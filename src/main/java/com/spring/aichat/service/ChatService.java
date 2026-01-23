@@ -6,6 +6,7 @@ import com.spring.aichat.domain.chat.ChatLogRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatRole;
+import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.external.OpenRouterClient;
