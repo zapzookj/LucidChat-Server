@@ -10,5 +10,7 @@ public enum EmotionTag {
     ANGRY, // 화남
     SHY, // 부끄러움
     SURPRISE, // 놀람
-    CONTEMPT // 경멸
+    PANIC, // 당황
+    RELAX, // 편안함
+    DISGUST // 경멸
 }
