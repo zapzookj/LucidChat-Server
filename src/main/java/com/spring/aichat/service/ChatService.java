@@ -9,6 +9,7 @@ import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
+import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.affection.UserMessageSavedEvent;
 import com.spring.aichat.service.prompt.EmotionParser;
