@@ -12,6 +12,8 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     @EntityGraph(attributePaths = {"member", "character"})
     Optional<ChatRoom> findWithMemberAndCharacterById(Long id);
 
+    Optional<ChatRoom> findByMember_IdAndCharacter_Id(Long memberId, Long characterId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ChatRoom> findById(Long id);
 }

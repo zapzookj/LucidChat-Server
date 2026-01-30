@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.character;
 
+import com.spring.aichat.config.DefaultCharacterProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,5 +40,16 @@ public class Character {
         this.name = name;
         this.baseSystemPrompt = baseSystemPrompt;
         this.llmModelName = llmModelName;
+    }
+
+    /**
+     * 기본 캐릭터 시드 값으로 동기화(업데이트)
+     */
+    public void applySeed(DefaultCharacterProperties props) {
+        this.name = props.name();
+        this.baseSystemPrompt = props.baseSystemPrompt();
+        this.llmModelName = props.llmModelName();
+        this.ttsVoiceId = props.ttsVoiceId();
+        this.defaultImageUrl = props.defaultImageUrl();
     }
 }

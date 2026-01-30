@@ -1,8 +1,11 @@
 package com.spring.aichat.service.auth;
 
+import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.dto.auth.AuthResponse;
 import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.exception.BadRequestException;
@@ -20,11 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final OnboardingService onboardingService;
     private final JwtTokenService jwtTokenService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Transactional
-    public Long signup(SignupRequest req) {
+    public AuthResponse signup(SignupRequest req) {
         if (userRepository.existsByUsername(req.username())) {
             throw new BadRequestException("이미 사용 중인 아이디입니다.");
         }
@@ -35,11 +39,14 @@ public class AuthService {
         String hash = passwordEncoder.encode(req.password());
         User user = User.local(req.username(), hash, req.nickname(), req.email());
 
-        return userRepository.save(user).getId();
+        ChatRoom room = onboardingService.getOrCreateDefaultRoom(user);
+
+        var token = jwtTokenService.issue(user);
+        return new AuthResponse(token.accessToken(), token.expiresIn(), room.getId(), token.user());
     }
 
-    @Transactional(readOnly = true)
-    public JwtTokenService.TokenResponse login(LoginRequest req) {
+    @Transactional
+    public AuthResponse login(LoginRequest req) {
         User user = userRepository.findByUsername(req.username())
             .orElseThrow(() -> new NotFoundException("아이디 또는 비밀번호가 올바르지 않습니다."));
 
@@ -51,6 +58,8 @@ public class AuthService {
             throw new NotFoundException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        return jwtTokenService.issue(user);
+        // 안전망: 혹시 방이 없으면 만들어줌
+        var token = jwtTokenService.issue(user);
+        return new AuthResponse(token.accessToken(), token.expiresIn(), -1L, token.user());
     }
 }

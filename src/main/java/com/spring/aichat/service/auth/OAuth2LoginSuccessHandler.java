@@ -1,8 +1,10 @@
 package com.spring.aichat.service.auth;
 
+import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.dto.auth.AuthResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,6 +33,7 @@ import java.lang.reflect.Field;
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
+    private final OnboardingService onboardingService;
     private final JwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -44,7 +47,15 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
         User user = upsertGoogleMember(oidcUser);
 
+        ChatRoom room = onboardingService.getOrCreateDefaultRoom(user);
         JwtTokenService.TokenResponse token = jwtTokenService.issue(user);
+
+        AuthResponse payload = new AuthResponse(
+            token.accessToken(),
+            token.expiresIn(),
+            room.getId(),
+            token.user()
+        );
 
         // 1) 리다이렉트 방식 (웹/앱 브릿지)
         if (successRedirect != null && !successRedirect.isBlank()) {
@@ -57,9 +68,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
 
         // 2) JSON 응답 방식 (API 중심)
+        response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write(objectMapper.writeValueAsString(token));
+        objectMapper.writeValue(response.getWriter(), payload);
     }
 
     @Transactional

@@ -1,5 +1,6 @@
 package com.spring.aichat.controller;
 
+import com.spring.aichat.dto.auth.AuthResponse;
 import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.service.auth.AuthService;
@@ -22,12 +23,12 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/signup")
-    public Long signup(@RequestBody @Valid SignupRequest req) {
+    public AuthResponse signup(@RequestBody @Valid SignupRequest req) {
         return authService.signup(req);
     }
 
     @PostMapping("/login")
-    public JwtTokenService.TokenResponse login(@RequestBody @Valid LoginRequest req) {
+    public AuthResponse login(@RequestBody @Valid LoginRequest req) {
         return authService.login(req);
     }
 }
