@@ -23,8 +23,7 @@ public class Character {
     @Column(nullable = false, length = 50)
     private String name;
 
-    @Lob
-    @Column(name = "base_system_prompt", nullable = false)
+    @Column(name = "base_system_prompt", nullable = false, columnDefinition = "TEXT")
     private String baseSystemPrompt;
 
     @Column(name = "llm_model_name", nullable = false, length = 100)

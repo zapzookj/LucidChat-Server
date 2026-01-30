@@ -39,9 +39,11 @@ public class AuthService {
         String hash = passwordEncoder.encode(req.password());
         User user = User.local(req.username(), hash, req.nickname(), req.email());
 
-        ChatRoom room = onboardingService.getOrCreateDefaultRoom(user);
+        User saved = userRepository.save(user);
 
-        var token = jwtTokenService.issue(user);
+        ChatRoom room = onboardingService.getOrCreateDefaultRoom(saved);
+
+        var token = jwtTokenService.issue(saved);
         return new AuthResponse(token.accessToken(), token.expiresIn(), room.getId(), token.user());
     }
 

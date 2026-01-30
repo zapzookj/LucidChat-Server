@@ -13,7 +13,8 @@ import java.util.Set;
 @NoArgsConstructor
 @Entity
 @Table(name = "users", indexes = {
-    @Index(name = "idx_user_username", columnList = "username", unique = true)
+    @Index(name = "idx_user_username", columnList = "username", unique = true),
+    @Index(name = "idx_user_email", columnList = "email", unique = true)
 })
 /**
  * 사용자 엔티티

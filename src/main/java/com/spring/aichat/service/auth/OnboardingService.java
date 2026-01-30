@@ -29,7 +29,7 @@ public class OnboardingService {
         Character character = characterRepository.findByName(defaultCharacterProperties.name())
             .orElseThrow(() -> new NotFoundException("기본 캐릭터가 존재하지 않습니다. 시드 설정을 확인하세요."));
 
-        return chatRoomRepository.findByMember_IdAndCharacter_Id(user.getId(), character.getId())
+        return chatRoomRepository.findByUser_IdAndCharacter_Id(user.getId(), character.getId())
             .orElseGet(() -> chatRoomRepository.save(new ChatRoom(user, character)));
     }
 }
