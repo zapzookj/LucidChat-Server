@@ -1,10 +1,10 @@
 package com.spring.aichat.service.scheduler;
 
 import com.spring.aichat.domain.user.UserRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 사용자 에너지 회복 스케줄러

@@ -14,10 +14,10 @@ import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.affection.UserMessageSavedEvent;
 import com.spring.aichat.service.prompt.EmotionParser;
 import com.spring.aichat.service.prompt.PromptAssembler;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;

@@ -6,11 +6,11 @@ import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.external.OpenRouterClient;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 

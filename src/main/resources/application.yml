@@ -1,0 +1,38 @@
+server:
+  port: 8080
+
+auth:
+  jwt:
+    issuer: aichat
+    secret: ${JWT_SECRET_BASE64}          # Base64 인코딩된 256bit 이상 시크릿 권장
+    access-token-ttl-seconds: 3600
+  oauth2:
+    success-redirect: http://localhost:3000/oauth2/success  # (선택) 프론트 성공 리다이렉트
+
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: openid, profile, email
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:aichat}?useSSL=false&serverTimezone=UTC
+    username: ${DB_USERNAME:aichat_user}
+    password: ${DB_PASSWORD:aichat_password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+
+openai:
+  api-key: ${OPENROUTER_API_KEY}
+  base-url: https://openrouter.ai/api/v1
+  model: qwen/qwen-2.5-72b-instruct
+  sentiment-model: meta-llama/llama-3-8b-instruct
+  app-referer: https://your-service.com
+  app-title: ai-character-chat
