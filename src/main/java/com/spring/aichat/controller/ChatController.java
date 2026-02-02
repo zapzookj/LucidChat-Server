@@ -3,6 +3,7 @@ package com.spring.aichat.controller;
 import com.spring.aichat.domain.chat.ChatLog;
 import com.spring.aichat.domain.chat.ChatLogRepository;
 import com.spring.aichat.dto.chat.ChatLogResponse;
+import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatRequest;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.service.ChatService;
@@ -48,6 +49,13 @@ public class ChatController {
 
         return chatLogRepository.findByRoom_Id(roomId, pageable)
             .map(this::toDto);
+    }
+
+    @GetMapping("/rooms/{roomId}")
+    public ChatRoomInfoResponse getRoomInfo(
+        @PathVariable Long roomId
+    ) {
+        return chatService.getChatRoomInfo(roomId);
     }
 
     private ChatLogResponse toDto(ChatLog log) {

@@ -6,6 +6,7 @@ import com.spring.aichat.domain.chat.ChatLogRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatRole;
+import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
@@ -14,10 +15,10 @@ import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.affection.UserMessageSavedEvent;
 import com.spring.aichat.service.prompt.EmotionParser;
 import com.spring.aichat.service.prompt.PromptAssembler;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -105,6 +106,21 @@ public class ChatService {
             parsed.stageDirection(),
             parsed.emotionTag().name(),
             room.getAffectionScore()
+        );
+    }
+
+    @Transactional
+    public ChatRoomInfoResponse getChatRoomInfo(Long roomId) {
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
+
+        return new ChatRoomInfoResponse(
+            room.getId(),
+            room.getCharacter().getName(),
+            room.getCharacter().getDefaultImageUrl(),
+            "background_default.png",
+            room.getAffectionScore(),
+            room.getStatusLevel().name()
         );
     }
 }
