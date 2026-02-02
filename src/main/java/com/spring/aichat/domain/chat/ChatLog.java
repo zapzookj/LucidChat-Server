@@ -35,12 +35,10 @@ public class ChatLog {
     @Column(nullable = false, length = 20)
     private ChatRole role;
 
-    @Lob
-    @Column(name = "raw_content", nullable = false)
+    @Column(name = "raw_content", nullable = false, columnDefinition = "TEXT")
     private String rawContent;
 
-    @Lob
-    @Column(name = "clean_content")
+    @Column(name = "clean_content", columnDefinition = "TEXT")
     private String cleanContent;
 
     @Enumerated(EnumType.STRING)
