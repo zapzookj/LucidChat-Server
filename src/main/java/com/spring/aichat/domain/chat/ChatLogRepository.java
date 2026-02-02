@@ -11,4 +11,6 @@ public interface ChatLogRepository extends JpaRepository<ChatLog, Long> {
     List<ChatLog> findTop20ByRoom_IdOrderByCreatedAtDesc(Long roomId);
 
     Page<ChatLog> findByRoom_Id(Long roomId, Pageable pageable);
+
+    void deleteByRoom_Id(Long roomId);
 }

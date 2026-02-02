@@ -58,6 +58,13 @@ public class ChatController {
         return chatService.getChatRoomInfo(roomId);
     }
 
+    @DeleteMapping("/rooms/{roomId}")
+    public void deleteRoom(
+        @PathVariable Long roomId
+    ) {
+        chatService.deleteChatRoom(roomId);
+    }
+
     private ChatLogResponse toDto(ChatLog log) {
         return new ChatLogResponse(
             log.getId(),

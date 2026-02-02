@@ -17,6 +17,7 @@ import com.spring.aichat.service.prompt.EmotionParser;
 import com.spring.aichat.service.prompt.PromptAssembler;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +32,7 @@ import java.util.List;
  * - OpenRouter 호출 후 응답 파싱/저장
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ChatService {
 
@@ -77,6 +79,8 @@ public class ChatService {
             }
         }
 
+        log.info("[ChatService] roomId={} sending messages: {}", roomId, messages);
+
         // 5) OpenRouter 호출
         String model = room.getCharacter().getLlmModelName() != null
             ? room.getCharacter().getLlmModelName()
@@ -122,5 +126,10 @@ public class ChatService {
             room.getAffectionScore(),
             room.getStatusLevel().name()
         );
+    }
+
+    @Transactional
+    public void deleteChatRoom(Long roomId) {
+        chatLogRepository.deleteByRoom_Id(roomId);
     }
 }
