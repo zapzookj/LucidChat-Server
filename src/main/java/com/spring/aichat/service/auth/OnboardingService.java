@@ -7,9 +7,9 @@ import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.exception.NotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 회원 온보딩 서비스

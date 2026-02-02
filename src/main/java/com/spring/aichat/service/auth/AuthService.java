@@ -10,15 +10,17 @@ import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.exception.NotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 로컬 회원가입/로그인 비즈니스 로직
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuthService {
 

@@ -1,5 +1,6 @@
 package com.spring.aichat.service.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
@@ -8,15 +9,14 @@ import com.spring.aichat.dto.auth.AuthResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
-import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.lang.reflect.Field;

@@ -37,7 +37,7 @@ public class JwtTokenService {
         String token = jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
 
         return new TokenResponse(token, props.accessTokenTtlSeconds(),
-            Map.of("memberId", user.getId(), "username", user.getUsername(), "nickname", user.getNickname()));
+            Map.of("userId", user.getId(), "username", user.getUsername(), "nickname", user.getNickname()));
     }
 
     public record TokenResponse(String accessToken, long expiresIn, Map<String, Object> user) {}
