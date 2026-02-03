@@ -43,6 +43,9 @@ public class User {
     @Column(length = 120, unique = true)
     private String email;
 
+    @Column(name = "profile_description", columnDefinition = "TEXT")
+    private String profileDescription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AuthProvider provider = AuthProvider.LOCAL;
@@ -104,5 +107,13 @@ public class User {
      */
     public void regenEnergy(int amount) {
         this.energy = Math.min(100, this.energy + amount);
+    }
+
+    public void updateNickName(String nickname) {
+        this.nickname = nickname;
+    }
+
+    public void updateProfileDescription(String s) {
+        this.profileDescription = s;
     }
 }
