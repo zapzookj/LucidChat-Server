@@ -16,4 +16,6 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ChatRoom> findById(Long id);
+
+    Optional<ChatRoom> findByUser_Id(Long userId);
 }

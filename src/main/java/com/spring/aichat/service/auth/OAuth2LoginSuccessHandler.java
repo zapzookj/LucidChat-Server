@@ -1,12 +1,14 @@
 package com.spring.aichat.service.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.spring.aichat.config.JwtProperties;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.auth.AuthResponse;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
@@ -20,6 +22,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 구글 로그인 성공 처리
@@ -35,6 +39,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final UserRepository userRepository;
     private final OnboardingService onboardingService;
     private final JwtTokenService jwtTokenService;
+    private final JwtProperties props;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${auth.oauth2.success-redirect:}")
@@ -48,30 +53,47 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         User user = upsertGoogleMember(oidcUser);
 
         ChatRoom room = onboardingService.getOrCreateDefaultRoom(user);
-        JwtTokenService.TokenResponse token = jwtTokenService.issue(user);
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(user.getUsername(), "ROLE_USER");
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", user.getId());
+        userMap.put("username", user.getUsername());
+        userMap.put("nickname", user.getNickname());
+        userMap.put("energy", user.getEnergy());
 
         AuthResponse payload = new AuthResponse(
-            token.accessToken(),
-            token.expiresIn(),
+            tokenPair.accessToken(),
+            props.accessTokenTtlSeconds(),
             room.getId(),
-            token.user()
+            userMap
         );
 
-        // 1) 리다이렉트 방식 (웹/앱 브릿지)
+        setRefreshTokenCookie(response, tokenPair.refreshToken());
+
         if (successRedirect != null && !successRedirect.isBlank()) {
             String url = UriComponentsBuilder.fromUriString(successRedirect)
-                .queryParam("access_token", token.accessToken())
+                .queryParam("access_token", tokenPair.accessToken())
+                .queryParam("room_id", room.getId()) // 편의상 추가
                 .build(true)
                 .toUriString();
+
             response.sendRedirect(url);
             return;
         }
 
-        // 2) JSON 응답 방식 (API 중심)
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         objectMapper.writeValue(response.getWriter(), payload);
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refresh_token", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false); // 배포(HTTPS) 환경에서는 true로 변경 필요
+        cookie.setPath("/");
+        cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
+        response.addCookie(cookie);
     }
 
     @Transactional
