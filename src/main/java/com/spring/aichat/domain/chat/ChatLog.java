@@ -3,6 +3,7 @@ package com.spring.aichat.domain.chat;
 import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EmotionTag;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "chat_logs", indexes = {
     @Index(name = "idx_log_room_created", columnList = "room_id, created_at")
@@ -50,6 +52,15 @@ public class ChatLog {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public ChatLog(ChatRoom room, ChatRole role, String raw, String clean, EmotionTag emotion, String audioUrl) {
+        this.room = room;
+        this.role = role;
+        this.rawContent = raw;
+        this.cleanContent = clean;
+        this.emotionTag = emotion;
+        this.audioUrl = audioUrl;
+    }
 
     @PrePersist
     void prePersist() {

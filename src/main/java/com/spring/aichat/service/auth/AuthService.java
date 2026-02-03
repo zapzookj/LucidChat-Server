@@ -64,6 +64,6 @@ public class AuthService {
 
         // 안전망: 혹시 방이 없으면 만들어줌
         var token = jwtTokenService.issue(user);
-        return new AuthResponse(token.accessToken(), token.expiresIn(), -1L, token.user());
+        return new AuthResponse(token.accessToken(), token.expiresIn(), user.getId(), token.user());
     }
 }

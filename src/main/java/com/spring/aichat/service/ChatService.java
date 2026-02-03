@@ -1,15 +1,18 @@
 package com.spring.aichat.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
-import com.spring.aichat.domain.chat.ChatLog;
-import com.spring.aichat.domain.chat.ChatLogRepository;
-import com.spring.aichat.domain.chat.ChatRoom;
-import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.ChatRole;
+import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
+import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.affection.UserMessageSavedEvent;
@@ -24,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 채팅 핵심 서비스
@@ -43,6 +47,7 @@ public class ChatService {
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ApplicationEventPublisher eventPublisher;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
@@ -90,27 +95,48 @@ public class ChatService {
             new OpenAiChatRequest(model, messages, 0.8)
         );
 
-        // 6) 지문 파싱(감정/cleanContent) :contentReference[oaicite:18]{index=18}
-        EmotionParser.ParsedEmotion parsed = emotionParser.parse(rawAssistant);
+        try {
+            // 6. JSON 파싱 및 전처리 (마크다운 제거)
+            String cleanJson = stripMarkdown(rawAssistant);
+            AiJsonOutput aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
 
-        // 7) assistant 로그 저장
-        ChatLog assistantLog = ChatLog.assistant(room, rawAssistant, parsed.cleanContent(), parsed.emotionTag());
-        chatLogRepository.save(assistantLog);
+            // 7. 호감도 반영 (LLM이 판단한 수치 적용)
+            applyAffectionChange(room, aiOutput.affectionChange());
 
-        // 8) 방 상태 업데이트
-        room.touch(parsed.emotionTag());
+            // 8. AI 응답 로그 저장
+            // - Raw: JSON 원본
+            // - Clean: 대사만 합쳐서 저장 (히스토리 주입용)
+            // - Emotion: 마지막 씬의 감정을 대표 감정으로 저장
+            String combinedDialogue = aiOutput.scenes().stream()
+                .map(AiJsonOutput.Scene::dialogue)
+                .collect(Collectors.joining(" "));
 
-        // 9) 비동기 호감도 분석 트리거 :contentReference[oaicite:19]{index=19}
-        eventPublisher.publishEvent(new UserMessageSavedEvent(roomId, userMessage));
+            String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
+                : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
+            EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
 
-        // 10) 클라이언트 즉시 반환(clean/emotion)
-        return new SendChatResponse(
-            rawAssistant,
-            parsed.cleanContent(),
-            parsed.stageDirection(),
-            parsed.emotionTag().name(),
-            room.getAffectionScore()
-        );
+            saveLog(room, ChatRole.ASSISTANT, cleanJson, combinedDialogue, mainEmotion, null);
+
+            // 9. 응답 DTO 생성
+            List<SendChatResponse.SceneResponse> sceneResponses = aiOutput.scenes().stream()
+                .map(s -> new SendChatResponse.SceneResponse(
+                    s.narration(),
+                    s.dialogue(),
+                    parseEmotion(s.emotion())
+                ))
+                .collect(Collectors.toList());
+
+            return new SendChatResponse(
+                room.getId(),
+                sceneResponses,
+                room.getAffectionScore(),
+                room.getStatusLevel().name()
+            );
+
+        } catch (JsonProcessingException e) {
+            log.error("JSON Parsing Error. Raw: {}", rawAssistant, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "AI 응답 형식이 올바르지 않습니다.");
+        }
     }
 
     @Transactional
@@ -131,5 +157,48 @@ public class ChatService {
     @Transactional
     public void deleteChatRoom(Long roomId) {
         chatLogRepository.deleteByRoom_Id(roomId);
+        ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
+            () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
+        );
+        room.resetAffection();
+    }
+
+    private void applyAffectionChange(ChatRoom room, int change) {
+        if (change == 0) return;
+        int newScore = room.getAffectionScore() + change;
+        // -100 ~ 100 클램핑
+        newScore = Math.max(-100, Math.min(100, newScore));
+        room.updateAffection(newScore);
+
+        // 관계 단계 업데이트 로직 (필요 시)
+        room.updateStatusLevel(RelationStatusPolicy.fromScore(newScore));
+    }
+
+    private void saveLog(ChatRoom room, ChatRole role, String raw, String clean, EmotionTag emotion, String audioUrl) {
+        ChatLog log = new ChatLog(room, role, raw, clean, emotion, audioUrl);
+        chatLogRepository.save(log);
+
+        // 마지막 활동 시간 등 업데이트
+        room.updateLastActive(emotion);
+    }
+
+    private String stripMarkdown(String text) {
+        if (text.startsWith("```json")) {
+            text = text.substring(7);
+        } else if (text.startsWith("```")) {
+            text = text.substring(3);
+        }
+        if (text.endsWith("```")) {
+            text = text.substring(0, text.length() - 3);
+        }
+        return text.trim();
+    }
+
+    private EmotionTag parseEmotion(String emotionStr) {
+        try {
+            return EmotionTag.valueOf(emotionStr.toUpperCase());
+        } catch (Exception e) {
+            return EmotionTag.NEUTRAL;
+        }
     }
 }

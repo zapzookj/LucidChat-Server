@@ -76,4 +76,22 @@ public class ChatRoom {
     private int clamp(int min, int max, int v) {
         return Math.max(min, Math.min(max, v));
     }
+
+    public void updateAffection(int newScore) {
+        this.affectionScore = newScore;
+    }
+
+    public void updateStatusLevel(RelationStatus relationStatus) {
+        this.statusLevel = relationStatus;
+    }
+
+    public void updateLastActive(EmotionTag emotion) {
+        this.lastActiveAt = LocalDateTime.now();
+        this.lastEmotion = emotion;
+    }
+
+    public void resetAffection() {
+        this.affectionScore = 0;
+        this.statusLevel = RelationStatus.STRANGER;
+    }
 }

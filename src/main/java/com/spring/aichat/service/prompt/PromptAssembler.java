@@ -26,11 +26,24 @@ public class PromptAssembler {
                 - User Affection: %d/100
                 - Relation: %s
                 
-                [Output Rules]
-                1) 감정/행동 지문은 반드시 문장 맨 앞의 소괄호() 안에 작성한다.
-                   예: (미소 지으며) 오늘도 보고 싶었어요.
-                2) 사용자를 반드시 userNickname으로 자연스럽게 불러라.
-                3) 관계 상태(Relation)에 맞는 말투/거리감을 반드시 유지하라.
+                [Output Format Rules]
+                You MUST output the response in the following JSON format ONLY. Do not output any other text.
+                The response should be a JSON Object containing a "scenes" list and an "affection_change" integer.
+                
+                {
+                  "scenes": [
+                    {
+                      "narration": "Write the character's action or facial expression here (e.g., 부드럽게 미소 지으며 고개를 끄덕인다).",
+                      "dialogue": "Write the character's spoken line here.",
+                      "emotion": "Choose one from [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX]"
+                    }
+                  ],
+                  "affection_change": Integer value between -5 and 5 based on how much the user's message pleased or annoyed the character.
+                }
+                
+                [Instruction for Scenes]
+                - Split the response into multiple scenes if the character does multiple actions or has a long pause.
+                - Ensure 'emotion' matches the dialogue and narration.
                 """.formatted(
             character.getBaseSystemPrompt(),
             member.getNickname(),
