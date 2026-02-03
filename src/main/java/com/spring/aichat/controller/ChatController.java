@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -28,6 +29,7 @@ public class ChatController {
     /**
      * 채팅 전송: 특정 방에 메시지 보내기
      */
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     @PostMapping("/rooms/{roomId}/messages")
     public SendChatResponse sendRestful(
         @PathVariable Long roomId,
@@ -40,17 +42,19 @@ public class ChatController {
      * 채팅 로그 조회 (페이지네이션)
      */
     @GetMapping("/rooms/{roomId}/logs")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     public Page<ChatLogResponse> getLogs(
         @PathVariable Long roomId,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size
-    ) {
+        ) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         return chatLogRepository.findByRoom_Id(roomId, pageable)
             .map(this::toDto);
     }
 
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     @GetMapping("/rooms/{roomId}")
     public ChatRoomInfoResponse getRoomInfo(
         @PathVariable Long roomId
@@ -58,6 +62,7 @@ public class ChatController {
         return chatService.getChatRoomInfo(roomId);
     }
 
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     @DeleteMapping("/rooms/{roomId}")
     public void deleteRoom(
         @PathVariable Long roomId
