@@ -50,7 +50,10 @@ public class AuthService {
         }
 
         String hash = passwordEncoder.encode(req.password());
-        User user = User.local(req.username(), hash, req.nickname(), req.email());
+
+        // 빈 문자열 "" 은 null 처리. DB 버그 방지용
+        String email = (req.email() == null || req.email().isBlank()) ? null : req.email().trim();
+        User user = User.local(req.username(), hash, req.nickname(), email);
         User saved = userRepository.save(user);
 
         ChatRoom room = onboardingService.getOrCreateDefaultRoom(saved);
