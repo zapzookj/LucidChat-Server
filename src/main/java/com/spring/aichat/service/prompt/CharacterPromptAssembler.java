@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  * - base_system_prompt + 관계/호감도 상태 + 출력 규칙(지문 괄호)
  */
 @Component
-public class PromptAssembler {
+public class CharacterPromptAssembler {
 
     public String assembleSystemPrompt(Character character, ChatRoom room, User member) {
 

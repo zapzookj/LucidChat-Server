@@ -15,13 +15,10 @@ import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
-import com.spring.aichat.service.affection.UserMessageSavedEvent;
-import com.spring.aichat.service.prompt.EmotionParser;
-import com.spring.aichat.service.prompt.PromptAssembler;
+import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -42,11 +39,9 @@ public class ChatService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatLogRepository chatLogRepository;
-    private final PromptAssembler promptAssembler;
-    private final EmotionParser emotionParser;
+    private final CharacterPromptAssembler promptAssembler;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
-    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -69,6 +64,7 @@ public class ChatService {
         );
 
         // 3) 최근 대화 20개 로딩(ASC로 정렬) :contentReference[oaicite:17]{index=17}
+        // TODO: 캐싱
         List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
         recent.sort(Comparator.comparing(ChatLog::getCreatedAt)); // ASC
 
@@ -79,8 +75,11 @@ public class ChatService {
         for (ChatLog log : recent) {
             if (log.getRole() == ChatRole.USER) {
                 messages.add(OpenAiMessage.user(log.getRawContent()));
-            } else {
+            } else if (log.getRole() == ChatRole.ASSISTANT) {
                 messages.add(OpenAiMessage.assistant(log.getRawContent()));
+            } else if (log.getRole() == ChatRole.SYSTEM) {
+                // [Phase 2] 나레이션/이벤트 로그는 System 메시지로 주입하여 캐릭터가 상황을 인지하게 함
+                messages.add(OpenAiMessage.system(log.getRawContent()));
             }
         }
 
