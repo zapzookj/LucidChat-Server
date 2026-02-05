@@ -6,6 +6,7 @@ import java.util.List;
 
 // LLM이 뱉어낼 JSON 구조와 매핑될 클래스
 public record AiJsonOutput(
+    String reasoning,
     List<Scene> scenes,
     @JsonProperty("affection_change") int affectionChange
 ) {

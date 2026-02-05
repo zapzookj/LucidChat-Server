@@ -63,6 +63,9 @@ public class User {
     @Column(nullable = false)
     private int energy = 100;
 
+    @Column(name = "is_secret_mode", nullable = false)
+    private Boolean isSecretMode = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -115,5 +118,9 @@ public class User {
 
     public void updateProfileDescription(String s) {
         this.profileDescription = s;
+    }
+
+    public void updateIsSecretMode(boolean b) {
+        this.isSecretMode = b;
     }
 }

@@ -5,6 +5,7 @@ public record UserResponse(
     String username,
     String nickname,
     String email,
-    String profileDescription
+    String profileDescription,
+    Boolean isSecretMode
 ) {
 }

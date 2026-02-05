@@ -23,7 +23,8 @@ public class UserService {
             currentUser.getUsername(),
             currentUser.getNickname(),
             currentUser.getEmail(),
-            currentUser.getProfileDescription()
+            currentUser.getProfileDescription(),
+            currentUser.getIsSecretMode()
         );
     }
 
@@ -38,6 +39,8 @@ public class UserService {
         if (request.profileDescription() != null) {
             currentUser.updateProfileDescription(request.profileDescription());
         }
+
+        currentUser.updateIsSecretMode(request.isSecretMode() != null ? request.isSecretMode() : false);
 
         userRepository.save(currentUser);
     }
