@@ -9,6 +9,7 @@ import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.service.ChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -52,6 +53,12 @@ public class ChatController {
 
         return chatLogRepository.findByRoom_Id(roomId, pageable)
             .map(this::toDto);
+    }
+
+    @PostMapping("/rooms/{roomId}/init")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public void init(@PathVariable Long roomId) {
+        chatService.initializeChatRoom(roomId);
     }
 
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")

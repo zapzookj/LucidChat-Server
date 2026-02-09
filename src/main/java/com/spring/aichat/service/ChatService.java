@@ -199,7 +199,7 @@ public class ChatService {
         ChatLog assistantLog = new ChatLog(room, ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
         chatLogRepository.save(assistantLog);
 
-        room.updateLastActive(EmotionTag.JOY);
+        room.updateLastActive(EmotionTag.NEUTRAL);
     }
 
     private void applyAffectionChange(ChatRoom room, int change) {
