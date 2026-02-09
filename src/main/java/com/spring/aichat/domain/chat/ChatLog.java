@@ -62,6 +62,10 @@ public class ChatLog {
         this.audioUrl = audioUrl;
     }
 
+    public static ChatLog system(ChatRoom room, String introNarration) {
+        return new ChatLog(room, ChatRole.SYSTEM, introNarration, introNarration, EmotionTag.NEUTRAL);
+    }
+
     @PrePersist
     void prePersist() {
         this.createdAt = LocalDateTime.now();

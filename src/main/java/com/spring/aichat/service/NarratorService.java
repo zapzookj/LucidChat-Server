@@ -1,5 +1,7 @@
 package com.spring.aichat.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.ChatLog;
 import com.spring.aichat.domain.chat.ChatLogRepository;
@@ -8,8 +10,11 @@ import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.dto.chat.NarratorResponse;
+import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
+import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.prompt.NarratorPromptAssembler;
@@ -32,24 +37,23 @@ public class NarratorService {
     private final NarratorPromptAssembler promptAssembler;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
+    private final ObjectMapper objectMapper;
+    private final ChatService chatService;
 
-    // 이벤트 트리거 비용 (적당히 조절하자. 토큰 많이 먹음)
-    private static final int EVENT_ENERGY_COST = 2;
-
+    /**
+     * 1단계: 이벤트 옵션 생성 (저장 X)
+     */
     @Transactional
     public NarratorResponse triggerEvent(Long roomId) {
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-        // 1. 에너지 차감 (이벤트는 일반 대화보다 비쌀 수 있음)
-        room.getUser().consumeEnergy(EVENT_ENERGY_COST);
-
-        // 2. 나레이터 프롬프트 조립
+        // 1. 나레이터 프롬프트 조립
         String systemPrompt = promptAssembler.assembleNarratorPrompt(
             room.getCharacter(), room, room.getUser()
         );
 
-        // 3. 컨텍스트 로딩 (최근 대화 흐름 파악용)
+        // 2. 컨텍스트 로딩 (최근 대화 흐름 파악용)
         List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
         recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
 
@@ -67,24 +71,50 @@ public class NarratorService {
         // 메인 모델과 다른 sentimentModel 사용
         String model = props.sentimentModel();
 
-        String eventDescription = openRouterClient.chatCompletion(
+        String rawJson = openRouterClient.chatCompletion(
             new OpenAiChatRequest(model, messages, 0.9) // 창의성(Temperature)을 높임
         ).trim();
 
-        // 따옴표 제거나 마크다운 제거 등 간단한 후처리
-        eventDescription = cleanResponse(eventDescription);
+        try {
+            // JSON 파싱 (Wrapper DTO 내부적으로 사용하거나, NarratorResponse 구조와 매핑)
+            // 여기서는 NarratorResponse가 바로 매핑된다고 가정 (필드명 일치 시)
+            // 만약 root가 "options"라면 Wrapper가 필요할 수 있음.
+            // 편의상 JsonNode로 읽거나 Wrapper Class를 만드는 것이 정석.
+            NarratorOptionsWrapper wrapper = objectMapper.readValue(extractJson(rawJson), NarratorOptionsWrapper.class);
 
-        // 5. 로그 저장 (Role: SYSTEM)
-        // 나레이션은 감정이 없으므로 NEUTRAL
-        ChatLog eventLog = new ChatLog(
-            room, ChatRole.SYSTEM, eventDescription, eventDescription, EmotionTag.NEUTRAL, null
-        );
-        chatLogRepository.save(eventLog);
+            return new NarratorResponse(wrapper.options(), room.getUser().getEnergy());
 
-        return new NarratorResponse(eventDescription, room.getUser().getEnergy());
+        } catch (JsonProcessingException e) {
+            log.error("Narrator JSON Parsing Failed: {}", rawJson, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이벤트 생성 중 오류가 발생했습니다.");
+        }
     }
 
-    private String cleanResponse(String text) {
-        return text.replace("\"", "").replace("Event:", "").trim();
+    /**
+     * 2단계: 유저가 선택한 이벤트 실행 (저장 O + 캐릭터 반응)
+     */
+    @Transactional
+    public SendChatResponse selectEvent(Long roomId, String selectedDetail, int energyCost) {
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+        // 1. 에너지 차감 (선택 시점에 차감)
+        room.getUser().consumeEnergy(energyCost);
+
+        // 2. ChatService를 통해 시스템 로그 저장 및 캐릭터 반응 생성
+        return chatService.generateResponseForSystemEvent(roomId, selectedDetail);
     }
+
+    private String extractJson(String text) {
+        if (text.startsWith("```json")) return text.substring(7, text.lastIndexOf("```")).trim();
+        if (text.startsWith("```")) return text.substring(3, text.lastIndexOf("```")).trim();
+        return text;
+    }
+
+    // JSON 파싱용 내부 DTO
+    private record NarratorOptionsWrapper(List<NarratorResponse.EventOption> options) {}
+
+//    private String cleanResponse(String text) {
+//        return text.replace("\"", "").replace("Event:", "").trim();
+//    }
 }

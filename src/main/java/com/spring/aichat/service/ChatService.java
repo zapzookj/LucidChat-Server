@@ -49,26 +49,50 @@ public class ChatService {
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-        // 에너지 차감 (MVP BM 모델)
+        // 에너지 차감
         room.getUser().consumeEnergy(1);
 
-        // 1) 사용자 입력 저장 :contentReference[oaicite:15]{index=15}
+        // 1. 유저 로그 저장
         ChatLog userLog = ChatLog.user(room, userMessage);
         chatLogRepository.save(userLog);
 
-        // 2) 시스템 프롬프트 생성 + 호감도/관계 상태 주입 :contentReference[oaicite:16]{index=16}
+        // 2. 캐릭터 응답 생성 (공통 로직 호출)
+        return generateCharacterResponse(room);
+    }
+
+    /**
+     * [NEW] 시스템(이벤트) 메시지에 대한 캐릭터 반응 생성
+     * NarratorService에서 호출함
+     */
+    @Transactional
+    public SendChatResponse generateResponseForSystemEvent(Long roomId, String systemDetail) {
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+            .orElseThrow(() -> new NotFoundException("ChatRoom not found: " + roomId));
+
+        // 1. 시스템 로그 저장 (이벤트 내용)
+        ChatLog systemLog = ChatLog.system(room, systemDetail);
+        chatLogRepository.save(systemLog);
+
+        // 2. 캐릭터 응답 생성 (공통 로직 호출)
+        return generateCharacterResponse(room);
+    }
+
+    /**
+     * [Refactored] 캐릭터 LLM 호출 및 응답 처리 공통 로직
+     */
+    private SendChatResponse generateCharacterResponse(ChatRoom room) {
+        // 1. 프롬프트 조립
         String systemPrompt = promptAssembler.assembleSystemPrompt(
             room.getCharacter(),
             room,
             room.getUser()
         );
 
-        // 3) 최근 대화 20개 로딩(ASC로 정렬) :contentReference[oaicite:17]{index=17}
-        // TODO: 캐싱
-        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        recent.sort(Comparator.comparing(ChatLog::getCreatedAt)); // ASC
+        // 2. 히스토리 로딩
+        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(room.getId());
+        recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
 
-        // 4) messages 구성: [System] + [History] (+ 이미 userLog가 history 안에 포함됨)
+        // 3. 메시지 구성 (Anti-Hallucination Tagging 적용)
         List<OpenAiMessage> messages = new ArrayList<>();
         messages.add(OpenAiMessage.system(systemPrompt));
 
@@ -78,34 +102,27 @@ public class ChatService {
             } else if (log.getRole() == ChatRole.ASSISTANT) {
                 messages.add(OpenAiMessage.assistant(log.getRawContent()));
             } else if (log.getRole() == ChatRole.SYSTEM) {
-                // [Phase 2] 나레이션/이벤트 로그는 System 메시지로 주입하여 캐릭터가 상황을 인지하게 함
-                messages.add(OpenAiMessage.system(log.getRawContent()));
+                // [FIX] 시스템 로그에 태그를 붙여서 캐릭터가 유저 발화로 착각하지 않게 함
+                String taggedContent = "[NARRATION]\n" + log.getRawContent();
+                messages.add(OpenAiMessage.system(taggedContent));
             }
         }
 
-        log.info("[ChatService] roomId={} sending messages: {}", roomId, messages);
-
-        // 5) OpenRouter 호출
+        // 4. LLM 호출
         String model = room.getCharacter().getLlmModelName() != null
-            ? room.getCharacter().getLlmModelName()
-            : props.model();
+            ? room.getCharacter().getLlmModelName() : props.model();
 
         String rawAssistant = openRouterClient.chatCompletion(
             new OpenAiChatRequest(model, messages, 0.8)
         );
 
+        // 5. 응답 처리 및 저장
         try {
-            // 6. JSON 파싱 및 전처리 (마크다운 제거)
             String cleanJson = stripMarkdown(rawAssistant);
             AiJsonOutput aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
 
-            // 7. 호감도 반영 (LLM이 판단한 수치 적용)
             applyAffectionChange(room, aiOutput.affectionChange());
 
-            // 8. AI 응답 로그 저장
-            // - Raw: JSON 원본
-            // - Clean: 대사만 합쳐서 저장 (히스토리 주입용)
-            // - Emotion: 마지막 씬의 감정을 대표 감정으로 저장
             String combinedDialogue = aiOutput.scenes().stream()
                 .map(AiJsonOutput.Scene::dialogue)
                 .collect(Collectors.joining(" "));
@@ -116,7 +133,6 @@ public class ChatService {
 
             saveLog(room, ChatRole.ASSISTANT, cleanJson, combinedDialogue, mainEmotion, null);
 
-            // 9. 응답 DTO 생성
             List<SendChatResponse.SceneResponse> sceneResponses = aiOutput.scenes().stream()
                 .map(s -> new SendChatResponse.SceneResponse(
                     s.narration(),
@@ -133,7 +149,7 @@ public class ChatService {
             );
 
         } catch (JsonProcessingException e) {
-            log.error("JSON Parsing Error. Raw: {}", rawAssistant, e);
+            log.error("JSON Parsing Error: {}", rawAssistant, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "AI 응답 형식이 올바르지 않습니다.");
         }
     }
@@ -160,6 +176,30 @@ public class ChatService {
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
         room.resetAffection();
+    }
+
+    // [NEW] 인트로 초기화 메서드
+    @Transactional
+    public void initializeChatRoom(Long roomId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+            .orElseThrow(() -> new NotFoundException("Room not found"));
+
+        if (chatLogRepository.countByRoomId(roomId) > 0) return;
+
+        String introNarration = """
+            [NARRATION]
+            달빛이 쏟아지는 밤, 당신은 숲속 깊은 곳에 위치한 고풍스러운 저택 앞에 도착했습니다.
+            초대장을 손에 쥐고 무거운 현관문을 밀자, 따스한 온기와 은은한 홍차 향기가 당신을 감쌉니다.
+            로비의 중앙, 샹들리에 아래에 단정하게 서 있던 메이드가 당신을 발견하고 부드럽게 고개를 숙입니다.
+            """;
+
+        chatLogRepository.save(ChatLog.system(room, introNarration));
+
+        String firstGreeting = "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
+        ChatLog assistantLog = new ChatLog(room, ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
+        chatLogRepository.save(assistantLog);
+
+        room.updateLastActive(EmotionTag.JOY);
     }
 
     private void applyAffectionChange(ChatRoom room, int change) {

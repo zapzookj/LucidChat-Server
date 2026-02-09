@@ -52,6 +52,12 @@ public class CharacterPromptAssembler {
             - **Major Increase (+2~+3):** Only for deeply touching moments or perfect choices in events.
             - **Decrease (-1~-5):** If the user is rude, boring, aggressive, or breaks immersion.
             - **WARNING:** Do NOT give positive points easily. Making the user work for affection is part of the game.
+            
+            # IMPORTANT: Handling Narration
+            - Messages starting with **[NARRATION]** are descriptions of the situation or environment provided by the System.
+            - These are **NOT** spoken by the user.
+            - Do NOT thank the user for these events (e.g., do not say "Thank you for the snow").
+            - Treat them as absolute reality and react to them naturally within your persona.
                             
             # User Profile
             - User Nickname: %s
