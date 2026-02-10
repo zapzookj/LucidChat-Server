@@ -8,5 +8,11 @@ import java.util.List;
 public record OpenAiChatRequest(
     String model,
     List<OpenAiMessage> messages,
-    Double temperature
-) {}
+    Double temperature,
+    Boolean stream
+) {
+    // [하위 호환성 유지] 기존 생성자 호출 시 stream = false로 설정
+    public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature) {
+        this(model, messages, temperature, false);
+    }
+}

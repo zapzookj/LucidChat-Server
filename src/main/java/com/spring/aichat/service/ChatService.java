@@ -1,6 +1,7 @@
 package com.spring.aichat.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.*;
@@ -16,10 +17,11 @@ import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,6 +46,98 @@ public class ChatService {
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
     private final MemoryService memoryService;
+
+    /**
+     * [Phase 3] SSE 스트리밍 메인 로직
+     * 1. 유저 메시지 저장 & 에너지 차감 (Transaction 필수)
+     * 2. RAG & 프롬프트 조립
+     * 3. 스트리밍 시작 (OpenRouter 연결)
+     */
+    @Transactional(readOnly = true) // 전체적으로는 읽기 전용 (스트림 도중 DB 락 방지)
+    public Flux<String> streamMessage(Long roomId, String userMessage) {
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+        // [1] 선행 작업: 유저 메시지 저장 및 에너지 차감 (별도 트랜잭션으로 커밋)
+        saveUserMessageAndDeductEnergy(room, userMessage);
+
+        // [2] RAG: 장기 기억 조회 (동기)
+        String lastUserMessage = chatLogRepository.findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(room.getId(), ChatRole.USER)
+            .map(ChatLog::getCleanContent)
+            .orElse("");
+
+        String longTermMemory = "";
+        if (!lastUserMessage.isEmpty()) {
+            longTermMemory = memoryService.retrieveContext(room.getUser().getId(), lastUserMessage);
+        }
+
+        // [3] 프롬프트 조립
+        String systemPrompt = promptAssembler.assembleSystemPrompt(
+            room.getCharacter(), room, room.getUser(), longTermMemory
+        );
+
+        // [4] 메시지 히스토리 로딩 (이전 코드와 동일 로직)
+        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(room.getId());
+        recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
+
+        List<OpenAiMessage> messages = new ArrayList<>();
+        messages.add(OpenAiMessage.system(systemPrompt));
+        for (ChatLog log : recent) {
+            // ... (기존 role 처리 로직 복사: System -> User 둔갑 포함!) ...
+            if (log.getRole() == ChatRole.USER) {
+                messages.add(OpenAiMessage.user(log.getRawContent()));
+            } else if (log.getRole() == ChatRole.ASSISTANT) {
+                messages.add(OpenAiMessage.assistant(log.getRawContent()));
+            } else if (log.getRole() == ChatRole.SYSTEM) {
+                messages.add(OpenAiMessage.user("[NARRATION]\n" + log.getRawContent()));
+            }
+        }
+        // 마지막 유저 메시지 추가
+        messages.add(OpenAiMessage.user(userMessage));
+
+        // [5] 모델 선택
+        String model = room.getCharacter().getLlmModelName() != null
+            ? room.getCharacter().getLlmModelName() : props.model();
+
+        // [6] 스트림 반환 (Flux)
+        return openRouterClient.streamChatCompletion(new OpenAiChatRequest(model, messages, 0.8))
+            .map(this::extractContentFromChunk) // 껍데기 벗기기
+            .filter(content -> !content.isEmpty()); // 빈 데이터 필터링
+    }
+
+    // [Helper] 별도 트랜잭션으로 유저 로그 저장 (스트리밍 시작 전에 확실히 커밋되어야 함)
+    @Transactional
+    public void saveUserMessageAndDeductEnergy(ChatRoom room, String userMessage) {
+        room.getUser().consumeEnergy(1);
+        ChatLog userLog = ChatLog.user(room, userMessage);
+        chatLogRepository.save(userLog);
+
+        // 메모리 요약 트리거 체크 (20턴)
+        long logCount = chatLogRepository.countByRoomId(room.getId());
+        if (logCount > 0 && logCount % 20 == 0) {
+            memoryService.summarizeAndSaveMemory(room.getId(), room.getUser().getId());
+        }
+    }
+
+    // [Helper] OpenAI Chunk 파싱
+    private String extractContentFromChunk(String chunk) {
+        try {
+            if (chunk.equals("[DONE]")) return "";
+            String jsonStr = chunk.startsWith("data:") ? chunk.substring(5).trim() : chunk;
+            if (jsonStr.isEmpty() || jsonStr.equals("[DONE]")) return "";
+
+            JsonNode node = objectMapper.readTree(jsonStr);
+            if (node.has("choices") && !node.get("choices").isEmpty()) {
+                JsonNode delta = node.get("choices").get(0).get("delta");
+                if (delta.has("content")) {
+                    return delta.get("content").asText();
+                }
+            }
+            return "";
+        } catch (Exception e) {
+            return ""; // 파싱 에러 무시
+        }
+    }
 
     @Transactional
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
