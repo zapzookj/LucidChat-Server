@@ -43,6 +43,7 @@ public class ChatService {
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
+    private final MemoryService memoryService;
 
     @Transactional
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
@@ -56,7 +57,14 @@ public class ChatService {
         ChatLog userLog = ChatLog.user(room, userMessage);
         chatLogRepository.save(userLog);
 
-        // 2. 캐릭터 응답 생성 (공통 로직 호출)
+        // 2. 트리거: 대화가 20턴 단위로 쌓일 때마다 비동기 요약 실행
+        // (현재 유저 메시지 저장 후 카운트 체크)
+        long logCount = chatLogRepository.countByRoomId(roomId);
+        if (logCount > 0 && logCount % 20 == 0) {
+            memoryService.summarizeAndSaveMemory(roomId, room.getUser().getId());
+        }
+
+        // 3. 캐릭터 응답 생성 (공통 로직 호출)
         return generateCharacterResponse(room);
     }
 
@@ -81,11 +89,23 @@ public class ChatService {
      * [Refactored] 캐릭터 LLM 호출 및 응답 처리 공통 로직
      */
     private SendChatResponse generateCharacterResponse(ChatRoom room) {
+        // 0. RAG: 장기 기억 회상 (최근 유저 질문 기반)
+        // ChatLog에서 가장 최근 유저 메시지 가져오기 (방금 저장한 것)
+        String lastUserMessage = chatLogRepository.findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(room.getId(), ChatRole.USER)
+            .map(ChatLog::getCleanContent)
+            .orElse("");
+
+        String longTermMemory = "";
+        if (!lastUserMessage.isEmpty()) {
+            longTermMemory = memoryService.retrieveContext(room.getUser().getId(), lastUserMessage);
+        }
+
         // 1. 프롬프트 조립
         String systemPrompt = promptAssembler.assembleSystemPrompt(
             room.getCharacter(),
             room,
-            room.getUser()
+            room.getUser(),
+            longTermMemory
         );
 
         // 2. 히스토리 로딩
@@ -104,18 +124,20 @@ public class ChatService {
             } else if (log.getRole() == ChatRole.SYSTEM) {
                 // [FIX] 시스템 로그에 태그를 붙여서 캐릭터가 유저 발화로 착각하지 않게 함
                 String taggedContent = "[NARRATION]\n" + log.getRawContent();
-                messages.add(OpenAiMessage.system(taggedContent));
+                messages.add(OpenAiMessage.user(taggedContent));
             }
         }
 
         // 4. LLM 호출
-        String model = room.getCharacter().getLlmModelName() != null
-            ? room.getCharacter().getLlmModelName() : props.model();
+        String model = props.model();
+
+        log.error("🤖 Sending Request to Model: {}", model); // [DEBUG] 모델명 확인
 
         String rawAssistant = openRouterClient.chatCompletion(
             new OpenAiChatRequest(model, messages, 0.8)
         );
 
+        log.error("📝 Raw LLM Response: '{}'", rawAssistant);
         // 5. 응답 처리 및 저장
         try {
             String cleanJson = stripMarkdown(rawAssistant);

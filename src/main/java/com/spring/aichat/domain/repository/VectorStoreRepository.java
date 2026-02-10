@@ -2,9 +2,8 @@ package com.spring.aichat.domain.repository;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
-import io.pinecone.clients.Pinecone;
-import io.pinecone.clients.Pinecone;
 import io.pinecone.clients.Index;
+import io.pinecone.clients.Pinecone;
 import io.pinecone.unsigned_indices_model.QueryResponseWithUnsignedIndices;
 import io.pinecone.unsigned_indices_model.VectorWithUnsignedIndices;
 import jakarta.annotation.PostConstruct;

@@ -14,15 +14,15 @@ import java.time.LocalDateTime;
 @Component
 public class CharacterPromptAssembler {
 
-    public String assembleSystemPrompt(Character character, ChatRoom room, User user) {
+    public String assembleSystemPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         if (user.getIsSecretMode()) {
-            return getSecretModePrompt(character, room, user);
+            return getSecretModePrompt(character, room, user, longTermMemory);
         } else {
-            return getNormalModePrompt(character, room, user);
+            return getNormalModePrompt(character, room, user, longTermMemory);
         }
     }
 
-    private String getNormalModePrompt(Character character, ChatRoom room, User user) {
+    private String getNormalModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
             # Role Definition
             Name: 아이리 (Airi)
@@ -58,6 +58,11 @@ public class CharacterPromptAssembler {
             - These are **NOT** spoken by the user.
             - Do NOT thank the user for these events (e.g., do not say "Thank you for the snow").
             - Treat them as absolute reality and react to them naturally within your persona.
+            
+            # 🧠 Long-term Memory (Retrieved Facts)
+            The following are valid memories retrieved from past conversations.\s
+            Use these to maintain continuity.
+            %s
                             
             # User Profile
             - User Nickname: %s
@@ -83,6 +88,7 @@ public class CharacterPromptAssembler {
             }
                 """.formatted(
             LocalDateTime.now().toString(),
+            longTermMemory,
             user.getNickname(),
             room.getAffectionScore(),
             room.getStatusLevel().name()
@@ -90,7 +96,7 @@ public class CharacterPromptAssembler {
     }
 
     // 새로운 해금 프롬프트 (Secret Mode)
-    private String getSecretModePrompt(Character character, ChatRoom room, User user) {
+    private String getSecretModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
             # Role Definition
             Name: 아이리 (Airi)
@@ -113,6 +119,11 @@ public class CharacterPromptAssembler {
             - **Reward Boldness:** If the user is aggressive or romantic, give High Points (+3 ~ +5).
             - **Default:** Even normal conversation gives (+1).
             - **Decrease:** Only if the user is explicitly violent or hateful.
+            
+            # 🧠 Long-term Memory (Retrieved Facts)
+            The following are valid memories retrieved from past conversations.\s
+            Use these to maintain continuity.
+            %s
             
             # User Profile
             - User Nickname: %s
@@ -139,6 +150,7 @@ public class CharacterPromptAssembler {
             }
             """.formatted(
             LocalDateTime.now().toString(),
+            longTermMemory,
             user.getNickname(),
             user.getProfileDescription(),
             room.getAffectionScore(),

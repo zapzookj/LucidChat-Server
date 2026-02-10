@@ -1,10 +1,12 @@
 package com.spring.aichat.domain.chat;
 
+import com.spring.aichat.domain.enums.ChatRole;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ChatLogRepository extends JpaRepository<ChatLog, Long> {
 
@@ -15,4 +17,6 @@ public interface ChatLogRepository extends JpaRepository<ChatLog, Long> {
     void deleteByRoom_Id(Long roomId);
 
     int countByRoomId(Long roomId);
+
+    Optional<ChatLog> findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(Long id, ChatRole chatRole);
 }

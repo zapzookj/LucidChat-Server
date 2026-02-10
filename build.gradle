@@ -36,6 +36,9 @@ dependencies {
     // Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    // Vector DB (Pinecone)
+    implementation 'io.pinecone:pinecone-client:3.0.0'
+
     runtimeOnly 'org.postgresql:postgresql'
 
     compileOnly 'org.projectlombok:lombok'
