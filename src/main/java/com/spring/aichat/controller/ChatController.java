@@ -13,8 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 
 /**
  * 채팅 API 컨트롤러
@@ -26,6 +28,19 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatLogRepository chatLogRepository;
+
+    /**
+     * [Phase 3] 실시간 스트리밍 채팅 엔드포인트
+     * POST /api/rooms/{roomId}/stream
+     */
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @PostMapping(value = "/rooms/{roomId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> streamChat(
+        @PathVariable Long roomId,
+        @RequestBody @Valid SendChatRequest request
+    ) {
+        return chatService.streamMessage(roomId, request.message());
+    }
 
     /**
      * 채팅 전송: 특정 방에 메시지 보내기
