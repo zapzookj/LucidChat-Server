@@ -105,11 +105,6 @@ public class ChatService {
         log.info("⏱️ [PERF] TX-1 (preprocess): {}ms", System.currentTimeMillis() - tx1Start);
         // ━━ TX-1 커밋 완료. DB 커넥션 반환됨. ━━
 
-        // ━━ 메모리 요약 트리거 (@Async) ━━
-        // ⚠️ 반드시 TX-1 커밋 이후에 호출해야 비동기 스레드가 커밋된 데이터를 읽을 수 있다.
-        // 트리거 조건: USER 메시지 기준 20턴마다 (총 로그 수가 아닌 유저 턴 기준)
-        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
-
         // ━━ Non-TX Zone: 외부 API 호출 (DB 커넥션 미점유) ━━
         // userMessage를 RAG 쿼리로 직접 사용 (불필요한 DB 조회 제거)
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
@@ -136,6 +131,12 @@ public class ChatService {
 
         log.info("⏱️ [PERF] ====== sendMessage DONE: {}ms ======",
             System.currentTimeMillis() - totalStart);
+
+        // ━━ 메모리 요약 트리거 (@Async) ━━
+        // ⚠️ 반드시 TX-2 이후에 호출: 모든 OpenRouter 호출이 완료된 시점에서 비동기 시작
+        //   → 동시 API 요청 경합 방지 (401 "User not found" 해소)
+        // ⚠️ 반드시 TX-1 커밋 이후에 호출: 비동기 스레드가 커밋된 데이터를 읽을 수 있어야 함
+        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
 
         return response;
     }
