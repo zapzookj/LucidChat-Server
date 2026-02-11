@@ -51,8 +51,11 @@ public class ChatService {
     private final MemoryService memoryService;
     private final TransactionTemplate txTemplate;
 
-    /** 메모리가 생성되는 최소 대화 턴 수 (이 미만이면 RAG 스킵) */
-    private static final long MEMORY_THRESHOLD = 20;
+    /** USER 메시지 기준 메모리 요약 주기 (10 유저턴 ≈ 20 총 로그) */
+    private static final long USER_TURN_MEMORY_CYCLE = 10;
+
+    /** RAG 호출 스킵 기준: 이 로그 수 미만이면 메모리가 존재할 수 없음 */
+    private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  TX 간 데이터 전달용 내부 DTO
@@ -97,15 +100,15 @@ public class ChatService {
 
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            // 메모리 요약 트리거 (@Async 비동기)
-            if (logCount > 0 && logCount % MEMORY_THRESHOLD == 0) {
-                memoryService.summarizeAndSaveMemory(roomId, room.getUser().getId());
-            }
-
             return new PreProcessResult(room, room.getUser().getId(), logCount);
         });
         log.info("⏱️ [PERF] TX-1 (preprocess): {}ms", System.currentTimeMillis() - tx1Start);
-        // ━━ TX-1 커밋 완료. DB 커넥션 즉시 반환. ━━
+        // ━━ TX-1 커밋 완료. DB 커넥션 반환됨. ━━
+
+        // ━━ 메모리 요약 트리거 (@Async) ━━
+        // ⚠️ 반드시 TX-1 커밋 이후에 호출해야 비동기 스레드가 커밋된 데이터를 읽을 수 있다.
+        // 트리거 조건: USER 메시지 기준 20턴마다 (총 로그 수가 아닌 유저 턴 기준)
+        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
 
         // ━━ Non-TX Zone: 외부 API 호출 (DB 커넥션 미점유) ━━
         // userMessage를 RAG 쿼리로 직접 사용 (불필요한 DB 조회 제거)
@@ -215,7 +218,7 @@ public class ChatService {
 
         // ── [Strategy 1] Smart RAG Skip ──
         String longTermMemory = "";
-        if (logCount >= MEMORY_THRESHOLD && ragQuery != null && !ragQuery.isEmpty()) {
+        if (logCount >= RAG_SKIP_LOG_THRESHOLD && ragQuery != null && !ragQuery.isEmpty()) {
             long ragStart = System.currentTimeMillis();
             try {
                 longTermMemory = memoryService.retrieveContext(room.getUser().getId(), ragQuery);
@@ -225,7 +228,7 @@ public class ChatService {
             log.info("⏱️ [PERF] RAG: {}ms | found={}",
                 System.currentTimeMillis() - ragStart, !longTermMemory.isEmpty());
         } else {
-            log.info("⏱️ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, MEMORY_THRESHOLD);
+            log.info("⏱️ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, RAG_SKIP_LOG_THRESHOLD);
         }
 
         // ── 프롬프트 조립 ──
@@ -337,6 +340,26 @@ public class ChatService {
             .findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(roomId, ChatRole.USER)
             .map(ChatLog::getCleanContent)
             .orElse("");
+    }
+
+    /**
+     * 메모리 요약 트리거 (TX-1 커밋 이후에 호출해야 함)
+     *
+     * [수정된 로직]
+     * 1. 총 로그 수(logCount)가 아닌 USER 메시지 수 기준으로 판단
+     *    → 총 로그 수는 SYSTEM/ASSISTANT 로그에 따라 홀짝이 달라져 % 연산이 불안정
+     * 2. TX-1 커밋 이후에 호출 → @Async 스레드가 커밋된 데이터를 정상 읽음
+     */
+    private void triggerMemorySummarizationIfNeeded(Long roomId, Long userId, long totalLogCount) {
+        // USER 메시지 수 추정: (총 로그 - 초기 2개) / 2 ≈ 유저 턴 수
+        // 정확한 카운트가 필요하므로 DB에서 직접 조회
+        long userMsgCount = chatLogRepository.countByRoom_IdAndRole(roomId, ChatRole.USER);
+
+        if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
+            log.info("🧠 [MEMORY] Summarization TRIGGERED | roomId={} | userMsgCount={}",
+                roomId, userMsgCount);
+            memoryService.summarizeAndSaveMemory(roomId, userId);
+        }
     }
 
     /**
