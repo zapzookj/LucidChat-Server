@@ -24,56 +24,86 @@ public class MemoryService {
 
     private final EmbeddingClient embeddingClient;
     private final VectorStoreRepository vectorStoreRepository;
-    private final OpenRouterClient openRouterClient; // 요약용 LLM 호출
+    private final OpenRouterClient openRouterClient;
     private final ChatLogRepository chatLogRepository;
 
     /**
      * [READ] 현재 대화와 관련된 장기 기억을 검색
+     * ⚠️ 병목 의심 구간 — embed + pinecone 각각 타이밍 측정
      */
     public String retrieveContext(Long userId, String query) {
+        long totalStart = System.currentTimeMillis();
         try {
-            // 1. 임베딩 (Double -> Float 변환)
+            // ── [RAG-1] Embedding API 호출 ──
+            long tEmbed = System.currentTimeMillis();
             List<Double> doubleVector = embeddingClient.embed(query);
             List<Float> floatVector = doubleVector.stream()
                 .map(Double::floatValue)
                 .collect(Collectors.toList());
+            log.info("⏱️ [RAG-TIMING] [RAG-1] Embedding API: {}ms | vectorDim={}",
+                System.currentTimeMillis() - tEmbed, floatVector.size());
 
-            // 2. 검색 (Top 3)
-            List<String> memories = vectorStoreRepository.searchMemories(String.valueOf(userId), floatVector, 3);
+            // ── [RAG-2] Pinecone 검색 ──
+            long tSearch = System.currentTimeMillis();
+            List<String> memories = vectorStoreRepository.searchMemories(
+                String.valueOf(userId), floatVector, 3
+            );
+            log.info("⏱️ [RAG-TIMING] [RAG-2] Pinecone search: {}ms | resultsFound={}",
+                System.currentTimeMillis() - tSearch, memories.size());
 
-            if (memories.isEmpty()) return "";
+            if (memories.isEmpty()) {
+                log.info("⏱️ [RAG-TIMING] Total retrieveContext: {}ms (no memories)",
+                    System.currentTimeMillis() - totalStart);
+                return "";
+            }
 
-            // 3. 프롬프트용 텍스트 포맷팅
-            return memories.stream()
+            String result = memories.stream()
                 .map(m -> "- " + m)
                 .collect(Collectors.joining("\n"));
 
+            log.info("⏱️ [RAG-TIMING] Total retrieveContext: {}ms",
+                System.currentTimeMillis() - totalStart);
+            return result;
+
         } catch (Exception e) {
-            log.warn("Memory retrieval failed (Non-blocking): {}", e.getMessage());
-            return ""; // 기억 회상 실패해도 대화는 계속되어야 함
+            log.warn("⏱️ [RAG-TIMING] retrieveContext FAILED after {}ms: {}",
+                System.currentTimeMillis() - totalStart, e.getMessage());
+            return "";
         }
     }
 
     /**
      * [WRITE] 지난 대화(20턴)를 요약하여 장기 기억에 저장
      * @Async: 유저 응답 속도에 영향을 주지 않기 위해 비동기 처리
+     * ⚠️ 진짜 비동기로 도는지 확인용 로그 추가
      */
     @Async
     @Transactional(readOnly = true)
     public void summarizeAndSaveMemory(Long roomId, Long userId) {
-        log.info("Starting memory summarization for room: {}", roomId);
+        long asyncStart = System.currentTimeMillis();
+        String threadName = Thread.currentThread().getName();
+        log.info("⏱️ [ASYNC-TIMING] summarizeAndSaveMemory START | thread={} | roomId={}",
+            threadName, roomId);
 
-        // 1. 요약 대상 로드 (최근 20개 ~ 30개)
+        // @Async가 정상이면 thread 이름이 'task-N' 또는 'async-N' 형태여야 함
+        // 만약 'http-nio-*' 이면 동기 실행 중인 것!
+        if (threadName.contains("http-nio") || threadName.contains("tomcat")) {
+            log.error("🚨 [ASYNC-TIMING] WARNING: summarizeAndSaveMemory is running on HTTP thread! " +
+                "@Async is NOT working! thread={}", threadName);
+        }
+
+        // 1. 요약 대상 로드
+        long t1 = System.currentTimeMillis();
         List<ChatLog> recentLogs = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        // 시간순 정렬 (과거 -> 현재)
         List<ChatLog> sortedLogs = new ArrayList<>(recentLogs);
         sortedLogs.sort((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+        log.info("⏱️ [ASYNC-TIMING] [A1] Load logs: {}ms | logCount={}",
+            System.currentTimeMillis() - t1, sortedLogs.size());
 
         if (sortedLogs.isEmpty()) return;
 
-        // 2. 요약 프롬프트 생성
         String conversationText = sortedLogs.stream()
-            .map(log -> String.format("%s: %s", log.getRole(), log.getCleanContent()))
+            .map(l -> String.format("%s: %s", l.getRole(), l.getCleanContent()))
             .collect(Collectors.joining("\n"));
 
         String summaryPrompt = """
@@ -90,23 +120,32 @@ public class MemoryService {
             """.formatted(conversationText);
 
         try {
-            // 3. LLM에게 요약 요청 (gpt-4o-mini 또는 저렴한 모델 권장)
+            // 2. LLM 요약 호출
+            long t2 = System.currentTimeMillis();
             String summary = openRouterClient.chatCompletion(
                 new OpenAiChatRequest("gpt-4o-mini", List.of(OpenAiMessage.system(summaryPrompt)), 0.5)
             );
+            log.info("⏱️ [ASYNC-TIMING] [A2] LLM summarize: {}ms", System.currentTimeMillis() - t2);
 
-            log.info("Memory Summarized: {}", summary);
-
-            // 4. 임베딩 및 저장
+            // 3. Embedding
+            long t3 = System.currentTimeMillis();
             List<Double> doubleVector = embeddingClient.embed(summary);
             List<Float> floatVector = doubleVector.stream()
                 .map(Double::floatValue)
                 .collect(Collectors.toList());
+            log.info("⏱️ [ASYNC-TIMING] [A3] Embedding: {}ms", System.currentTimeMillis() - t3);
 
+            // 4. Pinecone 저장
+            long t4 = System.currentTimeMillis();
             vectorStoreRepository.saveMemory(String.valueOf(userId), summary, floatVector);
+            log.info("⏱️ [ASYNC-TIMING] [A4] Pinecone save: {}ms", System.currentTimeMillis() - t4);
+
+            log.info("⏱️ [ASYNC-TIMING] summarizeAndSaveMemory DONE: {}ms total",
+                System.currentTimeMillis() - asyncStart);
 
         } catch (Exception e) {
-            log.error("Failed to summarize memory", e);
+            log.error("⏱️ [ASYNC-TIMING] summarizeAndSaveMemory FAILED after {}ms",
+                System.currentTimeMillis() - asyncStart, e);
         }
     }
 }
