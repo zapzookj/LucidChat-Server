@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -113,11 +114,15 @@ public class MemoryService {
             [Conversation]
             %s
             
+            [Time]
+            %s
+            
             [Output Rule]
             - Summarize in Korean within 3 sentences.
             - Focus on "User's Info" and "Relationship Progress".
             - Ignore small talk (greetings, weather).
-            """.formatted(conversationText);
+            - Write the date (time) of that memory.
+            """.formatted(conversationText, LocalDateTime.now().toString());
 
         try {
             // 2. LLM 요약 호출

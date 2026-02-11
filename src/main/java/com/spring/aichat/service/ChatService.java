@@ -15,6 +15,7 @@ import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
+import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,10 +33,9 @@ import java.util.stream.Collectors;
  *
  * [Phase 3 최적화]
  * 1. 트랜잭션 분리: TX-1(전처리) → Non-TX(RAG + LLM) → TX-2(후처리)
- *    → DB 커넥션 점유 시간을 ~20ms 이하로 축소
- * 2. Smart RAG Skip: logCount < 20이면 RAG 호출 생략 (메모리가 존재할 수 없으므로)
- *    → 초반 대화에서 5~6초 절약
+ * 2. Smart RAG Skip: logCount < 20이면 RAG 호출 생략
  * 3. 불필요한 DB 쿼리 제거: userMessage 파라미터 직접 사용
+ * 4. Redis 캐싱: ChatRoomInfo 캐싱 + 호감도 변경 시 eviction
  */
 @Service
 @Slf4j
@@ -50,25 +50,24 @@ public class ChatService {
     private final ObjectMapper objectMapper;
     private final MemoryService memoryService;
     private final TransactionTemplate txTemplate;
+    private final RedisCacheService cacheService;
 
-    /** USER 메시지 기준 메모리 요약 주기 (10 유저턴 ≈ 20 총 로그) */
+    /** USER 메시지 기준 메모리 요약 주기 */
     private static final long USER_TURN_MEMORY_CYCLE = 10;
 
-    /** RAG 호출 스킵 기준: 이 로그 수 미만이면 메모리가 존재할 수 없음 */
+    /** RAG 호출 스킵 기준 */
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  TX 간 데이터 전달용 내부 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** TX-1 → Non-TX 구간으로 전달되는 데이터 */
     private record PreProcessResult(
-        ChatRoom room,      // Detached but fully loaded (EntityGraph)
+        ChatRoom room,
         Long userId,
         long logCount
     ) {}
 
-    /** Non-TX 구간에서 LLM 호출 + 파싱 결과 */
     private record LlmResult(
         AiJsonOutput aiOutput,
         String cleanJson,
@@ -81,15 +80,11 @@ public class ChatService {
     //  유저 채팅 메시지 처리
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 유저 메시지 전송 → 캐릭터 응답 반환
-     * @Transactional 제거 — TransactionTemplate으로 수동 분리
-     */
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
         long totalStart = System.currentTimeMillis();
         log.info("⏱️ [PERF] ====== sendMessage START ====== roomId={}", roomId);
 
-        // ━━ TX-1: 전처리 (유저 메시지 저장, 에너지 차감) ━━
+        // ━━ TX-1: 전처리 ━━
         long tx1Start = System.currentTimeMillis();
         PreProcessResult pre = txTemplate.execute(status -> {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -97,85 +92,14 @@ public class ChatService {
 
             room.getUser().consumeEnergy(1);
             chatLogRepository.save(ChatLog.user(room, userMessage));
-
             long logCount = chatLogRepository.countByRoomId(roomId);
 
             return new PreProcessResult(room, room.getUser().getId(), logCount);
         });
         log.info("⏱️ [PERF] TX-1 (preprocess): {}ms", System.currentTimeMillis() - tx1Start);
-        // ━━ TX-1 커밋 완료. DB 커넥션 반환됨. ━━
 
-        // ━━ Non-TX Zone: 외부 API 호출 (DB 커넥션 미점유) ━━
-        // userMessage를 RAG 쿼리로 직접 사용 (불필요한 DB 조회 제거)
+        // ━━ Non-TX Zone: 외부 API 호출 ━━
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
-
-        // ━━ TX-2: 후처리 (AI 로그 저장, 호감도 반영) ━━
-        long tx2Start = System.currentTimeMillis();
-        SendChatResponse response = txTemplate.execute(status -> {
-            ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-
-            applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
-            saveLog(freshRoom, ChatRole.ASSISTANT,
-                llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
-
-            return new SendChatResponse(
-                roomId,
-                llmResult.sceneResponses(),
-                freshRoom.getAffectionScore(),
-                freshRoom.getStatusLevel().name()
-            );
-        });
-        log.info("⏱️ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
-        // ━━ TX-2 커밋 완료. ━━
-
-        log.info("⏱️ [PERF] ====== sendMessage DONE: {}ms ======",
-            System.currentTimeMillis() - totalStart);
-
-        // ━━ 메모리 요약 트리거 (@Async) ━━
-        // ⚠️ 반드시 TX-2 이후에 호출: 모든 OpenRouter 호출이 완료된 시점에서 비동기 시작
-        //   → 동시 API 요청 경합 방지 (401 "User not found" 해소)
-        // ⚠️ 반드시 TX-1 커밋 이후에 호출: 비동기 스레드가 커밋된 데이터를 읽을 수 있어야 함
-        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
-
-        return response;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  시스템 이벤트에 대한 캐릭터 반응 처리
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 시스템(이벤트) 메시지 저장 + 에너지 차감 + 캐릭터 반응 생성
-     * NarratorService.selectEvent()에서 호출
-     *
-     * @param energyCost 이벤트 선택 시 차감할 에너지 (0이면 차감 안 함)
-     */
-    public SendChatResponse generateResponseForSystemEvent(Long roomId, String systemDetail, int energyCost) {
-        long totalStart = System.currentTimeMillis();
-        log.info("⏱️ [PERF] ====== systemEvent START ====== roomId={}", roomId);
-
-        // ━━ TX-1: 시스템 로그 저장 + 에너지 차감 ━━
-        long tx1Start = System.currentTimeMillis();
-        PreProcessResult pre = txTemplate.execute(status -> {
-            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("ChatRoom not found: " + roomId));
-
-            if (energyCost > 0) {
-                room.getUser().consumeEnergy(energyCost);
-            }
-
-            chatLogRepository.save(ChatLog.system(room, systemDetail));
-            long logCount = chatLogRepository.countByRoomId(roomId);
-
-            return new PreProcessResult(room, room.getUser().getId(), logCount);
-        });
-        log.info("⏱️ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
-
-        // ━━ Non-TX Zone: RAG + LLM ━━
-        // 이벤트 시에는 최근 유저 메시지를 RAG 쿼리로 사용
-        String ragQuery = fetchLastUserMessage(roomId);
-        LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
 
         // ━━ TX-2: 후처리 ━━
         long tx2Start = System.currentTimeMillis();
@@ -194,7 +118,72 @@ public class ChatService {
                 freshRoom.getStatusLevel().name()
             );
         });
+        log.info("⏱️ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
+
+        // [Redis] 호감도 변경 시 캐시 무효화
+        if (llmResult.aiOutput().affectionChange() != 0) {
+            cacheService.evictRoomInfo(roomId);
+        }
+
+        log.info("⏱️ [PERF] ====== sendMessage DONE: {}ms ======",
+            System.currentTimeMillis() - totalStart);
+
+        // 메모리 요약 트리거 (@Async — TX-2 이후)
+        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
+
+        return response;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  시스템 이벤트에 대한 캐릭터 반응 처리
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public SendChatResponse generateResponseForSystemEvent(Long roomId, String systemDetail, int energyCost) {
+        long totalStart = System.currentTimeMillis();
+        log.info("⏱️ [PERF] ====== systemEvent START ====== roomId={}", roomId);
+
+        // ━━ TX-1 ━━
+        long tx1Start = System.currentTimeMillis();
+        PreProcessResult pre = txTemplate.execute(status -> {
+            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("ChatRoom not found: " + roomId));
+
+            if (energyCost > 0) {
+                room.getUser().consumeEnergy(energyCost);
+            }
+
+            chatLogRepository.save(ChatLog.system(room, systemDetail));
+            long logCount = chatLogRepository.countByRoomId(roomId);
+
+            return new PreProcessResult(room, room.getUser().getId(), logCount);
+        });
+        log.info("⏱️ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
+
+        // ━━ Non-TX Zone ━━
+        String ragQuery = fetchLastUserMessage(roomId);
+        LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
+
+        // ━━ TX-2 ━━
+        long tx2Start = System.currentTimeMillis();
+        SendChatResponse response = txTemplate.execute(status -> {
+            ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+            applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
+            saveLog(freshRoom, ChatRole.ASSISTANT,
+                llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+
+            return new SendChatResponse(
+                roomId,
+                llmResult.sceneResponses(),
+                freshRoom.getAffectionScore(),
+                freshRoom.getStatusLevel().name()
+            );
+        });
         log.info("⏱️ [PERF] TX-2 (event postprocess): {}ms", System.currentTimeMillis() - tx2Start);
+
+        // [Redis] 이벤트는 항상 에너지/호감도 변동 → 캐시 무효화
+        cacheService.evictRoomInfo(roomId);
 
         log.info("⏱️ [PERF] ====== systemEvent DONE: {}ms ======",
             System.currentTimeMillis() - totalStart);
@@ -203,21 +192,10 @@ public class ChatService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Non-TX 공통 로직: RAG + 프롬프트 + LLM 호출 + 파싱
+    //  Non-TX 공통 로직
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * DB 커넥션 없이 실행되는 핵심 AI 파이프라인
-     * - Smart RAG: logCount < MEMORY_THRESHOLD 이면 외부 API 호출 생략
-     * - 프롬프트 조립 + LLM 호출 + JSON 파싱
-     *
-     * @param room      Detached but fully loaded (EntityGraph)
-     * @param logCount  현재 방의 총 로그 수 (RAG 스킵 판단용)
-     * @param ragQuery  RAG 검색 쿼리 (유저의 최근 발화)
-     */
     private LlmResult callLlmAndParse(ChatRoom room, long logCount, String ragQuery) {
-
-        // ── [Strategy 1] Smart RAG Skip ──
         String longTermMemory = "";
         if (logCount >= RAG_SKIP_LOG_THRESHOLD && ragQuery != null && !ragQuery.isEmpty()) {
             long ragStart = System.currentTimeMillis();
@@ -232,15 +210,12 @@ public class ChatService {
             log.info("⏱️ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, RAG_SKIP_LOG_THRESHOLD);
         }
 
-        // ── 프롬프트 조립 ──
         String systemPrompt = promptAssembler.assembleSystemPrompt(
             room.getCharacter(), room, room.getUser(), longTermMemory
         );
 
-        // ── 메시지 히스토리 빌드 (짧은 DB read — Non-TX 가능) ──
         List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
 
-        // ── LLM 호출 ──
         String model = props.model();
         long llmStart = System.currentTimeMillis();
         log.info("⏱️ [PERF] LLM call START | model={} | messages={} | promptChars={}",
@@ -253,7 +228,6 @@ public class ChatService {
         log.info("⏱️ [PERF] LLM call DONE: {}ms | responseChars={}",
             System.currentTimeMillis() - llmStart, rawAssistant.length());
 
-        // ── JSON 파싱 ──
         try {
             String cleanJson = stripMarkdown(rawAssistant);
             AiJsonOutput aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
@@ -283,19 +257,33 @@ public class ChatService {
     //  채팅방 관리 영역
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Transactional(readOnly = true)
+    /**
+     * 채팅방 정보 조회
+     *
+     * [Phase 3 Redis 캐싱]
+     * - Cache Hit: Redis에서 즉시 반환 (DB 접근 없음)
+     * - Cache Miss: DB 조회 후 Redis에 60초 TTL로 캐싱
+     * - 호감도 변경 시(sendMessage, selectEvent) 캐시 evict
+     */
     public ChatRoomInfoResponse getChatRoomInfo(Long roomId) {
-        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
+        return cacheService.getRoomInfo(roomId, ChatRoomInfoResponse.class)
+            .orElseGet(() -> {
+                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-        return new ChatRoomInfoResponse(
-            room.getId(),
-            room.getCharacter().getName(),
-            room.getCharacter().getDefaultImageUrl(),
-            "background_default.png",
-            room.getAffectionScore(),
-            room.getStatusLevel().name()
-        );
+                ChatRoomInfoResponse response = new ChatRoomInfoResponse(
+                    room.getId(),
+                    room.getCharacter().getName(),
+                    room.getCharacter().getDefaultImageUrl(),
+                    "background_default.png",
+                    room.getAffectionScore(),
+                    room.getStatusLevel().name()
+                );
+
+                cacheService.cacheRoomInfo(roomId, response);
+                log.debug("🏠 [CACHE] ChatRoomInfo cached: roomId={}", roomId);
+                return response;
+            });
     }
 
     @Transactional
@@ -305,6 +293,10 @@ public class ChatService {
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
         room.resetAffection();
+
+        // [Redis] 관련 캐시 모두 무효화
+        cacheService.evictRoomInfo(roomId);
+        cacheService.evictRoomOwner(roomId);
     }
 
     @Transactional
@@ -315,9 +307,8 @@ public class ChatService {
         if (chatLogRepository.countByRoomId(roomId) > 0) return;
 
         String introNarration = """
-            [NARRATION]
             달빛이 쏟아지는 밤, 당신은 숲속 깊은 곳에 위치한 고풍스러운 저택 앞에 도착했습니다.
-            초대장을 손에 쥐고 무거운 현관문을 밀자, 따스한 온기와 은은한 홍차 향기가 당신을 감쌉니다.
+            저택의 무거운 현관문을 밀자, 따스한 온기와 은은한 향기가 당신을 감쌉니다.
             로비의 중앙, 샹들리에 아래에 단정하게 서 있던 메이드가 당신을 발견하고 부드럽게 고개를 숙입니다.
             """;
 
@@ -335,7 +326,6 @@ public class ChatService {
     //  공통 헬퍼 메서드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 이벤트 처리 시 RAG 쿼리용 최근 유저 메시지 조회 */
     private String fetchLastUserMessage(Long roomId) {
         return chatLogRepository
             .findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(roomId, ChatRole.USER)
@@ -343,17 +333,7 @@ public class ChatService {
             .orElse("");
     }
 
-    /**
-     * 메모리 요약 트리거 (TX-1 커밋 이후에 호출해야 함)
-     *
-     * [수정된 로직]
-     * 1. 총 로그 수(logCount)가 아닌 USER 메시지 수 기준으로 판단
-     *    → 총 로그 수는 SYSTEM/ASSISTANT 로그에 따라 홀짝이 달라져 % 연산이 불안정
-     * 2. TX-1 커밋 이후에 호출 → @Async 스레드가 커밋된 데이터를 정상 읽음
-     */
     private void triggerMemorySummarizationIfNeeded(Long roomId, Long userId, long totalLogCount) {
-        // USER 메시지 수 추정: (총 로그 - 초기 2개) / 2 ≈ 유저 턴 수
-        // 정확한 카운트가 필요하므로 DB에서 직접 조회
         long userMsgCount = chatLogRepository.countByRoom_IdAndRole(roomId, ChatRole.USER);
 
         if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
@@ -363,10 +343,6 @@ public class ChatService {
         }
     }
 
-    /**
-     * 최근 대화 로그를 LLM 메시지 포맷으로 변환
-     * Anti-Hallucination: SYSTEM 로그에 [NARRATION] 태그 부착
-     */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
         List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
         recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
