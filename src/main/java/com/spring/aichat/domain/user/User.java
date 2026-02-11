@@ -1,6 +1,7 @@
 package com.spring.aichat.domain.user;
 
 import com.spring.aichat.domain.enums.AuthProvider;
+import com.spring.aichat.exception.InsufficientEnergyException;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -100,7 +101,7 @@ public class User {
      */
     public void consumeEnergy(int amount) {
         if (this.energy < amount) {
-//            throw new InsufficientEnergyException("에너지가 부족합니다. 충전 후 다시 시도해주세요.");
+            throw new InsufficientEnergyException("에너지가 부족합니다. 충전 후 다시 시도해주세요.");
         }
         this.energy -= amount;
     }

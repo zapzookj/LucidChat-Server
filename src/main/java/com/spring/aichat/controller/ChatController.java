@@ -33,14 +33,14 @@ public class ChatController {
      * [Phase 3] 실시간 스트리밍 채팅 엔드포인트
      * POST /api/rooms/{roomId}/stream
      */
-    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
-    @PostMapping(value = "/rooms/{roomId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> streamChat(
-        @PathVariable Long roomId,
-        @RequestBody @Valid SendChatRequest request
-    ) {
-        return chatService.streamMessage(roomId, request.message());
-    }
+//    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+//    @PostMapping(value = "/rooms/{roomId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+//    public Flux<String> streamChat(
+//        @PathVariable Long roomId,
+//        @RequestBody @Valid SendChatRequest request
+//    ) {
+//        return chatService.streamMessage(roomId, request.message());
+//    }
 
     /**
      * 채팅 전송: 특정 방에 메시지 보내기

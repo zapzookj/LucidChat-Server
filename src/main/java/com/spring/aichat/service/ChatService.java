@@ -63,56 +63,56 @@ public class ChatService {
      *
      * @return Flux<String> - 프론트엔드로 실시간 전송되는 텍스트 청크 스트림
      */
-    public Flux<String> streamMessage(Long roomId, String userMessage) {
-
-        // ── [Phase 1] 전처리: 유저 메시지 저장 & 에너지 차감 (TX-1) ──
-        // TransactionTemplate으로 명시적 트랜잭션 → 커밋 후 즉시 DB 커넥션 반환
-        Long userId = txTemplate.execute(status -> {
-            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-
-            room.getUser().consumeEnergy(1);
-            chatLogRepository.save(ChatLog.user(room, userMessage));
-
-            // 메모리 요약 트리거 (20턴 단위)
-            long logCount = chatLogRepository.countByRoomId(roomId);
-            if (logCount > 0 && logCount % 20 == 0) {
-                memoryService.summarizeAndSaveMemory(roomId, room.getUser().getId());
-            }
-
-            return room.getUser().getId();
-        });
-        // ── TX-1 커밋 완료. DB 커넥션 반환됨. ──
-
-        // ── [Phase 1.5] 프롬프트 조립 (TX 불필요 - 읽기 전용) ──
-        // EntityGraph(fetch join)으로 즉시 로딩되므로 Lazy 이슈 없음
-        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-
-        // RAG: 장기 기억 조회 (외부 API 호출 포함 → TX 밖에서 실행)
-        String longTermMemory = userMessage.isEmpty() ? ""
-            : memoryService.retrieveContext(userId, userMessage);
-
-        String systemPrompt = promptAssembler.assembleSystemPrompt(
-            room.getCharacter(), room, room.getUser(), longTermMemory
-        );
-
-        // 히스토리 로딩 (TX-1에서 저장한 유저 메시지가 이미 포함됨)
-        List<OpenAiMessage> messages = buildMessageHistory(roomId, systemPrompt);
-
-        String model = room.getCharacter().getLlmModelName() != null
-            ? room.getCharacter().getLlmModelName() : props.model();
-
-        // ── [Phase 2] 스트리밍 (TX 없음) + 후처리 훅 ──
-        StringBuilder buffer = new StringBuilder();
-
-        return openRouterClient.streamChatCompletion(new OpenAiChatRequest(model, messages, 0.8))
-            .map(this::extractContentFromChunk)
-            .filter(content -> !content.isEmpty())
-            .doOnNext(buffer::append)
-            .doOnComplete(() -> postProcessStreaming(roomId, buffer.toString()))
-            .doOnError(e -> log.error("[SSE] Stream error. room={}", roomId, e));
-    }
+//    public Flux<String> streamMessage(Long roomId, String userMessage) {
+//
+//        // ── [Phase 1] 전처리: 유저 메시지 저장 & 에너지 차감 (TX-1) ──
+//        // TransactionTemplate으로 명시적 트랜잭션 → 커밋 후 즉시 DB 커넥션 반환
+//        Long userId = txTemplate.execute(status -> {
+//            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+//                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+//
+//            room.getUser().consumeEnergy(1);
+//            chatLogRepository.save(ChatLog.user(room, userMessage));
+//
+//            // 메모리 요약 트리거 (20턴 단위)
+//            long logCount = chatLogRepository.countByRoomId(roomId);
+//            if (logCount > 0 && logCount % 20 == 0) {
+//                memoryService.summarizeAndSaveMemory(roomId, room.getUser().getId());
+//            }
+//
+//            return room.getUser().getId();
+//        });
+//        // ── TX-1 커밋 완료. DB 커넥션 반환됨. ──
+//
+//        // ── [Phase 1.5] 프롬프트 조립 (TX 불필요 - 읽기 전용) ──
+//        // EntityGraph(fetch join)으로 즉시 로딩되므로 Lazy 이슈 없음
+//        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+//            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+//
+//        // RAG: 장기 기억 조회 (외부 API 호출 포함 → TX 밖에서 실행)
+//        String longTermMemory = userMessage.isEmpty() ? ""
+//            : memoryService.retrieveContext(userId, userMessage);
+//
+//        String systemPrompt = promptAssembler.assembleSystemPrompt(
+//            room.getCharacter(), room, room.getUser(), longTermMemory
+//        );
+//
+//        // 히스토리 로딩 (TX-1에서 저장한 유저 메시지가 이미 포함됨)
+//        List<OpenAiMessage> messages = buildMessageHistory(roomId, systemPrompt);
+//
+//        String model = room.getCharacter().getLlmModelName() != null
+//            ? room.getCharacter().getLlmModelName() : props.model();
+//
+//        // ── [Phase 2] 스트리밍 (TX 없음) + 후처리 훅 ──
+//        StringBuilder buffer = new StringBuilder();
+//
+//        return openRouterClient.streamChatCompletion(new OpenAiChatRequest(model, messages, 0.8))
+//            .map(this::extractContentFromChunk)
+//            .filter(content -> !content.isEmpty())
+//            .doOnNext(buffer::append)
+//            .doOnComplete(() -> postProcessStreaming(roomId, buffer.toString()))
+//            .doOnError(e -> log.error("[SSE] Stream error. room={}", roomId, e));
+//    }
 
     /**
      * [Phase 3 - 후처리] 스트림 완료 시 호출
