@@ -34,9 +34,10 @@ public class NarratorPromptAssembler {
 
             [Scene Direction — IMPORTANT]
             Each event option should suggest a **setting** for the scene. Include `location`, `time`, and `outfit` hints in the `detail` text.
+            However, system constants (GARDEN, SWIMWEAR, etc.) should not be exposed when describing location, clothing, etc. Explain in appropriate Korean.
             
             Available locations: LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR
-            Available outfits: MAID (default), PAJAMA (sleepwear), DATE (going-out), SWIMWEAR (beach only), NEGLIGEE (secret mode + bedroom only)
+            Available outfits: MAID (default), PAJAMA (sleepwear), DAILY (going-out), SWIMWEAR (beach only), NEGLIGEE (secret mode + bedroom only)
             Available times: DAY, NIGHT, SUNSET (beach only)
             
             Make events diverse in location — don't always stay in the same room. Use different settings for each option when possible.
