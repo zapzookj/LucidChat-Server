@@ -6,9 +6,12 @@ import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
+import com.spring.aichat.dto.chat.SendChatResponse.PromotionEvent;
+import com.spring.aichat.dto.chat.SendChatResponse.UnlockInfo;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
@@ -31,12 +34,13 @@ import java.util.stream.Collectors;
 /**
  * 채팅 핵심 서비스
  *
- * [Phase 3] 트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
- * [Phase 4] Scene direction fields (location, time, outfit, bgmMode) 매핑 추가
+ * [Phase 3]   트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
+ * [Phase 4]   Scene direction fields
  * [Phase 4.1] 씬 상태 영속화 + BGM 관성 시스템
- *   - ChatRoom에 씬 상태 저장 (bgmMode, location, outfit, timeOfDay)
- *   - LLM 프롬프트에 현재 상태 주입 → 불필요한 전환 방지
- *   - 재접속 시 마지막 씬 상태 복원
+ * [Phase 4.2]   관계 승급 이벤트 시스템
+ *   - 호감도 임계점 도달 시 승급 이벤트 자동 발동
+ *   - 이벤트 중 호감도 동결 + mood_score 누적
+ *   - 5턴 후 성공/실패 판정 → 해금 보상
  */
 @Service
 @Slf4j
@@ -63,13 +67,10 @@ public class ChatService {
     private record PreProcessResult(
         ChatRoom room,
         Long userId,
-        long logCount
+        long logCount,
+        boolean wasPromotionPending  // [Phase 5] LLM 호출 전 pending 상태 스냅샷
     ) {}
 
-    /**
-     * [Phase 4.1] LLM 결과에 씬 상태 갱신 정보 포함
-     * lastXxx 필드: 응답의 마지막 씬에서 추출한 non-null 값 (DB 영속용)
-     */
     private record LlmResult(
         AiJsonOutput aiOutput,
         String cleanJson,
@@ -79,7 +80,8 @@ public class ChatService {
         String lastBgmMode,
         String lastLocation,
         String lastOutfit,
-        String lastTimeOfDay
+        String lastTimeOfDay,
+        int moodScore           // [Phase 5] 승급 이벤트용 분위기 점수
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -100,43 +102,44 @@ public class ChatService {
             chatLogRepository.save(ChatLog.user(room, userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount);
+            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending());
         });
-        log.info("⏱ [PERF] TX-1 (preprocess): {}ms", System.currentTimeMillis() - tx1Start);
+        log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
+            System.currentTimeMillis() - tx1Start, pre.wasPromotionPending());
 
         // ── Non-TX Zone: 외부 API 호출 ──
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
 
-        // ── TX-2: 후처리 ──
+        // ── TX-2: 후처리 (승급 로직 포함) ──
         long tx2Start = System.currentTimeMillis();
         SendChatResponse response = txTemplate.execute(status -> {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-            applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
+            // [Phase 5] 승급 이벤트 처리
+            PromotionEvent promoEvent = resolveAffectionAndPromotion(
+                freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
+            );
+
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
 
-            // [Phase 4.1] 씬 상태 영속화
             freshRoom.updateSceneState(
-                llmResult.lastBgmMode(),
-                llmResult.lastLocation(),
-                llmResult.lastOutfit(),
-                llmResult.lastTimeOfDay()
+                llmResult.lastBgmMode(), llmResult.lastLocation(),
+                llmResult.lastOutfit(), llmResult.lastTimeOfDay()
             );
 
             return new SendChatResponse(
                 roomId,
                 llmResult.sceneResponses(),
                 freshRoom.getAffectionScore(),
-                freshRoom.getStatusLevel().name()
+                freshRoom.getStatusLevel().name(),
+                promoEvent
             );
         });
         log.info("⏱ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
-        if (llmResult.aiOutput().affectionChange() != 0) {
-            cacheService.evictRoomInfo(roomId);
-        }
+        cacheService.evictRoomInfo(roomId);
 
         log.info("⏱ [PERF] ====== sendMessage DONE: {}ms ======",
             System.currentTimeMillis() - totalStart);
@@ -144,6 +147,119 @@ public class ChatService {
         triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
 
         return response;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5] 승급 이벤트 핵심 로직
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 호감도 적용 + 승급 이벤트 감지/진행/판정
+     *
+     * @return PromotionEvent (null이면 이벤트 없음)
+     */
+    private PromotionEvent resolveAffectionAndPromotion(
+        ChatRoom room, int affectionChange, int moodScore, boolean wasPending) {
+
+        if (wasPending) {
+            // ── 승급 이벤트 진행 중 ──
+            // 호감도 변경 동결, mood_score 누적
+            room.advancePromotionTurn(moodScore);
+            log.info("🎯 [PROMOTION] Turn {}/{} | moodScore +{} (total: {}) | roomId={}",
+                room.getPromotionTurnCount(), RelationStatusPolicy.PROMOTION_MAX_TURNS,
+                moodScore, room.getPromotionMoodScore(), room.getId());
+
+            // 최종 턴 도달 → 판정
+            if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
+                return resolvePromotionResult(room);
+            }
+
+            // 진행 중
+            RelationStatus target = room.getPendingTargetStatus();
+            return new PromotionEvent(
+                "IN_PROGRESS",
+                target.name(),
+                RelationStatusPolicy.getDisplayName(target),
+                RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
+                room.getPromotionMoodScore(),
+                null
+            );
+
+        } else {
+            // ── 일반 상태: 호감도 적용 + 승급 감지 ──
+            RelationStatus oldStatus = room.getStatusLevel();
+
+            // 호감도 적용
+            applyAffectionChange(room, affectionChange);
+
+            // 새 관계 확인
+            RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
+
+            // 승급 감지
+            if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
+                log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | roomId={}",
+                    oldStatus, newStatus, room.getId());
+
+                // 실제 관계 업그레이드는 하지 않음 — 이벤트 결과에 따라 결정
+                room.updateStatusLevel(oldStatus);  // 원래 관계로 복원
+                room.startPromotion(newStatus);      // 이벤트 시작
+
+                return new PromotionEvent(
+                    "STARTED",
+                    newStatus.name(),
+                    RelationStatusPolicy.getDisplayName(newStatus),
+                    RelationStatusPolicy.PROMOTION_MAX_TURNS,
+                    0,
+                    null
+                );
+            }
+
+            // 승급 없음 → 이벤트 없음
+            return null;
+        }
+    }
+
+    /**
+     * 승급 이벤트 최종 판정 — 성공 또는 실패
+     */
+    private PromotionEvent resolvePromotionResult(ChatRoom room) {
+        int totalMood = room.getPromotionMoodScore();
+        RelationStatus target = room.getPendingTargetStatus();
+        boolean success = totalMood >= RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD;
+
+        log.info("🎯 [PROMOTION] RESULT: {} | mood={}/{} | target={} | roomId={}",
+            success ? "SUCCESS" : "FAILURE",
+            totalMood, RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD,
+            target, room.getId());
+
+        if (success) {
+            room.completePromotionSuccess();
+
+            // 해금 목록 구성
+            List<UnlockInfo> unlocks = RelationStatusPolicy.getUnlocksForRelation(target)
+                .stream()
+                .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
+                .collect(Collectors.toList());
+
+            return new PromotionEvent(
+                "SUCCESS",
+                target.name(),
+                RelationStatusPolicy.getDisplayName(target),
+                0,
+                totalMood,
+                unlocks
+            );
+        } else {
+            room.completePromotionFailure();
+            return new PromotionEvent(
+                "FAILURE",
+                target.name(),
+                RelationStatusPolicy.getDisplayName(target),
+                0,
+                totalMood,
+                null
+            );
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -166,7 +282,7 @@ public class ChatService {
             chatLogRepository.save(ChatLog.system(room, systemDetail));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount);
+            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending());
         });
         log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
 
@@ -178,16 +294,14 @@ public class ChatService {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
+            // 시스템 이벤트 중에는 승급 이벤트 감지하지 않음 (일반 호감도만 적용)
             applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
 
-            // [Phase 4.1] 씬 상태 영속화
             freshRoom.updateSceneState(
-                llmResult.lastBgmMode(),
-                llmResult.lastLocation(),
-                llmResult.lastOutfit(),
-                llmResult.lastTimeOfDay()
+                llmResult.lastBgmMode(), llmResult.lastLocation(),
+                llmResult.lastOutfit(), llmResult.lastTimeOfDay()
             );
 
             return new SendChatResponse(
@@ -256,7 +370,6 @@ public class ChatService {
                 : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
             EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
 
-            // [Phase 4] Scene direction fields 매핑 (null-safe)
             List<SendChatResponse.SceneResponse> sceneResponses = aiOutput.scenes().stream()
                 .map(s -> new SendChatResponse.SceneResponse(
                     s.narration(),
@@ -269,15 +382,16 @@ public class ChatService {
                 ))
                 .collect(Collectors.toList());
 
-            // [Phase 4.1] 마지막 씬의 non-null 상태 추출 (DB 영속용)
-            // 여러 씬 중 마지막 non-null 값을 역순으로 탐색
             String lastBgm = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::bgmMode);
             String lastLoc = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::location);
             String lastOutfit = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::outfit);
             String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
 
+            // [Phase 5] mood_score 추출 (없으면 0)
+            int moodScore = aiOutput.moodScore() != null ? aiOutput.moodScore() : 0;
+
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
-                lastBgm, lastLoc, lastOutfit, lastTime);
+                lastBgm, lastLoc, lastOutfit, lastTime, moodScore);
 
         } catch (JsonProcessingException e) {
             log.error("JSON Parsing Error: {}", rawAssistant, e);
@@ -289,9 +403,6 @@ public class ChatService {
     //  채팅방 관리 영역
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * [Phase 4.1] 씬 상태 포함하여 반환 — 재접속 시 복원용
-     */
     public ChatRoomInfoResponse getChatRoomInfo(Long roomId) {
         return cacheService.getRoomInfo(roomId, ChatRoomInfoResponse.class)
             .orElseGet(() -> {
@@ -305,7 +416,6 @@ public class ChatService {
                     "background_default.png",
                     room.getAffectionScore(),
                     room.getStatusLevel().name(),
-                    // [Phase 4.1] 씬 상태
                     room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY",
                     room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE",
                     room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID",
@@ -324,8 +434,7 @@ public class ChatService {
         ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
-        room.resetAffection();
-        room.resetSceneState(); // [Phase 4.1] 씬 상태도 리셋
+        room.resetAll(); // [Phase 5] 호감도 + 씬 + 승급 전부 리셋
 
         cacheService.evictRoomInfo(roomId);
         cacheService.evictRoomOwner(roomId);
@@ -352,7 +461,7 @@ public class ChatService {
         chatLogRepository.save(assistantLog);
 
         room.updateLastActive(EmotionTag.NEUTRAL);
-        room.resetSceneState(); // [Phase 4.1] 초기 씬 상태 설정
+        room.resetSceneState();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -431,10 +540,6 @@ public class ChatService {
         }
     }
 
-    /**
-     * [Phase 4] LLM 출력 문자열을 안전하게 대문자 변환
-     * null 또는 "null" 문자열이면 null 반환 (프론트에서 "이전 값 유지" 처리)
-     */
     private String safeUpperCase(String value) {
         if (value == null || value.isBlank() || "null".equalsIgnoreCase(value)) {
             return null;
@@ -442,9 +547,6 @@ public class ChatService {
         return value.toUpperCase().trim();
     }
 
-    /**
-     * [Phase 4.1] 씬 리스트에서 특정 필드의 마지막 non-null 값을 역순 탐색
-     */
     private String extractLastNonNull(
         List<SendChatResponse.SceneResponse> scenes,
         java.util.function.Function<SendChatResponse.SceneResponse, String> extractor) {

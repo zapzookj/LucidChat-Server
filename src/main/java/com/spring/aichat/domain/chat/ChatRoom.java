@@ -21,13 +21,14 @@ import java.time.LocalDateTime;
         @Index(name = "idx_room_character", columnList = "character_id")
     })
 /**
- * 채팅방(관계/상태 저장의 핵심 엔티티)
- * - affectionScore, statusLevel로 동적 프롬프트를 구성한다.
+ * 채팅방 — 관계/상태 저장의 핵심 엔티티
  *
- * [Phase 4.1] 씬 상태 영속화:
- * - currentBgmMode, currentLocation, currentOutfit, currentTimeOfDay
- * - BGM 관성 시스템: LLM에게 현재 상태를 알려주어 불필요한 전환 방지
- * - 재접속 복원: 유저가 재진입 시 마지막 씬 상태로 복원
+ * [Phase 4.1] 씬 상태 영속화 (bgmMode, location, outfit, timeOfDay)
+ * [Phase 4.2]  관계 승급 이벤트 시스템
+ *   - promotionPending:      승급 이벤트 진행 중 여부
+ *   - pendingTargetStatus:   승급 목표 관계
+ *   - promotionMoodScore:    누적 분위기 점수
+ *   - promotionTurnCount:    이벤트 경과 턴 수
  */
 public class ChatRoom {
 
@@ -59,7 +60,7 @@ public class ChatRoom {
     private EmotionTag lastEmotion;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.1] 씬 상태 영속화 필드
+    //  [Phase 4.1] 씬 상태 영속화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Enumerated(EnumType.STRING)
@@ -78,6 +79,25 @@ public class ChatRoom {
     @Column(name = "current_time_of_day", length = 20)
     private TimeOfDay currentTimeOfDay;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5] 관계 승급 이벤트
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Column(name = "promotion_pending", nullable = false)
+    private boolean promotionPending = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pending_target_status", length = 30)
+    private RelationStatus pendingTargetStatus;
+
+    @Column(name = "promotion_mood_score", nullable = false)
+    private int promotionMoodScore = 0;
+
+    @Column(name = "promotion_turn_count", nullable = false)
+    private int promotionTurnCount = 0;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     public ChatRoom(User user, Character character) {
         this.user = user;
         this.character = character;
@@ -85,7 +105,6 @@ public class ChatRoom {
         this.statusLevel = RelationStatus.STRANGER;
         this.lastActiveAt = LocalDateTime.now();
         this.lastEmotion = EmotionTag.NEUTRAL;
-        // 씬 초기값
         this.currentBgmMode = BgmMode.DAILY;
         this.currentLocation = Location.ENTRANCE;
         this.currentOutfit = Outfit.MAID;
@@ -124,13 +143,8 @@ public class ChatRoom {
         this.statusLevel = RelationStatus.STRANGER;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.1] 씬 상태 갱신
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ── 씬 상태 ──
 
-    /**
-     * LLM 응답의 마지막 씬에서 non-null 필드만 갱신 (null = 유지)
-     */
     public void updateSceneState(String bgmMode, String location, String outfit, String timeOfDay) {
         if (bgmMode != null) {
             try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {}
@@ -146,13 +160,61 @@ public class ChatRoom {
         }
     }
 
-    /**
-     * 채팅 기록 초기화 시 씬 상태도 리셋
-     */
     public void resetSceneState() {
         this.currentBgmMode = BgmMode.DAILY;
         this.currentLocation = Location.ENTRANCE;
         this.currentOutfit = Outfit.MAID;
         this.currentTimeOfDay = TimeOfDay.NIGHT;
+    }
+
+    // ── 관계 승급 이벤트 ──
+
+    /**
+     * 승급 이벤트 시작
+     */
+    public void startPromotion(RelationStatus targetStatus) {
+        this.promotionPending = true;
+        this.pendingTargetStatus = targetStatus;
+        this.promotionMoodScore = 0;
+        this.promotionTurnCount = 0;
+    }
+
+    /**
+     * 이벤트 턴 진행 — mood_score 누적
+     */
+    public void advancePromotionTurn(int moodScore) {
+        this.promotionTurnCount++;
+        this.promotionMoodScore += moodScore;
+    }
+
+    /**
+     * 승급 성공 — 관계 업그레이드 + 이벤트 종료
+     */
+    public void completePromotionSuccess() {
+        this.statusLevel = this.pendingTargetStatus;
+        clearPromotion();
+    }
+
+    /**
+     * 승급 실패 — 관계 유지 + 이벤트 종료
+     */
+    public void completePromotionFailure() {
+        clearPromotion();
+    }
+
+    private void clearPromotion() {
+        this.promotionPending = false;
+        this.pendingTargetStatus = null;
+        this.promotionMoodScore = 0;
+        this.promotionTurnCount = 0;
+    }
+
+    /**
+     * 전체 초기화 (대화 삭제 시)
+     */
+    public void resetAll() {
+        resetAffection();
+        resetSceneState();
+        clearPromotion();
     }
 }
