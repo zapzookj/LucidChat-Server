@@ -1,8 +1,7 @@
 package com.spring.aichat.domain.chat;
 
 import com.spring.aichat.domain.character.Character;
-import com.spring.aichat.domain.enums.EmotionTag;
-import com.spring.aichat.domain.enums.RelationStatus;
+import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -24,6 +23,11 @@ import java.time.LocalDateTime;
 /**
  * 채팅방(관계/상태 저장의 핵심 엔티티)
  * - affectionScore, statusLevel로 동적 프롬프트를 구성한다.
+ *
+ * [Phase 4.1] 씬 상태 영속화:
+ * - currentBgmMode, currentLocation, currentOutfit, currentTimeOfDay
+ * - BGM 관성 시스템: LLM에게 현재 상태를 알려주어 불필요한 전환 방지
+ * - 재접속 복원: 유저가 재진입 시 마지막 씬 상태로 복원
  */
 public class ChatRoom {
 
@@ -54,6 +58,26 @@ public class ChatRoom {
     @Column(name = "last_emotion", length = 30)
     private EmotionTag lastEmotion;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4.1] 씬 상태 영속화 필드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_bgm_mode", length = 20)
+    private BgmMode currentBgmMode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_location", length = 20)
+    private Location currentLocation;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_outfit", length = 20)
+    private Outfit currentOutfit;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_time_of_day", length = 20)
+    private TimeOfDay currentTimeOfDay;
+
     public ChatRoom(User user, Character character) {
         this.user = user;
         this.character = character;
@@ -61,6 +85,11 @@ public class ChatRoom {
         this.statusLevel = RelationStatus.STRANGER;
         this.lastActiveAt = LocalDateTime.now();
         this.lastEmotion = EmotionTag.NEUTRAL;
+        // 씬 초기값
+        this.currentBgmMode = BgmMode.DAILY;
+        this.currentLocation = Location.ENTRANCE;
+        this.currentOutfit = Outfit.MAID;
+        this.currentTimeOfDay = TimeOfDay.NIGHT;
     }
 
     public void touch(EmotionTag lastEmotion) {
@@ -93,5 +122,37 @@ public class ChatRoom {
     public void resetAffection() {
         this.affectionScore = 0;
         this.statusLevel = RelationStatus.STRANGER;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4.1] 씬 상태 갱신
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * LLM 응답의 마지막 씬에서 non-null 필드만 갱신 (null = 유지)
+     */
+    public void updateSceneState(String bgmMode, String location, String outfit, String timeOfDay) {
+        if (bgmMode != null) {
+            try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {}
+        }
+        if (location != null) {
+            try { this.currentLocation = Location.valueOf(location); } catch (IllegalArgumentException ignored) {}
+        }
+        if (outfit != null) {
+            try { this.currentOutfit = Outfit.valueOf(outfit); } catch (IllegalArgumentException ignored) {}
+        }
+        if (timeOfDay != null) {
+            try { this.currentTimeOfDay = TimeOfDay.valueOf(timeOfDay); } catch (IllegalArgumentException ignored) {}
+        }
+    }
+
+    /**
+     * 채팅 기록 초기화 시 씬 상태도 리셋
+     */
+    public void resetSceneState() {
+        this.currentBgmMode = BgmMode.DAILY;
+        this.currentLocation = Location.ENTRANCE;
+        this.currentOutfit = Outfit.MAID;
+        this.currentTimeOfDay = TimeOfDay.NIGHT;
     }
 }

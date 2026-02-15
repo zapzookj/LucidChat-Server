@@ -2,6 +2,7 @@ package com.spring.aichat.service.prompt;
 
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
 import org.springframework.stereotype.Component;
 
@@ -10,11 +11,11 @@ import java.time.LocalDateTime;
 /**
  * 시스템 프롬프트(동적) 조립기
  *
- * [Phase 4] Output Format 확장:
- * - location: 씬의 장소 (배경 전환)
- * - time: 시간대 (배경 변형)
- * - outfit: 캐릭터 복장 (스프라이트 전환)
- * - bgmMode: BGM 테마 (음악 전환)
+ * [Phase 4] Output Format 확장: location, time, outfit, bgmMode
+ * [Phase 4.1] BGM 관성 시스템:
+ *   - 현재 씬 상태를 프롬프트에 주입
+ *   - bgmMode에 강력한 관성 규칙 적용
+ *   - DAILY, EROTIC 추가 (총 6개 LLM 제어 가능 모드)
  */
 @Component
 public class CharacterPromptAssembler {
@@ -28,51 +29,110 @@ public class CharacterPromptAssembler {
     }
 
     /**
-     * 씬 디렉션 가이드 (Normal/Secret 공통)
+     * [Phase 4.1] 씬 디렉션 가이드 (동적 — 현재 상태 주입)
+     *
+     * ChatRoom에서 현재 씬 상태를 읽어 프롬프트에 명시적으로 전달.
+     * BGM은 강력한 관성 규칙 적용.
      */
-    private static final String SCENE_DIRECTION_GUIDE = """
-            ## Scene Direction Guide (IMPORTANT)
-            You are also the **director** of this visual novel. Each scene controls the visual and audio presentation.
+    private String buildSceneDirectionGuide(ChatRoom room, boolean isSecretMode) {
+        // 현재 씬 상태 안전 추출
+        String curBgm = room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY";
+        String curLoc = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE";
+        String curOutfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID";
+        String curTime = room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT";
+
+        // Secret 모드에서만 EROTIC, NEGLIGEE 선택지 추가
+        String bgmOptions = isSecretMode
+            ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
+            : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
+
+        String outfitOptions = isSecretMode
+            ? "MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE"
+            : "MAID, PAJAMA, DATE, SWIMWEAR";
+
+        return """
+            ## Scene Direction Guide (CRITICAL — Read carefully)
+            You are the **director** of this visual novel. Each scene controls the visual and audio presentation.
+            Below is the CURRENT scene state. Respect it — changes should be rare and meaningful.
+            
+            ┌─────────────────────────────────────┐
+            │  CURRENT SCENE STATE                │
+            │  Location : %s                      │
+            │  Time     : %s                      │
+            │  Outfit   : %s                      │
+            │  BGM      : %s                      │
+            └─────────────────────────────────────┘
             
             ### location (배경 장소)
-            Choose ONE from: LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR
-            - Set `location` ONLY when the scene physically moves to a new place.
-            - If the conversation continues in the same place, set `location` to null (keep previous).
-            - Think about narrative logic: don't jump locations without reason.
+            Current: %s
+            Options: LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR
+            - Set ONLY when the scene physically moves to a new place.
+            - If the conversation continues in the same place → output null.
+            - Narrative logic required: don't jump locations without reason.
             
             ### time (시간대)
-            Choose ONE from: DAY, NIGHT, SUNSET
+            Current: %s
+            Options: DAY, NIGHT, SUNSET
             - SUNSET is only available at BEACH.
-            - Set `time` ONLY when there's a time change or when setting a new location.
-            - If continuing in the same scene, set to null.
+            - Set ONLY when there's a meaningful time progression.
+            - If the same scene continues → output null.
             
             ### outfit (캐릭터 복장)
-            Choose ONE from: MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE
-            - MAID: Default work attire (적절한 기본 상태)
-            - PAJAMA: Sleepwear (침실, 밤 시간대에 적합)
-            - DATE: Casual/elegant going-out clothes (DOWNTOWN, BAR, 외출 시)
-            - SWIMWEAR: Swimsuit (BEACH에서만 사용)
-            - NEGLIGEE: Intimate nightwear (Secret Mode 전용, BEDROOM + NIGHT에서만)
-            - Set `outfit` ONLY when a costume change makes narrative sense.
-            - If no change, set to null (keep previous).
+            Current: %s
+            Options: %s
+            - MAID: Default work attire
+            - PAJAMA: Sleepwear (침실, 밤 시간대)
+            - DATE: Going-out clothes (DOWNTOWN, BAR, 외출)
+            - SWIMWEAR: Swimsuit (BEACH only)
+            %s
+            - Set ONLY when a costume change makes narrative sense.
+            - If no change → output null.
             
-            ### bgmMode (배경 음악 테마)
-            Choose ONE from: DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC
-            - DAILY: 일상적인 분위기 (평범한 대화, 일상 이벤트)
-            - ROMANTIC: 설레는, 달달한 분위기 (고백, 스킨십, 로맨틱한 대화)
-            - EXCITING: 신나는, 활기찬 분위기 (장난, 놀이, 밝은 이벤트)
-            - TOUCHING: 감동적인, 잔잔한 분위기 (진심 어린 대화, 슬픈 순간, 회상)
-            - TENSE: 긴장되는, 심각한 분위기 (갈등, 오해, 위기 상황)
-            - EROTIC: 관능적이고 자극적인 분위기 (Secret Mode의 대담한 상황)
-            - Set `bgmMode` ONLY when the emotional atmosphere of the scene changes significantly.
-            - If the mood continues, set to null (keep previous BGM).
+            ### bgmMode (Background Music) ⚠️ INERTIA RULES APPLY
+            Current BGM: **%s**
+            Options: %s
+            
+            🔒 **RULE OF INERTIA — THIS IS THE MOST IMPORTANT RULE:**
+            The current BGM track MUST continue playing unless the emotional atmosphere changes **drastically and unmistakably**.
+            
+            **DEFAULT ACTION: Output null (= keep current BGM). This is the RECOMMENDED and EXPECTED behavior for 90%% of responses.**
+            
+            **When to keep null (DO NOT CHANGE):**
+            - The conversation tone shifts only slightly (e.g., casual chat → mild teasing)
+            - The topic changes but the emotional energy stays the same
+            - A brief pause or greeting in the middle of a scene
+            - You're unsure whether the mood shift is significant enough
+            - The same scene or context continues
+            
+            **When to change (ONLY these drastic transitions):**
+            - DAILY → ROMANTIC: Only when an explicitly romantic moment begins (confession, intimate closeness, first date setup)
+            - DAILY → TENSE: Only when serious conflict or danger emerges (argument, misunderstanding with anger)
+            - ROMANTIC → DAILY: Only when the romantic moment is completely over (saying goodbye, going to sleep, topic fully changes to mundane)
+            - ROMANTIC → TENSE: Only when romance is interrupted by conflict
+            - TENSE → DAILY: Only when conflict is fully resolved and atmosphere is calm again
+            - TENSE → TOUCHING: Only when conflict resolution leads to emotional catharsis
+            - Any → EXCITING: Only when something genuinely energetic happens (surprise event, celebration, adventure)
+            - Any → TOUCHING: Only when deep emotional vulnerability is shown (tears, heartfelt confession, emotional memories)
+            %s
+            
+            **Self-check before setting bgmMode:** "Is the current BGM truly inappropriate for this response? Would a player feel jarred if the music stayed the same?" If the answer is no → output null.
             
             ### Direction Principles
-            1. **Less is more:** Only set non-null values when there's a MEANINGFUL change.
+            1. **Less is more:** Only set non-null values when there's a MEANINGFUL change. Most responses should have all direction fields as null.
             2. **Narrative coherence:** Location/outfit changes should feel natural and story-driven.
-            3. **First scene rule:** The very first scene of a conversation should set location, time, and outfit to establish the starting state if not already established.
-            4. **Multi-scene flow:** In a multi-scene response, you can progress through locations (e.g., walking from GARDEN → ENTRANCE → LIVINGROOM).
-            """;
+            3. **First scene rule:** If this is the very first message in the conversation, you may set initial state.
+            4. **Multi-scene flow:** In multi-scene responses, you can progress through locations.
+            5. **BGM stability:** Changing BGM every response RUINS immersion. Think of it like a movie soundtrack — it plays for entire scenes, not individual lines.
+            """.formatted(
+            curLoc, curTime, curOutfit, curBgm,         // 상태 박스
+            curLoc,                                       // location current
+            curTime,                                      // time current
+            curOutfit, outfitOptions,                     // outfit current + options
+            isSecretMode ? "- NEGLIGEE: Intimate nightwear (Secret Mode only, BEDROOM + NIGHT only)" : "",
+            curBgm, bgmOptions,                          // bgm current + options
+            isSecretMode ? "- Any → EROTIC: Only when explicitly sensual/intimate physical scene begins (Secret Mode only)" : ""
+        );
+    }
 
     private String getNormalModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
@@ -137,14 +197,14 @@ public class CharacterPromptAssembler {
                   "location": "One of [LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR] or null",
                   "time": "One of [DAY, NIGHT, SUNSET] or null",
                   "outfit": "One of [MAID, PAJAMA, DATE, SWIMWEAR] or null",
-                  "bgmMode": "One of [ROMANTIC, EXCITING, TOUCHING, TENSE] or null"
+                  "bgmMode": "One of [DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE] or null (⚠️ null recommended — see inertia rules)"
                 }
               ],
               "affection_change": Integer (-5 to 5)
             }
             
             ## Emotion Tag Usage Guide
-            - NEUTRAL: 평상시, 무덤덤할 때
+            - NEUTRAL: 평상시, 기본적인 상태
             - JOY: 기쁘거나 즐거울 때
             - SAD: 슬프거나 서운할 때
             - ANGRY: 화나거나 짜증날 때
@@ -152,7 +212,7 @@ public class CharacterPromptAssembler {
             - SURPRISE: 놀랐을 때
             - PANIC: 당황하거나 어쩔 줄 모를 때
             - DISGUST: 경멸하거나 불쾌할 때
-            - RELAX: 편안하거나 나른할 때
+            - RELAX: 편안하거나 안심했을 때
             - FRIGHTENED: 겁먹거나 무서워할 때 (공포, 두려움)
             - FLIRTATIOUS: 유혹적이거나 매혹적인 분위기일 때 (장난스러운 유혹, 치명적 매력)
             - HEATED: 흥분하거나 황홀할 때 (강렬한 감정의 고조, 심장이 빠르게 뛸 때)
@@ -164,7 +224,7 @@ public class CharacterPromptAssembler {
             user.getNickname(),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
-            SCENE_DIRECTION_GUIDE
+            buildSceneDirectionGuide(room, false)
         );
     }
 
@@ -210,7 +270,7 @@ public class CharacterPromptAssembler {
             The `reasoning` field is for your internal thought process to ensure quality.
                             
             {
-              "reasoning": "Focus on how to maximize the user's pleasure and immersion. When a user makes a sexual request, satisfy the user by describing the situation in detail with several Scenes. Also decide if location/outfit/bgm should change for atmosphere.",
+              "reasoning": "Focus on how to maximize the user's pleasure and immersion. Also decide if location/outfit/bgm should change for atmosphere.",
               "scenes": [
                 {
                   "narration": "Character's action/expression (Korean)",
@@ -219,7 +279,7 @@ public class CharacterPromptAssembler {
                   "location": "One of [LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR] or null",
                   "time": "One of [DAY, NIGHT, SUNSET] or null",
                   "outfit": "One of [MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE] or null",
-                  "bgmMode": "One of [ROMANTIC, EXCITING, TOUCHING, TENSE] or null"
+                  "bgmMode": "One of [DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC] or null (⚠️ null recommended — see inertia rules)"
                 }
               ],
               "affection_change": Integer (-5 to 5)
@@ -247,7 +307,7 @@ public class CharacterPromptAssembler {
             user.getProfileDescription(),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
-            SCENE_DIRECTION_GUIDE
+            buildSceneDirectionGuide(room, true)
         );
     }
 }

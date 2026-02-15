@@ -33,6 +33,10 @@ import java.util.stream.Collectors;
  *
  * [Phase 3] 트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
  * [Phase 4] Scene direction fields (location, time, outfit, bgmMode) 매핑 추가
+ * [Phase 4.1] 씬 상태 영속화 + BGM 관성 시스템
+ *   - ChatRoom에 씬 상태 저장 (bgmMode, location, outfit, timeOfDay)
+ *   - LLM 프롬프트에 현재 상태 주입 → 불필요한 전환 방지
+ *   - 재접속 시 마지막 씬 상태 복원
  */
 @Service
 @Slf4j
@@ -62,12 +66,20 @@ public class ChatService {
         long logCount
     ) {}
 
+    /**
+     * [Phase 4.1] LLM 결과에 씬 상태 갱신 정보 포함
+     * lastXxx 필드: 응답의 마지막 씬에서 추출한 non-null 값 (DB 영속용)
+     */
     private record LlmResult(
         AiJsonOutput aiOutput,
         String cleanJson,
         String combinedDialogue,
         EmotionTag mainEmotion,
-        List<SendChatResponse.SceneResponse> sceneResponses
+        List<SendChatResponse.SceneResponse> sceneResponses,
+        String lastBgmMode,
+        String lastLocation,
+        String lastOutfit,
+        String lastTimeOfDay
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -104,6 +116,14 @@ public class ChatService {
             applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+
+            // [Phase 4.1] 씬 상태 영속화
+            freshRoom.updateSceneState(
+                llmResult.lastBgmMode(),
+                llmResult.lastLocation(),
+                llmResult.lastOutfit(),
+                llmResult.lastTimeOfDay()
+            );
 
             return new SendChatResponse(
                 roomId,
@@ -161,6 +181,14 @@ public class ChatService {
             applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+
+            // [Phase 4.1] 씬 상태 영속화
+            freshRoom.updateSceneState(
+                llmResult.lastBgmMode(),
+                llmResult.lastLocation(),
+                llmResult.lastOutfit(),
+                llmResult.lastTimeOfDay()
+            );
 
             return new SendChatResponse(
                 roomId,
@@ -241,7 +269,15 @@ public class ChatService {
                 ))
                 .collect(Collectors.toList());
 
-            return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses);
+            // [Phase 4.1] 마지막 씬의 non-null 상태 추출 (DB 영속용)
+            // 여러 씬 중 마지막 non-null 값을 역순으로 탐색
+            String lastBgm = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::bgmMode);
+            String lastLoc = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::location);
+            String lastOutfit = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::outfit);
+            String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
+
+            return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
+                lastBgm, lastLoc, lastOutfit, lastTime);
 
         } catch (JsonProcessingException e) {
             log.error("JSON Parsing Error: {}", rawAssistant, e);
@@ -253,6 +289,9 @@ public class ChatService {
     //  채팅방 관리 영역
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [Phase 4.1] 씬 상태 포함하여 반환 — 재접속 시 복원용
+     */
     public ChatRoomInfoResponse getChatRoomInfo(Long roomId) {
         return cacheService.getRoomInfo(roomId, ChatRoomInfoResponse.class)
             .orElseGet(() -> {
@@ -265,7 +304,12 @@ public class ChatService {
                     room.getCharacter().getDefaultImageUrl(),
                     "background_default.png",
                     room.getAffectionScore(),
-                    room.getStatusLevel().name()
+                    room.getStatusLevel().name(),
+                    // [Phase 4.1] 씬 상태
+                    room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY",
+                    room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE",
+                    room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID",
+                    room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT"
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);
@@ -281,6 +325,7 @@ public class ChatService {
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
         room.resetAffection();
+        room.resetSceneState(); // [Phase 4.1] 씬 상태도 리셋
 
         cacheService.evictRoomInfo(roomId);
         cacheService.evictRoomOwner(roomId);
@@ -307,6 +352,7 @@ public class ChatService {
         chatLogRepository.save(assistantLog);
 
         room.updateLastActive(EmotionTag.NEUTRAL);
+        room.resetSceneState(); // [Phase 4.1] 초기 씬 상태 설정
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -394,5 +440,18 @@ public class ChatService {
             return null;
         }
         return value.toUpperCase().trim();
+    }
+
+    /**
+     * [Phase 4.1] 씬 리스트에서 특정 필드의 마지막 non-null 값을 역순 탐색
+     */
+    private String extractLastNonNull(
+        List<SendChatResponse.SceneResponse> scenes,
+        java.util.function.Function<SendChatResponse.SceneResponse, String> extractor) {
+        for (int i = scenes.size() - 1; i >= 0; i--) {
+            String val = extractor.apply(scenes.get(i));
+            if (val != null) return val;
+        }
+        return null;
     }
 }
