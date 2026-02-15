@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * 나레이터(이벤트 생성기)용 프롬프트 조립기
+ *
+ * [Phase 4] 이벤트 옵션에 location, time, outfit 힌트 추가
+ * → 이벤트 선택 시 캐릭터가 해당 장소/복장 컨텍스트에서 반응
  */
 @Component
 public class NarratorPromptAssembler {
@@ -29,6 +32,16 @@ public class NarratorPromptAssembler {
             2. **AFFECTION** (Cost 3): Romantic, touching moments. (Higher quality guaranteed)
             3. **SECRET** (Cost 4): A highly intimate, seductive, or bold situation (NSFW allowed).
 
+            [Scene Direction — IMPORTANT]
+            Each event option should suggest a **setting** for the scene. Include `location`, `time`, and `outfit` hints in the `detail` text.
+            
+            Available locations: LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR
+            Available outfits: MAID (default), PAJAMA (sleepwear), DATE (going-out), SWIMWEAR (beach only), NEGLIGEE (secret mode + bedroom only)
+            Available times: DAY, NIGHT, SUNSET (beach only)
+            
+            Make events diverse in location — don't always stay in the same room. Use different settings for each option when possible.
+            Example: Option 1 in KITCHEN (cooking together), Option 2 at BEACH (surprise outing), Option 3 in BEDROOM (secret mode).
+
             [Output Format Rule]
             Output ONLY a JSON object in the following format. Do not include any other text.
             {
@@ -36,21 +49,21 @@ public class NarratorPromptAssembler {
                 {
                   "type": "NORMAL",
                   "summary": "Short title for the button (Max 15 chars)",
-                  "detail": "Full description of the scene in Korean (2-3 sentences). This will be displayed if selected.",
+                  "detail": "Full description of the scene in Korean (2-3 sentences). Include the setting naturally in the narrative.",
                   "energyCost": 2,
                   "isSecret": false
                 },
                 {
                   "type": "AFFECTION",
                   "summary": "Title (e.g., 뜻밖의 스킨십)",
-                  "detail": "Description in Korean...",
+                  "detail": "Description in Korean... Include setting.",
                   "energyCost": 3,
                   "isSecret": false
                 },
                 {
                   "type": "SECRET",
                   "summary": "Title (e.g., 젖은 옷, 은밀한 속삭임)",
-                  "detail": "Description in Korean...",
+                  "detail": "Description in Korean... Include setting.",
                   "energyCost": 4,
                   "isSecret": true
                 }
