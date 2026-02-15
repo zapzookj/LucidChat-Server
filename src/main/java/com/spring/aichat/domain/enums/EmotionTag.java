@@ -12,5 +12,8 @@ public enum EmotionTag {
     SURPRISE, // 놀람
     PANIC, // 당황
     RELAX, // 편안함
-    DISGUST // 경멸
+    DISGUST, // 경멸
+    FRIGHTENED, // 겁먹음
+    FLIRTATIOUS, // 유혹적
+    HEATED, // 흥분한, 활홀
 }
