@@ -7,7 +7,7 @@ import java.util.*;
 /**
  * 호감도 점수에 따른 관계 레벨 정책
  *
- * [Phase 4.2] 관계 승급 이벤트 시스템
+ * [Phase 5] 관계 승급 이벤트 시스템
  *   - 승급 임계점 정의
  *   - 관계별 해금 콘텐츠 정의
  *   - 승급 이벤트 상수
@@ -26,6 +26,9 @@ public final class RelationStatusPolicy {
     /** 승급 성공에 필요한 최소 누적 mood_score */
     public static final int PROMOTION_SUCCESS_THRESHOLD = 5;
 
+    /** 승급 실패 시 호감도 감소량 (임계점 아래로 확실히 떨어뜨림) */
+    public static final int PROMOTION_FAILURE_PENALTY = 5;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  관계 레벨 판정
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -36,6 +39,24 @@ public final class RelationStatusPolicy {
         if (score < 40) return RelationStatus.ACQUAINTANCE;
         if (score < 80) return RelationStatus.FRIEND;
         return RelationStatus.LOVER;
+    }
+
+    /**
+     * 특정 관계의 진입 임계점 (해당 관계가 되기 위한 최소 점수)
+     *
+     * STRANGER:     0
+     * ACQUAINTANCE: 21
+     * FRIEND:       40
+     * LOVER:        80
+     */
+    public static int getThresholdScore(RelationStatus status) {
+        return switch (status) {
+            case ENEMY        -> -100;
+            case STRANGER     -> 0;
+            case ACQUAINTANCE -> 21;
+            case FRIEND       -> 40;
+            case LOVER        -> 80;
+        };
     }
 
     /**

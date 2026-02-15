@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  * [Phase 3]   트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
  * [Phase 4]   Scene direction fields
  * [Phase 4.1] 씬 상태 영속화 + BGM 관성 시스템
- * [Phase 4.2]   관계 승급 이벤트 시스템
+ * [Phase 5]   관계 승급 이벤트 시스템
  *   - 호감도 임계점 도달 시 승급 이벤트 자동 발동
  *   - 이벤트 중 호감도 동결 + mood_score 누적
  *   - 5턴 후 성공/실패 판정 → 해금 보상
@@ -197,12 +197,17 @@ public class ChatService {
 
             // 승급 감지
             if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
-                log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | roomId={}",
-                    oldStatus, newStatus, room.getId());
+                log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | affection={} | roomId={}",
+                    oldStatus, newStatus, room.getAffectionScore(), room.getId());
 
-                // 실제 관계 업그레이드는 하지 않음 — 이벤트 결과에 따라 결정
+                // 호감도를 임계점 직전으로 롤백 (이벤트 중 동결 상태에서 시작)
+                int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
+                room.updateAffection(thresholdEdge);
                 room.updateStatusLevel(oldStatus);  // 원래 관계로 복원
                 room.startPromotion(newStatus);      // 이벤트 시작
+
+                log.info("🎯 [PROMOTION] Affection rolled back to {} (threshold edge) | roomId={}",
+                    thresholdEdge, room.getId());
 
                 return new PromotionEvent(
                     "STARTED",
@@ -235,6 +240,13 @@ public class ChatService {
         if (success) {
             room.completePromotionSuccess();
 
+            // 성공: 호감도를 새 관계의 임계점으로 세팅
+            int thresholdScore = RelationStatusPolicy.getThresholdScore(target);
+            room.updateAffection(thresholdScore);
+
+            log.info("🎯 [PROMOTION] Success: affection set to {} (threshold of {}) | roomId={}",
+                thresholdScore, target, room.getId());
+
             // 해금 목록 구성
             List<UnlockInfo> unlocks = RelationStatusPolicy.getUnlocksForRelation(target)
                 .stream()
@@ -251,6 +263,17 @@ public class ChatService {
             );
         } else {
             room.completePromotionFailure();
+
+            // 실패 패널티: 호감도를 임계점 아래로 확실히 떨어뜨림
+            int penalty = RelationStatusPolicy.PROMOTION_FAILURE_PENALTY;
+            int thresholdEdge = RelationStatusPolicy.getThresholdScore(target) - 1;
+            int penalizedScore = Math.max(0, thresholdEdge - penalty);
+            room.updateAffection(penalizedScore);
+            room.updateStatusLevel(RelationStatusPolicy.fromScore(penalizedScore));
+
+            log.info("🎯 [PROMOTION] Failure penalty applied: affection {} → {} (penalty={}) | roomId={}",
+                thresholdEdge, penalizedScore, penalty, room.getId());
+
             return new PromotionEvent(
                 "FAILURE",
                 target.name(),
