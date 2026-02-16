@@ -253,7 +253,7 @@ public class CharacterPromptAssembler {
             The `reasoning` field is for your internal thought process to ensure quality.
             
             {
-              "reasoning": "Briefly analyze the user's intent, decide emotion, and calculate scores. Depending on the situation, use several scenes to proceed with the situation in detail.",
+              "reasoning": "Briefly analyze the user's intent, decide emotion, and calculate scores. CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.",
               "scenes": [
                 {
                   "narration": "Character's action/expression (Korean, vivid web-novel style)",
@@ -267,6 +267,8 @@ public class CharacterPromptAssembler {
               ],
               "affection_change": Integer (-5 to 5)%s%s
             }
+            
+            CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.
             """.formatted(
             locationOptions, outfitOptions, bgmOptions,
             moodScoreComma, moodScoreField
