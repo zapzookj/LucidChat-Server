@@ -6,6 +6,7 @@ public record UserResponse(
     String nickname,
     String email,
     String profileDescription,
-    Boolean isSecretMode
+    Boolean isSecretMode,
+    int energy          // [Fix] 에너지 동기화를 위해 추가
 ) {
 }

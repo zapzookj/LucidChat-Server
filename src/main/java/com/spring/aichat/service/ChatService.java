@@ -68,7 +68,8 @@ public class ChatService {
         ChatRoom room,
         Long userId,
         long logCount,
-        boolean wasPromotionPending  // [Phase 5] LLM 호출 전 pending 상태 스냅샷
+        boolean wasPromotionPending,
+        String username
     ) {}
 
     private record LlmResult(
@@ -81,7 +82,7 @@ public class ChatService {
         String lastLocation,
         String lastOutfit,
         String lastTimeOfDay,
-        int moodScore           // [Phase 5] 승급 이벤트용 분위기 점수
+        Integer moodScore       // [Phase 5] 승급 이벤트용 분위기 점수
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -102,10 +103,13 @@ public class ChatService {
             chatLogRepository.save(ChatLog.user(room, userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending());
+            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
         });
         log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
             System.currentTimeMillis() - tx1Start, pre.wasPromotionPending());
+
+        // [Fix] Evict user cache after energy consumed in TX-1
+        cacheService.evictUserProfile(pre.username());
 
         // ── Non-TX Zone: 외부 API 호출 ──
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
@@ -159,15 +163,20 @@ public class ChatService {
      * @return PromotionEvent (null이면 이벤트 없음)
      */
     private PromotionEvent resolveAffectionAndPromotion(
-        ChatRoom room, int affectionChange, int moodScore, boolean wasPending) {
+        ChatRoom room, int affectionChange, Integer moodScore, boolean wasPending) {
 
         if (wasPending) {
             // ── 승급 이벤트 진행 중 ──
             // 호감도 변경 동결, mood_score 누적
-            room.advancePromotionTurn(moodScore);
+            // [Fix] Default mood_score to 1 when LLM omits it (not player's fault)
+            int resolvedMood = (moodScore != null) ? moodScore : 1;
+            if (moodScore == null) {
+                log.warn("[PROMOTION] mood_score is NULL - LLM omitted it. Defaulting to 1 | roomId={}", room.getId());
+            }
+            room.advancePromotionTurn(resolvedMood);
             log.info("🎯 [PROMOTION] Turn {}/{} | moodScore +{} (total: {}) | roomId={}",
                 room.getPromotionTurnCount(), RelationStatusPolicy.PROMOTION_MAX_TURNS,
-                moodScore, room.getPromotionMoodScore(), room.getId());
+                resolvedMood, room.getPromotionMoodScore(), room.getId());
 
             // 최종 턴 도달 → 판정
             if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
@@ -305,9 +314,12 @@ public class ChatService {
             chatLogRepository.save(ChatLog.system(room, systemDetail));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending());
+            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
         });
         log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
+
+        // [Fix] Evict user cache after energy consumed
+        cacheService.evictUserProfile(pre.username());
 
         String ragQuery = fetchLastUserMessage(roomId);
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
@@ -411,7 +423,7 @@ public class ChatService {
             String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
 
             // [Phase 5] mood_score 추출 (없으면 0)
-            int moodScore = aiOutput.moodScore() != null ? aiOutput.moodScore() : 0;
+            Integer moodScore = aiOutput.moodScore();
 
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
                 lastBgm, lastLoc, lastOutfit, lastTime, moodScore);

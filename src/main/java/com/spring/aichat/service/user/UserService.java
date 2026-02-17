@@ -40,7 +40,8 @@ public class UserService {
                     currentUser.getNickname(),
                     currentUser.getEmail(),
                     currentUser.getProfileDescription(),
-                    currentUser.getIsSecretMode()
+                    currentUser.getIsSecretMode(),
+                    currentUser.getEnergy()
                 );
 
                 // 3. Redis에 캐싱 (TTL 30분)
