@@ -120,10 +120,24 @@ public class ChatService {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-            // [Phase 5] 승급 이벤트 처리
+            // [Phase 4.2] 승급 이벤트 처리
             PromotionEvent promoEvent = resolveAffectionAndPromotion(
                 freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
             );
+
+            // [Phase 4.3] 엔딩 트리거 감지
+            SendChatResponse.EndingTrigger endingTrigger = null;
+            if (!freshRoom.isEndingReached()) {
+                if (freshRoom.getAffectionScore() >= 100) {
+                    endingTrigger = new SendChatResponse.EndingTrigger("HAPPY");
+                    log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
+                        freshRoom.getAffectionScore(), roomId);
+                } else if (freshRoom.getAffectionScore() <= -100) {
+                    endingTrigger = new SendChatResponse.EndingTrigger("BAD");
+                    log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
+                        freshRoom.getAffectionScore(), roomId);
+                }
+            }
 
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
@@ -138,7 +152,8 @@ public class ChatService {
                 llmResult.sceneResponses(),
                 freshRoom.getAffectionScore(),
                 freshRoom.getStatusLevel().name(),
-                promoEvent
+                promoEvent,
+                endingTrigger
             );
         });
         log.info("⏱ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
@@ -454,7 +469,11 @@ public class ChatService {
                     room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY",
                     room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE",
                     room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID",
-                    room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT"
+                    room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT",
+                    // [Phase 4.3] 엔딩 상태
+                    room.isEndingReached(),
+                    room.getEndingType() != null ? room.getEndingType().name() : null,
+                    room.getEndingTitle()
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);
@@ -543,7 +562,7 @@ public class ChatService {
     private void applyAffectionChange(ChatRoom room, int change) {
         if (change == 0) return;
         int newScore = room.getAffectionScore() + change;
-        newScore = Math.max(-100, Math.min(100, newScore));
+        newScore = Math.max(-100, Math.min(100, newScore));  // -100 ~ 100
         room.updateAffection(newScore);
         room.updateStatusLevel(RelationStatusPolicy.fromScore(newScore));
     }

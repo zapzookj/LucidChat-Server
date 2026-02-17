@@ -22,4 +22,7 @@ public interface ChatLogRepository extends JpaRepository<ChatLog, Long> {
 
     /** [Phase 3] 특정 역할의 로그 수 조회 (메모리 트리거 판단용) */
     long countByRoom_IdAndRole(Long roomId, ChatRole role);
+
+    /** [Phase 4] 엔딩 통계 — 첫 번째 로그 조회 (가입일/시작일 계산) */
+    Optional<ChatLog> findTop1ByRoom_IdOrderByCreatedAtAsc(Long roomId);
 }

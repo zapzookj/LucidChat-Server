@@ -80,7 +80,7 @@ public class ChatRoom {
     private TimeOfDay currentTimeOfDay;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5] 관계 승급 이벤트
+    //  [Phase 4.2] 관계 승급 이벤트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Column(name = "promotion_pending", nullable = false)
@@ -97,6 +97,20 @@ public class ChatRoom {
     private int promotionTurnCount = 0;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4.3] 엔딩 이벤트
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Column(name = "ending_reached", nullable = false)
+    private boolean endingReached = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ending_type", length = 10)
+    private EndingType endingType;
+
+    @Column(name = "ending_title", length = 100)
+    private String endingTitle;
 
     public ChatRoom(User user, Character character) {
         this.user = user;
@@ -210,11 +224,30 @@ public class ChatRoom {
     }
 
     /**
+     * 엔딩 도달 마킹
+     */
+    public void markEndingReached(EndingType endingType) {
+        this.endingReached = true;
+        this.endingType = endingType;
+    }
+
+    /**
+     * 엔딩 타이틀 저장
+     */
+    public void saveEndingTitle(String title) {
+        this.endingTitle = title;
+    }
+
+    /**
      * 전체 초기화 (대화 삭제 시)
      */
     public void resetAll() {
         resetAffection();
         resetSceneState();
         clearPromotion();
+        // [Phase 4.3] 엔딩 상태 초기화
+        this.endingReached = false;
+        this.endingType = null;
+        this.endingTitle = null;
     }
 }
