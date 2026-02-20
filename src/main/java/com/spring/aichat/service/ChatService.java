@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.ChatRole;
+import com.spring.aichat.domain.enums.EasterEggType;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
+import com.spring.aichat.dto.achievement.AchievementResponse;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
@@ -55,6 +57,7 @@ public class ChatService {
     private final MemoryService memoryService;
     private final TransactionTemplate txTemplate;
     private final RedisCacheService cacheService;
+    private final AchievementService achievementService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -81,7 +84,8 @@ public class ChatService {
         String lastLocation,
         String lastOutfit,
         String lastTimeOfDay,
-        Integer moodScore
+        Integer moodScore,
+        String easterEggTrigger   // [Phase 4.4] 추가
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -145,13 +149,42 @@ public class ChatService {
                 }
             }
 
+            SendChatResponse.EasterEggEvent easterEggEvent = null;
+            if (llmResult.easterEggTrigger() != null && !llmResult.easterEggTrigger().isBlank()) {
+                try {
+                    EasterEggType eggType = EasterEggType.valueOf(llmResult.easterEggTrigger().toUpperCase());
+
+                    // 업적 해금
+                    AchievementResponse.UnlockNotification unlock =
+                        achievementService.unlockEasterEgg(pre.userId(), eggType);
+
+                    boolean revertAfter = (eggType == EasterEggType.FOURTH_WALL);
+
+                    easterEggEvent = new SendChatResponse.EasterEggEvent(
+                        eggType.name(),
+                        new SendChatResponse.AchievementInfo(
+                            unlock.code(), unlock.title(), unlock.titleKo(),
+                            unlock.description(), unlock.icon(), unlock.isNew()
+                        ),
+                        revertAfter
+                    );
+
+                    log.info("🥚 [EASTER_EGG] Triggered: {} | new={} | roomId={}",
+                        eggType.name(), unlock.isNew(), roomId);
+
+                } catch (IllegalArgumentException e) {
+                    log.warn("🥚 [EASTER_EGG] Unknown trigger: {}", llmResult.easterEggTrigger());
+                }
+            }
+
             return new SendChatResponse(
                 roomId,
                 llmResult.sceneResponses(),
                 freshRoom.getAffectionScore(),
                 freshRoom.getStatusLevel().name(),
                 promoEvent,
-                endingTrigger
+                endingTrigger,
+                easterEggEvent
             );
         });
         log.info("⏱ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
@@ -395,8 +428,10 @@ public class ChatService {
 
             Integer moodScore = aiOutput.moodScore();
 
+            String easterEggTrigger = aiOutput.easterEggTrigger();
+
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
-                lastBgm, lastLoc, lastOutfit, lastTime, moodScore);
+                lastBgm, lastLoc, lastOutfit, lastTime, moodScore, easterEggTrigger);
 
         } catch (JsonProcessingException e) {
             log.error("JSON Parsing Error: {}", rawAssistant, e);

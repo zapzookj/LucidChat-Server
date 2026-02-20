@@ -8,6 +8,7 @@ import com.spring.aichat.service.cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 채팅방 소유권 검증 가드
@@ -54,5 +55,18 @@ public class AuthGuard {
         log.debug("🔑 [CACHE] Room ownership cached: roomId={} → owner={}", roomId, ownerUsername);
 
         return ownerUsername.equals(username);
+    }
+
+    @Transactional
+    public Long getCurrentUserId(Long roomId) {
+        // 1. Redis에서 방 소유자 조회
+        String cachedOwner = cacheService.getRoomOwner(roomId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "채팅방을 찾을 수 없습니다."));
+
+        // 2. DB에서 사용자 ID 조회 (캐시에는 username만 저장되어 있으므로)
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        return chatRoom.getUser().getId();
     }
 }

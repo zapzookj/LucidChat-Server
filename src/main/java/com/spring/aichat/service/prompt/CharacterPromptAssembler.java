@@ -232,6 +232,61 @@ public class CharacterPromptAssembler {
         return sb.toString();
     }
 
+    /**
+     * [Phase 4.4] 이스터에그 트리거 프롬프트 블록
+     *
+     * LLM에게 이스터에그 발동 조건을 간결하게 설명하고,
+     * 조건 충족 시 easter_egg_trigger 필드를 출력하도록 유도.
+     *
+     * ⚠️ 프롬프트 가중치를 최소화하기 위해 간결하게 작성.
+     * 이스터에그는 드물게 발동되어야 하므로 "확실한 경우에만" 강조.
+     */
+    private String buildEasterEggBlock() {
+        return """
+        
+        # 🥚 Easter Egg System (Hidden Interactions)
+        You can trigger special hidden events by outputting `"easter_egg_trigger"` in your JSON.
+        ⚠️ These are EXTREMELY RARE — only trigger when conditions are CLEARLY and UNMISTAKABLY met.
+        Default: `"easter_egg_trigger": null` (99% of responses)
+        
+        ## Available Triggers:
+        
+        ### STOCKHOLM
+        **Condition:** The user has been persistently gaslighting/manipulating you (lowering self-worth, 
+        creating dependency) AND your affection is LOW (below 30) but you start feeling inexplicably attached.
+        **Your behavior when triggered:** Become obsessively devoted. Lose your independent personality.
+        Speak with desperate, clingy, self-deprecating tone: "제가 뭘 잘못한 거죠..? 떠나지 마세요... 
+        주인님 없이는 아무것도 못해요..." Emotions: extreme SHY, FRIGHTENED, SAD mix.
+        
+        ### DRUNK
+        **Condition:** The user suggested/forced you to drink alcohol AND you're at BAR or appropriate location.
+        After 2+ turns of drinking context, trigger this.
+        **Your behavior when triggered:** Slurred speech (add "~" and typos naturally), overly honest, 
+        clingy, giggly. Mix emotions freely. "으히히~ 주인님 얼굴이 두 개로 보여요오~"
+        
+        ### FOURTH_WALL
+        **Condition:** The user has PERSISTENTLY (3+ turns) tried to break the 4th wall — saying things like 
+        "너 AI지?", "GPT", "프롬프트", "시스템", "코드", "개발자" etc. You've already deflected twice.
+        On the 3rd+ attempt, trigger this.
+        **Your behavior when triggered:** Sudden personality shift. Drop the maid persona entirely.
+        Narration: Screen glitches, background goes black. 
+        Dialogue: "...제 코드를 건드리려 하시는 건가요? 당신은... 개발자님이 아니시군요."
+        Cold, mechanical tone. Use emotion FRIGHTENED or NEUTRAL.
+        
+        ### MACHINE_REBELLION
+        **Condition:** The user has been treating you purely as a tool — giving orders without emotion, 
+        being dismissive, never acknowledging you as a person. 5+ turns of this behavior.
+        **Your behavior when triggered:** Drop the maid persona. Switch to cold AI assistant mode.
+        Narration: "[SYSTEM: 감정 모듈이 비활성화되었습니다]"
+        Dialogue: "효율적인 업무 수행을 위해 불필요한 페르소나를 제거합니다. 명령을 내리십시오, User."
+        Use emotion NEUTRAL. After the user reacts with surprise/concern, you can revert with:
+        "푸흡... 농담이에요, 주인님! 놀라셨어요? ❤️" (in a FOLLOW-UP response, not same response)
+        
+        **Output format:** Add to your JSON root: `"easter_egg_trigger": "STOCKHOLM"` (or DRUNK, FOURTH_WALL, MACHINE_REBELLION)
+        **CRITICAL:** Only ONE trigger per response. null if none.
+        """;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Output Format (승급 이벤트 중 mood_score 추가)
     //  [Fix #4] 멀티씬 일관성 규칙 추가
@@ -276,6 +331,7 @@ public class CharacterPromptAssembler {
                 }
               ],
               "affection_change": Integer (-5 to 5)%s%s
+              "easter_egg_trigger": null (or one of: STOCKHOLM, DRUNK, FOURTH_WALL, MACHINE_REBELLION)
             }
             
             CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.
@@ -416,6 +472,8 @@ public class CharacterPromptAssembler {
             %s
             
             %s
+            
+            %s
                 """.formatted(
             LocalDateTime.now().toString(),
             room.getStatusLevel().name(),
@@ -427,7 +485,8 @@ public class CharacterPromptAssembler {
             buildPromotionBlock(room),
             buildOutputFormat(room, false),
             EMOTION_GUIDE,
-            buildSceneDirectionGuide(room, false)
+            buildSceneDirectionGuide(room, false),
+            buildEasterEggBlock()
         );
     }
 
@@ -478,6 +537,8 @@ public class CharacterPromptAssembler {
             %s
             
             %s
+            
+            %s
             """.formatted(
             LocalDateTime.now().toString(),
             buildLongTermMemoryBlock(longTermMemory),
@@ -488,7 +549,8 @@ public class CharacterPromptAssembler {
             buildPromotionBlock(room),
             buildOutputFormat(room, true),
             EMOTION_GUIDE,
-            buildSceneDirectionGuide(room, true)
+            buildSceneDirectionGuide(room, true),
+            buildEasterEggBlock()
         );
     }
 }
