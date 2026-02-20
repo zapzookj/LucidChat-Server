@@ -10,6 +10,7 @@ import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
+import com.spring.aichat.dto.chat.SendChatResponse.EndingTrigger;
 import com.spring.aichat.dto.chat.SendChatResponse.PromotionEvent;
 import com.spring.aichat.dto.chat.SendChatResponse.UnlockInfo;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
@@ -34,13 +35,11 @@ import java.util.stream.Collectors;
 /**
  * 채팅 핵심 서비스
  *
- * [Phase 3]   트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
- * [Phase 4]   Scene direction fields
- * [Phase 4.1] 씬 상태 영속화 + BGM 관성 시스템
- * [Phase 5]   관계 승급 이벤트 시스템
- *   - 호감도 임계점 도달 시 승급 이벤트 자동 발동
- *   - 이벤트 중 호감도 동결 + mood_score 누적
- *   - 5턴 후 성공/실패 판정 → 해금 보상
+ * [Phase 3]     트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
+ * [Phase 4]     Scene direction fields
+ * [Phase 4.1]   씬 상태 영속화 + BGM 관성 시스템
+ * [Phase 4.2]   관계 승급 이벤트 시스템
+ * [Phase 4.3]   엔딩 트리거 감지 + 히스토리 정제(reasoning 오염 차단)
  */
 @Service
 @Slf4j
@@ -82,7 +81,7 @@ public class ChatService {
         String lastLocation,
         String lastOutfit,
         String lastTimeOfDay,
-        Integer moodScore       // [Phase 5] 승급 이벤트용 분위기 점수
+        Integer moodScore
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -108,13 +107,12 @@ public class ChatService {
         log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
             System.currentTimeMillis() - tx1Start, pre.wasPromotionPending());
 
-        // [Fix] Evict user cache after energy consumed in TX-1
         cacheService.evictUserProfile(pre.username());
 
         // ── Non-TX Zone: 외부 API 호출 ──
         LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
 
-        // ── TX-2: 후처리 (승급 로직 포함) ──
+        // ── TX-2: 후처리 (승급 + 엔딩 감지) ──
         long tx2Start = System.currentTimeMillis();
         SendChatResponse response = txTemplate.execute(status -> {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -125,20 +123,6 @@ public class ChatService {
                 freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
             );
 
-            // [Phase 4.3] 엔딩 트리거 감지
-            SendChatResponse.EndingTrigger endingTrigger = null;
-            if (!freshRoom.isEndingReached()) {
-                if (freshRoom.getAffectionScore() >= 100) {
-                    endingTrigger = new SendChatResponse.EndingTrigger("HAPPY");
-                    log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
-                        freshRoom.getAffectionScore(), roomId);
-                } else if (freshRoom.getAffectionScore() <= -100) {
-                    endingTrigger = new SendChatResponse.EndingTrigger("BAD");
-                    log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
-                        freshRoom.getAffectionScore(), roomId);
-                }
-            }
-
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
 
@@ -146,6 +130,20 @@ public class ChatService {
                 llmResult.lastBgmMode(), llmResult.lastLocation(),
                 llmResult.lastOutfit(), llmResult.lastTimeOfDay()
             );
+
+            // [Phase 4.3] 엔딩 트리거 감지
+            EndingTrigger endingTrigger = null;
+            if (!freshRoom.isEndingReached()) {
+                if (freshRoom.getAffectionScore() >= 100) {
+                    endingTrigger = new EndingTrigger("HAPPY");
+                    log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
+                        freshRoom.getAffectionScore(), roomId);
+                } else if (freshRoom.getAffectionScore() <= -100) {
+                    endingTrigger = new EndingTrigger("BAD");
+                    log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
+                        freshRoom.getAffectionScore(), roomId);
+                }
+            }
 
             return new SendChatResponse(
                 roomId,
@@ -169,21 +167,13 @@ public class ChatService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5] 승급 이벤트 핵심 로직
+    //  [Phase 4.2] 승급 이벤트 핵심 로직
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 호감도 적용 + 승급 이벤트 감지/진행/판정
-     *
-     * @return PromotionEvent (null이면 이벤트 없음)
-     */
     private PromotionEvent resolveAffectionAndPromotion(
         ChatRoom room, int affectionChange, Integer moodScore, boolean wasPending) {
 
         if (wasPending) {
-            // ── 승급 이벤트 진행 중 ──
-            // 호감도 변경 동결, mood_score 누적
-            // [Fix] Default mood_score to 1 when LLM omits it (not player's fault)
             int resolvedMood = (moodScore != null) ? moodScore : 1;
             if (moodScore == null) {
                 log.warn("[PROMOTION] mood_score is NULL - LLM omitted it. Defaulting to 1 | roomId={}", room.getId());
@@ -193,12 +183,10 @@ public class ChatService {
                 room.getPromotionTurnCount(), RelationStatusPolicy.PROMOTION_MAX_TURNS,
                 resolvedMood, room.getPromotionMoodScore(), room.getId());
 
-            // 최종 턴 도달 → 판정
             if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
                 return resolvePromotionResult(room);
             }
 
-            // 진행 중
             RelationStatus target = room.getPendingTargetStatus();
             return new PromotionEvent(
                 "IN_PROGRESS",
@@ -210,25 +198,18 @@ public class ChatService {
             );
 
         } else {
-            // ── 일반 상태: 호감도 적용 + 승급 감지 ──
             RelationStatus oldStatus = room.getStatusLevel();
-
-            // 호감도 적용
             applyAffectionChange(room, affectionChange);
-
-            // 새 관계 확인
             RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
 
-            // 승급 감지
             if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
                 log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | affection={} | roomId={}",
                     oldStatus, newStatus, room.getAffectionScore(), room.getId());
 
-                // 호감도를 임계점 직전으로 롤백 (이벤트 중 동결 상태에서 시작)
                 int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
                 room.updateAffection(thresholdEdge);
-                room.updateStatusLevel(oldStatus);  // 원래 관계로 복원
-                room.startPromotion(newStatus);      // 이벤트 시작
+                room.updateStatusLevel(oldStatus);
+                room.startPromotion(newStatus);
 
                 log.info("🎯 [PROMOTION] Affection rolled back to {} (threshold edge) | roomId={}",
                     thresholdEdge, room.getId());
@@ -243,14 +224,10 @@ public class ChatService {
                 );
             }
 
-            // 승급 없음 → 이벤트 없음
             return null;
         }
     }
 
-    /**
-     * 승급 이벤트 최종 판정 — 성공 또는 실패
-     */
     private PromotionEvent resolvePromotionResult(ChatRoom room) {
         int totalMood = room.getPromotionMoodScore();
         RelationStatus target = room.getPendingTargetStatus();
@@ -263,48 +240,29 @@ public class ChatService {
 
         if (success) {
             room.completePromotionSuccess();
-
-            // 성공: 호감도를 새 관계의 임계점으로 세팅
             int thresholdScore = RelationStatusPolicy.getThresholdScore(target);
             room.updateAffection(thresholdScore);
 
-            log.info("🎯 [PROMOTION] Success: affection set to {} (threshold of {}) | roomId={}",
-                thresholdScore, target, room.getId());
-
-            // 해금 목록 구성
             List<UnlockInfo> unlocks = RelationStatusPolicy.getUnlocksForRelation(target)
                 .stream()
                 .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
                 .collect(Collectors.toList());
 
             return new PromotionEvent(
-                "SUCCESS",
-                target.name(),
-                RelationStatusPolicy.getDisplayName(target),
-                0,
-                totalMood,
-                unlocks
+                "SUCCESS", target.name(), RelationStatusPolicy.getDisplayName(target),
+                0, totalMood, unlocks
             );
         } else {
             room.completePromotionFailure();
-
-            // 실패 패널티: 호감도를 임계점 아래로 확실히 떨어뜨림
             int penalty = RelationStatusPolicy.PROMOTION_FAILURE_PENALTY;
             int thresholdEdge = RelationStatusPolicy.getThresholdScore(target) - 1;
             int penalizedScore = Math.max(0, thresholdEdge - penalty);
             room.updateAffection(penalizedScore);
             room.updateStatusLevel(RelationStatusPolicy.fromScore(penalizedScore));
 
-            log.info("🎯 [PROMOTION] Failure penalty applied: affection {} → {} (penalty={}) | roomId={}",
-                thresholdEdge, penalizedScore, penalty, room.getId());
-
             return new PromotionEvent(
-                "FAILURE",
-                target.name(),
-                RelationStatusPolicy.getDisplayName(target),
-                0,
-                totalMood,
-                null
+                "FAILURE", target.name(), RelationStatusPolicy.getDisplayName(target),
+                0, totalMood, null
             );
         }
     }
@@ -333,7 +291,6 @@ public class ChatService {
         });
         log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
 
-        // [Fix] Evict user cache after energy consumed
         cacheService.evictUserProfile(pre.username());
 
         String ragQuery = fetchLastUserMessage(roomId);
@@ -344,7 +301,6 @@ public class ChatService {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-            // 시스템 이벤트 중에는 승급 이벤트 감지하지 않음 (일반 호감도만 적용)
             applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
             saveLog(freshRoom, ChatRole.ASSISTANT,
                 llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
@@ -437,7 +393,6 @@ public class ChatService {
             String lastOutfit = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::outfit);
             String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
 
-            // [Phase 5] mood_score 추출 (없으면 0)
             Integer moodScore = aiOutput.moodScore();
 
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
@@ -488,7 +443,7 @@ public class ChatService {
         ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
-        room.resetAll(); // [Phase 5] 호감도 + 씬 + 승급 전부 리셋
+        room.resetAll();
 
         cacheService.evictRoomInfo(roomId);
         cacheService.evictRoomOwner(roomId);
@@ -539,6 +494,14 @@ public class ChatService {
         }
     }
 
+    /**
+     * [Phase 4.3] 히스토리 구성 — ASSISTANT 로그에서 reasoning 오염 차단
+     *
+     * 핵심 변경: ASSISTANT 메시지를 rawContent(전체 JSON + reasoning) 대신
+     * scenes의 narration/dialogue/emotion만 추출하여 전달.
+     * → LLM이 자신의 이전 reasoning을 참조하여 관계를 오인하는 문제 해결 (#3)
+     * → 이전 씬의 맥락이 현재 상황으로 오인되는 과거 회귀 문제 해결 (#12)
+     */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
         List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
         recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
@@ -549,7 +512,12 @@ public class ChatService {
         for (ChatLog chatLog : recent) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
-                case ASSISTANT -> messages.add(OpenAiMessage.assistant(chatLog.getRawContent()));
+                case ASSISTANT -> {
+                    // [Phase 4.3] reasoning 오염 차단:
+                    // rawContent(JSON)에서 scenes만 추출하여 대사+지문 형태로 재구성
+                    String sanitized = buildSanitizedAssistantContent(chatLog);
+                    messages.add(OpenAiMessage.assistant(sanitized));
+                }
                 case SYSTEM -> messages.add(
                     OpenAiMessage.user("[NARRATION]\n" + chatLog.getRawContent())
                 );
@@ -559,10 +527,52 @@ public class ChatService {
         return messages;
     }
 
+    /**
+     * ASSISTANT rawContent(JSON)에서 reasoning/affection_change/mood_score 제거,
+     * scenes의 narration+dialogue+emotion만 추출하여 자연어 형태로 변환.
+     *
+     * 파싱 실패 시 cleanContent(순수 대사)로 폴백.
+     */
+    private String buildSanitizedAssistantContent(ChatLog chatLog) {
+        try {
+            String raw = chatLog.getRawContent();
+            if (raw == null || raw.isBlank()) {
+                return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
+            }
+
+            String cleaned = stripMarkdown(raw);
+            AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
+
+            // scenes를 자연어로 재구성: "(지문) 대사 [감정]"
+            StringBuilder sb = new StringBuilder();
+            for (AiJsonOutput.Scene scene : parsed.scenes()) {
+                if (scene.narration() != null && !scene.narration().isBlank()) {
+                    sb.append("(").append(scene.narration().trim()).append(") ");
+                }
+                if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
+                    sb.append(scene.dialogue().trim());
+                }
+                if (scene.emotion() != null) {
+                    sb.append(" [").append(scene.emotion()).append("]");
+                }
+                sb.append("\n");
+            }
+
+            String result = sb.toString().trim();
+            return result.isEmpty()
+                ? (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
+                : result;
+
+        } catch (Exception e) {
+            // JSON 파싱 실패 → cleanContent 폴백 (초기 인사 등 plain text인 경우)
+            return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
+        }
+    }
+
     private void applyAffectionChange(ChatRoom room, int change) {
         if (change == 0) return;
         int newScore = room.getAffectionScore() + change;
-        newScore = Math.max(-100, Math.min(100, newScore));  // -100 ~ 100
+        newScore = Math.max(-100, Math.min(100, newScore));
         room.updateAffection(newScore);
         room.updateStatusLevel(RelationStatusPolicy.fromScore(newScore));
     }

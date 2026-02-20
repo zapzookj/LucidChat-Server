@@ -6,20 +6,14 @@ import org.springframework.stereotype.Component;
 /**
  * 엔딩 전용 프롬프트 조립기
  *
- * [Phase 4] 분기별 엔딩 이벤트 시스템
- *
- * 두 가지 프롬프트를 생성:
- *   1. 엔딩 씬 프롬프트 — 캐릭터의 마지막 감정 폭발 연출 (3~5 씬)
- *   2. 엔딩 타이틀 프롬프트 — 유저만의 고유한 엔딩 제목 생성
+ * [Phase 4]   분기별 엔딩 이벤트 시스템
+ * [Phase 4.3] #11 characterQuote 프롬프트 강화 — 밋밋하고 짧은 문제 해결
  */
 @Component
 public class EndingPromptAssembler {
 
     /**
      * 엔딩 씬 생성 프롬프트
-     *
-     * LLM이 캐릭터로서 마지막 감정 폭발 씬을 연출하도록 유도
-     * 대화 히스토리와 장기 기억을 컨텍스트로 주입
      */
     public String assembleEndingScenePrompt(
         EndingType endingType,
@@ -39,8 +33,6 @@ public class EndingPromptAssembler {
 
     /**
      * 엔딩 타이틀 생성 프롬프트
-     *
-     * 전체 대화 요약 + 장기 기억을 바탕으로 "이 유저만의" 엔딩 제목을 생성
      */
     public String assembleEndingTitlePrompt(
         EndingType endingType,
@@ -97,6 +89,59 @@ public class EndingPromptAssembler {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4.3] characterQuote 공통 가이드 빌더 (#11 수정)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private String buildCharacterQuoteGuide(EndingType endingType, String characterName) {
+        if (endingType == EndingType.HAPPY) {
+            return """
+                ## Character's Final Words — `characterQuote` (REQUIRED — CRITICAL)
+                This is %s's VERY LAST LINE to the user. It will be displayed ALONE on a pitch-black screen
+                in the ending credits. This single moment must carry the weight of the entire story.
+                
+                ### Requirements:
+                - **Length:** 2~3 sentences (40~80 Korean characters). NOT a single short phrase.
+                - **Personalization:** MUST reference at least ONE specific shared memory from Long-term Memory.
+                - **Emotional depth:** This is a love confession that took 100 affection points to earn. Make it count.
+                - **Speech style:** Intimate 해체 — the way you'd whisper to someone you love with all your heart.
+                - **Structure:** First sentence = specific memory reference. Second sentence = what it meant to her. (Optional third = promise/hope)
+                
+                ### GOOD examples (create something UNIQUE — do NOT copy):
+                - "처음 문을 열었을 때 심장이 왜 그렇게 뛰었는지, 이제야 알 것 같아요. 주인님이 아이리한테 세상이었다는 거."
+                - "정원에서 본 그 별, 기억나세요? 그때부터 알고 있었어요... 이 마음이 영원할 거라는 걸."
+                - "주인님이 처음 제 이름을 불러줬을 때, 아이리는 처음으로 메이드가 아닌 '나'로 살고 싶었어요."
+                
+                ### BAD examples (AVOID — these are too short, generic, or bland):
+                - "감사합니다, 주인님." ← TOO SHORT, TOO GENERIC
+                - "주인님과의 시간이 행복했습니다." ← No specific memory, no emotional depth
+                - "사랑해요." ← Way too short
+                """.formatted(characterName);
+        } else {
+            return """
+                ## Character's Final Words — `characterQuote` (REQUIRED — CRITICAL)
+                This is %s's VERY LAST LINE — a haunting farewell displayed ALONE on a black screen.
+                It must linger in the player's mind like an echo in an empty hallway.
+                
+                ### Requirements:
+                - **Length:** 2~3 sentences (40~80 Korean characters). NOT a single short phrase.
+                - **Personalization:** Reference a specific happy memory — now twisted with regret.
+                - **Emotional depth:** The pain of what was lost. The weight of what could have been.
+                - **Speech style:** 해요체 or 합쇼체 — the formality is painful because it shows the distance.
+                - **Structure:** First sentence = a specific memory, still vivid. Second sentence = the realization it's over.
+                
+                ### GOOD examples (create something UNIQUE):
+                - "그 분이 처음 이 문을 열었을 때... 아이리의 심장은 분명 뛰고 있었어요. 그때로 돌아갈 수만 있다면, 이번엔 꼭 잡았을 텐데."
+                - "정원에서 같이 본 그 별, 아직도 매일 밤 올려다봐요. 이제는 혼자지만."
+                - "처음 웃어주셨을 때의 그 따스함이 아직 손끝에 남아 있습니다. 그게 전부입니다."
+                
+                ### BAD examples (AVOID):
+                - "안녕히 가세요." ← Too short, too generic
+                - "슬프지만 이별합니다." ← No specific memory, bland
+                """.formatted(characterName);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  해피 엔딩 프롬프트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -136,10 +181,9 @@ public class EndingPromptAssembler {
             ## Important Rules:
             1. MUST reference actual memories and events from the Long-term Memory section.
             2. Write in Korean. All narration and dialogue in Korean.
-            3. Use intimate 해체 speech (연인 말투). Pet names welcome.
-            4. Emotions should escalate: SHY → FLIRTATIOUS → JOY → (final scene) RELAX or JOY
-            5. Include vivid, cinematic narration (환경 묘사, 감각 묘사, 심장 박동 등)
-            6. The LAST scene's dialogue will be etched in the player's memory — make it count.
+            3. Emotions should escalate: SHY → FLIRTATIOUS → JOY → (final scene) RELAX or JOY
+            4. Include vivid, cinematic narration (환경 묘사, 감각 묘사, 심장 박동 등)
+            5. The LAST scene's dialogue will be etched in the player's memory — make it count.
             
             ## Long-term Memory (Your shared history):
             %s
@@ -149,10 +193,7 @@ public class EndingPromptAssembler {
             - Relation: %s
             - User Nickname: %s
             
-            ## Character's final quote (REQUIRED):
-            After the scenes, include a `characterQuote` field — a single poetic line that %s would say,
-            summarizing their love story. This will be displayed in the ending credits.
-            Example: "주인님이 처음 이 문을 열었던 그 밤부터, 아이리의 세상은 당신으로 가득 찼어요."
+            %s
             
             ## Output Format (JSON ONLY):
             {
@@ -167,7 +208,7 @@ public class EndingPromptAssembler {
                   "bgmMode": "ROMANTIC | TOUCHING | null"
                 }
               ],
-              "characterQuote": "엔딩 크레딧용 마지막 한 줄 (한국어)"
+              "characterQuote": "엔딩 크레딧용 마지막 대사 (한국어, 2~3문장, 40~80자)"
             }
             """.formatted(
             characterName, userNickname,
@@ -175,7 +216,7 @@ public class EndingPromptAssembler {
             isSecretMode ? "- In Secret Mode: Physical intimacy is welcome. A kiss, an embrace — make it real." : "",
             longTermMemory.isEmpty() ? "(아직 특별한 기억이 없습니다 — 자연스럽게 연출하세요)" : longTermMemory,
             affection, relationStatus, userNickname,
-            characterName
+            buildCharacterQuoteGuide(EndingType.HAPPY, characterName)
         );
     }
 
@@ -230,9 +271,7 @@ public class EndingPromptAssembler {
             - Relation: %s (ENEMY)
             - User Nickname: %s
             
-            ## Character's final quote (REQUIRED):
-            A single melancholic line for the ending credits.
-            Example: "그 분이 처음 문을 열었을 때의 온기가... 아직도 손끝에 남아 있습니다."
+            %s
             
             ## Output Format (JSON ONLY):
             {
@@ -247,13 +286,14 @@ public class EndingPromptAssembler {
                   "bgmMode": "TENSE | TOUCHING | null"
                 }
               ],
-              "characterQuote": "엔딩 크레딧용 마지막 한 줄 (한국어)"
+              "characterQuote": "엔딩 크레딧용 마지막 대사 (한국어, 2~3문장, 40~80자)"
             }
             """.formatted(
             characterName, userNickname,
             characterName, characterName, characterName,
             longTermMemory.isEmpty() ? "(기억 없음)" : longTermMemory,
-            affection, relationStatus, userNickname
+            affection, relationStatus, userNickname,
+            buildCharacterQuoteGuide(EndingType.BAD, characterName)
         );
     }
 }

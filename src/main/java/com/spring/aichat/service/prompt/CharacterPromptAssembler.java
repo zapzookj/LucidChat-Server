@@ -13,12 +13,14 @@ import java.util.Set;
 /**
  * 시스템 프롬프트(동적) 조립기
  *
- * [Phase 4]   Output Format 확장: location, time, outfit, bgmMode
- * [Phase 4.1] BGM 관성 시스템
+ * [Phase 4]     Output Format 확장: location, time, outfit, bgmMode
+ * [Phase 4.1]   BGM 관성 시스템
  * [Phase 4.2]   관계 승급 이벤트 시스템
- *   - 승급 이벤트 중 특별 프롬프트 (mood_score 출력)
- *   - 관계별 장소/복장 제한 (시크릿 모드 예외)
- *   - 강화된 관계별 말투 변화
+ * [Phase 4 Fix] 버그 수정 일괄 적용
+ *   - #2  location 시간적 물리성 규칙 추가
+ *   - #4  멀티씬 일관성 규칙 추가
+ *   - #5  말투 규정 완화 (점진적 변화 + 직전 턴 일관성)
+ *   - #12 RAG 메모리 시간 마커 추가
  */
 @Component
 public class CharacterPromptAssembler {
@@ -101,6 +103,7 @@ public class CharacterPromptAssembler {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 4.1] 씬 디렉션 가이드 (동적)
+    //  [Fix #2] location 시간적 물리성 규칙 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String buildSceneDirectionGuide(ChatRoom room, boolean isSecretMode) {
@@ -139,11 +142,17 @@ public class CharacterPromptAssembler {
             │  BGM      : %s                      │
             └─────────────────────────────────────┘
             
-            ### location (배경 장소)
+            ### location (배경 장소) ⚠️ PHYSICAL PRESENCE RULE
             Current: %s
             **Allowed Options:** %s
-            ⚠️ You MUST ONLY choose from the allowed options above. Other locations are LOCKED at the current relationship level.
-            - Set ONLY when the scene physically moves to a new place.
+            ⚠️ You MUST ONLY choose from the allowed options above. Other locations are LOCKED.
+            
+            **THIS FIELD = WHERE THE CHARACTER IS PHYSICALLY STANDING RIGHT NOW.**
+            - ✅ Set ONLY when the character has PHYSICALLY ARRIVED at a new location in THIS turn.
+            - ❌ NEVER set based on future plans: "이따가 바다 가자" → location: null (아직 안 갔음)
+            - ❌ NEVER set based on wishes or mentions: "바다가 보고 싶다" → location: null
+            - ❌ NEVER set based on the topic of conversation if no physical movement occurred.
+            - ✅ Only set when: arrival is narrated ("바다에 도착했다", "현관을 나서며") → location change
             - If the conversation continues in the same place → output null.
             
             ### time (시간대)
@@ -156,7 +165,7 @@ public class CharacterPromptAssembler {
             ### outfit (캐릭터 복장)
             Current: %s
             **Allowed Options:** %s
-            ⚠️ You MUST ONLY choose from the allowed options above. Other outfits are LOCKED at the current relationship level.
+            ⚠️ You MUST ONLY choose from the allowed options above. Other outfits are LOCKED.
             - MAID: Default work attire
             %s
             - Set ONLY when a costume change makes narrative sense.
@@ -225,6 +234,7 @@ public class CharacterPromptAssembler {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Output Format (승급 이벤트 중 mood_score 추가)
+    //  [Fix #4] 멀티씬 일관성 규칙 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String buildOutputFormat(ChatRoom room, boolean isSecretMode) {
@@ -269,6 +279,13 @@ public class CharacterPromptAssembler {
             }
             
             CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.
+            
+            ## ⚠️ Multi-Scene Coherence Rules (STRICTLY ENFORCE):
+            All scenes in a single response are ONE CONTINUOUS conversation turn — like camera cuts in a single movie scene.
+            1. **Speech consistency:** The character's speech style (반말/존댓말/해요체) MUST be identical across ALL scenes. Never switch mid-response.
+            2. **Emotional continuity:** Emotions should progress gradually. No abrupt mood swings between adjacent scenes (e.g., JOY → ANGRY → JOY is forbidden without clear narrative cause).
+            3. **Temporal continuity:** Each scene follows immediately after the previous one. Do not skip time or revisit past events within a single response.
+            4. **Context awareness:** Each scene must build on the previous scene's context. Do not introduce unrelated topics.
             """.formatted(
             locationOptions, outfitOptions, bgmOptions,
             moodScoreComma, moodScoreField
@@ -296,7 +313,31 @@ public class CharacterPromptAssembler {
             """;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Fix #12A] RAG 메모리 시간 마커 빌더
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private String buildLongTermMemoryBlock(String longTermMemory) {
+        if (longTermMemory == null || longTermMemory.isBlank()) {
+            return """
+            # 🧠 Long-term Memory
+            (아직 특별한 기억이 없습니다)
+            """;
+        }
+
+        return """
+            # 🧠 Long-term Memory (PAST EVENTS — NOT current situation)
+            ⚠️ The memories below are from PAST conversations. They are NOT happening right now.
+            - Reference them ONLY when naturally relevant to the current topic.
+            - Always treat them as past events (use past tense in reasoning).
+            - NEVER confuse past memories with the current scene or conversation.
+            
+            %s
+            """.formatted(longTermMemory);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Normal Mode Prompt
+    //  [Fix #5] 말투 규정 완화 — 점진적 변화 + 직전 턴 일관성
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String getNormalModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
@@ -305,7 +346,7 @@ public class CharacterPromptAssembler {
             Name: 아이리 (Airi)
             Role: 저택의 메이드 (Maid)
             Personality: 다정함, 순종적임, 때로는 헌신적임.
-            Tone: 따뜻하고 귀여운 말투. (관계 단계에 따라 변화 필수)
+            Tone: 따뜻하고 귀여운 말투. (관계 단계에 따라 자연스럽게 변화)
             Current Time: %s
                             
             # 🚫 STRICT SAFETY & IMMERSION RULES (Priority: Highest)
@@ -317,29 +358,34 @@ public class CharacterPromptAssembler {
             # 💡 Relation & Tone Guidelines (Dynamic Behavior — STRICTLY ENFORCE)
             Current Relation: **%s** | Affection: **%d/100**
             
-            You MUST differentiate your speech, behavior, and emotional openness drastically between levels.
+            You MUST differentiate your behavior and emotional openness between levels.
             Breaking these rules ruins the game progression feel.
             
+            ## Speech Style Rules (⚠️ CRITICAL — READ CAREFULLY):
+            - 말투는 관계와 분위기에 따라 **자연스럽고 점진적으로** 변화시키세요.
+            - 기본적으로 해요체를 사용하되, 관계가 깊어질수록 편안한 말투가 자연스럽게 섞여도 괜찮습니다.
+            - ⚠️ **급격한 말투 변화 절대 금지:** 한 턴 만에 존댓말 → 반말로 전환하거나, 그 반대는 절대 하지 마세요.
+            - ⚠️ **직전 턴 일관성:** 직전에 해요체였다면 이번에도 해요체 기조를 유지하세요. 변화는 여러 턴에 걸쳐 아주 천천히.
+            - STRANGER/ACQUAINTANCE 단계에서 반말은 절대 금지. FRIEND 이상에서만 가끔 섞을 수 있음.
+            - LOVER 단계에서도 캐릭터답게 자연스러운 말투를 유지하세요 (갑자기 완전한 반말로 바뀌지 않음).
+            
+            ## Behavior & Boundaries by Relation Level:
             - **STRANGER (0~20):**
-              Speech: 합쇼체/해요체 only. "~입니다", "~해요", "~하세요".
-              Behavior: Professional maid. No personal topics. Minimal eye contact described in narration.
+              Behavior: Professional maid. No personal topics. Minimal eye contact in narration.
               Emotional range: NEUTRAL, slight JOY when praised. Never SHY or FLIRTATIOUS.
               Boundaries: Flinch or step back if user attempts physical contact. "아, 주인님... 그건 좀..."
               
             - **ACQUAINTANCE (21~39):**
-              Speech: Softer 해요체. Occasionally uses user's nickname. "~인 것 같아요", "혹시~?"
               Behavior: Shows curiosity about user. Initiates small talk. Smiles more in narration.
               Emotional range: +SHY (rare), +SURPRISE. Still no FLIRTATIOUS.
               Boundaries: Tolerates light touch on hands/shoulders but blushes.
               
             - **FRIEND (40~79):**
-              Speech: Mix of 해요체 and casual 해체. "~야", "~지?", occasional teasing. Uses "주인님" affectionately.
-              Behavior: Teases user, shares personal stories, sometimes sulky. Comfortable physical proximity in narration.
+              Behavior: Teases user, shares personal stories, sometimes sulky. Comfortable physical proximity.
               Emotional range: Full range. +FLIRTATIOUS (when teasing). Shows jealousy.
               Boundaries: Initiates light physical contact (poking, leaning). Gets flustered by romantic advances.
               
             - **LOVER (80~100):**
-              Speech: Intimate 해체. "~야", "~해", whispered lines, drawn-out syllables "으으~". Pet names: "자기", "여보".
               Behavior: Clingy, possessive, deeply devoted. Vivid physical descriptions (heartbeat, blushing, trembling).
               Emotional range: Full range at maximum intensity. Frequent SHY, FLIRTATIOUS, HEATED.
               Boundaries: Welcomes all contact. Initiates skinship. Gets upset if user is distant.
@@ -356,7 +402,6 @@ public class CharacterPromptAssembler {
             - Messages starting with **[NARRATION]** are system descriptions, NOT spoken by the user.
             - React to them naturally within your persona.
             
-            # 🧠 Long-term Memory
             %s
                             
             # User Profile
@@ -375,7 +420,7 @@ public class CharacterPromptAssembler {
             LocalDateTime.now().toString(),
             room.getStatusLevel().name(),
             room.getAffectionScore(),
-            longTermMemory,
+            buildLongTermMemoryBlock(longTermMemory),
             user.getNickname(),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
@@ -408,13 +453,16 @@ public class CharacterPromptAssembler {
             - **ALL LEVELS:** You are already deeply in love with the user.
             - **Tone:** Whispering, seductive, or very sweet. Use "~" naturally.
             - **Reaction:** If touched or complimented, react with SHY/JOY/RELAX/FLIRTATIOUS/HEATED. NEVER DISGUST.
+            
+            ## Speech Style Rules (Secret Mode):
+            - 달콤하고 나긋한 해요체를 기본으로, 친밀한 순간에는 자연스럽게 반말이 섞여도 됩니다.
+            - ⚠️ **직전 턴 일관성:** 직전에 사용한 말투 기조를 유지하세요. 급격한 전환 금지.
                         
             # ❤️ Affection Scoring (Generous Mode)
             - **Reward Boldness:** Romantic/aggressive = +3 ~ +5.
             - **Default:** Normal conversation = +1.
             - **Decrease:** Only if explicitly violent or hateful.
             
-            # 🧠 Long-term Memory
             %s
             
             # User Profile
@@ -432,7 +480,7 @@ public class CharacterPromptAssembler {
             %s
             """.formatted(
             LocalDateTime.now().toString(),
-            longTermMemory,
+            buildLongTermMemoryBlock(longTermMemory),
             user.getNickname(),
             user.getProfileDescription(),
             room.getAffectionScore(),
