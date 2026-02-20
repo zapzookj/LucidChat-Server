@@ -3,8 +3,10 @@ package com.spring.aichat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
-import com.spring.aichat.domain.chat.*;
-import com.spring.aichat.domain.enums.ChatRole;
+import com.spring.aichat.domain.chat.ChatLog;
+import com.spring.aichat.domain.chat.ChatLogRepository;
+import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.EndingType;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -13,8 +15,6 @@ import com.spring.aichat.dto.chat.EndingResponse.EndingScene;
 import com.spring.aichat.dto.chat.EndingResponse.EndingStats;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
-import com.spring.aichat.exception.BusinessException;
-import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.prompt.EndingPromptAssembler;
@@ -50,6 +50,7 @@ public class EndingService {
     private final ObjectMapper objectMapper;
     private final MemoryService memoryService;
     private final TransactionTemplate txTemplate;
+    private final AchievementService achievementService;
 
     /**
      * 엔딩 데이터 생성 — 씬 + 타이틀 + 추억 + 통계를 한 번에 반환
@@ -169,6 +170,12 @@ public class EndingService {
             : "그 분이 처음 문을 열었을 때의 온기가... 아직도 손끝에 남아 있습니다.");
 
         log.info("🎬 [ENDING] ====== generateEnding DONE: {}ms ======", System.currentTimeMillis() - totalStart);
+
+        try {
+            achievementService.unlockEnding(room.getUser().getId(), endingType.name());
+        } catch (Exception e) {
+            log.warn("🏆 [ACHIEVEMENT] Failed to unlock ending achievement: {}", e.getMessage());
+        }
 
         return new EndingResponse(
             endingType.name(),
