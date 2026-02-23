@@ -85,7 +85,7 @@ public class AuthController {
         AuthResponse authResponse = new AuthResponse(
             tokenPair.accessToken(),
             props.accessTokenTtlSeconds(), // expiresIn
-            room.getId(),                          // roomId
+            true,                          // roomId
             userMap                                // user
         );
 

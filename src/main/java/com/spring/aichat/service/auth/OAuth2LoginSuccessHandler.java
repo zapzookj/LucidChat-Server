@@ -64,7 +64,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         AuthResponse payload = new AuthResponse(
             tokenPair.accessToken(),
             props.accessTokenTtlSeconds(),
-            room.getId(),
+            false,
             userMap
         );
 

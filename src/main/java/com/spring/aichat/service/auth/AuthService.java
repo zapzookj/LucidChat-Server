@@ -1,7 +1,6 @@
 package com.spring.aichat.service.auth;
 
 import com.spring.aichat.config.JwtProperties;
-import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
@@ -22,6 +21,11 @@ import java.util.Map;
 
 /**
  * 로컬 회원가입/로그인 비즈니스 로직
+ *
+ * [Phase 4.5] 단일 채팅방(roomId) 가정 제거
+ * - 로그인 시 더 이상 기본 방을 자동 생성하지 않음
+ * - 유저는 로비에서 직접 캐릭터 + 모드를 선택하여 방 생성
+ * - hasExistingRooms 플래그로 로비 UI가 Continue 메뉴 활성화 여부를 판단
  */
 @Service
 @Slf4j
@@ -30,7 +34,6 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
-    private final OnboardingService onboardingService;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties props;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -50,19 +53,17 @@ public class AuthService {
         }
 
         String hash = passwordEncoder.encode(req.password());
-
-        // 빈 문자열 "" 은 null 처리. DB 버그 방지용
         String email = (req.email() == null || req.email().isBlank()) ? null : req.email().trim();
         User user = User.local(req.username(), hash, req.nickname(), email);
         User saved = userRepository.save(user);
 
-        ChatRoom room = onboardingService.getOrCreateDefaultRoom(saved);
-
+        // [Phase 4.5] 더 이상 기본 방을 자동 생성하지 않음 — 로비에서 직접 선택
         JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(saved.getUsername(), "ROLE_USER");
+
         AuthResponse response = new AuthResponse(
             tokenPair.accessToken(),
             props.accessTokenTtlSeconds(),
-            room.getId(),
+            false,  // 신규 가입이므로 기존 방 없음
             createUserMap(saved)
         );
 
@@ -82,16 +83,15 @@ public class AuthService {
             throw new NotFoundException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        // [FIX] 기존 코드 버그 수정 (user.getId() -> room.getId())
-        ChatRoom room = chatRoomRepository.findByUser_Id(user.getId())
-            .orElseGet(() -> onboardingService.getOrCreateDefaultRoom(user)); // 안전망
+        // [Phase 4.5] 기존 방 존재 여부 확인 (Continue 메뉴 활성화 판단용)
+        boolean hasRooms = chatRoomRepository.countByUser_Id(user.getId()) > 0;
 
         JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(user.getUsername(), "ROLE_USER");
 
         AuthResponse response = new AuthResponse(
             tokenPair.accessToken(),
             props.accessTokenTtlSeconds(),
-            room.getId(),
+            hasRooms,
             createUserMap(user)
         );
 

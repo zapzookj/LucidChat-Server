@@ -102,7 +102,7 @@ public class ChatService {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-            room.getUser().consumeEnergy(1);
+            room.getUser().consumeEnergy(room.getChatMode().getEnergyCost());
             chatLogRepository.save(ChatLog.user(room, userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
@@ -118,34 +118,40 @@ public class ChatService {
 
         // ── TX-2: 후처리 (승급 + 엔딩 감지) ──
         long tx2Start = System.currentTimeMillis();
+        boolean isStory = pre.room().isStoryMode();
         SendChatResponse response = txTemplate.execute(status -> {
             ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
+            PromotionEvent promoEvent = null;
             // [Phase 4.2] 승급 이벤트 처리
-            PromotionEvent promoEvent = resolveAffectionAndPromotion(
-                freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
-            );
+            if (isStory){
+                promoEvent = resolveAffectionAndPromotion(
+                    freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
+                );
 
-            saveLog(freshRoom, ChatRole.ASSISTANT,
-                llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+                saveLog(freshRoom, ChatRole.ASSISTANT,
+                    llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
 
-            freshRoom.updateSceneState(
-                llmResult.lastBgmMode(), llmResult.lastLocation(),
-                llmResult.lastOutfit(), llmResult.lastTimeOfDay()
-            );
+                freshRoom.updateSceneState(
+                    llmResult.lastBgmMode(), llmResult.lastLocation(),
+                    llmResult.lastOutfit(), llmResult.lastTimeOfDay()
+                );
+            }
 
-            // [Phase 4.3] 엔딩 트리거 감지
             EndingTrigger endingTrigger = null;
-            if (!freshRoom.isEndingReached()) {
-                if (freshRoom.getAffectionScore() >= 100) {
-                    endingTrigger = new EndingTrigger("HAPPY");
-                    log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
-                        freshRoom.getAffectionScore(), roomId);
-                } else if (freshRoom.getAffectionScore() <= -100) {
-                    endingTrigger = new EndingTrigger("BAD");
-                    log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
-                        freshRoom.getAffectionScore(), roomId);
+            // [Phase 4.3] 엔딩 트리거 감지
+            if (isStory) {
+                if (!freshRoom.isEndingReached()) {
+                    if (freshRoom.getAffectionScore() >= 100) {
+                        endingTrigger = new EndingTrigger("HAPPY");
+                        log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
+                            freshRoom.getAffectionScore(), roomId);
+                    } else if (freshRoom.getAffectionScore() <= -100) {
+                        endingTrigger = new EndingTrigger("BAD");
+                        log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
+                            freshRoom.getAffectionScore(), roomId);
+                    }
                 }
             }
 
@@ -456,6 +462,7 @@ public class ChatService {
                     "background_default.png",
                     room.getAffectionScore(),
                     room.getStatusLevel().name(),
+                    room.getChatMode().name(),
                     room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY",
                     room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE",
                     room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID",

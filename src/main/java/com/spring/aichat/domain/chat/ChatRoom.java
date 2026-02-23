@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "chat_rooms",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_member_character", columnNames = {"user_id", "character_id"})
+        // [Phase 4.5] 동일 유저 + 동일 캐릭터 + 동일 모드 조합 중복 방지
+        @UniqueConstraint(name = "uk_user_character_mode", columnNames = {"user_id", "character_id", "chat_mode"})
     },
     indexes = {
         @Index(name = "idx_room_member", columnList = "user_id"),
@@ -24,11 +25,8 @@ import java.time.LocalDateTime;
  * 채팅방 — 관계/상태 저장의 핵심 엔티티
  *
  * [Phase 4.1] 씬 상태 영속화 (bgmMode, location, outfit, timeOfDay)
- * [Phase 4.2]  관계 승급 이벤트 시스템
- *   - promotionPending:      승급 이벤트 진행 중 여부
- *   - pendingTargetStatus:   승급 목표 관계
- *   - promotionMoodScore:    누적 분위기 점수
- *   - promotionTurnCount:    이벤트 경과 턴 수
+ * [Phase 4.2] 관계 승급 이벤트 시스템
+ * [Phase 4.5] 모드 분리 (STORY / SANDBOX)
  */
 public class ChatRoom {
 
@@ -44,6 +42,16 @@ public class ChatRoom {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "character_id", nullable = false)
     private Character character;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4.5] 채팅 모드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "chat_mode", nullable = false, length = 20)
+    private ChatMode chatMode = ChatMode.STORY;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Column(name = "affection_score", nullable = false)
     private int affectionScore = 0;
@@ -97,8 +105,6 @@ public class ChatRoom {
     private int promotionTurnCount = 0;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 4.3] 엔딩 이벤트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -112,9 +118,13 @@ public class ChatRoom {
     @Column(name = "ending_title", length = 100)
     private String endingTitle;
 
-    public ChatRoom(User user, Character character) {
+    /**
+     * [Phase 4.5] 모드를 포함한 생성자
+     */
+    public ChatRoom(User user, Character character, ChatMode chatMode) {
         this.user = user;
         this.character = character;
+        this.chatMode = chatMode;
         this.affectionScore = 0;
         this.statusLevel = RelationStatus.STRANGER;
         this.lastActiveAt = LocalDateTime.now();
@@ -123,6 +133,27 @@ public class ChatRoom {
         this.currentLocation = Location.ENTRANCE;
         this.currentOutfit = Outfit.MAID;
         this.currentTimeOfDay = TimeOfDay.NIGHT;
+    }
+
+    /**
+     * 기존 호환성 유지 — 기본 모드 STORY
+     */
+    public ChatRoom(User user, Character character) {
+        this(user, character, ChatMode.STORY);
+    }
+
+    /**
+     * [Phase 4.5] 스토리 모드 여부 판별
+     */
+    public boolean isStoryMode() {
+        return this.chatMode == ChatMode.STORY;
+    }
+
+    /**
+     * [Phase 4.5] 샌드박스 모드 여부 판별
+     */
+    public boolean isSandboxMode() {
+        return this.chatMode == ChatMode.SANDBOX;
     }
 
     public void touch(EmotionTag lastEmotion) {
@@ -183,9 +214,6 @@ public class ChatRoom {
 
     // ── 관계 승급 이벤트 ──
 
-    /**
-     * 승급 이벤트 시작
-     */
     public void startPromotion(RelationStatus targetStatus) {
         this.promotionPending = true;
         this.pendingTargetStatus = targetStatus;
@@ -193,25 +221,16 @@ public class ChatRoom {
         this.promotionTurnCount = 0;
     }
 
-    /**
-     * 이벤트 턴 진행 — mood_score 누적
-     */
     public void advancePromotionTurn(int moodScore) {
         this.promotionTurnCount++;
         this.promotionMoodScore += moodScore;
     }
 
-    /**
-     * 승급 성공 — 관계 업그레이드 + 이벤트 종료
-     */
     public void completePromotionSuccess() {
         this.statusLevel = this.pendingTargetStatus;
         clearPromotion();
     }
 
-    /**
-     * 승급 실패 — 관계 유지 + 이벤트 종료
-     */
     public void completePromotionFailure() {
         clearPromotion();
     }
@@ -223,29 +242,19 @@ public class ChatRoom {
         this.promotionTurnCount = 0;
     }
 
-    /**
-     * 엔딩 도달 마킹
-     */
     public void markEndingReached(EndingType endingType) {
         this.endingReached = true;
         this.endingType = endingType;
     }
 
-    /**
-     * 엔딩 타이틀 저장
-     */
     public void saveEndingTitle(String title) {
         this.endingTitle = title;
     }
 
-    /**
-     * 전체 초기화 (대화 삭제 시)
-     */
     public void resetAll() {
         resetAffection();
         resetSceneState();
         clearPromotion();
-        // [Phase 4.3] 엔딩 상태 초기화
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;
