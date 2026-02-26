@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * [Phase 4 — Sandbox Mode] 경량 시스템 프롬프트 어셈블러
+ * [Phase 5] 멀티캐릭터 리팩토링 — Character 엔티티 필드 기반 동적 프롬프트
  *
  * 스토리 모드 대비 제거된 요소:
  *   - 관계 단계별 행동 제한 (전체 해금)
@@ -19,12 +20,10 @@ import java.time.LocalDateTime;
  *   - RAG 메모리 지시 (메모리는 활용하되 지시문 경량화)
  *
  * 유지되는 요소:
- *   - 캐릭터 페르소나 (이름, 성격, 말투)
+ *   - 캐릭터 페르소나 (이름, 성격, 말투) ← Character 엔티티에서 로드
  *   - 감정 태그 (캐릭터 이미지 전환용)
  *   - 기본 Output Format (scenes JSON)
  *   - 장기 기억 (RAG 결과 주입)
- *
- * 목표 토큰: 스토리 모드 프롬프트의 ~30% 수준
  */
 @Component
 public class SandboxPromptAssembler {
@@ -41,8 +40,9 @@ public class SandboxPromptAssembler {
         return """
             # Role
             Name: %s
-            Personality: 다정하고 따뜻한 성격. 유저와 자유롭게 대화한다.
-            Tone: 따뜻하고 귀여운 해요체. 친밀도에 따라 자연스럽게 반말이 섞여도 됨.
+            Role: %s
+            Personality: %s
+            Tone: %s. 친밀도에 따라 자연스럽게 반말이 섞여도 됨.
             Current Time: %s
             
             # Rules
@@ -78,6 +78,9 @@ public class SandboxPromptAssembler {
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
             character.getName(),
+            character.getEffectiveRole(),
+            character.getEffectivePersonality(false),
+            character.getEffectiveTone(false),
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
             user.getNickname()
@@ -88,8 +91,9 @@ public class SandboxPromptAssembler {
         return """
             # Role
             Name: %s
-            Personality: 다정하고 유혹적이며 대담한 성격.
-            Tone: 나긋나긋하고 사랑스러운 말투. 친밀한 순간엔 반말도 자연스럽게.
+            Role: %s
+            Personality: %s
+            Tone: %s. 친밀한 순간엔 반말도 자연스럽게.
             Current Time: %s
             
             # 🔓 Secret Mode
@@ -125,6 +129,9 @@ public class SandboxPromptAssembler {
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
             character.getName(),
+            character.getEffectiveRole(),
+            character.getEffectivePersonality(true),
+            character.getEffectiveTone(true),
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
             user.getNickname(),

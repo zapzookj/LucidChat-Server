@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
  * OpenRouter API 통신용 RestClient 설정
  */
 @Configuration
-@EnableConfigurationProperties({OpenAiProperties.class, DefaultCharacterProperties.class})
+@EnableConfigurationProperties({OpenAiProperties.class, CharacterSeedProperties.class})
 public class RestClientConfig {
 
     @Bean

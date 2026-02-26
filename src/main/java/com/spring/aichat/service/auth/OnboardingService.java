@@ -1,6 +1,6 @@
 package com.spring.aichat.service.auth;
 
-import com.spring.aichat.config.DefaultCharacterProperties;
+import com.spring.aichat.config.CharacterSeedProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
@@ -28,7 +28,7 @@ public class OnboardingService {
 
     private final CharacterRepository characterRepository;
     private final ChatRoomRepository chatRoomRepository;
-    private final DefaultCharacterProperties defaultCharacterProperties;
+    private final CharacterSeedProperties characterSeedProperties;
     private final RedisCacheService cacheService;
 
     private static final String DEFAULT_CHARACTER_ID_KEY = "character:default_id";
@@ -58,12 +58,12 @@ public class OnboardingService {
         return cacheService.getString(DEFAULT_CHARACTER_ID_KEY)
             .map(Long::parseLong)
             .orElseGet(() -> {
-                Character character = characterRepository.findByName(defaultCharacterProperties.name())
+                Character character = characterRepository.findByName(characterSeedProperties.characters().get(0).name())
                     .orElseThrow(() -> new NotFoundException("기본 캐릭터가 존재하지 않습니다. 시드 설정을 확인하세요."));
 
                 cacheService.putString(DEFAULT_CHARACTER_ID_KEY, String.valueOf(character.getId()));
                 log.info("🎭 [CACHE] Default character ID cached: {} → id={}",
-                    defaultCharacterProperties.name(), character.getId());
+                    characterSeedProperties.characters().get(0).name(), character.getId());
 
                 return character.getId();
             });

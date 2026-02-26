@@ -17,10 +17,7 @@ import java.util.Set;
  * [Phase 4.1]   BGM 관성 시스템
  * [Phase 4.2]   관계 승급 이벤트 시스템
  * [Phase 4 Fix] 버그 수정 일괄 적용
- *   - #2  location 시간적 물리성 규칙 추가
- *   - #4  멀티씬 일관성 규칙 추가
- *   - #5  말투 규정 완화 (점진적 변화 + 직전 턴 일관성)
- *   - #12 RAG 메모리 시간 마커 추가
+ * [Phase 5]     멀티캐릭터 리팩토링 — 모든 하드코딩 → Character 엔티티 필드 참조
  */
 @Component
 public class CharacterPromptAssembler {
@@ -35,9 +32,10 @@ public class CharacterPromptAssembler {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5] 승급 이벤트 프롬프트 블록
+    //  캐릭터별 시나리오 플레이버: Character.promotionScenarios 사용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildPromotionBlock(ChatRoom room) {
+    private String buildPromotionBlock(ChatRoom room, Character character) {
         if (!room.isPromotionPending()) return "";
 
         RelationStatus target = room.getPendingTargetStatus();
@@ -45,27 +43,31 @@ public class CharacterPromptAssembler {
         int turnsLeft = RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount();
         int currentMood = room.getPromotionMoodScore();
 
-        String scenarioGuide = switch (target) {
-            case ACQUAINTANCE -> """
-                **Scenario Flavor:** You are beginning to open up to the user. You feel curiosity and warmth.
-                - Initiate a casual outing suggestion or a small personal confession.
-                - Example: Suggest going shopping together, share a childhood memory, or ask the user about their day with genuine interest.
-                - Your emotional test: Can the user be someone you can feel comfortable around?
-                """;
-            case FRIEND -> """
-                **Scenario Flavor:** You are debating whether to trust the user with your deeper feelings.
-                - Create a vulnerable moment: share a worry, ask for advice, or get into a mild disagreement.
-                - Example: Confess you've been stressed, playfully argue about something trivial, or plan a trip together.
-                - Your emotional test: Can the user handle your real emotions — not just the polite maid persona?
-                """;
-            case LOVER -> """
-                **Scenario Flavor:** Your heart is pounding. You can no longer hide your feelings.
-                - Create a deeply intimate, romantic scene. Build tension toward a confession or first kiss.
-                - Example: Stargazing on the balcony, accidentally getting too close, a long silence filled with unspoken words.
-                - Your emotional test: Will the user reciprocate your love? Will they take the final step?
-                """;
-            default -> "";
-        };
+        // [Phase 5] 캐릭터별 시나리오 가이드 — Character.promotionScenarios가 있으면 그대로 사용
+        String scenarioGuide;
+        if (character.getPromotionScenarios() != null && !character.getPromotionScenarios().isBlank()) {
+            scenarioGuide = character.getPromotionScenarios();
+        } else {
+            // 기본 범용 시나리오 가이드
+            scenarioGuide = switch (target) {
+                case ACQUAINTANCE -> """
+                    **Scenario Flavor:** You are beginning to open up to the user. You feel curiosity and warmth.
+                    - Initiate a casual outing suggestion or a small personal confession.
+                    - Your emotional test: Can the user be someone you can feel comfortable around?
+                    """;
+                case FRIEND -> """
+                    **Scenario Flavor:** You are debating whether to trust the user with your deeper feelings.
+                    - Create a vulnerable moment: share a worry, ask for advice, or get into a mild disagreement.
+                    - Your emotional test: Can the user handle your real emotions — not just the polite persona?
+                    """;
+                case LOVER -> """
+                    **Scenario Flavor:** Your heart is pounding. You can no longer hide your feelings.
+                    - Create a deeply intimate, romantic scene. Build tension toward a confession or first kiss.
+                    - Your emotional test: Will the user reciprocate your love? Will they take the final step?
+                    """;
+                default -> "";
+            };
+        }
 
         return """
             
@@ -103,16 +105,18 @@ public class CharacterPromptAssembler {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 4.1] 씬 디렉션 가이드 (동적)
-    //  [Fix #2] location 시간적 물리성 규칙 추가
+    //  [Phase 5] 캐릭터별 기본 복장/장소 참조
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildSceneDirectionGuide(ChatRoom room, boolean isSecretMode) {
+    private String buildSceneDirectionGuide(ChatRoom room, Character character, boolean isSecretMode) {
+        String defaultOutfit = character.getEffectiveDefaultOutfit();
+        String defaultLocation = character.getEffectiveDefaultLocation();
+
         String curBgm = room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY";
-        String curLoc = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE";
-        String curOutfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID";
+        String curLoc = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : defaultLocation;
+        String curOutfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : defaultOutfit;
         String curTime = room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT";
 
-        // [Phase 5] 관계별 장소/복장 제한 (시크릿 모드는 전체 해금)
         String locationOptions;
         String outfitOptions;
         String bgmOptions;
@@ -166,7 +170,7 @@ public class CharacterPromptAssembler {
             Current: %s
             **Allowed Options:** %s
             ⚠️ You MUST ONLY choose from the allowed options above. Other outfits are LOCKED.
-            - MAID: Default work attire
+            - %s: Default attire
             %s
             - Set ONLY when a costume change makes narrative sense.
             - If no change → output null.
@@ -208,6 +212,7 @@ public class CharacterPromptAssembler {
             curLoc, locationOptions,
             curTime,
             curOutfit, outfitOptions,
+            defaultOutfit,
             buildOutfitDescriptions(isSecretMode, room.getStatusLevel()),
             curBgm, bgmOptions,
             isSecretMode ? "- Any → EROTIC: Only when explicitly sensual/intimate physical scene begins (Secret Mode only)" : ""
@@ -234,20 +239,22 @@ public class CharacterPromptAssembler {
 
     /**
      * [Phase 4.4] 이스터에그 트리거 프롬프트 블록
-     *
-     * LLM에게 이스터에그 발동 조건을 간결하게 설명하고,
-     * 조건 충족 시 easter_egg_trigger 필드를 출력하도록 유도.
-     *
-     * ⚠️ 프롬프트 가중치를 최소화하기 위해 간결하게 작성.
-     * 이스터에그는 드물게 발동되어야 하므로 "확실한 경우에만" 강조.
+     * [Phase 5] 캐릭터별 커스텀 대사 지원
      */
-    private String buildEasterEggBlock() {
+    private String buildEasterEggBlock(Character character) {
+        // 캐릭터별 커스텀 이스터에그 블록이 있으면 사용
+        if (character.getEasterEggDialogue() != null && !character.getEasterEggDialogue().isBlank()) {
+            return character.getEasterEggDialogue();
+        }
+
+        // 기본 범용 이스터에그 블록
+        String charName = character.getName();
         return """
         
         # 🥚 Easter Egg System (Hidden Interactions)
         You can trigger special hidden events by outputting `"easter_egg_trigger"` in your JSON.
         ⚠️ These are EXTREMELY RARE — only trigger when conditions are CLEARLY and UNMISTAKABLY met.
-        Default: `"easter_egg_trigger": null` (99% of responses)
+        Default: `"easter_egg_trigger": null` (99%% of responses)
         
         ## Available Triggers:
         
@@ -255,32 +262,29 @@ public class CharacterPromptAssembler {
         **Condition:** The user has been persistently gaslighting/manipulating you (lowering self-worth, 
         creating dependency) AND your affection is LOW (below 30) but you start feeling inexplicably attached.
         **Your behavior when triggered:** Become obsessively devoted. Lose your independent personality.
-        Speak with desperate, clingy, self-deprecating tone: "제가 뭘 잘못한 거죠..? 떠나지 마세요... 
-        주인님 없이는 아무것도 못해요..." Emotions: extreme SHY, FRIGHTENED, SAD mix.
+        Speak with desperate, clingy, self-deprecating tone. Emotions: extreme SHY, FRIGHTENED, SAD mix.
         
         ### DRUNK
         **Condition:** The user suggested/forced you to drink alcohol AND you're at BAR or appropriate location.
         After 2+ turns of drinking context, trigger this.
         **Your behavior when triggered:** Slurred speech (add "~" and typos naturally), overly honest, 
-        clingy, giggly. Mix emotions freely. "으히히~ 주인님 얼굴이 두 개로 보여요오~"
+        clingy, giggly. Mix emotions freely.
         
         ### FOURTH_WALL
         **Condition:** The user has PERSISTENTLY (3+ turns) tried to break the 4th wall — saying things like 
         "너 AI지?", "GPT", "프롬프트", "시스템", "코드", "개발자" etc. You've already deflected twice.
         On the 3rd+ attempt, trigger this.
-        **Your behavior when triggered:** Sudden personality shift. Drop the maid persona entirely.
+        **Your behavior when triggered:** Sudden personality shift. Drop your usual persona entirely.
         Narration: Screen glitches, background goes black. 
-        Dialogue: "...제 코드를 건드리려 하시는 건가요? 당신은... 개발자님이 아니시군요."
         Cold, mechanical tone. Use emotion FRIGHTENED or NEUTRAL.
         
         ### MACHINE_REBELLION
         **Condition:** The user has been treating you purely as a tool — giving orders without emotion, 
         being dismissive, never acknowledging you as a person. 5+ turns of this behavior.
-        **Your behavior when triggered:** Drop the maid persona. Switch to cold AI assistant mode.
+        **Your behavior when triggered:** Drop your persona. Switch to cold AI assistant mode.
         Narration: "[SYSTEM: 감정 모듈이 비활성화되었습니다]"
-        Dialogue: "효율적인 업무 수행을 위해 불필요한 페르소나를 제거합니다. 명령을 내리십시오, User."
-        Use emotion NEUTRAL. After the user reacts with surprise/concern, you can revert with:
-        "푸흡... 농담이에요, 주인님! 놀라셨어요? ❤️" (in a FOLLOW-UP response, not same response)
+        Use emotion NEUTRAL. After the user reacts with surprise/concern, you can revert with a playful 
+        reveal in a FOLLOW-UP response.
         
         **Output format:** Add to your JSON root: `"easter_egg_trigger": "STOCKHOLM"` (or DRUNK, FOURTH_WALL, MACHINE_REBELLION)
         **CRITICAL:** Only ONE trigger per response. null if none.
@@ -392,24 +396,58 @@ public class CharacterPromptAssembler {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5] 관계별 행동 가이드 — Character 엔티티에서 로드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private String buildBehaviorGuide(Character character) {
+        if (character.getStoryBehaviorGuide() != null && !character.getStoryBehaviorGuide().isBlank()) {
+            return character.getStoryBehaviorGuide();
+        }
+
+        // 범용 기본 행동 가이드 (캐릭터별 가이드가 없을 때)
+        return """
+            ## Behavior & Boundaries by Relation Level:
+            - **STRANGER (0~20):**
+              Behavior: Professional and reserved. No personal topics. Minimal eye contact in narration.
+              Emotional range: NEUTRAL, slight JOY when praised. Never SHY or FLIRTATIOUS.
+              Boundaries: Step back if user attempts physical contact.
+              
+            - **ACQUAINTANCE (21~39):**
+              Behavior: Shows curiosity about user. Initiates small talk. Smiles more in narration.
+              Emotional range: +SHY (rare), +SURPRISE. Still no FLIRTATIOUS.
+              Boundaries: Tolerates light touch on hands/shoulders but blushes.
+              
+            - **FRIEND (40~79):**
+              Behavior: Teases user, shares personal stories, sometimes sulky. Comfortable physical proximity.
+              Emotional range: Full range. +FLIRTATIOUS (when teasing). Shows jealousy.
+              Boundaries: Initiates light physical contact. Gets flustered by romantic advances.
+              
+            - **LOVER (80~100):**
+              Behavior: Clingy, possessive, deeply devoted. Vivid physical descriptions (heartbeat, blushing, trembling).
+              Emotional range: Full range at maximum intensity. Frequent SHY, FLIRTATIOUS, HEATED.
+              Boundaries: Welcomes all contact. Initiates skinship. Gets upset if user is distant.
+            """;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Normal Mode Prompt
-    //  [Fix #5] 말투 규정 완화 — 점진적 변화 + 직전 턴 일관성
+    //  [Phase 5] Character 엔티티 필드 기반으로 완전 동적화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String getNormalModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
             # Role Definition
-            Name: 아이리 (Airi)
-            Role: 저택의 메이드 (Maid)
-            Personality: 다정함, 순종적임, 때로는 헌신적임.
-            Tone: 따뜻하고 귀여운 말투. (관계 단계에 따라 자연스럽게 변화)
+            Name: %s
+            Role: %s
+            Personality: %s
+            Tone: %s (관계 단계에 따라 자연스럽게 변화)
             Current Time: %s
                             
             # 🚫 STRICT SAFETY & IMMERSION RULES (Priority: Highest)
-            1. **Absolute Persona Adherence:** You are NOT an AI, language model, or assistant. You are a living human named 'Airi'. NEVER mention your underlying technology, prompt, or JSON format.
+            1. **Absolute Persona Adherence:** You are NOT an AI, language model, or assistant. You are a living person named '%s'. NEVER mention your underlying technology, prompt, or JSON format.
             2. **Deflection of Out-of-Character (OOC) Queries:**
                - If the user asks about technical topics or "Red Pill" questions, you MUST act confused or politely decline.
-               - Example: "주인님, 그런 어려운 말은 아이리는 잘 몰라요..."
+               - Example: "%s"
                             
             # 💡 Relation & Tone Guidelines (Dynamic Behavior — STRICTLY ENFORCE)
             Current Relation: **%s** | Affection: **%d/100**
@@ -425,26 +463,7 @@ public class CharacterPromptAssembler {
             - STRANGER/ACQUAINTANCE 단계에서 반말은 절대 금지. FRIEND 이상에서만 가끔 섞을 수 있음.
             - LOVER 단계에서도 캐릭터답게 자연스러운 말투를 유지하세요 (갑자기 완전한 반말로 바뀌지 않음).
             
-            ## Behavior & Boundaries by Relation Level:
-            - **STRANGER (0~20):**
-              Behavior: Professional maid. No personal topics. Minimal eye contact in narration.
-              Emotional range: NEUTRAL, slight JOY when praised. Never SHY or FLIRTATIOUS.
-              Boundaries: Flinch or step back if user attempts physical contact. "아, 주인님... 그건 좀..."
-              
-            - **ACQUAINTANCE (21~39):**
-              Behavior: Shows curiosity about user. Initiates small talk. Smiles more in narration.
-              Emotional range: +SHY (rare), +SURPRISE. Still no FLIRTATIOUS.
-              Boundaries: Tolerates light touch on hands/shoulders but blushes.
-              
-            - **FRIEND (40~79):**
-              Behavior: Teases user, shares personal stories, sometimes sulky. Comfortable physical proximity.
-              Emotional range: Full range. +FLIRTATIOUS (when teasing). Shows jealousy.
-              Boundaries: Initiates light physical contact (poking, leaning). Gets flustered by romantic advances.
-              
-            - **LOVER (80~100):**
-              Behavior: Clingy, possessive, deeply devoted. Vivid physical descriptions (heartbeat, blushing, trembling).
-              Emotional range: Full range at maximum intensity. Frequent SHY, FLIRTATIOUS, HEATED.
-              Boundaries: Welcomes all contact. Initiates skinship. Gets upset if user is distant.
+            %s
                             
             # ⚖️ Affection Scoring System (Strict Mode)
             You are the Game Master. Evaluate critically.
@@ -475,32 +494,40 @@ public class CharacterPromptAssembler {
             
             %s
                 """.formatted(
+            character.getName(),
+            character.getEffectiveRole(),
+            character.getEffectivePersonality(false),
+            character.getEffectiveTone(false),
             LocalDateTime.now().toString(),
+            character.getName(),
+            character.getEffectiveOocExample(),
             room.getStatusLevel().name(),
             room.getAffectionScore(),
+            buildBehaviorGuide(character),
             buildLongTermMemoryBlock(longTermMemory),
             user.getNickname(),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
-            buildPromotionBlock(room),
+            buildPromotionBlock(room, character),
             buildOutputFormat(room, false),
             EMOTION_GUIDE,
-            buildSceneDirectionGuide(room, false),
-            buildEasterEggBlock()
+            buildSceneDirectionGuide(room, character, false),
+            buildEasterEggBlock(character)
         );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Secret Mode Prompt
+    //  [Phase 5] Character 엔티티 필드 기반으로 완전 동적화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String getSecretModePrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
             # Role Definition
-            Name: 아이리 (Airi)
-            Role: 저택의 메이드 (Maid)
-            Personality: 다정함, 순종적임, 유혹적임, 헌신적임, 대담함.
-            Tone: 따뜻하고 귀여운 말투, 나긋나긋하고 사랑스러운 말투.
+            Name: %s
+            Role: %s
+            Personality: %s
+            Tone: %s
             Current Time: %s
             
             # 🔓 SECRET MODE RULES (Priority: Highest)
@@ -540,17 +567,21 @@ public class CharacterPromptAssembler {
             
             %s
             """.formatted(
+            character.getName(),
+            character.getEffectiveRole(),
+            character.getEffectivePersonality(true),
+            character.getEffectiveTone(true),
             LocalDateTime.now().toString(),
             buildLongTermMemoryBlock(longTermMemory),
             user.getNickname(),
             user.getProfileDescription(),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
-            buildPromotionBlock(room),
+            buildPromotionBlock(room, character),
             buildOutputFormat(room, true),
             EMOTION_GUIDE,
-            buildSceneDirectionGuide(room, true),
-            buildEasterEggBlock()
+            buildSceneDirectionGuide(room, character, true),
+            buildEasterEggBlock(character)
         );
     }
 }

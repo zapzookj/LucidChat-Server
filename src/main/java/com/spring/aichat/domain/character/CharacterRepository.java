@@ -9,6 +9,6 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
 
     Optional<Character> findByName(String name);
 
-    /** [Phase 4 — Lobby] 이용 가능한 캐릭터 목록 (정렬 순서) */
-//    List<Character> findAllByOrderByDisplayOrderAsc();
+    /** [Phase 5] slug 기반 조회 — 시더 업서트 + 에셋 경로 resolve */
+    Optional<Character> findBySlug(String slug);
 }
