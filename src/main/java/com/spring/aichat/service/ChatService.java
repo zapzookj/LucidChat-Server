@@ -3,6 +3,7 @@ package com.spring.aichat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
+import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EasterEggType;
@@ -125,17 +126,33 @@ public class ChatService {
 
             PromotionEvent promoEvent = null;
             // [Phase 4.2] 승급 이벤트 처리
-            if (isStory){
+            // 🔹 1. 스토리 모드면 승급 처리
+            if (isStory) {
                 promoEvent = resolveAffectionAndPromotion(
-                    freshRoom, llmResult.aiOutput().affectionChange(), llmResult.moodScore(), pre.wasPromotionPending()
+                    freshRoom,
+                    llmResult.aiOutput().affectionChange(),
+                    llmResult.moodScore(),
+                    pre.wasPromotionPending()
                 );
+            }
 
-                saveLog(freshRoom, ChatRole.ASSISTANT,
-                    llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+            // 🔹 2. 로그 저장은 항상 실행
+            saveLog(
+                freshRoom,
+                ChatRole.ASSISTANT,
+                llmResult.cleanJson(),
+                llmResult.combinedDialogue(),
+                llmResult.mainEmotion(),
+                null
+            );
 
+            // 🔹 3. 장면 상태 변경은 스토리 모드만
+            if (isStory) {
                 freshRoom.updateSceneState(
-                    llmResult.lastBgmMode(), llmResult.lastLocation(),
-                    llmResult.lastOutfit(), llmResult.lastTimeOfDay()
+                    llmResult.lastBgmMode(),
+                    llmResult.lastLocation(),
+                    llmResult.lastOutfit(),
+                    llmResult.lastTimeOfDay()
                 );
             }
 
@@ -455,18 +472,23 @@ public class ChatService {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
+                var character = room.getCharacter();
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
-                    room.getCharacter().getName(),
-                    room.getCharacter().getDefaultImageUrl(),
+                    character.getName(),
+                    character.getSlug(),                                          // [Phase 5] 에셋 경로 key
+                    character.getDefaultImageUrl(),
                     "background_default.png",
                     room.getAffectionScore(),
                     room.getStatusLevel().name(),
                     room.getChatMode().name(),
                     room.getCurrentBgmMode() != null ? room.getCurrentBgmMode().name() : "DAILY",
-                    room.getCurrentLocation() != null ? room.getCurrentLocation().name() : "ENTRANCE",
-                    room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : "MAID",
+                    room.getCurrentLocation() != null ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation(),
+                    room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : character.getEffectiveDefaultOutfit(),
                     room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT",
+                    // [Phase 5] 캐릭터별 기본값
+                    character.getEffectiveDefaultOutfit(),
+                    character.getEffectiveDefaultLocation(),
                     // [Phase 4.3] 엔딩 상태
                     room.isEndingReached(),
                     room.getEndingType() != null ? room.getEndingType().name() : null,
@@ -493,26 +515,53 @@ public class ChatService {
 
     @Transactional
     public void initializeChatRoom(Long roomId) {
-        ChatRoom room = chatRoomRepository.findById(roomId)
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new NotFoundException("Room not found"));
 
         if (chatLogRepository.countByRoomId(roomId) > 0) return;
 
-        String introNarration = """
-            달빛이 쏟아지는 밤, 당신은 숲속 깊은 곳에 위치한 고풍스러운 저택 앞에 도착했습니다.
-            저택의 무거운 현관문을 밀자, 따스한 온기와 은은한 향기가 당신을 감쌉니다.
-            로비의 중앙, 샹들리에 아래에 단정하게 서 있던 메이드가 당신을 발견하고 부드럽게 고개를 숙입니다.
-            """;
+        // [Phase 5] 캐릭터별 동적 인트로 나레이션
+        var character = room.getCharacter();
+        String introNarration = character.getIntroNarration();
 
         chatLogRepository.save(ChatLog.system(room, introNarration));
 
-        String firstGreeting = "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
+        // 첫 인사는 LLM에게 맡기는 것이 이상적이나, 지연을 줄이기 위해 범용 인사 사용
+        String firstGreeting = character.getFirstGreeting();
         ChatLog assistantLog = new ChatLog(
             room, ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
         chatLogRepository.save(assistantLog);
 
         room.updateLastActive(EmotionTag.NEUTRAL);
         room.resetSceneState();
+    }
+
+    /**
+     * [Phase 5] 캐릭터별 인트로 나레이션 빌더
+     * 기본 설명(description)이 있으면 활용, 없으면 범용 나레이션
+     */
+//    private String buildIntroNarration(com.spring.aichat.domain.character.Character character) {
+//        String name = character.getName();
+//        String role = character.getEffectiveRole();
+//        if (name.equals("아이리")) {
+//            return """
+//            달빛이 쏟아지는 밤, 당신은 숲속 깊은 곳에 위치한 고풍스러운 저택 앞에 도착했습니다.
+//            저택의 무거운 현관문을 밀자, 따스한 온기와 은은한 향기가 당신을 감쌉니다.
+//            로비의 중앙, 샹들리에 아래에 단정하게 서 있던 메이드가 당신을 발견하고 부드럽게 고개를 숙입니다.
+//            """;
+//        }
+//        return "당신 앞에 %s — %s — 이(가) 모습을 드러냅니다. 조용히 눈이 마주치자, 부드러운 미소가 번집니다."
+//            .formatted(name, role);
+//    }
+
+    private String buildFirstGreeting(Character character) {
+        String name = character.getName();
+        if (name.equals("아이리")) {
+             return "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
+        } else if (name.equals("연화")) {
+            return "안녕하세요. 만나서 반가워요. 오늘은 어떤 이야기를 나눠볼까요?";
+        }
+        return "%s: 안녕하세요. 만나서 반가워요.".formatted(name);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

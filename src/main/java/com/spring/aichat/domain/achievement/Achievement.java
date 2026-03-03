@@ -84,8 +84,8 @@ public class Achievement {
         a.title = endingType.equals("HAPPY") ? "Happily Ever After" : "Bittersweet Farewell";
         a.titleKo = endingType.equals("HAPPY") ? "해피엔딩" : "배드엔딩";
         a.description = endingType.equals("HAPPY")
-            ? "아이리와 행복한 결말을 맞이했다."
-            : "아이리와 이별의 결말을 맞이했다.";
+            ? "행복한 결말을 맞이했다."
+            : "이별의 결말을 맞이했다.";
         a.icon = endingType.equals("HAPPY") ? "💕" : "💔";
         return a;
     }

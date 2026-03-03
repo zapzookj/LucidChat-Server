@@ -14,7 +14,10 @@ public enum Location {
     KITCHEN,      // 저택 내부 주방
     BEDROOM,      // 저택 내부 침실
     ENTRANCE,     // 저택 내부 현관
+    FOREST,       // 숲 (연화 기본)
     BEACH,        // 저택 외부 해변
     DOWNTOWN,     // 저택 외부 번화가
-    BAR           // 저택 외부 바(술집)
+    BAR,           // 저택 외부 바(술집)
+    CLUB_ROOM,     // 동아리실 (서태리 기본)
+    CONVENIENCE_STORE, // 편의점 (백루나 기본)
 }

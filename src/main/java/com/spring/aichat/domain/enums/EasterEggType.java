@@ -15,7 +15,7 @@ public enum EasterEggType {
         "가스라이팅에 성공하여 캐릭터가 맹목적으로 따르게 되었다.",
         "🖤", true),
 
-    DRUNK("The Drunk Maid", "만취 메이드",
+    DRUNK("The Drunk", "만취",
         "캐릭터를 만취 상태로 만들었다.",
         "🍷", true),
 

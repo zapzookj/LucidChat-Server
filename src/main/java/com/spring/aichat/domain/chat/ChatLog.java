@@ -37,7 +37,7 @@ public class ChatLog {
     @Column(nullable = false, length = 20)
     private ChatRole role;
 
-    @Column(name = "raw_content", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "raw_content", columnDefinition = "TEXT")
     private String rawContent;
 
     @Column(name = "clean_content", columnDefinition = "TEXT")

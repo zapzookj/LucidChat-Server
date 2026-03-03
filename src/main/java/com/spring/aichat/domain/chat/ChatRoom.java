@@ -120,6 +120,7 @@ public class ChatRoom {
 
     /**
      * [Phase 4.5] 모드를 포함한 생성자
+     * [Phase 5]   캐릭터별 기본 복장/장소 적용
      */
     public ChatRoom(User user, Character character, ChatMode chatMode) {
         this.user = user;
@@ -130,9 +131,11 @@ public class ChatRoom {
         this.lastActiveAt = LocalDateTime.now();
         this.lastEmotion = EmotionTag.NEUTRAL;
         this.currentBgmMode = BgmMode.DAILY;
-        this.currentLocation = Location.ENTRANCE;
-        this.currentOutfit = Outfit.MAID;
         this.currentTimeOfDay = TimeOfDay.NIGHT;
+
+        // [Phase 5] 캐릭터별 기본 장소/복장 — enum 파싱, 실패 시 범용 폴백
+        this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
+        this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
     }
 
     /**
@@ -207,8 +210,9 @@ public class ChatRoom {
 
     public void resetSceneState() {
         this.currentBgmMode = BgmMode.DAILY;
-        this.currentLocation = Location.ENTRANCE;
-        this.currentOutfit = Outfit.MAID;
+        // [Phase 5] 캐릭터별 기본값으로 리셋
+        this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
+        this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
         this.currentTimeOfDay = TimeOfDay.NIGHT;
     }
 
@@ -258,5 +262,17 @@ public class ChatRoom {
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;
+    }
+
+    // ── [Phase 5] enum 파싱 헬퍼 ──
+
+    private static Location parseLocationOrDefault(String value) {
+        try { return Location.valueOf(value); }
+        catch (Exception e) { return Location.ENTRANCE; }
+    }
+
+    private static Outfit parseOutfitOrDefault(String value) {
+        try { return Outfit.valueOf(value); }
+        catch (Exception e) { return Outfit.MAID; }
     }
 }

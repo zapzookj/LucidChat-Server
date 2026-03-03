@@ -143,6 +143,12 @@ public class Character {
     @Column(name = "ending_quote_bad", columnDefinition = "TEXT")
     private String endingQuoteBad;
 
+    @Column(name = "intro_narration", columnDefinition = "TEXT")
+    private String introNarration;
+
+    @Column(name = "first_greeting", columnDefinition = "TEXT")
+    private String firstGreeting;
+
 
     public Character(String name, String slug, String baseSystemPrompt, String llmModelName) {
         this.name = name;
@@ -183,6 +189,8 @@ public class Character {
         if (seed.endingRoleDesc() != null) this.endingRoleDesc = seed.endingRoleDesc();
         if (seed.endingQuoteHappy() != null) this.endingQuoteHappy = seed.endingQuoteHappy();
         if (seed.endingQuoteBad() != null) this.endingQuoteBad = seed.endingQuoteBad();
+        if (seed.introNarration() != null) this.introNarration = seed.introNarration();
+        if (seed.firstGreeting() != null) this.firstGreeting = seed.firstGreeting();
     }
 
     // ── 편의 메서드: 시크릿 모드 성격/말투 (폴백) ──

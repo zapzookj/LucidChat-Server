@@ -8,9 +8,10 @@ package com.spring.aichat.dto.lobby;
 public record CharacterResponse(
     Long id,
     String name,
-    String tagline,          // 한 줄 요약 (예: "상냥한 저택의 메이드")
-    String description,      // 상세 설명
-    String thumbnailUrl,     // 카루셀 카드용 이미지
-    String defaultImageUrl,  // 기본 캐릭터 이미지
-    boolean storyAvailable   // 스토리 모드 지원 여부
+    String slug,              // [Phase 5] 에셋 경로 key (예: "airi", "yeonhwa")
+    String tagline,           // 한 줄 요약 (예: "상냥한 저택의 메이드")
+    String description,       // 상세 설명
+    String thumbnailUrl,      // 카루셀 카드용 이미지
+    String defaultImageUrl,   // 기본 캐릭터 이미지
+    boolean storyAvailable    // 스토리 모드 지원 여부
 ) {}

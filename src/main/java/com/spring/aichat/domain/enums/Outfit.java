@@ -10,8 +10,10 @@ package com.spring.aichat.domain.enums;
  */
 public enum Outfit {
     MAID,       // 기본 메이드 복장
+    HANBOK,     // 한복 (구미호 기본)
     PAJAMA,     // 잠옷
     DATE,       // 데이트룩
     SWIMWEAR,   // 수영복
-    NEGLIGEE    // 네글리제 (시크릿 전용)
+    NEGLIGEE,    // 네글리제 (시크릿 전용)
+    DAILY       // 일상복 (서태리, 백루나 기본)
 }

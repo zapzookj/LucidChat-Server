@@ -105,6 +105,7 @@ public class LobbyService {
         return new CharacterResponse(
             c.getId(),
             c.getName(),
+            c.getSlug(),
             c.getTagline(),
             c.getDescription(),
             c.getThumbnailUrl(),

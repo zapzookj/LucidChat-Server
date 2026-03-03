@@ -37,13 +37,13 @@ public class AchievementService {
     private static final List<AchievementItem> ALL_ACHIEVEMENTS = List.of(
         // Endings
         new AchievementItem("ENDING", "HAPPY_ENDING", "Happily Ever After", "해피엔딩",
-            "아이리와 행복한 결말을 맞이했다.", "💕", null),
+            "행복한 결말을 맞이했다.", "💕", null),
         new AchievementItem("ENDING", "BAD_ENDING", "Bittersweet Farewell", "배드엔딩",
-            "아이리와 이별의 결말을 맞이했다.", "💔", null),
+            "이별의 결말을 맞이했다.", "💔", null),
         // Special (Easter Eggs)
         new AchievementItem("SPECIAL", "STOCKHOLM", "Stockholm Syndrome", "스톡홀름 증후군",
             "???", "🖤", null),
-        new AchievementItem("SPECIAL", "DRUNK", "The Drunk Maid", "만취 메이드",
+        new AchievementItem("SPECIAL", "DRUNK", "The Drunk", "만취",
             "???", "🍷", null),
         new AchievementItem("SPECIAL", "FOURTH_WALL", "Hacker", "해커",
             "???", "💻", null),

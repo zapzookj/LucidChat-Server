@@ -107,9 +107,9 @@ public final class RelationStatusPolicy {
      */
     public static Set<String> getAllowedLocations(RelationStatus status) {
         Set<String> allowed = new LinkedHashSet<>();
-        // STRANGER 이하: 저택 내부만
+        // STRANGER 이하: 기본 장소 (저택 내부 + 캐릭터별 기본 장소)
         allowed.addAll(List.of("LIVINGROOM", "BALCONY", "STUDY", "BATHROOM",
-            "GARDEN", "KITCHEN", "BEDROOM", "ENTRANCE"));
+            "GARDEN", "KITCHEN", "BEDROOM", "ENTRANCE", "FOREST"));
 
         if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
             allowed.add("DOWNTOWN");
@@ -128,7 +128,9 @@ public final class RelationStatusPolicy {
      */
     public static Set<String> getAllowedOutfits(RelationStatus status) {
         Set<String> allowed = new LinkedHashSet<>();
+        // 기본 복장 (캐릭터별 기본 복장 포함)
         allowed.add("MAID");
+        allowed.add("HANBOK");
 
         if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
             allowed.add("DATE");

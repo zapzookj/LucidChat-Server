@@ -122,8 +122,8 @@ public class CharacterPromptAssembler {
         String bgmOptions;
 
         if (isSecretMode) {
-            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR";
-            outfitOptions = "MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE";
+            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, CLUB_ROOM, CONVENIENCE_STORE, BEACH, DOWNTOWN, BAR";
+            outfitOptions = "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY";
             bgmOptions = "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC";
         } else {
             Set<String> allowedLocs = RelationStatusPolicy.getAllowedLocations(room.getStatusLevel());
@@ -298,11 +298,11 @@ public class CharacterPromptAssembler {
 
     private String buildOutputFormat(ChatRoom room, boolean isSecretMode) {
         String locationOptions = isSecretMode
-            ? "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR"
+            ? "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, BEACH, DOWNTOWN, BAR"
             : String.join(", ", RelationStatusPolicy.getAllowedLocations(room.getStatusLevel()));
 
         String outfitOptions = isSecretMode
-            ? "MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE"
+            ? "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY"
             : String.join(", ", RelationStatusPolicy.getAllowedOutfits(room.getStatusLevel()));
 
         String bgmOptions = isSecretMode

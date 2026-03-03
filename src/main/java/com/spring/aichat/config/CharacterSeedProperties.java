@@ -60,6 +60,8 @@ public record CharacterSeedProperties(
         // ── 엔딩 ──
         String endingRoleDesc,
         String endingQuoteHappy,
-        String endingQuoteBad
+        String endingQuoteBad,
+        String introNarration,
+        String firstGreeting
     ) {}
 }

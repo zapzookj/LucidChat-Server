@@ -63,7 +63,8 @@ public class EndingService {
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-        String characterName = room.getCharacter().getName();
+        com.spring.aichat.domain.character.Character character = room.getCharacter();
+        String characterName = character.getName();
         String userNickname = room.getUser().getNickname();
         int affection = room.getAffectionScore();
         String relationStatus = room.getStatusLevel().name();
@@ -113,7 +114,7 @@ public class EndingService {
         // ── 4. 엔딩 씬 생성 (LLM Call 1) ──
         long sceneStart = System.currentTimeMillis();
         String scenePrompt = endingPromptAssembler.assembleEndingScenePrompt(
-            endingType, characterName, userNickname,
+            endingType, character, userNickname,
             affection, relationStatus, longTermMemory, isSecretMode
         );
 
@@ -128,7 +129,7 @@ public class EndingService {
         // ── 5. 엔딩 타이틀 생성 (LLM Call 2 — penalty 미적용, 창의성 극대화) ──
         long titleStart = System.currentTimeMillis();
         String titlePrompt = endingPromptAssembler.assembleEndingTitlePrompt(
-            endingType, longTermMemory, recentSummary, userNickname, characterName
+            endingType, longTermMemory, recentSummary, userNickname, character
         );
         String endingTitle = openRouterClient.chatCompletion(
             OpenAiChatRequest.withoutPenalty(props.sentimentModel(), List.of(OpenAiMessage.system(titlePrompt)), 0.9)
@@ -166,8 +167,8 @@ public class EndingService {
         String characterQuote = scenesWrapper.characterQuote() != null
             ? scenesWrapper.characterQuote()
             : (endingType == EndingType.HAPPY
-            ? "주인님과의 모든 순간이, 아이리에겐 기적이었어요."
-            : "그 분이 처음 문을 열었을 때의 온기가... 아직도 손끝에 남아 있습니다.");
+            ? character.getEffectiveEndingQuoteHappy()
+            : character.getEffectiveEndingQuoteBad());
 
         log.info("🎬 [ENDING] ====== generateEnding DONE: {}ms ======", System.currentTimeMillis() - totalStart);
 
@@ -214,14 +215,14 @@ public class EndingService {
             .collect(Collectors.joining("\n"));
 
         String transformPrompt = """
-            당신은 '%s'라는 이름의 메이드 캐릭터입니다.
-            아래의 기억들을 당신(%s)이 '%s'(주인님)을 회상하는 1인칭 시점으로 변환하세요.
+            당신은 '%s'라는 이름의 캐릭터입니다.
+            아래의 기억들을 당신(%s)이 '%s'을(를) 회상하는 1인칭 시점으로 변환하세요.
             
             ## 규칙:
             - 각 기억을 **시적이고 감성적인 한 줄**(15~30자)로 변환
             - %s 회상하세요
             - 'AI', '유저', '캐릭터', '시스템', '호감도' 같은 메타 용어는 **절대 사용 금지**
-            - '주인님', '나(아이리)' 같은 인칭을 사용
+            - 캐릭터가 평소 사용하는 인칭과 호칭을 사용
             - 기억의 개수를 유지하세요 (입력 N개 → 출력 N개)
             - 각 줄을 "- "로 시작하세요
             
@@ -361,8 +362,8 @@ public class EndingService {
             log.error("🎬 [ENDING] Scene JSON parsing failed: {}", raw, e);
             return new EndingScenesWrapper(
                 List.of(new RawEndingScene(
-                    "아이리가 조용히 당신을 바라본다.",
-                    "...감사했습니다, 주인님.",
+                    "조용히 당신을 바라본다.",
+                    "...감사했습니다.",
                     "SAD", null, null, null, null
                 )),
                 "당신과의 모든 날들이, 저에겐 전부였습니다."

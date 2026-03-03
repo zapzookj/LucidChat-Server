@@ -26,8 +26,8 @@ public class NarratorPromptAssembler {
         String outfitOptions;
 
         if (isSecretMode) {
-            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, BEACH, DOWNTOWN, BAR";
-            outfitOptions = "MAID, PAJAMA, DATE, SWIMWEAR, NEGLIGEE";
+            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, BEACH, DOWNTOWN, BAR, CLUB_ROOM, CONVENIENCE_STORE";
+            outfitOptions = "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY";
         } else {
             Set<String> allowedLocs = RelationStatusPolicy.getAllowedLocations(room.getStatusLevel());
             Set<String> allowedOutfits = RelationStatusPolicy.getAllowedOutfits(room.getStatusLevel());
