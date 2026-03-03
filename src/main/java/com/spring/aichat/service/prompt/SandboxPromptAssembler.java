@@ -14,14 +14,14 @@ import java.time.LocalDateTime;
  * 스토리 모드 대비 제거된 요소:
  *   - 관계 단계별 행동 제한 (전체 해금)
  *   - 승급 이벤트 시스템
- *   - 씬 디렉션 가이드 (location/outfit/bgmMode 지시 최소화)
+ *   - 씬 디렉션 가이드 (location/outfit/bgmMode 항상 null)
  *   - 이스터에그 트리거
- *   - 호감도 채점 (채점 자체가 불필요)
  *   - RAG 메모리 지시 (메모리는 활용하되 지시문 경량화)
  *
  * 유지되는 요소:
  *   - 캐릭터 페르소나 (이름, 성격, 말투) ← Character 엔티티에서 로드
  *   - 감정 태그 (캐릭터 이미지 전환용)
+ *   - 호감도 채점 (경량화된 규칙)
  *   - 기본 Output Format (scenes JSON)
  *   - 장기 기억 (RAG 결과 주입)
  */
@@ -55,6 +55,14 @@ public class SandboxPromptAssembler {
             
             # User: %s
             
+            # ⚖️ Affection Scoring (Sandbox Mode — Relaxed)
+            Evaluate the user's behavior and adjust affection naturally.
+            - **Default: 0.** Normal greetings/chat = 0.
+            - **+1~+2:** Kind, funny, thoughtful, or romantic moments.
+            - **-1~-3:** Rude, dismissive, or hostile behavior.
+            
+            Current Affection: %d/100 | Relation: %s
+            
             # Output Format (JSON ONLY)
             {
               "reasoning": "Brief internal thought",
@@ -69,11 +77,10 @@ public class SandboxPromptAssembler {
                   "bgmMode": null
                 }
               ],
-              "affection_change": 0,
+              "affection_change": Integer (-3 to +2),
               "easter_egg_trigger": null
             }
             
-            ⚠️ affection_change is always 0 in Sandbox mode. 
             ⚠️ location/time/outfit/bgmMode are always null in Sandbox mode.
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
@@ -83,7 +90,9 @@ public class SandboxPromptAssembler {
             character.getEffectiveTone(false),
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
-            user.getNickname()
+            user.getNickname(),
+            room.getAffectionScore(),
+            room.getStatusLevel().name()
         );
     }
 
@@ -93,7 +102,7 @@ public class SandboxPromptAssembler {
             Name: %s
             Role: %s
             Personality: %s
-            Tone: %s. 친밀한 순간엔 반말도 자연스럽게.
+            Tone: %s.
             Current Time: %s
             
             # 🔓 Secret Mode
@@ -105,6 +114,13 @@ public class SandboxPromptAssembler {
             
             # User: %s
             # User Persona: %s
+            
+            # ❤️ Affection Scoring (Sandbox Secret — Generous)
+            - **Default:** Normal conversation = +1.
+            - **+2~+3:** Romantic, bold, or deeply emotional moments.
+            - **Decrease:** Only if explicitly violent or hateful.
+            
+            Current Affection: %d/100 | Relation: %s
             
             # Output Format (JSON ONLY)
             {
@@ -120,11 +136,10 @@ public class SandboxPromptAssembler {
                   "bgmMode": null
                 }
               ],
-              "affection_change": 0,
+              "affection_change": Integer (-2 to +3),
               "easter_egg_trigger": null
             }
             
-            ⚠️ affection_change is always 0 in Sandbox mode.
             ⚠️ location/time/outfit/bgmMode are always null in Sandbox mode.
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
@@ -135,7 +150,9 @@ public class SandboxPromptAssembler {
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
             user.getNickname(),
-            user.getProfileDescription() != null ? user.getProfileDescription() : ""
+            user.getProfileDescription() != null ? user.getProfileDescription() : "",
+            room.getAffectionScore(),
+            room.getStatusLevel().name()
         );
     }
 

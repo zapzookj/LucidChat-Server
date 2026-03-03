@@ -1,9 +1,12 @@
 package com.spring.aichat.domain.character;
 
 import com.spring.aichat.config.CharacterSeedProperties;
+import com.spring.aichat.domain.enums.RelationStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import java.util.*;
 
 @Getter
 @NoArgsConstructor
@@ -130,6 +133,47 @@ public class Character {
     private String defaultLocation;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4 Fix] 캐릭터별 복장/장소 독립 세계관
+    //  각 캐릭터의 고유 복장·장소 풀 + 관계별 해금 규칙
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** STRANGER 레벨부터 사용 가능한 복장 (쉼표 구분, 예: "MAID") */
+    @Column(name = "base_outfits", length = 500)
+    private String baseOutfits;
+
+    /** STRANGER 레벨부터 사용 가능한 장소 (쉼표 구분) */
+    @Column(name = "base_locations", length = 500)
+    private String baseLocations;
+
+    /** ACQUAINTANCE 승급 시 해금되는 복장 (쉼표 구분, 예: "DATE,PAJAMA") */
+    @Column(name = "acquaintance_unlock_outfits", length = 200)
+    private String acquaintanceUnlockOutfits;
+
+    /** ACQUAINTANCE 승급 시 해금되는 장소 */
+    @Column(name = "acquaintance_unlock_locations", length = 200)
+    private String acquaintanceUnlockLocations;
+
+    /** FRIEND 승급 시 해금되는 복장 */
+    @Column(name = "friend_unlock_outfits", length = 200)
+    private String friendUnlockOutfits;
+
+    /** FRIEND 승급 시 해금되는 장소 */
+    @Column(name = "friend_unlock_locations", length = 200)
+    private String friendUnlockLocations;
+
+    /** LOVER 승급 시 해금되는 복장 */
+    @Column(name = "lover_unlock_outfits", length = 200)
+    private String loverUnlockOutfits;
+
+    /** LOVER 승급 시 해금되는 장소 */
+    @Column(name = "lover_unlock_locations", length = 200)
+    private String loverUnlockLocations;
+
+    /** 복장별 설명 (프롬프트 주입용, 줄 구분: "MAID:Default maid attire\nDATE:Going-out clothes") */
+    @Column(name = "outfit_descriptions", columnDefinition = "TEXT")
+    private String outfitDescriptions;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5] 엔딩 프롬프트용 필드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -186,6 +230,16 @@ public class Character {
         if (seed.easterEggDialogue() != null) this.easterEggDialogue = seed.easterEggDialogue();
         if (seed.defaultOutfit() != null) this.defaultOutfit = seed.defaultOutfit();
         if (seed.defaultLocation() != null) this.defaultLocation = seed.defaultLocation();
+        // [Phase 4 Fix] 캐릭터별 독립 세계관 필드
+        if (seed.baseOutfits() != null) this.baseOutfits = seed.baseOutfits();
+        if (seed.baseLocations() != null) this.baseLocations = seed.baseLocations();
+        if (seed.acquaintanceUnlockOutfits() != null) this.acquaintanceUnlockOutfits = seed.acquaintanceUnlockOutfits();
+        if (seed.acquaintanceUnlockLocations() != null) this.acquaintanceUnlockLocations = seed.acquaintanceUnlockLocations();
+        if (seed.friendUnlockOutfits() != null) this.friendUnlockOutfits = seed.friendUnlockOutfits();
+        if (seed.friendUnlockLocations() != null) this.friendUnlockLocations = seed.friendUnlockLocations();
+        if (seed.loverUnlockOutfits() != null) this.loverUnlockOutfits = seed.loverUnlockOutfits();
+        if (seed.loverUnlockLocations() != null) this.loverUnlockLocations = seed.loverUnlockLocations();
+        if (seed.outfitDescriptions() != null) this.outfitDescriptions = seed.outfitDescriptions();
         if (seed.endingRoleDesc() != null) this.endingRoleDesc = seed.endingRoleDesc();
         if (seed.endingQuoteHappy() != null) this.endingQuoteHappy = seed.endingQuoteHappy();
         if (seed.endingQuoteBad() != null) this.endingQuoteBad = seed.endingQuoteBad();
@@ -238,5 +292,146 @@ public class Character {
     public String getEffectiveEndingQuoteBad() {
         return endingQuoteBad != null ? endingQuoteBad
             : "그 분이 처음 문을 열었을 때의 온기가... 아직도 손끝에 남아 있습니다.";
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 4 Fix] 캐릭터별 복장/장소 해금 로직
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private Set<String> parseCommaSet(String csv) {
+        if (csv == null || csv.isBlank()) return new LinkedHashSet<>();
+        Set<String> set = new LinkedHashSet<>();
+        for (String s : csv.split(",")) {
+            String trimmed = s.trim().toUpperCase();
+            if (!trimmed.isEmpty()) set.add(trimmed);
+        }
+        return set;
+    }
+
+    /**
+     * 현재 관계에서 허용되는 복장 목록
+     * @param status  현재 관계 레벨
+     * @param isSecret  시크릿 모드 여부 (true면 전체 해금)
+     */
+    public Set<String> getAllowedOutfits(RelationStatus status, boolean isSecret) {
+        Set<String> all = getAllOutfits();
+        if (isSecret) return all;
+
+        Set<String> allowed = new LinkedHashSet<>(getBaseOutfitSet());
+        if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
+            allowed.addAll(parseCommaSet(acquaintanceUnlockOutfits));
+        }
+        if (status.ordinal() >= RelationStatus.FRIEND.ordinal()) {
+            allowed.addAll(parseCommaSet(friendUnlockOutfits));
+        }
+        if (status.ordinal() >= RelationStatus.LOVER.ordinal()) {
+            allowed.addAll(parseCommaSet(loverUnlockOutfits));
+        }
+        return allowed;
+    }
+
+    /**
+     * 현재 관계에서 허용되는 장소 목록
+     */
+    public Set<String> getAllowedLocations(RelationStatus status, boolean isSecret) {
+        Set<String> all = getAllLocations();
+        if (isSecret) return all;
+
+        Set<String> allowed = new LinkedHashSet<>(getBaseLocationSet());
+        if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
+            allowed.addAll(parseCommaSet(acquaintanceUnlockLocations));
+        }
+        if (status.ordinal() >= RelationStatus.FRIEND.ordinal()) {
+            allowed.addAll(parseCommaSet(friendUnlockLocations));
+        }
+        if (status.ordinal() >= RelationStatus.LOVER.ordinal()) {
+            allowed.addAll(parseCommaSet(loverUnlockLocations));
+        }
+        return allowed;
+    }
+
+    /** 이 캐릭터의 전체 복장 풀 (모든 해금 포함) */
+    public Set<String> getAllOutfits() {
+        Set<String> all = new LinkedHashSet<>(getBaseOutfitSet());
+        all.addAll(parseCommaSet(acquaintanceUnlockOutfits));
+        all.addAll(parseCommaSet(friendUnlockOutfits));
+        all.addAll(parseCommaSet(loverUnlockOutfits));
+        return all;
+    }
+
+    /** 이 캐릭터의 전체 장소 풀 (모든 해금 포함) */
+    public Set<String> getAllLocations() {
+        Set<String> all = new LinkedHashSet<>(getBaseLocationSet());
+        all.addAll(parseCommaSet(acquaintanceUnlockLocations));
+        all.addAll(parseCommaSet(friendUnlockLocations));
+        all.addAll(parseCommaSet(loverUnlockLocations));
+        return all;
+    }
+
+    public Set<String> getBaseOutfitSet() {
+        Set<String> set = parseCommaSet(baseOutfits);
+        if (set.isEmpty()) set.add(getEffectiveDefaultOutfit());
+        return set;
+    }
+
+    public Set<String> getBaseLocationSet() {
+        Set<String> set = parseCommaSet(baseLocations);
+        if (set.isEmpty()) set.add(getEffectiveDefaultLocation());
+        return set;
+    }
+
+    /**
+     * 특정 관계로 승급할 때 새로 해금되는 콘텐츠 목록
+     */
+    public record UnlockInfo(String type, String name, String displayName) {}
+
+    public List<UnlockInfo> getUnlocksForRelation(RelationStatus relation) {
+        List<UnlockInfo> unlocks = new ArrayList<>();
+        String unlockOutfits = switch (relation) {
+            case ACQUAINTANCE -> acquaintanceUnlockOutfits;
+            case FRIEND -> friendUnlockOutfits;
+            case LOVER -> loverUnlockOutfits;
+            default -> null;
+        };
+        String unlockLocations = switch (relation) {
+            case ACQUAINTANCE -> acquaintanceUnlockLocations;
+            case FRIEND -> friendUnlockLocations;
+            case LOVER -> loverUnlockLocations;
+            default -> null;
+        };
+
+        if (unlockLocations != null) {
+            for (String loc : parseCommaSet(unlockLocations)) {
+                unlocks.add(new UnlockInfo("LOCATION", loc, loc));
+            }
+        }
+        if (unlockOutfits != null) {
+            for (String outfit : parseCommaSet(unlockOutfits)) {
+                unlocks.add(new UnlockInfo("OUTFIT", outfit, outfit));
+            }
+        }
+        return unlocks;
+    }
+
+    /**
+     * 프롬프트용 복장 설명 블록 빌더
+     * outfitDescriptions 필드에서 현재 해금된 복장만 필터링하여 반환
+     */
+    public String buildOutfitDescriptionsForPrompt(RelationStatus status, boolean isSecret) {
+        if (outfitDescriptions == null || outfitDescriptions.isBlank()) return "";
+
+        Set<String> allowed = getAllowedOutfits(status, isSecret);
+        StringBuilder sb = new StringBuilder();
+        for (String line : outfitDescriptions.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            int colonIdx = trimmed.indexOf(':');
+            if (colonIdx <= 0) continue;
+            String outfitKey = trimmed.substring(0, colonIdx).trim().toUpperCase();
+            if (allowed.contains(outfitKey)) {
+                sb.append("- ").append(trimmed).append("\n");
+            }
+        }
+        return sb.toString();
     }
 }

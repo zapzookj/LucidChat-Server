@@ -8,7 +8,6 @@ import com.spring.aichat.domain.user.User;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 /**
  * 시스템 프롬프트(동적) 조립기
@@ -117,21 +116,12 @@ public class CharacterPromptAssembler {
         String curOutfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : defaultOutfit;
         String curTime = room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT";
 
-        String locationOptions;
-        String outfitOptions;
-        String bgmOptions;
-
-        if (isSecretMode) {
-            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, CLUB_ROOM, CONVENIENCE_STORE, BEACH, DOWNTOWN, BAR";
-            outfitOptions = "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY";
-            bgmOptions = "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC";
-        } else {
-            Set<String> allowedLocs = RelationStatusPolicy.getAllowedLocations(room.getStatusLevel());
-            Set<String> allowedOutfits = RelationStatusPolicy.getAllowedOutfits(room.getStatusLevel());
-            locationOptions = String.join(", ", allowedLocs);
-            outfitOptions = String.join(", ", allowedOutfits);
-            bgmOptions = "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
-        }
+        // [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 허용 목록 조회
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
+        String bgmOptions = isSecretMode
+            ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
+            : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
 
         return """
             ## Scene Direction Guide (CRITICAL — Read carefully)
@@ -213,28 +203,10 @@ public class CharacterPromptAssembler {
             curTime,
             curOutfit, outfitOptions,
             defaultOutfit,
-            buildOutfitDescriptions(isSecretMode, room.getStatusLevel()),
+            character.buildOutfitDescriptionsForPrompt(room.getStatusLevel(), isSecretMode),
             curBgm, bgmOptions,
             isSecretMode ? "- Any → EROTIC: Only when explicitly sensual/intimate physical scene begins (Secret Mode only)" : ""
         );
-    }
-
-    /**
-     * 관계별로 해금된 복장에 대한 설명만 표시
-     */
-    private String buildOutfitDescriptions(boolean isSecretMode, RelationStatus status) {
-        StringBuilder sb = new StringBuilder();
-        if (isSecretMode || status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
-            sb.append("- PAJAMA: Sleepwear (침실, 밤 시간대)\n");
-            sb.append("- DATE: Going-out clothes (DOWNTOWN, BAR, 외출)\n");
-        }
-        if (isSecretMode || status.ordinal() >= RelationStatus.FRIEND.ordinal()) {
-            sb.append("- SWIMWEAR: Swimsuit (BEACH only)\n");
-        }
-        if (isSecretMode || status.ordinal() >= RelationStatus.LOVER.ordinal()) {
-            sb.append("- NEGLIGEE: Intimate nightwear (BEDROOM + NIGHT only)\n");
-        }
-        return sb.toString();
     }
 
     /**
@@ -297,13 +269,9 @@ public class CharacterPromptAssembler {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String buildOutputFormat(ChatRoom room, boolean isSecretMode) {
-        String locationOptions = isSecretMode
-            ? "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, BEACH, DOWNTOWN, BAR"
-            : String.join(", ", RelationStatusPolicy.getAllowedLocations(room.getStatusLevel()));
-
-        String outfitOptions = isSecretMode
-            ? "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY"
-            : String.join(", ", RelationStatusPolicy.getAllowedOutfits(room.getStatusLevel()));
+        Character character = room.getCharacter();
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
 
         String bgmOptions = isSecretMode
             ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"

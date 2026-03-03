@@ -2,15 +2,15 @@ package com.spring.aichat.domain.chat;
 
 import com.spring.aichat.domain.enums.RelationStatus;
 
-import java.util.*;
-
 /**
  * 호감도 점수에 따른 관계 레벨 정책
  *
- * [Phase 5] 관계 승급 이벤트 시스템
- *   - 승급 임계점 정의
- *   - 관계별 해금 콘텐츠 정의
- *   - 승급 이벤트 상수
+ * [Phase 5]     관계 승급 이벤트 시스템
+ * [Phase 4 Fix] 복장/장소 해금 로직을 Character 엔티티로 이관
+ *               (캐릭터별 독립 세계관 지원)
+ *
+ * 이 클래스는 순수 정책(임계점, 표시명, 승급 상수)만 담당.
+ * 복장/장소 해금 → Character.getAllowedOutfits(), Character.getAllowedLocations()
  */
 public final class RelationStatusPolicy {
 
@@ -41,14 +41,6 @@ public final class RelationStatusPolicy {
         return RelationStatus.LOVER;
     }
 
-    /**
-     * 특정 관계의 진입 임계점 (해당 관계가 되기 위한 최소 점수)
-     *
-     * STRANGER:     0
-     * ACQUAINTANCE: 21
-     * FRIEND:       40
-     * LOVER:        80
-     */
     public static int getThresholdScore(RelationStatus status) {
         return switch (status) {
             case ENEMY        -> -100;
@@ -59,90 +51,8 @@ public final class RelationStatusPolicy {
         };
     }
 
-    /**
-     * 새 점수가 현재 관계 대비 승급에 해당하는지 판정
-     * (강등은 이벤트 없이 즉시 적용)
-     */
     public static boolean isUpgrade(RelationStatus current, RelationStatus next) {
         return next.ordinal() > current.ordinal() && next != RelationStatus.ENEMY;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  관계별 해금 콘텐츠 정의
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 해금 정보 DTO
-     */
-    public record UnlockInfo(String type, String name, String displayName) {}
-
-    /**
-     * 특정 관계로 승급할 때 새로 해금되는 콘텐츠 목록
-     *
-     * STRANGER → ACQUAINTANCE: DOWNTOWN + DATE + PAJAMA
-     * ACQUAINTANCE → FRIEND:   BEACH + SWIMWEAR
-     * FRIEND → LOVER:          BAR + NEGLIGEE
-     */
-    public static List<UnlockInfo> getUnlocksForRelation(RelationStatus relation) {
-        return switch (relation) {
-            case ACQUAINTANCE -> List.of(
-                new UnlockInfo("LOCATION", "DOWNTOWN", "번화가"),
-                new UnlockInfo("OUTFIT",   "DATE",     "외출복"),
-                new UnlockInfo("OUTFIT",   "PAJAMA",   "잠옷")
-            );
-            case FRIEND -> List.of(
-                new UnlockInfo("LOCATION", "BEACH",    "해변"),
-                new UnlockInfo("OUTFIT",   "SWIMWEAR", "수영복")
-            );
-            case LOVER -> List.of(
-                new UnlockInfo("LOCATION", "BAR",       "바"),
-                new UnlockInfo("OUTFIT",   "NEGLIGEE",  "네글리제")
-            );
-            default -> List.of();
-        };
-    }
-
-    /**
-     * 현재 관계에서 허용되는 장소 목록 (Secret 모드는 제한 없음)
-     */
-    public static Set<String> getAllowedLocations(RelationStatus status) {
-        Set<String> allowed = new LinkedHashSet<>();
-        // STRANGER 이하: 기본 장소 (저택 내부 + 캐릭터별 기본 장소)
-        allowed.addAll(List.of("LIVINGROOM", "BALCONY", "STUDY", "BATHROOM",
-            "GARDEN", "KITCHEN", "BEDROOM", "ENTRANCE", "FOREST"));
-
-        if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
-            allowed.add("DOWNTOWN");
-        }
-        if (status.ordinal() >= RelationStatus.FRIEND.ordinal()) {
-            allowed.add("BEACH");
-        }
-        if (status.ordinal() >= RelationStatus.LOVER.ordinal()) {
-            allowed.add("BAR");
-        }
-        return allowed;
-    }
-
-    /**
-     * 현재 관계에서 허용되는 복장 목록 (Secret 모드는 제한 없음)
-     */
-    public static Set<String> getAllowedOutfits(RelationStatus status) {
-        Set<String> allowed = new LinkedHashSet<>();
-        // 기본 복장 (캐릭터별 기본 복장 포함)
-        allowed.add("MAID");
-        allowed.add("HANBOK");
-
-        if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
-            allowed.add("DATE");
-            allowed.add("PAJAMA");
-        }
-        if (status.ordinal() >= RelationStatus.FRIEND.ordinal()) {
-            allowed.add("SWIMWEAR");
-        }
-        if (status.ordinal() >= RelationStatus.LOVER.ordinal()) {
-            allowed.add("NEGLIGEE");
-        }
-        return allowed;
     }
 
     /**

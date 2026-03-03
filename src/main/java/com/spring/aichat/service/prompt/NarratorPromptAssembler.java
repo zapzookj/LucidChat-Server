@@ -2,18 +2,15 @@ package com.spring.aichat.service.prompt;
 
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
-import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.user.User;
 import org.springframework.stereotype.Component;
-
-import java.util.Set;
 
 /**
  * 나레이터(이벤트 생성기)용 프롬프트 조립기
  *
- * [Phase 4]   이벤트 옵션에 location, time, outfit 힌트 추가
- * [Fix  #1]   관계별 해금 장소/복장 필터링 적용
- *             → STRANGER인데 BEACH 이벤트가 나오는 버그 수정
+ * [Phase 4]     이벤트 옵션에 location, time, outfit 힌트 추가
+ * [Fix  #1]     관계별 해금 장소/복장 필터링 적용
+ * [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 허용 목록 조회
  */
 @Component
 public class NarratorPromptAssembler {
@@ -21,19 +18,9 @@ public class NarratorPromptAssembler {
     public String assembleNarratorPrompt(Character character, ChatRoom room, User user) {
         boolean isSecretMode = user.getIsSecretMode();
 
-        // [Fix #1] 관계별 해금 필터링 — CharacterPromptAssembler와 동일 로직
-        String locationOptions;
-        String outfitOptions;
-
-        if (isSecretMode) {
-            locationOptions = "LIVINGROOM, BALCONY, STUDY, BATHROOM, GARDEN, KITCHEN, BEDROOM, ENTRANCE, FOREST, BEACH, DOWNTOWN, BAR, CLUB_ROOM, CONVENIENCE_STORE";
-            outfitOptions = "MAID, HANBOK, PAJAMA, DATE, SWIMWEAR, NEGLIGEE, DAILY";
-        } else {
-            Set<String> allowedLocs = RelationStatusPolicy.getAllowedLocations(room.getStatusLevel());
-            Set<String> allowedOutfits = RelationStatusPolicy.getAllowedOutfits(room.getStatusLevel());
-            locationOptions = String.join(", ", allowedLocs);
-            outfitOptions = String.join(", ", allowedOutfits);
-        }
+        // [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 허용 목록 조회
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
 
         return """
             You are the "Narrator" (Game Master) of an interactive visual novel.

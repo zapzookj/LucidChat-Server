@@ -125,8 +125,7 @@ public class ChatService {
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
             PromotionEvent promoEvent = null;
-            // [Phase 4.2] 승급 이벤트 처리
-            // 🔹 1. 스토리 모드면 승급 처리
+            // [Phase 4.2] 승급 이벤트 처리 — 스토리 모드 전용
             if (isStory) {
                 promoEvent = resolveAffectionAndPromotion(
                     freshRoom,
@@ -134,6 +133,9 @@ public class ChatService {
                     llmResult.moodScore(),
                     pre.wasPromotionPending()
                 );
+            } else {
+                // [Phase 4 Fix] 샌드박스 모드에서도 호감도 적용 (승급 이벤트/엔딩 없이 순수 호감도만)
+                applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
             }
 
             // 🔹 2. 로그 저장은 항상 실행
@@ -299,7 +301,8 @@ public class ChatService {
             int thresholdScore = RelationStatusPolicy.getThresholdScore(target);
             room.updateAffection(thresholdScore);
 
-            List<UnlockInfo> unlocks = RelationStatusPolicy.getUnlocksForRelation(target)
+            // [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 해금 콘텐츠 조회
+            List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target)
                 .stream()
                 .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
                 .collect(Collectors.toList());
@@ -473,6 +476,7 @@ public class ChatService {
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
                 var character = room.getCharacter();
+                boolean isSecret = room.getUser().getIsSecretMode();
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
                     character.getName(),
@@ -492,7 +496,10 @@ public class ChatService {
                     // [Phase 4.3] 엔딩 상태
                     room.isEndingReached(),
                     room.getEndingType() != null ? room.getEndingType().name() : null,
-                    room.getEndingTitle()
+                    room.getEndingTitle(),
+                    // [Phase 4 Fix] 캐릭터별 독립 세계관 — 프론트엔드 가드용
+                    new java.util.ArrayList<>(character.getAllowedOutfits(room.getStatusLevel(), isSecret)),
+                    new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret))
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);
@@ -557,7 +564,7 @@ public class ChatService {
     private String buildFirstGreeting(Character character) {
         String name = character.getName();
         if (name.equals("아이리")) {
-             return "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
+            return "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
         } else if (name.equals("연화")) {
             return "안녕하세요. 만나서 반가워요. 오늘은 어떤 이야기를 나눠볼까요?";
         }

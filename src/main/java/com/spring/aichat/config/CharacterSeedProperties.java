@@ -57,6 +57,17 @@ public record CharacterSeedProperties(
         String defaultOutfit,
         String defaultLocation,
 
+        // ── [Phase 4 Fix] 캐릭터별 독립 세계관 ──
+        String baseOutfits,
+        String baseLocations,
+        String acquaintanceUnlockOutfits,
+        String acquaintanceUnlockLocations,
+        String friendUnlockOutfits,
+        String friendUnlockLocations,
+        String loverUnlockOutfits,
+        String loverUnlockLocations,
+        String outfitDescriptions,
+
         // ── 엔딩 ──
         String endingRoleDesc,
         String endingQuoteHappy,
