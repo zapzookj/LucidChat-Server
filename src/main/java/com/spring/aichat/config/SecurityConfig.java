@@ -52,7 +52,8 @@ public class SecurityConfig {
                 "/oauth2/**",           // OAuth2 엔드포인트
                 "/login/**",            // 로그인 페이지 등
                 "/swagger-ui/**", "/v3/api-docs/**", // Swagger
-                "/actuator/**"          // (선택) 헬스 체크 등
+                "/actuator/**",          // (선택) 헬스 체크 등
+                "/api/v1/payments/webhook"   // Phase 5: PortOne webhook (no JWT)
             ).permitAll()
             .anyRequest().authenticated()
         );
@@ -90,7 +91,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // [중요] 프론트엔드 Origin 허용 (배포 시 변경 필요)
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
+        // [변경] 배포 시 S3 주소 등을 유연하게 허용하기 위해 패턴 사용
+        configuration.setAllowedOriginPatterns(List.of("*"));
+//        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000", "https://758c6e824017.ngrok-free.app"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true); // 쿠키 주고받기 허용
