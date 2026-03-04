@@ -7,6 +7,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * Phase 5: 전역 예외 처리기
+ *
+ * [개선사항]
+ * - EXTERNAL_API_ERROR (502): 외부 API 타임아웃/장애 시
+ * - 결제/인증 관련 에러 코드 매핑 추가
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
@@ -17,18 +24,23 @@ public class GlobalExceptionHandler {
             case NOT_FOUND, ORDER_NOT_FOUND -> 404;
             case BAD_REQUEST -> 400;
             case INSUFFICIENT_ENERGY -> 402;
+
+            // 외부 API 장애 (타임아웃 포함)
             case EXTERNAL_API_ERROR -> 502;
-            // Phase 5: Payment errors
-            case PAYMENT_AMOUNT_MISMATCH, PAYMENT_VERIFICATION_FAILED -> 422;
+
+            // 결제
+            case PAYMENT_AMOUNT_MISMATCH -> 422;
+            case PAYMENT_VERIFICATION_FAILED -> 502;
             case PAYMENT_ALREADY_PROCESSED -> 409;
             case PAYMENT_CANCELLED -> 400;
             case ORDER_EXPIRED -> 410;
-            // Phase 5: Verification errors
+
+            // 성인 인증
             case VERIFICATION_TOKEN_FAILED, VERIFICATION_DECRYPT_FAILED -> 502;
             case VERIFICATION_UNDERAGE -> 403;
-            case VERIFICATION_DUPLICATE_CI -> 409;
-            case VERIFICATION_ALREADY_DONE -> 409;
+            case VERIFICATION_DUPLICATE_CI, VERIFICATION_ALREADY_DONE -> 409;
             case VERIFICATION_EXPIRED -> 410;
+
             default -> 500;
         };
 

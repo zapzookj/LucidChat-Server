@@ -5,22 +5,39 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.PortOneProperties;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
+/**
+ * PortOne (iamport) API Client
+ *
+ * [Phase 5 개선]
+ * - @Qualifier("externalApiRestTemplate"): 3s connect / 5s read 타임아웃 적용
+ * - ResourceAccessException 전용 catch: 타임아웃 시 명확한 로깅 + EXTERNAL_API_ERROR
+ */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class PortOneClient {
 
     private final PortOneProperties props;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+
+    public PortOneClient(
+        PortOneProperties props,
+        @Qualifier("externalApiRestTemplate") RestTemplate restTemplate,
+        ObjectMapper objectMapper
+    ) {
+        this.props = props;
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+    }
 
     public String getAccessToken() {
         try {
@@ -42,9 +59,15 @@ public class PortOneClient {
                 }
             }
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "PortOne token failed");
-        } catch (BusinessException e) { throw e;
+
+        } catch (ResourceAccessException e) {
+            log.error("[PortOne] Token request TIMEOUT (server may be down)", e);
+            throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR,
+                "PortOne server not responding. Please try again later.", e);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("[PortOne] Token error", e);
+            log.error("[PortOne] Token unexpected error", e);
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "PortOne comm failed", e);
         }
     }
@@ -66,7 +89,13 @@ public class PortOneClient {
                 }
             }
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "Payment not found: " + impUid);
-        } catch (BusinessException e) { throw e;
+
+        } catch (ResourceAccessException e) {
+            log.error("[PortOne] Payment query TIMEOUT: impUid={}", impUid, e);
+            throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR,
+                "PortOne server not responding. Please try again later.", e);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[PortOne] Query error: impUid={}", impUid, e);
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "Query failed", e);
@@ -89,7 +118,13 @@ public class PortOneClient {
                 return response.getBody().path("response");
             }
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "Cancel failed: " + impUid);
-        } catch (BusinessException e) { throw e;
+
+        } catch (ResourceAccessException e) {
+            log.error("[PortOne] Cancel TIMEOUT: impUid={}", impUid, e);
+            throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR,
+                "PortOne server not responding during cancel. Manual check needed.", e);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[PortOne] Cancel error: impUid={}", impUid, e);
             throw new BusinessException(ErrorCode.PAYMENT_VERIFICATION_FAILED, "Cancel failed", e);

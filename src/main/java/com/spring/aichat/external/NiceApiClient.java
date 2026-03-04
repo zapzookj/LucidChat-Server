@@ -5,10 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.NiceApiProperties;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.crypto.Cipher;
@@ -22,29 +23,28 @@ import java.util.*;
 /**
  * NICE 본인인증 API 클라이언트
  *
- * [보안 핵심]
- * 1. Access Token은 짧은 TTL로 관리 (요청마다 발급 or Redis 캐싱)
- * 2. 암호화 토큰(enc_data)은 서버에서만 복호화 - 클라이언트에 키 노출 금지
- * 3. CI 값은 해시 후 저장 (원본 보관 불필요)
- *
- * [NICE API 플로우]
- * 1. /digital/niceid/oauth/oauth/token -> Access Token 발급
- * 2. /digital/niceid/api/v1.0/common/crypto/token -> 암호화 토큰 발급
- * 3. 프론트에서 팝업 인증 -> enc_data 콜백
- * 4. 서버에서 enc_data 복호화 -> 이름, 생년월일, CI 추출
+ * [Phase 5 개선]
+ * - @Qualifier("externalApiRestTemplate"): 3s connect / 5s read 타임아웃 적용
+ * - ResourceAccessException 전용 catch: 타임아웃 시 명확한 에러 메시지 + 빠른 실패
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class NiceApiClient {
 
     private final NiceApiProperties props;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    /**
-     * NICE OAuth2 Access Token 발급
-     */
+    public NiceApiClient(
+        NiceApiProperties props,
+        @Qualifier("externalApiRestTemplate") RestTemplate restTemplate,
+        ObjectMapper objectMapper
+    ) {
+        this.props = props;
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+    }
+
     public String getAccessToken() {
         try {
             String credentials = props.getClientId() + ":" + props.getClientSecret();
@@ -66,25 +66,26 @@ public class NiceApiClient {
                 JsonNode body = response.getBody();
                 String tokenType = body.path("dataBody").path("token_type").asText();
                 String accessToken = body.path("dataBody").path("access_token").asText();
-                log.info("[NICE] Access Token 발급 성공");
+                log.info("[NICE] Access Token issued");
                 return tokenType + " " + accessToken;
             }
 
             throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
-                "NICE Access Token 발급에 실패했습니다.");
+                "NICE Access Token issue failed");
 
+        } catch (ResourceAccessException e) {
+            log.error("[NICE] Access Token TIMEOUT (server may be down)", e);
+            throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR,
+                "NICE server not responding. Please try again later.", e);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("[NICE] Access Token 발급 중 예외", e);
+            log.error("[NICE] Access Token unexpected error", e);
             throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
-                "NICE 인증 서버와 통신에 실패했습니다.", e);
+                "NICE communication failed.", e);
         }
     }
 
-    /**
-     * NICE 암호화 토큰 발급 (프론트 팝업 호출용)
-     */
     public CryptoTokenResult requestCryptoToken(String accessToken, String requestNo) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -113,7 +114,7 @@ public class NiceApiClient {
 
                 if (!"P000".equals(resultCd)) {
                     throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
-                        "NICE 암호화 토큰 발급 실패 (rsp_cd=" + resultCd + ")");
+                        "NICE crypto token failed (rsp_cd=" + resultCd + ")");
                 }
 
                 String tokenVersionId = body.path("token_version_id").asText();
@@ -128,37 +129,38 @@ public class NiceApiClient {
                 String encData = encryptAES128CBC(plainText, key, iv);
                 String integrityValue = hmacSHA256(hmacKey, encData);
 
-                log.info("[NICE] 암호화 토큰 발급 성공: tokenVersionId={}", tokenVersionId);
+                log.info("[NICE] Crypto token issued: tokenVersionId={}", tokenVersionId);
                 return new CryptoTokenResult(tokenVersionId, encData, integrityValue, key, iv);
             }
 
             throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
-                "NICE 암호화 토큰 응답이 올바르지 않습니다.");
+                "NICE crypto token invalid response");
 
+        } catch (ResourceAccessException e) {
+            log.error("[NICE] Crypto token TIMEOUT", e);
+            throw new BusinessException(ErrorCode.EXTERNAL_API_ERROR,
+                "NICE server not responding. Please try again later.", e);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("[NICE] 암호화 토큰 발급 중 예외", e);
+            log.error("[NICE] Crypto token unexpected error", e);
             throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
-                "NICE 암호화 토큰 발급에 실패했습니다.", e);
+                "NICE crypto token failed.", e);
         }
     }
 
-    /**
-     * NICE 인증 완료 후 enc_data 복호화
-     */
     public JsonNode decryptResult(String encData, String key, String iv) {
         try {
             String decrypted = decryptAES128CBC(encData, key, iv);
             return objectMapper.readTree(decrypted);
         } catch (Exception e) {
-            log.error("[NICE] 인증 결과 복호화 실패", e);
+            log.error("[NICE] Decryption failed", e);
             throw new BusinessException(ErrorCode.VERIFICATION_DECRYPT_FAILED,
-                "인증 결과 복호화에 실패했습니다.", e);
+                "Decryption failed.", e);
         }
     }
 
-    // ── 내부 유틸리티 ──
+    // ── internal utilities ──
 
     private String buildPlainText(String requestNo, String siteCode) {
         Map<String, String> data = new LinkedHashMap<>();
@@ -207,12 +209,8 @@ public class NiceApiClient {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
     }
 
-    /** 암호화 토큰 결과 (key/iv는 서버 세션에만 저장, 프론트 노출 금지) */
     public record CryptoTokenResult(
-        String tokenVersionId,
-        String encData,
-        String integrityValue,
-        String key,
-        String iv
+        String tokenVersionId, String encData, String integrityValue,
+        String key, String iv
     ) {}
 }
