@@ -23,6 +23,7 @@ import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.cache.RedisCacheService;
+import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +60,7 @@ public class ChatService {
     private final TransactionTemplate txTemplate;
     private final RedisCacheService cacheService;
     private final AchievementService achievementService;
+    private final BoostModeResolver boostModeResolver;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -103,7 +105,9 @@ public class ChatService {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-            room.getUser().consumeEnergy(room.getChatMode().getEnergyCost());
+            room.getUser().consumeEnergy(
+                boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser())
+            );
             chatLogRepository.save(ChatLog.user(room, userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
@@ -411,7 +415,7 @@ public class ChatService {
 
         List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
 
-        String model = props.model();
+        String model = boostModeResolver.resolveModel(room.getUser());
         long llmStart = System.currentTimeMillis();
         log.info("⏱ [PERF] LLM call START | model={} | messages={} | promptChars={}",
             model, messages.size(),

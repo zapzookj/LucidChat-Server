@@ -22,29 +22,18 @@ import java.util.UUID;
 /**
  * 결제 서비스
  *
- * [Phase 5 안정성 개선]
+ * [Phase 5 BM 패키지 연결 완료]
  *
- * 1. 비관적 락(PESSIMISTIC_WRITE)으로 동시성 중복 지급 방지
- *    - findByMerchantUidForUpdate() = SELECT ... FOR UPDATE
- *    - 동일 merchantUid 동시 요청 시 DB 행 락으로 직렬화
+ * deliverProduct()에서 모든 상품 타입에 대한 실제 지급 로직 구현:
+ *   ENERGY_T1/T2/T3       -> User.chargePaidEnergy()
+ *   SECRET_PASS_24H       -> SecretModeService.activate24hPass() (Redis TTL 24h)
+ *   SECRET_UNLOCK_PERMANENT -> UserSecretUnlock 레코드 생성 (영구)
+ *   LUCID_PASS             -> SubscriptionService.activateSubscription()
+ *   LUCID_MIDNIGHT_PASS    -> SubscriptionService.activateSubscription()
  *
- * 2. 웹훅 수신 (processWebhook)
- *    - PortOne이 결제 완료 시 서버로 직접 통보
- *    - 클라이언트 /confirm과 웹훅 중 먼저 도착한 쪽이 처리
- *    - 늦게 도착한 쪽은 멱등성에 의해 조용히 리턴
- *
- * 3. 멱등성(Idempotency) 설계
- *    - 이미 PAID인 주문에 대한 재요청: 예외 없이 성공 응답
- *    - FAILED/EXPIRED 주문: 처리 거부 (명확한 에러 코드)
- *    - PENDING만 실제 검증 + 지급 수행
- *
- * [검증 플로우 (confirm / webhook 공통)]
- *    1. merchantUid로 주문 조회 (FOR UPDATE - 행 락)
- *    2. 상태 체크 (PENDING만 통과, PAID는 멱등 성공, 나머지는 거부)
- *    3. PortOne API로 실결제 정보 조회
- *    4. 결제 상태 확인 ("paid" 여부)
- *    5. 금액 위변조 검증 (불일치 시 자동 환불)
- *    6. PAID 처리 + 재화 지급
+ * [구매 전 검증]
+ * prepareOrder()에서 성인 전용 상품의 성인 인증 여부 검증
+ * SECRET_UNLOCK_PERMANENT의 이중 구매 방지
  */
 @Service
 @Slf4j
@@ -55,6 +44,8 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final PortOneClient portOneClient;
     private final RedisCacheService cacheService;
+    private final com.spring.aichat.service.payment.SecretModeService secretModeService;
+    private final com.spring.aichat.service.payment.SubscriptionService subscriptionService;
 
     // ─────────────────────────────────────────────
     // Step 1: 사전 주문 생성
@@ -65,9 +56,28 @@ public class PaymentService {
         User user = findUser(username);
         ProductType product = request.productType();
 
-        if (product == ProductType.SECRET_UNLOCK_PERMANENT && request.targetCharacterId() == null) {
+        // 성인 전용 상품 검증
+        if (product.isAdultOnly() && !Boolean.TRUE.equals(user.getIsAdult())) {
+            throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
+                "Adult verification required for this product");
+        }
+
+        // 시크릿 영구해금: targetCharacterId 필수 + 이중 구매 방지
+        if (product == ProductType.SECRET_UNLOCK_PERMANENT) {
+            if (request.targetCharacterId() == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "target character ID required for secret unlock");
+            }
+            if (secretModeService.hasPermanentUnlock(user.getId(), request.targetCharacterId())) {
+                throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
+                    "Character already unlocked");
+            }
+        }
+
+        // 24시간 패스: targetCharacterId 필수
+        if (product == ProductType.SECRET_PASS_24H && request.targetCharacterId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                "target character ID required for secret unlock");
+                "target character ID required for secret pass");
         }
 
         String merchantUid = "lucid_" + UUID.randomUUID().toString().replace("-", "").substring(0, 20);
@@ -86,18 +96,15 @@ public class PaymentService {
 
     @Transactional
     public PaymentResultResponse confirmPayment(String username, ConfirmPaymentRequest request) {
-        // 비관적 락으로 주문 조회 (동시성 방어)
         Order order = orderRepository.findByMerchantUidForUpdate(request.merchantUid())
             .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND,
                 "Order not found: " + request.merchantUid()));
 
-        // 소유권 검증 (웹훅에서는 스킵 — 여기서만 수행)
         if (!order.getUser().getUsername().equals(username)) {
             log.warn("[PAYMENT] Ownership mismatch: uid={}, user={}", request.merchantUid(), username);
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Order ownership mismatch");
         }
 
-        // 공통 검증 + 지급 로직 위임
         return verifyAndDeliver(order, request.impUid(), "CLIENT");
     }
 
@@ -105,33 +112,19 @@ public class PaymentService {
     // Step 3b: 웹훅 수신 (/webhook)
     // ─────────────────────────────────────────────
 
-    /**
-     * PortOne 웹훅 처리
-     *
-     * [설계 원칙]
-     * - 소유권 검증 불필요 (PortOne 서버가 호출하므로)
-     * - 멱등성 필수 (클라이언트 /confirm과 경합 가능)
-     * - 실패해도 200 응답 (PortOne이 재시도하도록)
-     *   단, 내부적으로 로깅 + 알림
-     *
-     * @param impUid PortOne 결제 고유번호
-     * @param merchantUid 우리 서버 주문번호
-     */
     @Transactional
     public void processWebhook(String impUid, String merchantUid) {
-        // 비관적 락으로 주문 조회
         Order order = orderRepository.findByMerchantUidForUpdate(merchantUid)
             .orElse(null);
 
         if (order == null) {
             log.warn("[WEBHOOK] Order not found: merchantUid={}, impUid={}", merchantUid, impUid);
-            return; // 웹훅은 200 리턴해야 재시도 안 함
+            return;
         }
 
         try {
             verifyAndDeliver(order, impUid, "WEBHOOK");
         } catch (BusinessException e) {
-            // 멱등성에 의한 ALREADY_PROCESSED는 정상 케이스
             if (e.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PROCESSED) {
                 log.info("[WEBHOOK] Already processed (idempotent): uid={}", merchantUid);
             } else {
@@ -141,26 +134,11 @@ public class PaymentService {
     }
 
     // ─────────────────────────────────────────────
-    // 공통 검증 + 지급 로직 (핵심)
+    // 공통 검증 + 지급 로직
     // ─────────────────────────────────────────────
 
-    /**
-     * 결제 검증 + 재화 지급 (confirm / webhook 공통)
-     *
-     * [멱등성 보장]
-     * - PAID: 이미 처리됨 -> 성공 응답 반환 (중복 지급 없음)
-     * - FAILED/EXPIRED/REFUNDED: 처리 불가 -> 예외
-     * - PENDING: 실제 검증 수행 -> PAID or FAILED
-     *
-     * [비관적 락에 의한 직렬화]
-     * 이 메서드 진입 시점에 이미 FOR UPDATE 락이 걸려 있으므로
-     * 동일 merchantUid에 대한 동시 호출은 순차 실행됨.
-     * 첫 번째 스레드가 PAID로 전환 후 커밋하면,
-     * 두 번째 스레드는 PAID 상태를 보고 멱등 분기로 진입.
-     */
     private PaymentResultResponse verifyAndDeliver(Order order, String impUid, String caller) {
 
-        // ── 멱등성 분기 ──
         if (order.getStatus() == OrderStatus.PAID) {
             log.info("[PAYMENT:{}] Already PAID (idempotent): uid={}", caller, order.getMerchantUid());
             return buildResult(order, "Already processed");
@@ -173,12 +151,10 @@ public class PaymentService {
                 "Order in terminal state: " + order.getStatus());
         }
 
-        // ── PortOne 실결제 정보 조회 ──
         JsonNode paymentInfo = portOneClient.getPaymentInfo(impUid);
         int paidAmount = paymentInfo.path("amount").asInt();
         String portOneStatus = paymentInfo.path("status").asText();
 
-        // ── 결제 상태 확인 ──
         if (!"paid".equals(portOneStatus)) {
             order.markFailed("PortOne status: " + portOneStatus);
             orderRepository.save(order);
@@ -187,32 +163,24 @@ public class PaymentService {
             return buildResult(order, "Payment not completed");
         }
 
-        // ── 금액 위변조 검증 (가장 중요!) ──
         if (paidAmount != order.getAmount()) {
             log.error("[PAYMENT:{}] AMOUNT MISMATCH! uid={}, expected={}, actual={}",
                 caller, order.getMerchantUid(), order.getAmount(), paidAmount);
-
             try {
                 portOneClient.cancelPayment(impUid, paidAmount, "Amount mismatch - auto refund");
                 log.info("[PAYMENT:{}] Auto-refund success: impUid={}", caller, impUid);
             } catch (Exception e) {
-                log.error("[PAYMENT:{}] AUTO-REFUND FAILED! MANUAL INTERVENTION NEEDED. impUid={}",
-                    caller, impUid, e);
+                log.error("[PAYMENT:{}] AUTO-REFUND FAILED! impUid={}", caller, impUid, e);
             }
-
             order.markFailed("Amount mismatch: expected=" + order.getAmount() + " actual=" + paidAmount);
             orderRepository.save(order);
-
             throw new BusinessException(ErrorCode.PAYMENT_AMOUNT_MISMATCH,
                 "Amount mismatch detected. Auto-refund initiated.");
         }
 
-        // ── 검증 통과 -> PAID + 재화 지급 ──
         order.markPaid(impUid);
         deliverProduct(order);
         orderRepository.save(order);
-
-        // 유저 캐시 무효화
         cacheService.evictUserProfile(order.getUser().getUsername());
 
         log.info("[PAYMENT:{}] Confirmed: uid={}, product={}, amount={}",
@@ -222,9 +190,17 @@ public class PaymentService {
     }
 
     // ─────────────────────────────────────────────
-    // 재화 지급
+    // 재화 지급 (BM 패키지 연동)
     // ─────────────────────────────────────────────
 
+    /**
+     * 상품 지급 로직
+     *
+     * [에너지] -> User.chargePaidEnergy()
+     * [시크릿 24h] -> Redis TTL 24시간
+     * [시크릿 영구] -> UserSecretUnlock 테이블 INSERT
+     * [구독] -> SubscriptionService (구독 생성/연장/업그레이드)
+     */
     private void deliverProduct(Order order) {
         User user = order.getUser();
         ProductType product = order.getProductType();
@@ -232,23 +208,30 @@ public class PaymentService {
         switch (product) {
             case ENERGY_T1, ENERGY_T2, ENERGY_T3 -> {
                 user.chargePaidEnergy(product.getEnergyAmount());
-                log.info("[PAYMENT] Energy charged: user={}, +{}", user.getUsername(), product.getEnergyAmount());
+                userRepository.save(user);
+                log.info("[DELIVER] Energy: user={}, +{}", user.getUsername(), product.getEnergyAmount());
             }
+
             case SECRET_PASS_24H -> {
-                // TODO: Phase 5 BM - 24h secret pass activation
-                log.info("[PAYMENT] Secret pass 24h: user={}", user.getUsername());
-            }
-            case SECRET_UNLOCK_PERMANENT -> {
-                // TODO: Phase 5 BM - permanent secret unlock
-                log.info("[PAYMENT] Secret unlock: user={}, charId={}",
+                secretModeService.activate24hPass(user.getId(), order.getTargetCharacterId());
+                log.info("[DELIVER] Secret 24h pass: user={}, charId={}",
                     user.getUsername(), order.getTargetCharacterId());
             }
-            case LUCID_PASS_MONTHLY -> {
-                // TODO: Phase 5 BM - subscription activation
-                log.info("[PAYMENT] Lucid Pass: user={}", user.getUsername());
+
+            case SECRET_UNLOCK_PERMANENT -> {
+                secretModeService.createPermanentUnlock(
+                    user, order.getTargetCharacterId(), order.getMerchantUid());
+                log.info("[DELIVER] Secret permanent unlock: user={}, charId={}",
+                    user.getUsername(), order.getTargetCharacterId());
+            }
+
+            case LUCID_PASS, LUCID_MIDNIGHT_PASS -> {
+                subscriptionService.activateSubscription(
+                    user, product.toSubscriptionType(), order.getMerchantUid());
+                log.info("[DELIVER] Subscription: user={}, tier={}",
+                    user.getUsername(), product.toSubscriptionType());
             }
         }
-        userRepository.save(user);
     }
 
     // ─────────────────────────────────────────────

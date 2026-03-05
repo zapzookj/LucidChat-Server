@@ -4,19 +4,22 @@ import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.user.UpdateUserRequest;
 import com.spring.aichat.dto.user.UserResponse;
+import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.service.cache.RedisCacheService;
+import com.spring.aichat.service.payment.SecretModeService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 유저 프로필 서비스
+ * Phase 5 BM 패키지 통합
  *
- * [Phase 3 Redis 캐싱]
- * - getMyInfo(): Redis에서 먼저 조회 → Cache Miss 시에만 DB 조회 후 캐싱
- * - updateMyInfo(): DB 업데이트 후 캐시 evict → 다음 조회 시 최신 데이터로 갱신
- * - TTL: 30분 (프로필 변경은 드물지만, 에너지 등 주기적 변경에 대비)
+ * [변경]
+ * - getMyInfo(): 구독/부스트/freeEnergyMax 필드 포함
+ * - updateMyInfo(): 시크릿 모드 토글 시 SecretModeService 권한 검증
+ * - toggleBoostMode(): 부스트 모드 토글 API
  */
 @Service
 @Slf4j
@@ -25,51 +28,76 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
+    private final SecretModeService secretModeService;
 
     public UserResponse getMyInfo(String username) {
-        // 1. Redis 캐시 조회
         return cacheService.getUserProfile(username, UserResponse.class)
             .orElseGet(() -> {
-                // 2. Cache Miss → DB 조회
-                User currentUser = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                User user = findUser(username);
 
                 UserResponse response = new UserResponse(
-                    currentUser.getId(),
-                    currentUser.getUsername(),
-                    currentUser.getNickname(),
-                    currentUser.getEmail(),
-                    currentUser.getProfileDescription(),
-                    currentUser.getIsSecretMode(),
-                    currentUser.getEnergy()
+                    user.getId(),
+                    user.getUsername(),
+                    user.getNickname(),
+                    user.getEmail(),
+                    user.getProfileDescription(),
+                    user.getIsSecretMode(),
+                    user.getEnergy(),
+                    user.getFreeEnergy(),
+                    user.getPaidEnergy(),
+                    user.getFreeEnergyMax(),
+                    Boolean.TRUE.equals(user.getIsAdult()),
+                    user.getSubscriptionTier() != null ? user.getSubscriptionTier().name() : null,
+                    Boolean.TRUE.equals(user.getBoostMode())
                 );
 
-                // 3. Redis에 캐싱 (TTL 30분)
                 cacheService.cacheUserProfile(username, response);
-                log.debug("👤 [CACHE] User profile cached: {}", username);
-
                 return response;
             });
     }
 
     @Transactional
     public void updateMyInfo(UpdateUserRequest request, String username) {
-        User currentUser = userRepository.findByUsername(username)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = findUser(username);
 
         if (request.nickname() != null) {
-            currentUser.updateNickName(request.nickname());
+            user.updateNickName(request.nickname());
         }
         if (request.profileDescription() != null) {
-            currentUser.updateProfileDescription(request.profileDescription());
+            user.updateProfileDescription(request.profileDescription());
         }
 
-        currentUser.updateIsSecretMode(request.isSecretMode() != null ? request.isSecretMode() : false);
+        // 시크릿 모드 토글은 별도 API로 분리 권장
+        // 하위 호환: isSecretMode가 true로 요청되면 검증
+        if (Boolean.TRUE.equals(request.isSecretMode())) {
+            // 시크릿 모드 활성화 시 성인 인증 필수 체크 (캐릭터 무관)
+            if (!Boolean.TRUE.equals(user.getIsAdult())) {
+                throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
+                    "Adult verification required for secret mode");
+            }
+        }
+        user.updateIsSecretMode(
+            request.isSecretMode() != null ? request.isSecretMode() : false
+        );
 
-        userRepository.save(currentUser);
-
-        // 캐시 무효화 → 다음 getMyInfo() 호출 시 DB에서 최신 데이터 로드
+        userRepository.save(user);
         cacheService.evictUserProfile(username);
-        log.debug("👤 [CACHE] User profile evicted: {}", username);
+    }
+
+    /**
+     * 부스트 모드 토글
+     */
+    @Transactional
+    public void toggleBoostMode(String username, boolean enabled) {
+        User user = findUser(username);
+        user.updateBoostMode(enabled);
+        userRepository.save(user);
+        cacheService.evictUserProfile(username);
+        log.info("[BOOST] user={}, boostMode={}", username, enabled);
+    }
+
+    private User findUser(String username) {
+        return userRepository.findByUsername(username)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
     }
 }
