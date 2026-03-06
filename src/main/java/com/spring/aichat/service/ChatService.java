@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     private final ChatRoomRepository chatRoomRepository;
-    private final ChatLogRepository chatLogRepository;
+    private final ChatLogMongoRepository chatLogRepository;
     private final CharacterPromptAssembler promptAssembler;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
@@ -108,7 +108,7 @@ public class ChatService {
             room.getUser().consumeEnergy(
                 boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser())
             );
-            chatLogRepository.save(ChatLog.user(room, userMessage));
+            chatLogRepository.save(ChatLogDocument.user(room.getId(), userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
             return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
@@ -347,7 +347,7 @@ public class ChatService {
                 room.getUser().consumeEnergy(energyCost);
             }
 
-            chatLogRepository.save(ChatLog.system(room, systemDetail));
+            chatLogRepository.save(ChatLogDocument.user(room.getId(), systemDetail));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
             return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
@@ -514,7 +514,7 @@ public class ChatService {
 
     @Transactional
     public void deleteChatRoom(Long roomId) {
-        chatLogRepository.deleteByRoom_Id(roomId);
+        chatLogRepository.deleteByRoomId(roomId);
         ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
@@ -535,12 +535,12 @@ public class ChatService {
         var character = room.getCharacter();
         String introNarration = character.getIntroNarration();
 
-        chatLogRepository.save(ChatLog.system(room, introNarration));
+        chatLogRepository.save(ChatLogDocument.system(room.getId(), introNarration));
 
         // 첫 인사는 LLM에게 맡기는 것이 이상적이나, 지연을 줄이기 위해 범용 인사 사용
         String firstGreeting = character.getFirstGreeting();
-        ChatLog assistantLog = new ChatLog(
-            room, ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
+        ChatLogDocument assistantLog = ChatLogDocument.of(
+                 room.getId(), ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
         chatLogRepository.save(assistantLog);
 
         room.updateLastActive(EmotionTag.NEUTRAL);
@@ -581,13 +581,13 @@ public class ChatService {
 
     private String fetchLastUserMessage(Long roomId) {
         return chatLogRepository
-            .findTop1ByRoom_IdAndRoleOrderByCreatedAtDesc(roomId, ChatRole.USER)
-            .map(ChatLog::getCleanContent)
+            .findTop1ByRoomIdAndRoleOrderByCreatedAtDesc(roomId, ChatRole.USER)
+            .map(ChatLogDocument::getCleanContent)
             .orElse("");
     }
 
     private void triggerMemorySummarizationIfNeeded(Long roomId, Long userId, long totalLogCount) {
-        long userMsgCount = chatLogRepository.countByRoom_IdAndRole(roomId, ChatRole.USER);
+        long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
 
         if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
             log.info("🧠 [MEMORY] Summarization TRIGGERED | roomId={} | userMsgCount={}",
@@ -605,13 +605,13 @@ public class ChatService {
      * → 이전 씬의 맥락이 현재 상황으로 오인되는 과거 회귀 문제 해결 (#12)
      */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
-        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
+        List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+        recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
 
         List<OpenAiMessage> messages = new ArrayList<>();
         messages.add(OpenAiMessage.system(systemPrompt));
 
-        for (ChatLog chatLog : recent) {
+        for (ChatLogDocument chatLog : recent) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
                 case ASSISTANT -> {
@@ -635,7 +635,7 @@ public class ChatService {
      *
      * 파싱 실패 시 cleanContent(순수 대사)로 폴백.
      */
-    private String buildSanitizedAssistantContent(ChatLog chatLog) {
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) {
@@ -681,7 +681,7 @@ public class ChatService {
 
     private void saveLog(ChatRoom room, ChatRole role, String raw, String clean,
                          EmotionTag emotion, String audioUrl) {
-        ChatLog chatLog = new ChatLog(room, role, raw, clean, emotion, audioUrl);
+        ChatLogDocument chatLog = ChatLogDocument.of(room.getId(), role, raw, clean, emotion, audioUrl);
         chatLogRepository.save(chatLog);
         room.updateLastActive(emotion);
     }

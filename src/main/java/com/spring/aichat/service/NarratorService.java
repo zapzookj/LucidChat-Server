@@ -3,8 +3,8 @@ package com.spring.aichat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
-import com.spring.aichat.domain.chat.ChatLog;
-import com.spring.aichat.domain.chat.ChatLogRepository;
+import com.spring.aichat.domain.chat.ChatLogDocument;
+import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatRole;
@@ -28,10 +28,7 @@ import java.util.List;
 /**
  * 나레이터(이벤트) 서비스
  *
- * [Phase 3 최적화]
- * - @Transactional 제거: LLM 호출 중 DB 커넥션 점유 방지
- * - triggerEvent: 읽기 전용 → EntityGraph가 즉시로딩하므로 TX 불필요
- * - selectEvent: 에너지 차감을 ChatService.generateResponseForSystemEvent에 위임
+ * [Phase 5] MongoDB 마이그레이션: ChatLog → ChatLogDocument
  */
 @Service
 @Slf4j
@@ -39,7 +36,7 @@ import java.util.List;
 public class NarratorService {
 
     private final ChatRoomRepository chatRoomRepository;
-    private final ChatLogRepository chatLogRepository;
+    private final ChatLogMongoRepository chatLogRepository;
     private final NarratorPromptAssembler promptAssembler;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
@@ -48,37 +45,32 @@ public class NarratorService {
 
     /**
      * 1단계: 이벤트 옵션 생성 (저장 X)
-     * @Transactional 제거 — EntityGraph로 즉시 로딩, LLM 호출 중 DB 미점유
      */
     public NarratorResponse triggerEvent(Long roomId) {
         long totalStart = System.currentTimeMillis();
 
-        // DB 조회 (EntityGraph → user, character 즉시 로딩)
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-        // 나레이터 프롬프트 조립
         String systemPrompt = promptAssembler.assembleNarratorPrompt(
             room.getCharacter(), room, room.getUser()
         );
 
-        // 컨텍스트 로딩 (최근 대화 흐름 파악용)
-        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
+        List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+        recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
 
         List<OpenAiMessage> messages = new ArrayList<>();
         messages.add(OpenAiMessage.system(systemPrompt));
 
-        for (ChatLog chatLog : recent) {
-            String roleName = switch (chatLog.getRole()) {
+        for (ChatLogDocument doc : recent) {
+            String roleName = switch (doc.getRole()) {
                 case USER -> "User";
                 case ASSISTANT -> "Character";
                 case SYSTEM -> "Narrator";
             };
-            messages.add(OpenAiMessage.user(roleName + ": " + chatLog.getRawContent()));
+            messages.add(OpenAiMessage.user(roleName + ": " + doc.getRawContent()));
         }
 
-        // LLM 호출 (DB 커넥션 미점유 상태)
         String model = props.sentimentModel();
         long llmStart = System.currentTimeMillis();
 
@@ -103,11 +95,9 @@ public class NarratorService {
     }
 
     /**
-     * 2단계: 유저가 선택한 이벤트 실행 (저장 O + 캐릭터 반응)
-     * @Transactional 제거 — ChatService 내부에서 TX 분리 처리
+     * 2단계: 유저가 선택한 이벤트 실행
      */
     public SendChatResponse selectEvent(Long roomId, String selectedDetail, int energyCost) {
-        // 에너지 차감 + 시스템 로그 저장 + 캐릭터 반응 생성 모두 ChatService에 위임
         return chatService.generateResponseForSystemEvent(roomId, selectedDetail, energyCost);
     }
 
@@ -117,6 +107,5 @@ public class NarratorService {
         return text;
     }
 
-    // JSON 파싱용 내부 DTO
     private record NarratorOptionsWrapper(List<NarratorResponse.EventOption> options) {}
 }

@@ -1,7 +1,7 @@
 package com.spring.aichat.controller;
 
-import com.spring.aichat.domain.chat.ChatLog;
-import com.spring.aichat.domain.chat.ChatLogRepository;
+import com.spring.aichat.domain.chat.ChatLogDocument;
+import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.dto.chat.ChatLogResponse;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatRequest;
@@ -9,17 +9,19 @@ import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.service.ChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 
 /**
  * 채팅 API 컨트롤러
+ *
+ * [Phase 5] MongoDB 마이그레이션:
+ * - ChatLogRepository(JPA) → ChatLogMongoRepository
+ * - ChatLog → ChatLogDocument
+ * - toDto(): getId() → String
  */
 @RestController
 @RequiredArgsConstructor
@@ -27,20 +29,7 @@ import reactor.core.publisher.Flux;
 public class ChatController {
 
     private final ChatService chatService;
-    private final ChatLogRepository chatLogRepository;
-
-    /**
-     * [Phase 3] 실시간 스트리밍 채팅 엔드포인트
-     * POST /api/rooms/{roomId}/stream
-     */
-//    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
-//    @PostMapping(value = "/rooms/{roomId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-//    public Flux<String> streamChat(
-//        @PathVariable Long roomId,
-//        @RequestBody @Valid SendChatRequest request
-//    ) {
-//        return chatService.streamMessage(roomId, request.message());
-//    }
+    private final ChatLogMongoRepository chatLogRepository;
 
     /**
      * 채팅 전송: 특정 방에 메시지 보내기
@@ -56,6 +45,10 @@ public class ChatController {
 
     /**
      * 채팅 로그 조회 (페이지네이션)
+     *
+     * [MongoDB 최적화]
+     * findByRoomId는 복합 인덱스 {roomId:1, createdAt:-1}로 커버됨.
+     * Sort.by(DESC, "createdAt")가 인덱스 방향과 일치하여 인-메모리 정렬 불필요.
      */
     @GetMapping("/rooms/{roomId}/logs")
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
@@ -63,10 +56,10 @@ public class ChatController {
         @PathVariable Long roomId,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size
-        ) {
+    ) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        return chatLogRepository.findByRoom_Id(roomId, pageable)
+        return chatLogRepository.findByRoomId(roomId, pageable)
             .map(this::toDto);
     }
 
@@ -92,14 +85,14 @@ public class ChatController {
         chatService.deleteChatRoom(roomId);
     }
 
-    private ChatLogResponse toDto(ChatLog log) {
+    private ChatLogResponse toDto(ChatLogDocument doc) {
         return new ChatLogResponse(
-            log.getId(),
-            log.getRole(),
-            log.getRawContent(),
-            log.getCleanContent(),
-            log.getEmotionTag(),
-            log.getCreatedAt()
+            doc.getId(),
+            doc.getRole(),
+            doc.getRawContent(),
+            doc.getCleanContent(),
+            doc.getEmotionTag(),
+            doc.getCreatedAt()
         );
     }
 }
