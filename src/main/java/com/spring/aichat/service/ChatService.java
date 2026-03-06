@@ -22,6 +22,7 @@ import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
+import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
@@ -61,6 +62,7 @@ public class ChatService {
     private final RedisCacheService cacheService;
     private final AchievementService achievementService;
     private final BoostModeResolver boostModeResolver;
+    private final PromptInjectionGuard injectionGuard;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -99,6 +101,7 @@ public class ChatService {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [PERF] ====== sendMessage START ====== roomId={}", roomId);
 
+
         // ── TX-1: 전처리 ──
         long tx1Start = System.currentTimeMillis();
         PreProcessResult pre = txTemplate.execute(status -> {
@@ -113,6 +116,15 @@ public class ChatService {
 
             return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
         });
+
+        PromptInjectionGuard.InjectionCheckResult injCheck =
+            injectionGuard.checkChatMessage(userMessage, pre.username());
+        if (injCheck.detected()) {
+            log.warn("⚠️ [INJECTION] Detected in chat: user={}, severity={}, pattern={}",
+                pre.username(), injCheck.severity(), injCheck.matchedPattern());
+            // CRITICAL 감지 시에도 차단하지 않음 — FOURTH_WALL 이스터에그가 자연스럽게 처리
+        }
+
         log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
             System.currentTimeMillis() - tx1Start, pre.wasPromotionPending());
 

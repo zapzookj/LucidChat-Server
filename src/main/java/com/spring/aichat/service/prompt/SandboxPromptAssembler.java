@@ -3,6 +3,7 @@ package com.spring.aichat.service.prompt;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.user.User;
+import com.spring.aichat.security.PromptInjectionGuard;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -27,6 +28,12 @@ import java.time.LocalDateTime;
  */
 @Component
 public class SandboxPromptAssembler {
+
+    private final PromptInjectionGuard injectionGuard;
+
+    public SandboxPromptAssembler(PromptInjectionGuard injectionGuard) {
+        this.injectionGuard = injectionGuard;
+    }
 
     public String assembleSystemPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         if (user.getIsSecretMode()) {
@@ -90,7 +97,7 @@ public class SandboxPromptAssembler {
             character.getEffectiveTone(false),
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
-            user.getNickname(),
+            injectionGuard.encapsulate("Nickname", user.getNickname()),
             room.getAffectionScore(),
             room.getStatusLevel().name()
         );
@@ -149,8 +156,9 @@ public class SandboxPromptAssembler {
             character.getEffectiveTone(true),
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
-            user.getNickname(),
-            user.getProfileDescription() != null ? user.getProfileDescription() : "",
+            injectionGuard.encapsulate("Nickname", user.getNickname()),
+            injectionGuard.encapsulate("Persona", user.getProfileDescription()) !=
+                null ? injectionGuard.encapsulate("Persona", user.getProfileDescription()) : "",
             room.getAffectionScore(),
             room.getStatusLevel().name()
         );

@@ -6,6 +6,7 @@ import com.spring.aichat.dto.user.UpdateUserRequest;
 import com.spring.aichat.dto.user.UserResponse;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
+import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.SecretModeService;
 import jakarta.transaction.Transactional;
@@ -29,6 +30,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
     private final SecretModeService secretModeService;
+    private final PromptInjectionGuard injectionGuard;
 
     public UserResponse getMyInfo(String username) {
         return cacheService.getUserProfile(username, UserResponse.class)
@@ -61,10 +63,10 @@ public class UserService {
         User user = findUser(username);
 
         if (request.nickname() != null) {
-            user.updateNickName(request.nickname());
+            user.updateNickName(injectionGuard.sanitizeNickname(request.nickname()));
         }
         if (request.profileDescription() != null) {
-            user.updateProfileDescription(request.profileDescription());
+            user.updateProfileDescription(injectionGuard.sanitizePersona(request.profileDescription()));
         }
 
         // 시크릿 모드 토글은 별도 API로 분리 권장

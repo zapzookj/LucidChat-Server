@@ -5,6 +5,7 @@ import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
+import com.spring.aichat.security.PromptInjectionGuard;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -20,6 +21,12 @@ import java.time.LocalDateTime;
  */
 @Component
 public class CharacterPromptAssembler {
+
+    private final PromptInjectionGuard injectionGuard;
+
+    public CharacterPromptAssembler(PromptInjectionGuard injectionGuard) {
+        this.injectionGuard = injectionGuard;
+    }
 
     public String assembleSystemPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         if (user.getIsSecretMode()) {
@@ -448,7 +455,7 @@ public class CharacterPromptAssembler {
             %s
                             
             # User Profile
-            - User Nickname: %s
+            %s
                             
             # Current State
             - Affection: %d/100
@@ -473,7 +480,7 @@ public class CharacterPromptAssembler {
             room.getAffectionScore(),
             buildBehaviorGuide(character),
             buildLongTermMemoryBlock(longTermMemory),
-            user.getNickname(),
+            injectionGuard.encapsulate("Nickname", user.getNickname()),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
             buildPromotionBlock(room, character),
@@ -520,8 +527,8 @@ public class CharacterPromptAssembler {
             %s
             
             # User Profile
-            - User Nickname: %s
-            - User Persona: %s
+            %s
+            %s
                             
             # Current State
             - Affection: %d/100
@@ -541,8 +548,8 @@ public class CharacterPromptAssembler {
             character.getEffectiveTone(true),
             LocalDateTime.now().toString(),
             buildLongTermMemoryBlock(longTermMemory),
-            user.getNickname(),
-            user.getProfileDescription(),
+            injectionGuard.encapsulate("Nickname", user.getNickname()),
+            injectionGuard.encapsulate("Persona", user.getProfileDescription()),
             room.getAffectionScore(),
             room.getStatusLevel().name(),
             buildPromotionBlock(room, character),
