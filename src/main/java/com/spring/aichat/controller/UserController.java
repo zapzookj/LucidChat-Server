@@ -6,6 +6,8 @@ import com.spring.aichat.dto.user.UpdateUserRequest;
 import com.spring.aichat.dto.user.UserResponse;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
+import com.spring.aichat.exception.RateLimitException;
+import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.payment.SubscriptionService;
 import com.spring.aichat.service.user.UserService;
@@ -33,6 +35,7 @@ public class UserController {
     private final SecretModeService secretModeService;
     private final SubscriptionService subscriptionService;
     private final UserRepository userRepository;
+    private final ApiRateLimiter rateLimiter;
 
     @GetMapping("/me")
     public UserResponse getMyInfo(Authentication authentication) {
@@ -42,6 +45,9 @@ public class UserController {
     @PatchMapping("/update")
     public void updateMyInfo(@RequestBody UpdateUserRequest request,
                              Authentication authentication) {
+        if (rateLimiter.checkProfileUpdate(authentication.getName())) {
+            throw new RateLimitException("프로필 업데이트가 너무 빠릅니다.", 5);
+        }
         userService.updateMyInfo(request, authentication.getName());
     }
 

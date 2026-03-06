@@ -10,9 +10,12 @@ import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
+import com.spring.aichat.exception.RateLimitException;
+import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.auth.AuthService;
 import com.spring.aichat.service.auth.JwtTokenService;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +38,16 @@ public class AuthController {
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final JwtProperties props;
+    private final ApiRateLimiter rateLimiter;
 
     @PostMapping("/signup")
     public AuthResponse signup(@RequestBody @Valid SignupRequest req,
+                               HttpServletRequest httpReq,
                                HttpServletResponse response) {
-
+        String clientIp = extractClientIp(httpReq);
+        if (rateLimiter.checkSignup(clientIp)) {
+            throw new RateLimitException("회원가입 시도가 너무 빈번합니다.", 60);
+        }
         // Service가 AuthResult(AuthResponse + RefreshToken) 반환
         AuthService.AuthResult result = authService.signup(req);
 
@@ -97,7 +105,13 @@ public class AuthController {
 
     @PostMapping("/login")
     public AuthResponse login(@RequestBody @Valid LoginRequest req,
+                              HttpServletRequest httpReq,
                               HttpServletResponse response) {
+        String clientIp = extractClientIp(httpReq);
+        if (rateLimiter.checkLogin(clientIp)) {
+            throw new RateLimitException("로그인 시도가 너무 빈번합니다. 1분 후 다시 시도해주세요.", 60);
+        }
+
         AuthService.AuthResult result = authService.login(req);
 
         setRefreshTokenCookie(response, result.refreshToken());
@@ -137,5 +151,13 @@ public class AuthController {
         cookie.setPath("/");
         cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
         response.addCookie(cookie);
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

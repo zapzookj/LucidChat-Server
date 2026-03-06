@@ -6,6 +6,8 @@ import com.spring.aichat.dto.chat.ChatLogResponse;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatRequest;
 import com.spring.aichat.dto.chat.SendChatResponse;
+import com.spring.aichat.exception.RateLimitException;
+import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.ChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -30,6 +33,7 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatLogMongoRepository chatLogRepository;
+    private final ApiRateLimiter rateLimiter;
 
     /**
      * 채팅 전송: 특정 방에 메시지 보내기
@@ -38,8 +42,13 @@ public class ChatController {
     @PostMapping("/rooms/{roomId}/messages")
     public SendChatResponse sendRestful(
         @PathVariable Long roomId,
-        @RequestBody @Valid SendChatRequest request
+        @RequestBody @Valid SendChatRequest request,
+        Authentication authentication
     ) {
+        // ── Rate Limit: 3초에 1회 ──
+        if (rateLimiter.checkChatSend(authentication.getName())) {
+            throw new RateLimitException("요청이 너무 빠릅니다. 잠시 후 다시 시도해주세요.", 3);
+        }
         return chatService.sendMessage(roomId, request.message());
     }
 
@@ -65,7 +74,11 @@ public class ChatController {
 
     @PostMapping("/rooms/{roomId}/init")
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
-    public void init(@PathVariable Long roomId) {
+    public void init(@PathVariable Long roomId, Authentication authentication) {
+        // ── Rate Limit: 5초에 1회 ──
+        if (rateLimiter.checkChatInit(authentication.getName())) {
+            throw new RateLimitException("초기화 요청이 너무 빠릅니다.", 5);
+        }
         chatService.initializeChatRoom(roomId);
     }
 

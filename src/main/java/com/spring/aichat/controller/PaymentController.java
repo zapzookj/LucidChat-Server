@@ -4,6 +4,8 @@ import com.spring.aichat.dto.payment.ConfirmPaymentRequest;
 import com.spring.aichat.dto.payment.PaymentResultResponse;
 import com.spring.aichat.dto.payment.PrepareOrderRequest;
 import com.spring.aichat.dto.payment.PrepareOrderResponse;
+import com.spring.aichat.exception.RateLimitException;
+import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.payment.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,7 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final ApiRateLimiter rateLimiter;
 
     /**
      * 사전 주문 생성
@@ -51,6 +54,9 @@ public class PaymentController {
         @RequestBody @Valid PrepareOrderRequest request,
         Authentication authentication
     ) {
+        if (rateLimiter.checkPayment(authentication.getName())) {
+            throw new RateLimitException("결제 요청이 너무 빠릅니다.", 5);
+        }
         PrepareOrderResponse response = paymentService.prepareOrder(
             authentication.getName(), request);
         return ResponseEntity.ok(response);
@@ -66,6 +72,9 @@ public class PaymentController {
         @RequestBody @Valid ConfirmPaymentRequest request,
         Authentication authentication
     ) {
+        if (rateLimiter.checkPayment(authentication.getName())) {
+            throw new RateLimitException("결제 검증 요청이 너무 빠릅니다.", 5);
+        }
         PaymentResultResponse response = paymentService.confirmPayment(
             authentication.getName(), request);
         return ResponseEntity.ok(response);

@@ -2,17 +2,16 @@ package com.spring.aichat.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Phase 5: 전역 예외 처리기
+ * 전역 예외 처리기
  *
- * [개선사항]
- * - EXTERNAL_API_ERROR (502): 외부 API 타임아웃/장애 시
- * - 결제/인증 관련 에러 코드 매핑 추가
+ * [Phase 5] RateLimitException → 429 Too Many Requests 처리 추가
  */
 @RestControllerAdvice
 @Slf4j
@@ -21,31 +20,34 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusiness(BusinessException e, HttpServletRequest req) {
         int status = switch (e.getErrorCode()) {
-            case NOT_FOUND, ORDER_NOT_FOUND -> 404;
+            case NOT_FOUND -> 404;
             case BAD_REQUEST -> 400;
             case INSUFFICIENT_ENERGY -> 402;
-
-            // 외부 API 장애 (타임아웃 포함)
             case EXTERNAL_API_ERROR -> 502;
-
-            // 결제
-            case PAYMENT_AMOUNT_MISMATCH -> 422;
-            case PAYMENT_VERIFICATION_FAILED -> 502;
-            case PAYMENT_ALREADY_PROCESSED -> 409;
-            case PAYMENT_CANCELLED -> 400;
-            case ORDER_EXPIRED -> 410;
-
-            // 성인 인증
-            case VERIFICATION_TOKEN_FAILED, VERIFICATION_DECRYPT_FAILED -> 502;
-            case VERIFICATION_UNDERAGE -> 403;
-            case VERIFICATION_DUPLICATE_CI, VERIFICATION_ALREADY_DONE -> 409;
-            case VERIFICATION_EXPIRED -> 410;
-
             default -> 500;
         };
 
         return ResponseEntity.status(status)
             .body(ApiErrorResponse.of(status, e.getErrorCode(), e.getMessage(), req.getRequestURI()));
+    }
+
+    /**
+     * [Phase 5] Rate Limit 초과 → 429 + Retry-After 헤더
+     *
+     * 프론트엔드에서 429 응답을 받으면:
+     * 1. 에러 토스트 "요청이 너무 빠릅니다" 표시
+     * 2. Retry-After 헤더 값만큼 대기 후 재시도 허용
+     */
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimit(RateLimitException e, HttpServletRequest req) {
+        log.warn("[RATE_LIMIT] 429 response: uri={}, message={}", req.getRequestURI(), e.getMessage());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Retry-After", String.valueOf(e.getRetryAfterSeconds()));
+
+        return ResponseEntity.status(429)
+            .headers(headers)
+            .body(ApiErrorResponse.of(429, ErrorCode.BAD_REQUEST, e.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -54,14 +56,16 @@ public class GlobalExceptionHandler {
             .findFirst()
             .map(err -> err.getField() + ": " + err.getDefaultMessage())
             .orElse("Validation error");
+
         return ResponseEntity.badRequest()
             .body(ApiErrorResponse.of(400, ErrorCode.BAD_REQUEST, msg, req.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnknown(Exception e, HttpServletRequest req) {
-        log.error("Unhandled exception: ", e);
+        log.error("Unhandled exception occurred: ", e);
+
         return ResponseEntity.internalServerError()
-            .body(ApiErrorResponse.of(500, ErrorCode.INTERNAL_ERROR, "Server error", req.getRequestURI()));
+            .body(ApiErrorResponse.of(500, ErrorCode.INTERNAL_ERROR, "서버 오류가 발생했습니다.", req.getRequestURI()));
     }
 }
