@@ -19,6 +19,7 @@ import com.spring.aichat.dto.chat.SendChatResponse.UnlockInfo;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.ContentModerationException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
@@ -39,7 +40,7 @@ import java.util.stream.Collectors;
 
 /**
  * 채팅 핵심 서비스
- *
+ * <p>
  * [Phase 3]     트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
  * [Phase 4]     Scene direction fields
  * [Phase 4.1]   씬 상태 영속화 + BGM 관성 시스템
@@ -63,6 +64,7 @@ public class ChatService {
     private final AchievementService achievementService;
     private final BoostModeResolver boostModeResolver;
     private final PromptInjectionGuard injectionGuard;
+    private final ContentModerationService contentModerationService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -77,7 +79,8 @@ public class ChatService {
         long logCount,
         boolean wasPromotionPending,
         String username
-    ) {}
+    ) {
+    }
 
     private record LlmResult(
         AiJsonOutput aiOutput,
@@ -91,7 +94,8 @@ public class ChatService {
         String lastTimeOfDay,
         Integer moodScore,
         String easterEggTrigger   // [Phase 4.4] 추가
-    ) {}
+    ) {
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  유저 채팅 메시지 처리
@@ -101,6 +105,22 @@ public class ChatService {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [PERF] ====== sendMessage START ====== roomId={}", roomId);
 
+        // ── [Phase 5] Content Moderation — TX-1 전에 실행 (에너지 차감 전 차단) ──
+        {
+            ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            boolean isSecret = roomForCheck.getUser().getIsSecretMode();
+
+            ContentModerationService.ModerationVerdict verdict =
+                contentModerationService.moderate(userMessage, isSecret);
+
+            if (!verdict.passed()) {
+                log.info("⛔ [MODERATION] Message blocked: roomId={}, step={}, category={}",
+                    roomId, verdict.blockedAtStep(), verdict.category());
+                throw new ContentModerationException(
+                    verdict.userMessage(), verdict.category(), verdict.blockedAtStep());
+            }
+        }
 
         // ── TX-1: 전처리 ──
         long tx1Start = System.currentTimeMillis();
@@ -552,7 +572,7 @@ public class ChatService {
         // 첫 인사는 LLM에게 맡기는 것이 이상적이나, 지연을 줄이기 위해 범용 인사 사용
         String firstGreeting = character.getFirstGreeting();
         ChatLogDocument assistantLog = ChatLogDocument.of(
-                 room.getId(), ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
+            room.getId(), ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
         chatLogRepository.save(assistantLog);
 
         room.updateLastActive(EmotionTag.NEUTRAL);
@@ -576,7 +596,6 @@ public class ChatService {
 //        return "당신 앞에 %s — %s — 이(가) 모습을 드러냅니다. 조용히 눈이 마주치자, 부드러운 미소가 번집니다."
 //            .formatted(name, role);
 //    }
-
     private String buildFirstGreeting(Character character) {
         String name = character.getName();
         if (name.equals("아이리")) {
@@ -610,7 +629,7 @@ public class ChatService {
 
     /**
      * [Phase 4.3] 히스토리 구성 — ASSISTANT 로그에서 reasoning 오염 차단
-     *
+     * <p>
      * 핵심 변경: ASSISTANT 메시지를 rawContent(전체 JSON + reasoning) 대신
      * scenes의 narration/dialogue/emotion만 추출하여 전달.
      * → LLM이 자신의 이전 reasoning을 참조하여 관계를 오인하는 문제 해결 (#3)
@@ -644,7 +663,7 @@ public class ChatService {
     /**
      * ASSISTANT rawContent(JSON)에서 reasoning/affection_change/mood_score 제거,
      * scenes의 narration+dialogue+emotion만 추출하여 자연어 형태로 변환.
-     *
+     * <p>
      * 파싱 실패 시 cleanContent(순수 대사)로 폴백.
      */
     private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
