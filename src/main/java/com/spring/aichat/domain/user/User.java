@@ -32,6 +32,8 @@ import java.util.Set;
  * [부스트 모드]
  * - boostMode: Pro 모델 사용 토글
  * - 비구독자: 5배 에너지 소모 / 구독자: 일반 비용으로 Pro 모델
+ *
+ * [Phase 5.1] refundEnergy 추가 — LLM 호출 실패 시 에너지 롤백
  */
 public class User {
 
@@ -150,6 +152,20 @@ public class User {
             this.freeEnergy = 0;
             this.paidEnergy -= remaining;
         }
+    }
+
+    /**
+     * [Phase 5.1] 에너지 환불 (LLM 호출 실패 시 롤백용)
+     *
+     * consumeEnergy의 역연산: freeEnergy 우선 복구 (max까지) → 초과분은 paidEnergy로.
+     * 차감 직후 동일 요청 내에서만 호출되므로, 정확한 복원이 보장됨.
+     */
+    public void refundEnergy(int amount) {
+        if (amount <= 0) return;
+        int freeSpace = getFreeEnergyMax() - this.freeEnergy;
+        int toFree = Math.min(amount, freeSpace);
+        this.freeEnergy += toFree;
+        this.paidEnergy += (amount - toFree);
     }
 
     /** 자연 에너지 회복 (구독 티어에 따른 max 적용) */

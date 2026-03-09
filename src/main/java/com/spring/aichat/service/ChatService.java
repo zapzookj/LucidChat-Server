@@ -9,6 +9,8 @@ import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EasterEggType;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
+import com.spring.aichat.domain.user.User;
+import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.achievement.AchievementResponse;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
@@ -46,6 +48,9 @@ import java.util.stream.Collectors;
  * [Phase 4.1]   씬 상태 영속화 + BGM 관성 시스템
  * [Phase 4.2]   관계 승급 이벤트 시스템
  * [Phase 4.3]   엔딩 트리거 감지 + 히스토리 정제(reasoning 오염 차단)
+ * [Phase 5.1]   LLM 실패 시 유저 메시지 + 에너지 롤백
+ *               유저 평가(LIKE/DISLIKE) 시스템
+ *               개별 대화 삭제 기능
  */
 @Service
 @Slf4j
@@ -65,6 +70,7 @@ public class ChatService {
     private final BoostModeResolver boostModeResolver;
     private final PromptInjectionGuard injectionGuard;
     private final ContentModerationService contentModerationService;
+    private final UserRepository userRepository;        // [Phase 5.1] 에너지 환불용
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -78,7 +84,9 @@ public class ChatService {
         Long userId,
         long logCount,
         boolean wasPromotionPending,
-        String username
+        String username,
+        String savedUserLogId,   // [Phase 5.1] 롤백용 MongoDB 문서 ID
+        int energyCost           // [Phase 5.1] 롤백용 차감된 에너지량
     ) {
     }
 
@@ -93,7 +101,7 @@ public class ChatService {
         String lastOutfit,
         String lastTimeOfDay,
         Integer moodScore,
-        String easterEggTrigger   // [Phase 4.4] 추가
+        String easterEggTrigger
     ) {
     }
 
@@ -128,13 +136,19 @@ public class ChatService {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-            room.getUser().consumeEnergy(
-                boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser())
-            );
-            chatLogRepository.save(ChatLogDocument.user(room.getId(), userMessage));
+            // [Phase 5.1] 에너지 비용 계산 및 저장 (롤백용)
+            int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
+            room.getUser().consumeEnergy(cost);
+
+            // [Phase 5.1] 유저 메시지 저장 후 ID 캡처 (롤백용)
+            ChatLogDocument savedLog = chatLogRepository.save(ChatLogDocument.user(room.getId(), userMessage));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
+            return new PreProcessResult(
+                room, room.getUser().getId(), logCount,
+                room.isPromotionPending(), room.getUser().getUsername(),
+                savedLog.getId(), cost    // [Phase 5.1] 롤백 정보
+            );
         });
 
         PromptInjectionGuard.InjectionCheckResult injCheck =
@@ -142,7 +156,6 @@ public class ChatService {
         if (injCheck.detected()) {
             log.warn("⚠️ [INJECTION] Detected in chat: user={}, severity={}, pattern={}",
                 pre.username(), injCheck.severity(), injCheck.matchedPattern());
-            // CRITICAL 감지 시에도 차단하지 않음 — FOURTH_WALL 이스터에그가 자연스럽게 처리
         }
 
         log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
@@ -150,104 +163,116 @@ public class ChatService {
 
         cacheService.evictUserProfile(pre.username());
 
-        // ── Non-TX Zone: 외부 API 호출 ──
-        LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
+        // ── [Phase 5.1] Non-TX Zone: LLM 호출 — 실패 시 롤백 ──
+        LlmResult llmResult;
+        try {
+            llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
+        } catch (Exception e) {
+            // ⚡ LLM 호출 실패 → 유저 메시지 삭제 + 에너지 환불
+            log.error("❌ [ROLLBACK] LLM call failed — rolling back user message and energy | roomId={}", roomId, e);
+            rollbackPreProcess(pre);
+            throw e;  // 원래 예외를 그대로 다시 던져서 프론트에 에러 전달
+        }
 
         // ── TX-2: 후처리 (승급 + 엔딩 감지) ──
         long tx2Start = System.currentTimeMillis();
         boolean isStory = pre.room().isStoryMode();
-        SendChatResponse response = txTemplate.execute(status -> {
-            ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+        SendChatResponse response;
+        try {
+            response = txTemplate.execute(status -> {
+                ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-            PromotionEvent promoEvent = null;
-            // [Phase 4.2] 승급 이벤트 처리 — 스토리 모드 전용
-            if (isStory) {
-                promoEvent = resolveAffectionAndPromotion(
+                PromotionEvent promoEvent = null;
+                if (isStory) {
+                    promoEvent = resolveAffectionAndPromotion(
+                        freshRoom,
+                        llmResult.aiOutput().affectionChange(),
+                        llmResult.moodScore(),
+                        pre.wasPromotionPending()
+                    );
+                } else {
+                    applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
+                }
+
+                saveLog(
                     freshRoom,
-                    llmResult.aiOutput().affectionChange(),
-                    llmResult.moodScore(),
-                    pre.wasPromotionPending()
+                    ChatRole.ASSISTANT,
+                    llmResult.cleanJson(),
+                    llmResult.combinedDialogue(),
+                    llmResult.mainEmotion(),
+                    null
                 );
-            } else {
-                // [Phase 4 Fix] 샌드박스 모드에서도 호감도 적용 (승급 이벤트/엔딩 없이 순수 호감도만)
-                applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
-            }
 
-            // 🔹 2. 로그 저장은 항상 실행
-            saveLog(
-                freshRoom,
-                ChatRole.ASSISTANT,
-                llmResult.cleanJson(),
-                llmResult.combinedDialogue(),
-                llmResult.mainEmotion(),
-                null
-            );
+                if (isStory) {
+                    freshRoom.updateSceneState(
+                        llmResult.lastBgmMode(),
+                        llmResult.lastLocation(),
+                        llmResult.lastOutfit(),
+                        llmResult.lastTimeOfDay()
+                    );
+                }
 
-            // 🔹 3. 장면 상태 변경은 스토리 모드만
-            if (isStory) {
-                freshRoom.updateSceneState(
-                    llmResult.lastBgmMode(),
-                    llmResult.lastLocation(),
-                    llmResult.lastOutfit(),
-                    llmResult.lastTimeOfDay()
-                );
-            }
-
-            EndingTrigger endingTrigger = null;
-            // [Phase 4.3] 엔딩 트리거 감지
-            if (isStory) {
-                if (!freshRoom.isEndingReached()) {
-                    if (freshRoom.getAffectionScore() >= 100) {
-                        endingTrigger = new EndingTrigger("HAPPY");
-                        log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
-                            freshRoom.getAffectionScore(), roomId);
-                    } else if (freshRoom.getAffectionScore() <= -100) {
-                        endingTrigger = new EndingTrigger("BAD");
-                        log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
-                            freshRoom.getAffectionScore(), roomId);
+                EndingTrigger endingTrigger = null;
+                if (isStory) {
+                    if (!freshRoom.isEndingReached()) {
+                        if (freshRoom.getAffectionScore() >= 100) {
+                            endingTrigger = new EndingTrigger("HAPPY");
+                            log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
+                                freshRoom.getAffectionScore(), roomId);
+                        } else if (freshRoom.getAffectionScore() <= -100) {
+                            endingTrigger = new EndingTrigger("BAD");
+                            log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
+                                freshRoom.getAffectionScore(), roomId);
+                        }
                     }
                 }
-            }
 
-            SendChatResponse.EasterEggEvent easterEggEvent = null;
-            if (llmResult.easterEggTrigger() != null && !llmResult.easterEggTrigger().isBlank()) {
-                try {
-                    EasterEggType eggType = EasterEggType.valueOf(llmResult.easterEggTrigger().toUpperCase());
+                SendChatResponse.EasterEggEvent easterEggEvent = null;
+                if (llmResult.easterEggTrigger() != null && !llmResult.easterEggTrigger().isBlank()) {
+                    try {
+                        EasterEggType eggType = EasterEggType.valueOf(llmResult.easterEggTrigger().toUpperCase());
 
-                    // 업적 해금
-                    AchievementResponse.UnlockNotification unlock =
-                        achievementService.unlockEasterEgg(pre.userId(), eggType);
+                        AchievementResponse.UnlockNotification unlock =
+                            achievementService.unlockEasterEgg(pre.userId(), eggType);
 
-                    boolean revertAfter = (eggType == EasterEggType.FOURTH_WALL);
+                        boolean revertAfter = (eggType == EasterEggType.FOURTH_WALL);
 
-                    easterEggEvent = new SendChatResponse.EasterEggEvent(
-                        eggType.name(),
-                        new SendChatResponse.AchievementInfo(
-                            unlock.code(), unlock.title(), unlock.titleKo(),
-                            unlock.description(), unlock.icon(), unlock.isNew()
-                        ),
-                        revertAfter
-                    );
+                        easterEggEvent = new SendChatResponse.EasterEggEvent(
+                            eggType.name(),
+                            new SendChatResponse.AchievementInfo(
+                                unlock.code(), unlock.title(), unlock.titleKo(),
+                                unlock.description(), unlock.icon(), unlock.isNew()
+                            ),
+                            revertAfter
+                        );
 
-                    log.info("🥚 [EASTER_EGG] Triggered: {} | new={} | roomId={}",
-                        eggType.name(), unlock.isNew(), roomId);
+                        log.info("🥚 [EASTER_EGG] Triggered: {} | new={} | roomId={}",
+                            eggType.name(), unlock.isNew(), roomId);
 
-                } catch (IllegalArgumentException e) {
-                    log.warn("🥚 [EASTER_EGG] Unknown trigger: {}", llmResult.easterEggTrigger());
+                    } catch (IllegalArgumentException ex) {
+                        log.warn("🥚 [EASTER_EGG] Unknown trigger: {}", llmResult.easterEggTrigger());
+                    }
                 }
-            }
 
-            return new SendChatResponse(
-                roomId,
-                llmResult.sceneResponses(),
-                freshRoom.getAffectionScore(),
-                freshRoom.getStatusLevel().name(),
-                promoEvent,
-                endingTrigger,
-                easterEggEvent
-            );
-        });
+                return new SendChatResponse(
+                    roomId,
+                    llmResult.sceneResponses(),
+                    freshRoom.getAffectionScore(),
+                    freshRoom.getStatusLevel().name(),
+                    promoEvent,
+                    endingTrigger,
+                    easterEggEvent
+                );
+            });
+        } catch (Exception e) {
+            // [Phase 5.1] TX-2 실패 시에도 롤백 (ASSISTANT 로그는 TX-2 안에서 저장되므로 JPA 롤백됨)
+            // 하지만 유저 메시지는 MongoDB에 이미 저장된 상태 → 삭제 필요
+            log.error("❌ [ROLLBACK] TX-2 failed — rolling back user message and energy | roomId={}", roomId, e);
+            rollbackPreProcess(pre);
+            throw e;
+        }
+
         log.info("⏱ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
         cacheService.evictRoomInfo(roomId);
@@ -258,6 +283,42 @@ public class ChatService {
         triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
 
         return response;
+    }
+
+    /**
+     * [Phase 5.1] LLM 호출 실패 시 TX-1 결과 롤백
+     *
+     * 1. MongoDB에 저장된 유저 메시지 삭제
+     * 2. JPA 새 트랜잭션으로 에너지 환불
+     */
+    private void rollbackPreProcess(PreProcessResult pre) {
+        // 1. MongoDB 유저 메시지 삭제
+        try {
+            if (pre.savedUserLogId() != null) {
+                chatLogRepository.deleteById(pre.savedUserLogId());
+                log.info("🔄 [ROLLBACK] User message deleted from MongoDB: logId={}", pre.savedUserLogId());
+            }
+        } catch (Exception ex) {
+            log.error("🔄 [ROLLBACK] Failed to delete user message: logId={}", pre.savedUserLogId(), ex);
+        }
+
+        // 2. 에너지 환불 (새 JPA 트랜잭션)
+        try {
+            txTemplate.execute(status -> {
+                User user = userRepository.findById(pre.userId())
+                    .orElseThrow(() -> new NotFoundException("User not found for refund"));
+                user.refundEnergy(pre.energyCost());
+                userRepository.save(user);
+                log.info("🔄 [ROLLBACK] Energy refunded: userId={}, amount={}", pre.userId(), pre.energyCost());
+                return null;
+            });
+        } catch (Exception ex) {
+            log.error("🔄 [ROLLBACK] Failed to refund energy: userId={}, amount={}",
+                pre.userId(), pre.energyCost(), ex);
+        }
+
+        // 3. 캐시 무효화 (에너지가 변경되었으므로)
+        cacheService.evictUserProfile(pre.username());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -337,7 +398,6 @@ public class ChatService {
             int thresholdScore = RelationStatusPolicy.getThresholdScore(target);
             room.updateAffection(thresholdScore);
 
-            // [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 해금 콘텐츠 조회
             List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target)
                 .stream()
                 .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
@@ -379,17 +439,30 @@ public class ChatService {
                 room.getUser().consumeEnergy(energyCost);
             }
 
-            chatLogRepository.save(ChatLogDocument.user(room.getId(), systemDetail));
+            ChatLogDocument savedLog = chatLogRepository.save(ChatLogDocument.user(room.getId(), systemDetail));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(room, room.getUser().getId(), logCount, room.isPromotionPending(), room.getUser().getUsername());
+            return new PreProcessResult(
+                room, room.getUser().getId(), logCount,
+                room.isPromotionPending(), room.getUser().getUsername(),
+                savedLog.getId(), energyCost
+            );
         });
         log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
 
         cacheService.evictUserProfile(pre.username());
 
         String ragQuery = fetchLastUserMessage(roomId);
-        LlmResult llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
+
+        // [Phase 5.1] 시스템 이벤트도 LLM 실패 시 롤백
+        LlmResult llmResult;
+        try {
+            llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
+        } catch (Exception e) {
+            log.error("❌ [ROLLBACK] LLM call failed for system event | roomId={}", roomId, e);
+            rollbackPreProcess(pre);
+            throw e;
+        }
 
         long tx2Start = System.currentTimeMillis();
         SendChatResponse response = txTemplate.execute(status -> {
@@ -516,7 +589,7 @@ public class ChatService {
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
                     character.getName(),
-                    character.getSlug(),                                          // [Phase 5] 에셋 경로 key
+                    character.getSlug(),
                     character.getDefaultImageUrl(),
                     "background_default.png",
                     room.getAffectionScore(),
@@ -526,14 +599,11 @@ public class ChatService {
                     room.getCurrentLocation() != null ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation(),
                     room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : character.getEffectiveDefaultOutfit(),
                     room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "NIGHT",
-                    // [Phase 5] 캐릭터별 기본값
                     character.getEffectiveDefaultOutfit(),
                     character.getEffectiveDefaultLocation(),
-                    // [Phase 4.3] 엔딩 상태
                     room.isEndingReached(),
                     room.getEndingType() != null ? room.getEndingType().name() : null,
                     room.getEndingTitle(),
-                    // [Phase 4 Fix] 캐릭터별 독립 세계관 — 프론트엔드 가드용
                     new java.util.ArrayList<>(character.getAllowedOutfits(room.getStatusLevel(), isSecret)),
                     new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret))
                 );
@@ -563,13 +633,11 @@ public class ChatService {
 
         if (chatLogRepository.countByRoomId(roomId) > 0) return;
 
-        // [Phase 5] 캐릭터별 동적 인트로 나레이션
         var character = room.getCharacter();
         String introNarration = character.getIntroNarration();
 
         chatLogRepository.save(ChatLogDocument.system(room.getId(), introNarration));
 
-        // 첫 인사는 LLM에게 맡기는 것이 이상적이나, 지연을 줄이기 위해 범용 인사 사용
         String firstGreeting = character.getFirstGreeting();
         ChatLogDocument assistantLog = ChatLogDocument.of(
             room.getId(), ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
@@ -579,31 +647,71 @@ public class ChatService {
         room.resetSceneState();
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.1] 유저 평가 시스템 (RLHF 데이터 수집)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     /**
-     * [Phase 5] 캐릭터별 인트로 나레이션 빌더
-     * 기본 설명(description)이 있으면 활용, 없으면 범용 나레이션
+     * ASSISTANT 메시지에 좋아요/싫어요 평가를 토글
+     *
+     * @param logId  MongoDB 문서 ID
+     * @param roomId 소유권 검증용
+     * @param rating "LIKE" | "DISLIKE"
+     * @return 업데이트된 rating 값 (토글 해제 시 null)
      */
-//    private String buildIntroNarration(com.spring.aichat.domain.character.Character character) {
-//        String name = character.getName();
-//        String role = character.getEffectiveRole();
-//        if (name.equals("아이리")) {
-//            return """
-//            달빛이 쏟아지는 밤, 당신은 숲속 깊은 곳에 위치한 고풍스러운 저택 앞에 도착했습니다.
-//            저택의 무거운 현관문을 밀자, 따스한 온기와 은은한 향기가 당신을 감쌉니다.
-//            로비의 중앙, 샹들리에 아래에 단정하게 서 있던 메이드가 당신을 발견하고 부드럽게 고개를 숙입니다.
-//            """;
-//        }
-//        return "당신 앞에 %s — %s — 이(가) 모습을 드러냅니다. 조용히 눈이 마주치자, 부드러운 미소가 번집니다."
-//            .formatted(name, role);
-//    }
-    private String buildFirstGreeting(Character character) {
-        String name = character.getName();
-        if (name.equals("아이리")) {
-            return "어서 오세요, 주인님. 기다리고 있었습니다. 여행길이 고단하진 않으셨나요?";
-        } else if (name.equals("연화")) {
-            return "안녕하세요. 만나서 반가워요. 오늘은 어떤 이야기를 나눠볼까요?";
+    public String rateChatLog(String logId, Long roomId, String rating) {
+        ChatLogDocument doc = chatLogRepository.findById(logId)
+            .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
+
+        // 소유권 검증: 해당 로그가 요청된 방에 속하는지 확인
+        if (!doc.getRoomId().equals(roomId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
         }
-        return "%s: 안녕하세요. 만나서 반가워요.".formatted(name);
+
+        // ASSISTANT 메시지만 평가 가능
+        if (doc.getRole() != ChatRole.ASSISTANT) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "캐릭터 응답에만 평가할 수 있습니다.");
+        }
+
+        doc.updateRating(rating);
+        chatLogRepository.save(doc);
+
+        log.info("⭐ [RATING] logId={}, roomId={}, rating={} → {}",
+            logId, roomId, rating, doc.getRating());
+
+        return doc.getRating();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.1] 개별 대화 삭제
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 단건 채팅 로그 삭제
+     *
+     * USER 또는 ASSISTANT 메시지를 개별 삭제한다.
+     * SYSTEM 메시지(나레이션)는 삭제 불가.
+     *
+     * @param logId  MongoDB 문서 ID
+     * @param roomId 소유권 검증용
+     */
+    public void deleteSingleChatLog(String logId, Long roomId) {
+        ChatLogDocument doc = chatLogRepository.findById(logId)
+            .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
+
+        // 소유권 검증
+        if (!doc.getRoomId().equals(roomId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
+        }
+
+        // SYSTEM 메시지는 삭제 불가 (인트로 나레이션 등 구조적 데이터)
+        if (doc.getRole() == ChatRole.SYSTEM) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "시스템 메시지는 삭제할 수 없습니다.");
+        }
+
+        chatLogRepository.deleteById(logId);
+        log.info("🗑️ [DELETE] Single log deleted: logId={}, roomId={}, role={}",
+            logId, roomId, doc.getRole());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -629,11 +737,6 @@ public class ChatService {
 
     /**
      * [Phase 4.3] 히스토리 구성 — ASSISTANT 로그에서 reasoning 오염 차단
-     * <p>
-     * 핵심 변경: ASSISTANT 메시지를 rawContent(전체 JSON + reasoning) 대신
-     * scenes의 narration/dialogue/emotion만 추출하여 전달.
-     * → LLM이 자신의 이전 reasoning을 참조하여 관계를 오인하는 문제 해결 (#3)
-     * → 이전 씬의 맥락이 현재 상황으로 오인되는 과거 회귀 문제 해결 (#12)
      */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
         List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
@@ -646,8 +749,6 @@ public class ChatService {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
                 case ASSISTANT -> {
-                    // [Phase 4.3] reasoning 오염 차단:
-                    // rawContent(JSON)에서 scenes만 추출하여 대사+지문 형태로 재구성
                     String sanitized = buildSanitizedAssistantContent(chatLog);
                     messages.add(OpenAiMessage.assistant(sanitized));
                 }
@@ -660,12 +761,6 @@ public class ChatService {
         return messages;
     }
 
-    /**
-     * ASSISTANT rawContent(JSON)에서 reasoning/affection_change/mood_score 제거,
-     * scenes의 narration+dialogue+emotion만 추출하여 자연어 형태로 변환.
-     * <p>
-     * 파싱 실패 시 cleanContent(순수 대사)로 폴백.
-     */
     private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
         try {
             String raw = chatLog.getRawContent();
@@ -676,7 +771,6 @@ public class ChatService {
             String cleaned = stripMarkdown(raw);
             AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
 
-            // scenes를 자연어로 재구성: "(지문) 대사 [감정]"
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
                 if (scene.narration() != null && !scene.narration().isBlank()) {
@@ -697,7 +791,6 @@ public class ChatService {
                 : result;
 
         } catch (Exception e) {
-            // JSON 파싱 실패 → cleanContent 폴백 (초기 인사 등 plain text인 경우)
             return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
         }
     }

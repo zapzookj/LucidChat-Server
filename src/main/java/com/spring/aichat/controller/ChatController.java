@@ -4,6 +4,7 @@ import com.spring.aichat.domain.chat.ChatLogDocument;
 import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.dto.chat.ChatLogResponse;
 import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
+import com.spring.aichat.dto.chat.RateChatLogRequest;
 import com.spring.aichat.dto.chat.SendChatRequest;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.exception.RateLimitException;
@@ -18,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 채팅 API 컨트롤러
  *
@@ -25,6 +28,10 @@ import org.springframework.web.bind.annotation.*;
  * - ChatLogRepository(JPA) → ChatLogMongoRepository
  * - ChatLog → ChatLogDocument
  * - toDto(): getId() → String
+ *
+ * [Phase 5.1] 신규 엔드포인트:
+ * - PATCH /rooms/{roomId}/logs/{logId}/rate — 유저 평가 (좋아요/싫어요)
+ * - DELETE /rooms/{roomId}/logs/{logId} — 단건 메시지 삭제
  */
 @RestController
 @RequiredArgsConstructor
@@ -98,6 +105,48 @@ public class ChatController {
         chatService.deleteChatRoom(roomId);
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.1] 유저 평가 (RLHF)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * ASSISTANT 메시지에 좋아요/싫어요 평가 토글
+     *
+     * - 같은 rating을 다시 보내면 해제 (토글)
+     * - 다른 rating을 보내면 변경
+     *
+     * @return { "rating": "LIKE" | "DISLIKE" | null }
+     */
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @PatchMapping("/rooms/{roomId}/logs/{logId}/rate")
+    public Map<String, String> rateChatLog(
+        @PathVariable Long roomId,
+        @PathVariable String logId,
+        @RequestBody @Valid RateChatLogRequest request
+    ) {
+        String updatedRating = chatService.rateChatLog(logId, roomId, request.rating());
+        return Map.of("rating", updatedRating != null ? updatedRating : "");
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.1] 단건 메시지 삭제
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 개별 채팅 로그 삭제 (USER 또는 ASSISTANT)
+     * SYSTEM 메시지(나레이션)는 삭제 불가.
+     */
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @DeleteMapping("/rooms/{roomId}/logs/{logId}")
+    public void deleteSingleLog(
+        @PathVariable Long roomId,
+        @PathVariable String logId
+    ) {
+        chatService.deleteSingleChatLog(logId, roomId);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     private ChatLogResponse toDto(ChatLogDocument doc) {
         return new ChatLogResponse(
             doc.getId(),
@@ -105,7 +154,8 @@ public class ChatController {
             doc.getRawContent(),
             doc.getCleanContent(),
             doc.getEmotionTag(),
-            doc.getCreatedAt()
+            doc.getCreatedAt(),
+            doc.getRating()     // [Phase 5.1] 평가 필드
         );
     }
 }

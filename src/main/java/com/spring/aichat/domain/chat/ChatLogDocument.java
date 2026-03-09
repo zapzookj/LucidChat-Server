@@ -30,11 +30,10 @@ import java.time.LocalDateTime;
  * 1. {roomId: 1, createdAt: -1} — 가장 빈번한 쿼리 (최근 로그 조회, 페이지네이션)
  * 2. {roomId: 1, role: 1, createdAt: -1} — 역할별 필터 (메모리 트리거 판단, 마지막 유저 메시지 조회)
  *
- * [기존 JPA ChatLog 대비 변경점]
- * - @Entity → @Document("chat_logs")
- * - Long id → String id (MongoDB ObjectId)
- * - @ManyToOne ChatRoom room → Long roomId (비정규화)
- * - @PrePersist → @CreatedDate (Spring Data Auditing)
+ * [Phase 5.1] rating 필드 추가 — RLHF 데이터 수집용
+ * - "LIKE" / "DISLIKE" / null
+ * - ASSISTANT 메시지에만 적용
+ * - 추후 파인튜닝 데이터셋 구축 시 rating 기반 필터링
  */
 @Document(collection = "chat_logs")
 @CompoundIndexes({
@@ -68,9 +67,36 @@ public class ChatLogDocument {
     @Field("audioUrl")
     private String audioUrl;
 
+    /**
+     * [Phase 5.1] RLHF 유저 평가
+     * - "LIKE": 좋아요
+     * - "DISLIKE": 싫어요
+     * - null: 미평가
+     *
+     * ASSISTANT 메시지에만 적용. USER/SYSTEM 메시지에는 항상 null.
+     */
+    @Field("rating")
+    private String rating;
+
     @CreatedDate
     @Field("createdAt")
     private LocalDateTime createdAt;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.1] Rating 업데이트
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 평가 업데이트 (토글 가능: 같은 값 재전송 → null로 해제)
+     */
+    public void updateRating(String newRating) {
+        if (newRating != null && newRating.equals(this.rating)) {
+            // 토글: 같은 평가를 다시 누르면 해제
+            this.rating = null;
+        } else {
+            this.rating = newRating;
+        }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Static Factory Methods (기존 ChatLog 인터페이스 호환)

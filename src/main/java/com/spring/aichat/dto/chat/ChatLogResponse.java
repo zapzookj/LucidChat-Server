@@ -10,7 +10,10 @@ import java.time.LocalDateTime;
  *
  * [Phase 5] MongoDB 마이그레이션:
  * - logId: Long → String (MongoDB ObjectId)
- * - 프론트엔드에서는 logId를 식별자로만 사용하므로 타입 변경에 따른 영향 없음
+ *
+ * [Phase 5.1] rating 필드 추가:
+ * - "LIKE" / "DISLIKE" / null
+ * - 프론트엔드에서 좋아요/싫어요 상태를 표시하기 위해 사용
  */
 public record ChatLogResponse(
     String logId,
@@ -18,5 +21,6 @@ public record ChatLogResponse(
     String rawContent,
     String cleanContent,
     EmotionTag emotionTag,
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    String rating           // [Phase 5.1] "LIKE" | "DISLIKE" | null
 ) {}
