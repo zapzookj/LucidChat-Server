@@ -24,16 +24,10 @@ import java.util.UUID;
  *
  * [Phase 5 BM 패키지 연결 완료]
  *
- * deliverProduct()에서 모든 상품 타입에 대한 실제 지급 로직 구현:
- *   ENERGY_T1/T2/T3       -> User.chargePaidEnergy()
- *   SECRET_PASS_24H       -> SecretModeService.activate24hPass() (Redis TTL 24h)
- *   SECRET_UNLOCK_PERMANENT -> UserSecretUnlock 레코드 생성 (영구)
- *   LUCID_PASS             -> SubscriptionService.activateSubscription()
- *   LUCID_MIDNIGHT_PASS    -> SubscriptionService.activateSubscription()
- *
- * [구매 전 검증]
- * prepareOrder()에서 성인 전용 상품의 성인 인증 여부 검증
- * SECRET_UNLOCK_PERMANENT의 이중 구매 방지
+ * [Phase 5 Fix] deliverProduct 변경
+ * - SECRET_PASS_24H: activate24hPass 시그니처 변경
+ *   기존: activate24hPass(userId, characterId)         ← Redis만 저장
+ *   수정: activate24hPass(user, characterId, merchantUid) ← RDB + Redis 저장
  */
 @Service
 @Slf4j
@@ -44,8 +38,8 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final PortOneClient portOneClient;
     private final RedisCacheService cacheService;
-    private final com.spring.aichat.service.payment.SecretModeService secretModeService;
-    private final com.spring.aichat.service.payment.SubscriptionService subscriptionService;
+    private final SecretModeService secretModeService;
+    private final SubscriptionService subscriptionService;
 
     // ─────────────────────────────────────────────
     // Step 1: 사전 주문 생성
@@ -196,10 +190,7 @@ public class PaymentService {
     /**
      * 상품 지급 로직
      *
-     * [에너지] -> User.chargePaidEnergy()
-     * [시크릿 24h] -> Redis TTL 24시간
-     * [시크릿 영구] -> UserSecretUnlock 테이블 INSERT
-     * [구독] -> SubscriptionService (구독 생성/연장/업그레이드)
+     * [Phase 5 Fix] SECRET_PASS_24H: RDB 영속화 + Redis 캐싱
      */
     private void deliverProduct(Order order) {
         User user = order.getUser();
@@ -213,8 +204,9 @@ public class PaymentService {
             }
 
             case SECRET_PASS_24H -> {
-                secretModeService.activate24hPass(user.getId(), order.getTargetCharacterId());
-                log.info("[DELIVER] Secret 24h pass: user={}, charId={}",
+                // [Phase 5 Fix] User 엔티티 + merchantUid 전달 → RDB 영속화
+                secretModeService.activate24hPass(user, order.getTargetCharacterId(), order.getMerchantUid());
+                log.info("[DELIVER] Secret 24h pass (RDB persisted): user={}, charId={}",
                     user.getUsername(), order.getTargetCharacterId());
             }
 

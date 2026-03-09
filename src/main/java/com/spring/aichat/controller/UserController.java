@@ -2,6 +2,7 @@ package com.spring.aichat.controller;
 
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.dto.user.ToggleSecretModeRequest;
 import com.spring.aichat.dto.user.UpdateUserRequest;
 import com.spring.aichat.dto.user.UserResponse;
 import com.spring.aichat.exception.BusinessException;
@@ -11,6 +12,7 @@ import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.payment.SubscriptionService;
 import com.spring.aichat.service.user.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -19,12 +21,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Phase 5 BM 패키지: 유저 API
+ * [Phase 5 Fix] 시크릿 모드 토글 전용 엔드포인트 추가
  *
- * [추가 엔드포인트]
- * PATCH /api/v1/users/boost            -> 부스트 모드 토글
- * GET   /api/v1/users/secret-status    -> 시크릿 모드 접근 상태 (캐릭터별)
- * GET   /api/v1/users/subscription     -> 구독 상태
+ * 기존: PATCH /users/update에서 isSecretMode 직접 변경 가능 (취약점)
+ * 수정: PATCH /users/secret-mode 전용 엔드포인트로 분리
+ *       → SecretModeService.canAccessSecretMode() 검증 필수
  */
 @RestController
 @RequiredArgsConstructor
@@ -52,9 +53,36 @@ public class UserController {
     }
 
     /**
-     * 부스트 모드 토글
+     * [Phase 5 Fix] 시크릿 모드 전용 토글 엔드포인트
      *
-     * Body: { "enabled": true/false }
+     * Body: { "enabled": true, "characterId": 1 }
+     *
+     * enabled=true:
+     *   - characterId 필수
+     *   - SecretModeService로 패스/해금/구독 검증
+     *   - 검증 실패 시 400 에러
+     *
+     * enabled=false:
+     *   - characterId 불필요
+     *   - 즉시 비활성화
+     */
+    @PatchMapping("/secret-mode")
+    public ResponseEntity<Map<String, Object>> toggleSecretMode(
+        @RequestBody @Valid ToggleSecretModeRequest request,
+        Authentication authentication
+    ) {
+        userService.toggleSecretMode(
+            authentication.getName(),
+            Boolean.TRUE.equals(request.enabled()),
+            request.characterId()
+        );
+        return ResponseEntity.ok(Map.of(
+            "isSecretMode", Boolean.TRUE.equals(request.enabled())
+        ));
+    }
+
+    /**
+     * 부스트 모드 토글
      */
     @PatchMapping("/boost")
     public ResponseEntity<Map<String, Object>> toggleBoostMode(
@@ -68,16 +96,6 @@ public class UserController {
 
     /**
      * 특정 캐릭터에 대한 시크릿 모드 접근 상태 조회
-     *
-     * 응답 예시:
-     * {
-     *   "isAdult": true,
-     *   "hasMidnightPass": false,
-     *   "hasPermanentUnlock": true,
-     *   "has24hPass": false,
-     *   "accessReason": "GRANTED",
-     *   "canAccess": true
-     * }
      */
     @GetMapping("/secret-status")
     public ResponseEntity<SecretModeService.SecretModeStatus> getSecretStatus(
@@ -91,13 +109,6 @@ public class UserController {
 
     /**
      * 구독 상태 조회
-     *
-     * 응답 예시:
-     * {
-     *   "active": true,
-     *   "tier": "LUCID_PASS",
-     *   "expiresAt": "2026-04-03T12:00:00"
-     * }
      */
     @GetMapping("/subscription")
     public ResponseEntity<Map<String, Object>> getSubscriptionStatus(
