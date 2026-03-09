@@ -28,6 +28,7 @@ import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.BoostModeResolver;
+import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +72,7 @@ public class ChatService {
     private final PromptInjectionGuard injectionGuard;
     private final ContentModerationService contentModerationService;
     private final UserRepository userRepository;        // [Phase 5.1] 에너지 환불용
+    private final SecretModeService secretModeService;    // [Phase 5 Fix] 런타임 시크릿 모드 검증
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -117,7 +119,10 @@ public class ChatService {
         {
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-            boolean isSecret = roomForCheck.getUser().getIsSecretMode();
+            // [Phase 5 Fix] 런타임 시크릿 모드 검증 — User 플래그만으로 판단하지 않음
+            boolean isSecret = roomForCheck.getUser().getIsSecretMode()
+                && secretModeService.canAccessSecretMode(
+                roomForCheck.getUser(), roomForCheck.getCharacter().getId());
 
             ContentModerationService.ModerationVerdict verdict =
                 contentModerationService.moderate(userMessage, isSecret);
@@ -514,8 +519,13 @@ public class ChatService {
             log.info("⏱ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, RAG_SKIP_LOG_THRESHOLD);
         }
 
+        // [Phase 5 Fix] 런타임 시크릿 모드 결정
+        boolean effectiveSecretMode = room.getUser().getIsSecretMode()
+            && secretModeService.canAccessSecretMode(
+            room.getUser(), room.getCharacter().getId());
+
         String systemPrompt = promptAssembler.assembleSystemPrompt(
-            room.getCharacter(), room, room.getUser(), longTermMemory
+            room.getCharacter(), room, room.getUser(), longTermMemory, effectiveSecretMode
         );
 
         List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
@@ -585,11 +595,15 @@ public class ChatService {
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
                 var character = room.getCharacter();
-                boolean isSecret = room.getUser().getIsSecretMode();
+                // [Phase 5 Fix] 런타임 검증된 시크릿 모드
+                boolean isSecret = room.getUser().getIsSecretMode()
+                    && secretModeService.canAccessSecretMode(
+                    room.getUser(), room.getCharacter().getId());
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
                     character.getName(),
                     character.getSlug(),
+                    character.getId(),
                     character.getDefaultImageUrl(),
                     "background_default.png",
                     room.getAffectionScore(),

@@ -35,8 +35,9 @@ public class SandboxPromptAssembler {
         this.injectionGuard = injectionGuard;
     }
 
-    public String assembleSystemPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
-        if (user.getIsSecretMode()) {
+    public String assembleSystemPrompt(Character character, ChatRoom room, User user,
+                                       String longTermMemory, boolean effectiveSecretMode) {
+        if (effectiveSecretMode) {
             return getSandboxSecretPrompt(character, room, user, longTermMemory);
         } else {
             return getSandboxNormalPrompt(character, room, user, longTermMemory);

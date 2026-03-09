@@ -28,8 +28,16 @@ public class CharacterPromptAssembler {
         this.injectionGuard = injectionGuard;
     }
 
-    public String assembleSystemPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
-        if (user.getIsSecretMode()) {
+    /**
+     * [Phase 5 Fix] effectiveSecretMode 매개변수 추가
+     *
+     * 기존: user.getIsSecretMode() 직접 참조 → 결제 우회 취약점
+     * 수정: ChatService에서 SecretModeService.canAccessSecretMode() 검증 후
+     *       결과값을 effectiveSecretMode로 전달
+     */
+    public String assembleSystemPrompt(Character character, ChatRoom room, User user,
+                                       String longTermMemory, boolean effectiveSecretMode) {
+        if (effectiveSecretMode) {
             return getSecretModePrompt(character, room, user, longTermMemory);
         } else {
             return getNormalModePrompt(character, room, user, longTermMemory);
