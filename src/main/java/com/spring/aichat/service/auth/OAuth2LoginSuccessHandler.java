@@ -1,142 +1,208 @@
 package com.spring.aichat.service.auth;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.JwtProperties;
-import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
-import com.spring.aichat.dto.auth.AuthResponse;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 구글 로그인 성공 처리
- * - OidcUser(email, sub) 기반으로 회원 upsert
- * - 우리 서비스 JWT 발급 후
- *   1) success-redirect가 있으면 리다이렉트 (?access_token=...)
- *   2) 없으면 JSON으로 반환
+ * [Phase 5] 소셜 로그인 통합 성공 핸들러
+ *
+ * [지원 프로바이더]
+ * - Google: OidcUser (OpenID Connect)
+ * - Kakao: OAuth2User (일반 OAuth2)
+ * - Naver: OAuth2User (일반 OAuth2)
+ *
+ * [변경 사항]
+ * - OnboardingService 의존 제거 (Phase 4.5에서 로비 기반으로 전환됨)
+ * - 멀티 프로바이더 지원: registrationId로 분기
+ * - /oauth2/success로 리다이렉트 시 access_token만 전달
+ *   → OAuthSuccessPage에서 /users/me API로 유저 정보 조회 (버그 수정)
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
-    private final OnboardingService onboardingService;
+    private final ChatRoomRepository chatRoomRepository;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties props;
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${auth.oauth2.success-redirect:}")
     private String successRedirect;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
-                                        Authentication authentication) throws IOException, ServletException {
+                                        Authentication authentication) throws IOException {
 
-        OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
-        User user = upsertGoogleMember(oidcUser);
+        // 프로바이더 식별
+        String registrationId = "google"; // 기본값
+        if (authentication instanceof OAuth2AuthenticationToken oauthToken) {
+            registrationId = oauthToken.getAuthorizedClientRegistrationId();
+        }
 
-        ChatRoom room = onboardingService.getOrCreateDefaultRoom(user);
-        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(user.getUsername(), "ROLE_USER");
+        // 프로바이더별 유저 Upsert
+        User user = switch (registrationId) {
+            case "google" -> upsertGoogleUser(authentication);
+            case "kakao" -> upsertKakaoUser(authentication);
+            case "naver" -> upsertNaverUser(authentication);
+            default -> {
+                log.error("[OAUTH] Unknown provider: {}", registrationId);
+                response.sendRedirect("/login?error=unknown_provider");
+                yield null;
+            }
+        };
 
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", user.getId());
-        userMap.put("username", user.getUsername());
-        userMap.put("nickname", user.getNickname());
-        userMap.put("energy", user.getEnergy());
+        if (user == null) return;
 
-        AuthResponse payload = new AuthResponse(
-            tokenPair.accessToken(),
-            props.accessTokenTtlSeconds(),
-            false,
-            userMap
-        );
+        // JWT 발급
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(
+            user.getUsername(), "ROLE_USER");
 
         setRefreshTokenCookie(response, tokenPair.refreshToken());
 
+        log.info("[OAUTH] Login success: provider={}, username={}, userId={}",
+            registrationId, user.getUsername(), user.getId());
+
+        // 프론트엔드로 리다이렉트 (access_token만 전달)
         if (successRedirect != null && !successRedirect.isBlank()) {
             String url = UriComponentsBuilder.fromUriString(successRedirect)
                 .queryParam("access_token", tokenPair.accessToken())
-                .queryParam("room_id", room.getId()) // 편의상 추가
                 .build(true)
                 .toUriString();
-
             response.sendRedirect(url);
-            return;
+        } else {
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"accessToken\":\"" + tokenPair.accessToken() + "\"}");
         }
-
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(response.getWriter(), payload);
     }
 
-    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refresh_token", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // 배포(HTTPS) 환경에서는 true로 변경 필요
-        cookie.setPath("/");
-        cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
-        response.addCookie(cookie);
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  Google (OpenID Connect)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Transactional
-    protected User upsertGoogleMember(OidcUser oidcUser) {
+    protected User upsertGoogleUser(Authentication authentication) {
+        OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
         String email = oidcUser.getEmail();
-        String sub = oidcUser.getSubject();   // providerId
-        String name = oidcUser.getFullName() != null ? oidcUser.getFullName() : "google-user";
+        String sub = oidcUser.getSubject();
+        String name = oidcUser.getFullName() != null ? oidcUser.getFullName() : "유저";
 
-        // 1) provider+providerId 우선
         return userRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, sub)
             .orElseGet(() -> {
-                // 2) email이 이미 있으면 그 계정에 provider 정보 연결
-                if (email != null && userRepository.existsByEmail(email)) {
-                    User existing = userRepository.findByEmail(email).orElseThrow();
-                    // 로컬 계정과 이메일이 겹치는 경우 정책은 서비스마다 다름. 여기선 "연결"로 처리
-                    // (원하면 여기서 예외 던져서 충돌 방지해도 됨)
-                    return userRepository.save(linkGoogle(existing, sub));
-                }
-
-                // 3) 신규 생성
-                String username = (email != null) ? email : ("google_" + sub.substring(0, 8));
-                // username 중복 방지
+                String username = email != null ? email : ("google_" + sub.substring(0, 8));
                 if (userRepository.existsByUsername(username)) {
                     username = "google_" + sub.substring(0, 12);
                 }
-
                 User created = User.google(username, name, email, sub);
                 return userRepository.save(created);
             });
     }
 
-    private User linkGoogle(User user, String providerId) {
-        // 단순 연결 (setter를 안 쓴다면 별도 메서드로 변경 권장)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  Kakao
+    //  응답 구조: { "id": 12345, "kakao_account": { "email": "...", "profile": { "nickname": "..." } } }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Transactional
+    protected User upsertKakaoUser(Authentication authentication) {
+        OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+        Map<String, Object> attributes = oAuth2User.getAttributes();
+
+        String providerId = String.valueOf(attributes.get("id"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.getOrDefault("kakao_account", Map.of());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> profile = (Map<String, Object>) kakaoAccount.getOrDefault("profile", Map.of());
+
+        String email = (String) kakaoAccount.get("email");
+        String nickname = (String) profile.getOrDefault("nickname", "유저");
+
+        return userRepository.findByProviderAndProviderId(AuthProvider.KAKAO, providerId)
+            .orElseGet(() -> {
+                String username = email != null ? email : ("kakao_" + providerId.substring(0, 8));
+                if (userRepository.existsByUsername(username)) {
+                    username = "kakao_" + providerId;
+                }
+                User created = new User();
+                setUserFields(created, username, nickname, email, AuthProvider.KAKAO, providerId);
+                return userRepository.save(created);
+            });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  Naver
+    //  응답 구조: { "response": { "id": "...", "email": "...", "nickname": "..." } }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Transactional
+    protected User upsertNaverUser(Authentication authentication) {
+        OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+        Map<String, Object> attributes = oAuth2User.getAttributes();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> naverResponse = (Map<String, Object>) attributes.getOrDefault("response", attributes);
+
+        String providerId = (String) naverResponse.get("id");
+        String email = (String) naverResponse.get("email");
+        String nickname = (String) naverResponse.getOrDefault("nickname",
+            naverResponse.getOrDefault("name", "유저"));
+
+        return userRepository.findByProviderAndProviderId(AuthProvider.NAVER, providerId)
+            .orElseGet(() -> {
+                String username = email != null ? email : ("naver_" + providerId.substring(0, 8));
+                if (userRepository.existsByUsername(username)) {
+                    username = "naver_" + providerId;
+                }
+                User created = new User();
+                setUserFields(created, username, (String) nickname, email, AuthProvider.NAVER, providerId);
+                return userRepository.save(created);
+            });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void setUserFields(User user, String username, String nickname, String email,
+                               AuthProvider provider, String providerId) {
         try {
-            Field provider = User.class.getDeclaredField("provider");
-            Field pid = User.class.getDeclaredField("providerId");
-            provider.setAccessible(true);
-            pid.setAccessible(true);
-            provider.set(user, AuthProvider.GOOGLE);
-            pid.set(user, providerId);
-            return user;
+            java.lang.reflect.Field f;
+            f = User.class.getDeclaredField("username"); f.setAccessible(true); f.set(user, username);
+            f = User.class.getDeclaredField("nickname"); f.setAccessible(true); f.set(user, nickname);
+            f = User.class.getDeclaredField("email"); f.setAccessible(true); f.set(user, email);
+            f = User.class.getDeclaredField("provider"); f.setAccessible(true); f.set(user, provider);
+            f = User.class.getDeclaredField("providerId"); f.setAccessible(true); f.set(user, providerId);
         } catch (Exception e) {
-            throw new IllegalStateException("구글 계정 연결 실패", e);
+            throw new IllegalStateException("소셜 유저 생성 실패", e);
         }
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+        Cookie cookie = new Cookie("refresh_token", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false); // 프로덕션에서 true
+        cookie.setPath("/");
+        cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
+        response.addCookie(cookie);
     }
 }

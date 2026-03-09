@@ -195,6 +195,26 @@ public class User {
         this.boostMode = enabled;
     }
 
+    public static User kakao(String username, String nickname, String email, String providerId) {
+        User u = new User();
+        u.username = username;
+        u.nickname = nickname;
+        u.email = email;
+        u.provider = AuthProvider.KAKAO;
+        u.providerId = providerId;
+        return u;
+    }
+
+    public static User naver(String username, String nickname, String email, String providerId) {
+        User u = new User();
+        u.username = username;
+        u.nickname = nickname;
+        u.email = email;
+        u.provider = AuthProvider.NAVER;
+        u.providerId = providerId;
+        return u;
+    }
+
     // ── 기존 ──
 
     public void updateNickName(String nickname) { this.nickname = nickname; }
