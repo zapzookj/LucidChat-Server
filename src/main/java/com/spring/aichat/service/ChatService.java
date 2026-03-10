@@ -17,6 +17,7 @@ import com.spring.aichat.dto.chat.ChatRoomInfoResponse;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.chat.SendChatResponse.EndingTrigger;
 import com.spring.aichat.dto.chat.SendChatResponse.PromotionEvent;
+import com.spring.aichat.dto.chat.SendChatResponse.StatsSnapshot;
 import com.spring.aichat.dto.chat.SendChatResponse.UnlockInfo;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
@@ -32,6 +33,7 @@ import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -43,17 +45,19 @@ import java.util.stream.Collectors;
 
 /**
  * 채팅 핵심 서비스
- * <p>
+ *
  * [Phase 3]     트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
  * [Phase 4]     Scene direction fields
  * [Phase 4.1]   씬 상태 영속화 + BGM 관성 시스템
  * [Phase 4.2]   관계 승급 이벤트 시스템
- * [Phase 4.3]   엔딩 트리거 감지 + 히스토리 정제(reasoning 오염 차단)
- * [Phase 5.1]   LLM 실패 시 유저 메시지 + 에너지 롤백
- *               유저 평가(LIKE/DISLIKE) 시스템
- *               개별 대화 삭제 기능
- * [Phase 5.2]   분산 트랜잭션 보상 패턴 (JPA/MongoDB 쓰기 분리)
- *               RLHF 싫어요 사유(dislikeReason) 추가
+ * [Phase 4.3]   엔딩 트리거 감지 + 히스토리 정제
+ * [Phase 5.1]   LLM 실패 시 롤백, 유저 평가, 개별 삭제
+ * [Phase 5.2]   분산 트랜잭션 보상 패턴, RLHF dislikeReason
+ * [Phase 5.5]   입체적 상태창 시스템
+ *               - 5개 노말 스탯 + 3개 시크릿 스탯 처리
+ *               - 동적 관계 태그 갱신
+ *               - BPM 심박수 처리
+ *               - 캐릭터의 생각 비동기 생성 (10턴 간격)
  */
 @Service
 @Slf4j
@@ -73,19 +77,20 @@ public class ChatService {
     private final BoostModeResolver boostModeResolver;
     private final PromptInjectionGuard injectionGuard;
     private final ContentModerationService contentModerationService;
-    private final UserRepository userRepository;        // [Phase 5.1] 에너지 환불용
-    private final SecretModeService secretModeService;    // [Phase 5 Fix] 런타임 시크릿 모드 검증
+    private final UserRepository userRepository;
+    private final SecretModeService secretModeService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
+
+    // [Phase 5.5] 캐릭터 생각 갱신 주기 (메모리 주기와 오프셋)
+    private static final long THOUGHT_UPDATE_CYCLE = 10;
+    private static final long THOUGHT_UPDATE_OFFSET = 5; // 5, 15, 25턴에 트리거
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  TX 간 데이터 전달용 내부 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * [Phase 5.2] JPA TX-1 결과 — MongoDB 관련 필드 분리
-     */
     private record JpaPreResult(
         ChatRoom room,
         Long userId,
@@ -95,16 +100,16 @@ public class ChatService {
         int energyCost
     ) {}
 
-    /**
-     * [Phase 5.2] 보상 트랜잭션용 롤백 컨텍스트
-     */
     private record RollbackContext(
         Long userId,
         String username,
         int energyCost,
-        String savedUserLogId   // MongoDB 문서 ID (null이면 아직 저장 안 됨)
+        String savedUserLogId
     ) {}
 
+    /**
+     * [Phase 5.5] LLM 결과에 statChanges, bpm 추가
+     */
     private record LlmResult(
         AiJsonOutput aiOutput,
         String cleanJson,
@@ -116,26 +121,23 @@ public class ChatService {
         String lastOutfit,
         String lastTimeOfDay,
         Integer moodScore,
-        String easterEggTrigger
-    ) {
-    }
+        String easterEggTrigger,
+        AiJsonOutput.StatChanges statChanges,     // [Phase 5.5]
+        Integer bpm                                // [Phase 5.5]
+    ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  유저 채팅 메시지 처리
-    //
-    //  [Phase 5.2] 분산 트랜잭션 보상 패턴
-    //  MongoDB 쓰기는 반드시 JPA 커밋 성공 후에 실행
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [PERF] ====== sendMessage START ====== roomId={}", roomId);
 
-        // ── [Phase 5] Content Moderation — TX-1 전에 실행 (에너지 차감 전 차단) ──
+        // ── Content Moderation ──
         {
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-            // [Phase 5 Fix] 런타임 시크릿 모드 검증 — User 플래그만으로 판단하지 않음
             boolean isSecret = roomForCheck.getUser().getIsSecretMode()
                 && secretModeService.canAccessSecretMode(
                 roomForCheck.getUser(), roomForCheck.getCharacter().getId());
@@ -160,7 +162,6 @@ public class ChatService {
             int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
             room.getUser().consumeEnergy(cost);
 
-            // [Phase 5.2] MongoDB countByRoomId는 읽기 전용이므로 TX 내에서 허용
             long logCount = chatLogRepository.countByRoomId(roomId);
 
             return new JpaPreResult(
@@ -174,7 +175,7 @@ public class ChatService {
 
         cacheService.evictUserProfile(jpa.username());
 
-        // ── Prompt Injection Check (Non-blocking) ──
+        // ── Prompt Injection Check ──
         PromptInjectionGuard.InjectionCheckResult injCheck =
             injectionGuard.checkChatMessage(userMessage, jpa.username());
         if (injCheck.detected()) {
@@ -182,7 +183,7 @@ public class ChatService {
                 jpa.username(), injCheck.severity(), injCheck.matchedPattern());
         }
 
-        // ── [Phase 5.2] MongoDB: USER 메시지 저장 (JPA 커밋 성공 후) ──
+        // ── MongoDB: USER 메시지 저장 ──
         String savedUserLogId;
         try {
             ChatLogDocument savedLog = chatLogRepository.save(
@@ -198,7 +199,7 @@ public class ChatService {
             jpa.userId(), jpa.username(), jpa.energyCost(), savedUserLogId
         );
 
-        // ── Non-TX Zone: LLM 호출 — 실패 시 보상 롤백 ──
+        // ── Non-TX Zone: LLM 호출 ──
         LlmResult llmResult;
         try {
             llmResult = callLlmAndParse(jpa.room(), jpa.logCount() + 1, userMessage);
@@ -208,9 +209,15 @@ public class ChatService {
             throw e;
         }
 
-        // ── TX-2: JPA only (호감도/씬/업적 업데이트) ──
+        // ── TX-2: JPA only (호감도/스탯/씬/업적 업데이트) ──
         long tx2Start = System.currentTimeMillis();
         boolean isStory = jpa.room().isStoryMode();
+
+        // [Phase 5.5] 시크릿 모드 여부 (스탯 스냅샷용)
+        boolean effectiveSecretMode = jpa.room().getUser().getIsSecretMode()
+            && secretModeService.canAccessSecretMode(
+            jpa.room().getUser(), jpa.room().getCharacter().getId());
+
         SendChatResponse response;
         try {
             response = txTemplate.execute(status -> {
@@ -229,7 +236,6 @@ public class ChatService {
                     applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
                 }
 
-                // [Phase 5.2] JPA만 — MongoDB saveLog() 제거, updateLastActive만 수행
                 freshRoom.updateLastActive(llmResult.mainEmotion());
 
                 if (isStory) {
@@ -240,6 +246,24 @@ public class ChatService {
                         llmResult.lastTimeOfDay()
                     );
                 }
+
+                // ━━━ [Phase 5.5] 스탯 + BPM + 동적 관계 처리 ━━━
+                applyStatChanges(freshRoom, llmResult.statChanges(), effectiveSecretMode);
+
+                if (llmResult.bpm() != null) {
+                    freshRoom.updateBpm(llmResult.bpm());
+                }
+
+                // 스탯 기반 관계 갱신 (승급 이벤트 중에는 스킵)
+                if (!freshRoom.isPromotionPending()) {
+                    boolean relationChanged = freshRoom.refreshRelationFromStats();
+                    if (relationChanged) {
+                        log.info("🔄 [STATS] Relation changed via stats: {} → {} | tag='{}' | roomId={}",
+                            jpa.room().getStatusLevel(), freshRoom.getStatusLevel(),
+                            freshRoom.getDynamicRelationTag(), roomId);
+                    }
+                }
+                // ━━━ [Phase 5.5 END] ━━━
 
                 EndingTrigger endingTrigger = null;
                 if (isStory) {
@@ -283,6 +307,9 @@ public class ChatService {
                     }
                 }
 
+                // [Phase 5.5] 스탯 스냅샷 생성
+                StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
                 return new SendChatResponse(
                     roomId,
                     llmResult.sceneResponses(),
@@ -290,11 +317,14 @@ public class ChatService {
                     freshRoom.getStatusLevel().name(),
                     promoEvent,
                     endingTrigger,
-                    easterEggEvent
+                    easterEggEvent,
+                    statsSnapshot,
+                    freshRoom.getCurrentBpm(),
+                    freshRoom.getDynamicRelationTag(),
+                    null  // characterThought는 비동기 갱신 후 프론트에서 별도 fetch
                 );
             });
         } catch (Exception e) {
-            // [Phase 5.2] TX-2 JPA 실패 시 → USER 메시지 + 에너지 보상 롤백
             log.error("❌ [COMPENSATION] TX-2 failed — rolling back | roomId={}", roomId, e);
             compensateFullRollback(rollbackCtx);
             throw e;
@@ -302,7 +332,7 @@ public class ChatService {
 
         log.info("⏱ [PERF] TX-2 (JPA postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
-        // ── [Phase 5.2] MongoDB: ASSISTANT 메시지 저장 (JPA 커밋 성공 후) ──
+        // ── MongoDB: ASSISTANT 메시지 저장 ──
         try {
             ChatLogDocument assistantLog = ChatLogDocument.of(
                 jpa.room().getId(), ChatRole.ASSISTANT,
@@ -311,9 +341,7 @@ public class ChatService {
             );
             chatLogRepository.save(assistantLog);
         } catch (Exception e) {
-            // JPA 이미 커밋 — 유저에겐 응답 정상 전달, 히스토리에만 누락 (경미한 불일치)
-            log.error("⚠️ [INCONSISTENCY] ASSISTANT log MongoDB save failed after JPA commit. " +
-                "Response delivered to user but history may be incomplete. roomId={}", roomId, e);
+            log.error("⚠️ [INCONSISTENCY] ASSISTANT log MongoDB save failed after JPA commit. roomId={}", roomId, e);
         }
 
         cacheService.evictRoomInfo(roomId);
@@ -323,16 +351,172 @@ public class ChatService {
 
         triggerMemorySummarizationIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1);
 
+        // [Phase 5.5] 캐릭터 생각 비동기 생성 트리거
+        triggerCharacterThoughtIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode);
+
         return response;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.2] 보상 트랜잭션
+    //  [Phase 5.5] 스탯 적용 헬퍼
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    private void applyStatChanges(ChatRoom room, AiJsonOutput.StatChanges statChanges, boolean isSecretMode) {
+        if (statChanges == null) return;
+
+        room.applyNormalStatChanges(
+            statChanges.safeIntimacy(),
+            statChanges.safeAffection(),
+            statChanges.safeDependency(),
+            statChanges.safePlayfulness(),
+            statChanges.safeTrust()
+        );
+
+        if (isSecretMode) {
+            room.applySecretStatChanges(
+                statChanges.safeLust(),
+                statChanges.safeCorruption(),
+                statChanges.safeObsession()
+            );
+        }
+
+        log.info("📊 [STATS] Applied: I={} A={} D={} P={} T={} | Current: I={} A={} D={} P={} T={} | roomId={}",
+            statChanges.safeIntimacy(), statChanges.safeAffection(),
+            statChanges.safeDependency(), statChanges.safePlayfulness(), statChanges.safeTrust(),
+            room.getStatIntimacy(), room.getStatAffection(),
+            room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust(),
+            room.getId());
+    }
+
     /**
-     * 에너지만 환불 (MongoDB USER 메시지 저장 실패 시)
+     * [Phase 5.5] 스탯 스냅샷 생성 (응답 DTO용)
      */
+    private StatsSnapshot buildStatsSnapshot(ChatRoom room, boolean isSecretMode) {
+        return new StatsSnapshot(
+            room.getStatIntimacy(),
+            room.getStatAffection(),
+            room.getStatDependency(),
+            room.getStatPlayfulness(),
+            room.getStatTrust(),
+            isSecretMode ? room.getStatLust() : null,
+            isSecretMode ? room.getStatCorruption() : null,
+            isSecretMode ? room.getStatObsession() : null
+        );
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5] 캐릭터의 생각 생성 (비동기)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void triggerCharacterThoughtIfNeeded(Long roomId, Long userId, long totalLogCount, boolean isSecretMode) {
+        long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
+
+        if (userMsgCount > 0 && userMsgCount % THOUGHT_UPDATE_CYCLE == THOUGHT_UPDATE_OFFSET) {
+            log.info("💭 [THOUGHT] Generation TRIGGERED | roomId={} | userMsgCount={}",
+                roomId, userMsgCount);
+            generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
+        }
+    }
+
+    /**
+     * 캐릭터의 생각을 비동기로 생성하여 ChatRoom에 저장.
+     *
+     * sentiment 모델(경량)을 사용하여 비용과 레이턴시를 최소화.
+     * 실패해도 유저 경험에 영향 없음 (다음 주기에 재시도).
+     */
+    @Async
+    public void generateCharacterThoughtAsync(Long roomId, Long userId, int currentTurnCount, boolean isSecretMode) {
+        long start = System.currentTimeMillis();
+        try {
+            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("Room not found for thought generation"));
+
+            Character character = room.getCharacter();
+            String nickname = room.getUser().getNickname();
+
+            // 최근 대화 5턴 로드 (생각의 맥락)
+            List<ChatLogDocument> recentLogs = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+            recentLogs.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+
+            // 최근 10개만 사용
+            List<ChatLogDocument> context = recentLogs.size() > 10
+                ? recentLogs.subList(recentLogs.size() - 10, recentLogs.size())
+                : recentLogs;
+
+            String conversationContext = context.stream()
+                .map(log -> log.getRole().name() + ": " + log.getCleanContent())
+                .collect(Collectors.joining("\n"));
+
+            String modeContext = isSecretMode ? "시크릿 모드 (친밀한 관계)" : "노말 모드";
+
+            String thoughtPrompt = """
+                당신은 '%s'이라는 이름의 캐릭터입니다.
+                
+                ## 캐릭터 정보
+                - 이름: %s
+                - 성격: %s
+                - 현재 관계: %s
+                - 모드: %s
+                
+                ## 현재 스탯 (0~100)
+                친밀도: %d | 호감도: %d | 의존도: %d | 장난기: %d | 신뢰도: %d
+                
+                ## 최근 대화
+                %s
+                
+                ## 지시사항
+                위 대화를 바탕으로, '%s'가 '%s'에 대해 지금 마음속으로 생각하고 있을 법한 **내면의 독백**을 한 문장으로 작성하세요.
+                
+                규칙:
+                - 캐릭터의 말투와 성격을 반영하세요
+                - 15~40자 이내의 짧은 독백
+                - 스탯 수치가 높은 감정을 반영하세요 (예: 호감도가 높으면 설렘, 의존도가 높으면 의지)
+                - 메타적 표현(AI, 시스템, 스탯 등) 절대 금지
+                - 독백만 출력하세요. 따옴표나 부연설명 없이.
+                """.formatted(
+                character.getName(),
+                character.getName(),
+                character.getEffectivePersonality(isSecretMode),
+                room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : room.getStatusLevel().name(),
+                modeContext,
+                room.getStatIntimacy(), room.getStatAffection(),
+                room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust(),
+                conversationContext,
+                character.getName(),
+                nickname
+            );
+
+            String thought = openRouterClient.chatCompletion(
+                OpenAiChatRequest.withoutPenalty(
+                    props.sentimentModel(),
+                    List.of(OpenAiMessage.system(thoughtPrompt)),
+                    0.8
+                )
+            ).trim().replaceAll("[\"']", "");
+
+            // DB 저장
+            txTemplate.execute(status -> {
+                ChatRoom freshRoom = chatRoomRepository.findById(roomId)
+                    .orElseThrow(() -> new NotFoundException("Room not found"));
+                freshRoom.updateCharacterThought(thought, currentTurnCount);
+                return null;
+            });
+
+            cacheService.evictRoomInfo(roomId);
+
+            log.info("💭 [THOUGHT] Generated: '{}' | roomId={} | {}ms",
+                thought, roomId, System.currentTimeMillis() - start);
+
+        } catch (Exception e) {
+            log.warn("💭 [THOUGHT] Generation failed (non-blocking): roomId={} | {}",
+                roomId, e.getMessage());
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  보상 트랜잭션
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     private void compensateEnergy(Long userId, int energyCost, String username) {
         try {
             txTemplate.execute(status -> {
@@ -350,27 +534,20 @@ public class ChatService {
         cacheService.evictUserProfile(username);
     }
 
-    /**
-     * 전체 롤백: MongoDB USER 메시지 삭제 + 에너지 환불
-     */
     private void compensateFullRollback(RollbackContext ctx) {
-        // 1. MongoDB 유저 메시지 삭제
         if (ctx.savedUserLogId() != null) {
             try {
                 chatLogRepository.deleteById(ctx.savedUserLogId());
                 log.info("🔄 [COMPENSATION] User message deleted: logId={}", ctx.savedUserLogId());
             } catch (Exception ex) {
-                log.error("🔄 [COMPENSATION] User message delete FAILED: logId={}",
-                    ctx.savedUserLogId(), ex);
+                log.error("🔄 [COMPENSATION] User message delete FAILED: logId={}", ctx.savedUserLogId(), ex);
             }
         }
-
-        // 2. 에너지 환불
         compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.2] 승급 이벤트 핵심 로직
+    //  승급 이벤트 핵심 로직
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private PromotionEvent resolveAffectionAndPromotion(
@@ -379,7 +556,7 @@ public class ChatService {
         if (wasPending) {
             int resolvedMood = (moodScore != null) ? moodScore : 1;
             if (moodScore == null) {
-                log.warn("[PROMOTION] mood_score is NULL - LLM omitted it. Defaulting to 1 | roomId={}", room.getId());
+                log.warn("[PROMOTION] mood_score is NULL - defaulting to 1 | roomId={}", room.getId());
             }
             room.advancePromotionTurn(resolvedMood);
             log.info("🎯 [PROMOTION] Turn {}/{} | moodScore +{} (total: {}) | roomId={}",
@@ -413,9 +590,6 @@ public class ChatService {
                 room.updateAffection(thresholdEdge);
                 room.updateStatusLevel(oldStatus);
                 room.startPromotion(newStatus);
-
-                log.info("🎯 [PROMOTION] Affection rolled back to {} (threshold edge) | roomId={}",
-                    thresholdEdge, room.getId());
 
                 return new PromotionEvent(
                     "STARTED",
@@ -472,15 +646,13 @@ public class ChatService {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  시스템 이벤트에 대한 캐릭터 반응 처리
-    //  [Phase 5.2] 동일 보상 패턴 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public SendChatResponse generateResponseForSystemEvent(Long roomId, String systemDetail, int energyCost) {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [PERF] ====== systemEvent START ====== roomId={}", roomId);
 
-        // ── TX-1: JPA only ──
-        long tx1Start = System.currentTimeMillis();
+        // ── TX-1 ──
         JpaPreResult jpa = txTemplate.execute(status -> {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("ChatRoom not found: " + roomId));
@@ -496,11 +668,10 @@ public class ChatService {
                 room.isPromotionPending(), room.getUser().getUsername(), energyCost
             );
         });
-        log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
 
         cacheService.evictUserProfile(jpa.username());
 
-        // ── MongoDB: USER (system detail) 저장 (JPA 커밋 후) ──
+        // ── MongoDB: system detail 저장 ──
         String savedLogId;
         try {
             ChatLogDocument savedLog = chatLogRepository.save(
@@ -528,8 +699,12 @@ public class ChatService {
             throw e;
         }
 
-        // ── TX-2: JPA only ──
-        long tx2Start = System.currentTimeMillis();
+        // [Phase 5.5] 시크릿 모드 여부
+        boolean effectiveSecretMode = jpa.room().getUser().getIsSecretMode()
+            && secretModeService.canAccessSecretMode(
+            jpa.room().getUser(), jpa.room().getCharacter().getId());
+
+        // ── TX-2 ──
         SendChatResponse response;
         try {
             response = txTemplate.execute(status -> {
@@ -537,8 +712,6 @@ public class ChatService {
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
                 applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
-
-                // [Phase 5.2] JPA만 — updateLastActive
                 freshRoom.updateLastActive(llmResult.mainEmotion());
 
                 freshRoom.updateSceneState(
@@ -546,11 +719,27 @@ public class ChatService {
                     llmResult.lastOutfit(), llmResult.lastTimeOfDay()
                 );
 
+                // [Phase 5.5] 스탯 + BPM
+                applyStatChanges(freshRoom, llmResult.statChanges(), effectiveSecretMode);
+                if (llmResult.bpm() != null) {
+                    freshRoom.updateBpm(llmResult.bpm());
+                }
+                if (!freshRoom.isPromotionPending()) {
+                    freshRoom.refreshRelationFromStats();
+                }
+
+                StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
                 return new SendChatResponse(
                     roomId,
                     llmResult.sceneResponses(),
                     freshRoom.getAffectionScore(),
-                    freshRoom.getStatusLevel().name()
+                    freshRoom.getStatusLevel().name(),
+                    null, null, null,
+                    statsSnapshot,
+                    freshRoom.getCurrentBpm(),
+                    freshRoom.getDynamicRelationTag(),
+                    null
                 );
             });
         } catch (Exception e) {
@@ -558,9 +747,8 @@ public class ChatService {
             compensateFullRollback(rollbackCtx);
             throw e;
         }
-        log.info("⏱ [PERF] TX-2 (event postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
-        // ── MongoDB: ASSISTANT 저장 (JPA 커밋 후) ──
+        // ── MongoDB: ASSISTANT 저장 ──
         try {
             chatLogRepository.save(ChatLogDocument.of(
                 jpa.room().getId(), ChatRole.ASSISTANT,
@@ -580,6 +768,7 @@ public class ChatService {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Non-TX 공통 로직
+    //  [Phase 5.5] statChanges, bpm 추출 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private LlmResult callLlmAndParse(ChatRoom room, long logCount, String ragQuery) {
@@ -597,7 +786,6 @@ public class ChatService {
             log.info("⏱ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, RAG_SKIP_LOG_THRESHOLD);
         }
 
-        // [Phase 5 Fix] 런타임 시크릿 모드 결정
         boolean effectiveSecretMode = room.getUser().getIsSecretMode()
             && secretModeService.canAccessSecretMode(
             room.getUser(), room.getCharacter().getId());
@@ -650,11 +838,15 @@ public class ChatService {
             String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
 
             Integer moodScore = aiOutput.moodScore();
-
             String easterEggTrigger = aiOutput.easterEggTrigger();
 
+            // [Phase 5.5] 스탯/BPM 추출
+            AiJsonOutput.StatChanges statChanges = aiOutput.statChanges();
+            Integer bpm = aiOutput.bpm();
+
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
-                lastBgm, lastLoc, lastOutfit, lastTime, moodScore, easterEggTrigger);
+                lastBgm, lastLoc, lastOutfit, lastTime, moodScore, easterEggTrigger,
+                statChanges, bpm);
 
         } catch (JsonProcessingException e) {
             log.error("JSON Parsing Error: {}", rawAssistant, e);
@@ -664,6 +856,7 @@ public class ChatService {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  채팅방 관리 영역
+    //  [Phase 5.5] 스탯 정보 포함
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public ChatRoomInfoResponse getChatRoomInfo(Long roomId) {
@@ -673,10 +866,13 @@ public class ChatService {
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
                 var character = room.getCharacter();
-                // [Phase 5 Fix] 런타임 검증된 시크릿 모드
                 boolean isSecret = room.getUser().getIsSecretMode()
                     && secretModeService.canAccessSecretMode(
                     room.getUser(), room.getCharacter().getId());
+
+                // [Phase 5.5] 스탯 스냅샷
+                StatsSnapshot statsSnapshot = buildStatsSnapshot(room, isSecret);
+
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
                     character.getName(),
@@ -697,7 +893,12 @@ public class ChatService {
                     room.getEndingType() != null ? room.getEndingType().name() : null,
                     room.getEndingTitle(),
                     new java.util.ArrayList<>(character.getAllowedOutfits(room.getStatusLevel(), isSecret)),
-                    new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret))
+                    new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret)),
+                    // [Phase 5.5] 입체적 상태창
+                    statsSnapshot,
+                    room.getCurrentBpm(),
+                    room.getDynamicRelationTag(),
+                    room.getCharacterThought()
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);
@@ -718,13 +919,9 @@ public class ChatService {
         cacheService.evictRoomOwner(roomId);
     }
 
-    /**
-     * [Phase 5.2] 초기화도 JPA → MongoDB 순서 보장
-     */
     public void initializeChatRoom(Long roomId) {
         if (chatLogRepository.countByRoomId(roomId) > 0) return;
 
-        // JPA TX: 방 상태 업데이트만
         Character character = txTemplate.execute(status -> {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("Room not found"));
@@ -733,7 +930,6 @@ public class ChatService {
             return room.getCharacter();
         });
 
-        // MongoDB: 인트로 로그 저장 (JPA 커밋 성공 후)
         String introNarration = character.getIntroNarration();
         chatLogRepository.save(ChatLogDocument.system(roomId, introNarration));
 
@@ -743,40 +939,27 @@ public class ChatService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.1] 유저 평가 시스템 (RLHF 데이터 수집)
-    //  [Phase 5.2] dislikeReason 추가
+    //  유저 평가 시스템 (RLHF)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * ASSISTANT 메시지에 좋아요/싫어요 평가를 토글
-     *
-     * @param logId         MongoDB 문서 ID
-     * @param roomId        소유권 검증용
-     * @param rating        "LIKE" | "DISLIKE"
-     * @param dislikeReason "DISLIKE" 시 사유 카테고리 (nullable)
-     * @return 업데이트된 rating 값 (토글 해제 시 null)
-     */
     public String rateChatLog(String logId, Long roomId, String rating, String dislikeReason) {
         ChatLogDocument doc = chatLogRepository.findById(logId)
             .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
 
-        // 소유권 검증: 해당 로그가 요청된 방에 속하는지 확인
         if (!doc.getRoomId().equals(roomId)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
         }
 
-        // ASSISTANT 메시지만 평가 가능
         if (doc.getRole() != ChatRole.ASSISTANT) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "캐릭터 응답에만 평가할 수 있습니다.");
         }
 
         doc.updateRating(rating);
 
-        // [Phase 5.2] 싫어요 사유 저장 — DISLIKE일 때만 유효
         if ("DISLIKE".equals(doc.getRating()) && dislikeReason != null && !dislikeReason.isBlank()) {
             doc.updateDislikeReason(dislikeReason);
         } else {
-            doc.updateDislikeReason(null);  // LIKE이거나 토글 해제 시 사유 초기화
+            doc.updateDislikeReason(null);
         }
 
         chatLogRepository.save(doc);
@@ -788,28 +971,17 @@ public class ChatService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.1] 개별 대화 삭제
+    //  개별 대화 삭제
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 단건 채팅 로그 삭제
-     *
-     * USER 또는 ASSISTANT 메시지를 개별 삭제한다.
-     * SYSTEM 메시지(나레이션)는 삭제 불가.
-     *
-     * @param logId  MongoDB 문서 ID
-     * @param roomId 소유권 검증용
-     */
     public void deleteSingleChatLog(String logId, Long roomId) {
         ChatLogDocument doc = chatLogRepository.findById(logId)
             .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
 
-        // 소유권 검증
         if (!doc.getRoomId().equals(roomId)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
         }
 
-        // SYSTEM 메시지는 삭제 불가 (인트로 나레이션 등 구조적 데이터)
         if (doc.getRole() == ChatRole.SYSTEM) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "시스템 메시지는 삭제할 수 없습니다.");
         }
@@ -840,9 +1012,6 @@ public class ChatService {
         }
     }
 
-    /**
-     * [Phase 4.3] 히스토리 구성 — ASSISTANT 로그에서 reasoning 오염 차단
-     */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
         List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
         recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));

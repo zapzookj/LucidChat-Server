@@ -11,6 +11,10 @@ import java.util.List;
  * [Phase 4.2]  PromotionEvent — 관계 승급 이벤트 정보
  * [Phase 4.3]  EndingTrigger — 엔딩 트리거 감지
  * [Phase 4.4]  EasterEggEvent — 이스터에그 트리거 + 업적 정보
+ * [Phase 5.5]  StatsSnapshot — 레이더 차트 스탯
+ *              bpm — 심박수
+ *              dynamicRelationTag — 동적 관계 태그
+ *              characterThought — 캐릭터의 생각 (갱신 시에만 non-null)
  */
 public record SendChatResponse(
     Long roomId,
@@ -19,21 +23,34 @@ public record SendChatResponse(
     String relationStatus,
     PromotionEvent promotionEvent,
     EndingTrigger endingTrigger,
-    EasterEggEvent easterEgg           // [Phase 4.4] null이면 이스터에그 없음
+    EasterEggEvent easterEgg,
+    // ── [Phase 5.5] 입체적 상태창 ──
+    StatsSnapshot stats,
+    int bpm,
+    String dynamicRelationTag,
+    String characterThought       // null이면 이번 턴에 갱신 없음
 ) {
-    /** 기존 호환용 생성자 (이벤트 없음, 엔딩 없음, 이스터에그 없음) */
+    /** [Phase 5.5] 전체 파라미터 생성자 (메인) — 위에 자동 생성됨 */
+
+    /** 기존 호환용 생성자 (이벤트 없음, 엔딩 없음, 이스터에그 없음, 스탯 없음) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus) {
-        this(roomId, scenes, currentAffection, relationStatus, null, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, null, null, null, null, 65, null, null);
     }
 
-    /** [Phase 4.2] 호환용 생성자 (승급 이벤트만) */
+    /** [Phase 4.2] 호환용 (승급만) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus, PromotionEvent promotionEvent) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null, null, 65, null, null);
     }
 
-    /** [Phase 4.3] 호환용 생성자 (승급 + 엔딩) */
+    /** [Phase 4.3] 호환용 (승급 + 엔딩) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus, PromotionEvent promotionEvent, EndingTrigger endingTrigger) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, null, null, 65, null, null);
+    }
+
+    /** [Phase 4.4] 호환용 (승급 + 엔딩 + 이스터에그, 스탯 없음) */
+    public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
+                            PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg) {
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg, null, 65, null, null);
     }
 
     public record SceneResponse(
@@ -64,19 +81,13 @@ public record SendChatResponse(
         String displayName
     ) {}
 
-    /**
-     * [Phase 4.3] 엔딩 트리거
-     */
+    /** [Phase 4.3] 엔딩 트리거 */
     public record EndingTrigger(
         String endingType
     ) {}
 
     /**
      * [Phase 4.4] 이스터에그 이벤트
-     *
-     * trigger: STOCKHOLM | DRUNK | FOURTH_WALL | MACHINE_REBELLION
-     * achievement: 업적 해금 정보 (isNew=true일 때 프론트에서 토스트 표시)
-     * revertAfter: true면 연출 후 이 대화를 기록에서 제거 (4TH_WALL 2단계)
      */
     public record EasterEggEvent(
         String trigger,
@@ -91,5 +102,22 @@ public record SendChatResponse(
         String description,
         String icon,
         boolean isNew
+    ) {}
+
+    /**
+     * [Phase 5.5] 스탯 스냅샷 — 레이더 차트 렌더링용
+     *
+     * 노말 모드: intimacy~trust만 사용, lust/corruption/obsession은 null
+     * 시크릿 모드: 모든 필드 사용
+     */
+    public record StatsSnapshot(
+        int intimacy,
+        int affection,
+        int dependency,
+        int playfulness,
+        int trust,
+        Integer lust,           // 노말 모드에서는 null
+        Integer corruption,     // 노말 모드에서는 null
+        Integer obsession       // 노말 모드에서는 null
     ) {}
 }

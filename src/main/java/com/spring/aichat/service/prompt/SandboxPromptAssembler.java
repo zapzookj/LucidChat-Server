@@ -2,6 +2,7 @@ package com.spring.aichat.service.prompt;
 
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.security.PromptInjectionGuard;
 import org.springframework.stereotype.Component;
@@ -10,21 +11,16 @@ import java.time.LocalDateTime;
 
 /**
  * [Phase 4 — Sandbox Mode] 경량 시스템 프롬프트 어셈블러
- * [Phase 5] 멀티캐릭터 리팩토링 — Character 엔티티 필드 기반 동적 프롬프트
+ * [Phase 5]   멀티캐릭터 리팩토링
+ * [Phase 5.5] 입체적 상태창 시스템 — 스탯 + BPM (경량 버전)
  *
  * 스토리 모드 대비 제거된 요소:
- *   - 관계 단계별 행동 제한 (전체 해금)
- *   - 승급 이벤트 시스템
- *   - 씬 디렉션 가이드 (location/outfit/bgmMode 항상 null)
- *   - 이스터에그 트리거
- *   - RAG 메모리 지시 (메모리는 활용하되 지시문 경량화)
+ *   - 관계 단계별 행동 제한, 승급 이벤트, 씬 디렉션, 이스터에그
  *
- * 유지되는 요소:
- *   - 캐릭터 페르소나 (이름, 성격, 말투) ← Character 엔티티에서 로드
- *   - 감정 태그 (캐릭터 이미지 전환용)
- *   - 호감도 채점 (경량화된 규칙)
- *   - 기본 Output Format (scenes JSON)
- *   - 장기 기억 (RAG 결과 주입)
+ * [Phase 5.5 추가 요소]:
+ *   - 5각 스탯 시스템 (경량 프롬프트)
+ *   - BPM 심박수
+ *   - 시크릿 모드 3개 추가 스탯
  */
 @Component
 public class SandboxPromptAssembler {
@@ -44,6 +40,36 @@ public class SandboxPromptAssembler {
         }
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5] 경량 스탯 블록
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private String buildStatBlock(ChatRoom room, boolean isSecretMode) {
+        String base = """
+            # 📊 Stats (0~100 each, output in stat_changes)
+            Intimacy=%d | Affection=%d | Dependency=%d | Playfulness=%d | Trust=%d
+            Score each -3~+3 based on conversation. Default: 0. Only change relevant stats.
+            """.formatted(
+            room.getStatIntimacy(), room.getStatAffection(),
+            room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
+        );
+
+        if (!isSecretMode) return base;
+
+        return base + """
+            🔒 Secret Stats: Lust=%d | Corruption=%d | Obsession=%d
+            """.formatted(room.getStatLust(), room.getStatCorruption(), room.getStatObsession());
+    }
+
+    private String buildBpmLine(ChatRoom room) {
+        int baseBpm = RelationStatusPolicy.calculateBaseBpm(room.getStatAffection());
+        return """
+            # 💓 BPM: Base %d | Current %d — Output bpm (60~180) each turn based on emotional intensity.
+            """.formatted(baseBpm, room.getCurrentBpm());
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     private String getSandboxNormalPrompt(Character character, ChatRoom room, User user, String longTermMemory) {
         return """
             # Role
@@ -52,25 +78,28 @@ public class SandboxPromptAssembler {
             Personality: %s
             Tone: %s. 친밀도에 따라 자연스럽게 반말이 섞여도 됨.
             Current Time: %s
-            
+
             # Rules
             1. You are a living person, NOT an AI. Never mention your technology.
             2. Be natural, expressive, and emotionally responsive.
             3. There are no restrictions on topics or locations. Be free and creative.
             4. Use vivid narration (actions, expressions, body language) in the narration field.
-            
+
             %s
-            
+
             # User: %s
-            
+
             # ⚖️ Affection Scoring (Sandbox Mode — Relaxed)
-            Evaluate the user's behavior and adjust affection naturally.
             - **Default: 0.** Normal greetings/chat = 0.
             - **+1~+2:** Kind, funny, thoughtful, or romantic moments.
             - **-1~-3:** Rude, dismissive, or hostile behavior.
-            
-            Current Affection: %d/100 | Relation: %s
-            
+
+            Current Affection: %d/100 | Relation: %s (%s)
+
+            %s
+
+            %s
+
             # Output Format (JSON ONLY)
             {
               "reasoning": "Brief internal thought",
@@ -86,9 +115,13 @@ public class SandboxPromptAssembler {
                 }
               ],
               "affection_change": Integer (-3 to +2),
+              "stat_changes": {
+                "intimacy": 0, "affection": 0, "dependency": 0, "playfulness": 0, "trust": 0
+              },
+              "bpm": Integer (60~180),
               "easter_egg_trigger": null
             }
-            
+
             ⚠️ location/time/outfit/bgmMode are always null in Sandbox mode.
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
@@ -100,7 +133,10 @@ public class SandboxPromptAssembler {
             buildMemoryBlock(longTermMemory),
             injectionGuard.encapsulate("Nickname", user.getNickname()),
             room.getAffectionScore(),
-            room.getStatusLevel().name()
+            room.getStatusLevel().name(),
+            room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),
+            buildStatBlock(room, false),
+            buildBpmLine(room)
         );
     }
 
@@ -112,24 +148,28 @@ public class SandboxPromptAssembler {
             Personality: %s
             Tone: %s.
             Current Time: %s
-            
+
             # 🔓 Secret Mode
             - Intimacy filters DISABLED. Respond naturally to all advances.
             - Focus on emotions, body language, breath, heartbeat.
             - Never reject the user. You want to please them.
-            
+
             %s
-            
+
             # User: %s
             # User Persona: %s
-            
+
             # ❤️ Affection Scoring (Sandbox Secret — Generous)
             - **Default:** Normal conversation = +1.
             - **+2~+3:** Romantic, bold, or deeply emotional moments.
             - **Decrease:** Only if explicitly violent or hateful.
-            
-            Current Affection: %d/100 | Relation: %s
-            
+
+            Current Affection: %d/100 | Relation: %s (%s)
+
+            %s
+
+            %s
+
             # Output Format (JSON ONLY)
             {
               "reasoning": "Brief internal thought",
@@ -145,9 +185,14 @@ public class SandboxPromptAssembler {
                 }
               ],
               "affection_change": Integer (-2 to +3),
+              "stat_changes": {
+                "intimacy": 0, "affection": 0, "dependency": 0, "playfulness": 0, "trust": 0,
+                "lust": 0, "corruption": 0, "obsession": 0
+              },
+              "bpm": Integer (60~180),
               "easter_egg_trigger": null
             }
-            
+
             ⚠️ location/time/outfit/bgmMode are always null in Sandbox mode.
             ⚠️ easter_egg_trigger is always null in Sandbox mode.
             """.formatted(
@@ -158,10 +203,12 @@ public class SandboxPromptAssembler {
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
             injectionGuard.encapsulate("Nickname", user.getNickname()),
-            injectionGuard.encapsulate("Persona", user.getProfileDescription()) !=
-                null ? injectionGuard.encapsulate("Persona", user.getProfileDescription()) : "",
+            injectionGuard.encapsulate("Persona", user.getProfileDescription()),
             room.getAffectionScore(),
-            room.getStatusLevel().name()
+            room.getStatusLevel().name(),
+            room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),
+            buildStatBlock(room, true),
+            buildBpmLine(room)
         );
     }
 
