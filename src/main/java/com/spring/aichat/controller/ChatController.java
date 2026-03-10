@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -32,6 +33,10 @@ import java.util.Map;
  * [Phase 5.1] 신규 엔드포인트:
  * - PATCH /rooms/{roomId}/logs/{logId}/rate — 유저 평가 (좋아요/싫어요)
  * - DELETE /rooms/{roomId}/logs/{logId} — 단건 메시지 삭제
+ *
+ * [Phase 5.2] 변경:
+ * - rateChatLog: dislikeReason 전달
+ * - toDto: dislikeReason 포함
  */
 @RestController
 @RequiredArgsConstructor
@@ -107,6 +112,7 @@ public class ChatController {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.1] 유저 평가 (RLHF)
+    //  [Phase 5.2] dislikeReason 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
@@ -114,8 +120,9 @@ public class ChatController {
      *
      * - 같은 rating을 다시 보내면 해제 (토글)
      * - 다른 rating을 보내면 변경
+     * - [Phase 5.2] DISLIKE 시 dislikeReason 사유 카테고리 전달 가능
      *
-     * @return { "rating": "LIKE" | "DISLIKE" | null }
+     * @return { "rating": "LIKE" | "DISLIKE" | "" }
      */
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     @PatchMapping("/rooms/{roomId}/logs/{logId}/rate")
@@ -124,8 +131,12 @@ public class ChatController {
         @PathVariable String logId,
         @RequestBody @Valid RateChatLogRequest request
     ) {
-        String updatedRating = chatService.rateChatLog(logId, roomId, request.rating());
-        return Map.of("rating", updatedRating != null ? updatedRating : "");
+        String updatedRating = chatService.rateChatLog(
+            logId, roomId, request.rating(), request.dislikeReason());
+
+        Map<String, String> result = new HashMap<>();
+        result.put("rating", updatedRating != null ? updatedRating : "");
+        return result;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -155,7 +166,8 @@ public class ChatController {
             doc.getCleanContent(),
             doc.getEmotionTag(),
             doc.getCreatedAt(),
-            doc.getRating()     // [Phase 5.1] 평가 필드
+            doc.getRating(),         // [Phase 5.1] 평가 필드
+            doc.getDislikeReason()   // [Phase 5.2] 싫어요 사유
         );
     }
 }

@@ -29,16 +29,16 @@ import java.time.LocalDateTime;
  * [인덱스 설계]
  * 1. {roomId: 1, createdAt: -1} — 가장 빈번한 쿼리 (최근 로그 조회, 페이지네이션)
  * 2. {roomId: 1, role: 1, createdAt: -1} — 역할별 필터 (메모리 트리거 판단, 마지막 유저 메시지 조회)
+ * 3. {rating: 1, createdAt: -1} — [Phase 5.2] RLHF 데이터 ETL용 (평가된 문서만 효율적 추출)
  *
  * [Phase 5.1] rating 필드 추가 — RLHF 데이터 수집용
- * - "LIKE" / "DISLIKE" / null
- * - ASSISTANT 메시지에만 적용
- * - 추후 파인튜닝 데이터셋 구축 시 rating 기반 필터링
+ * [Phase 5.2] dislikeReason 필드 추가 — 싫어요 사유 카테고리
  */
 @Document(collection = "chat_logs")
 @CompoundIndexes({
     @CompoundIndex(name = "idx_room_created", def = "{'roomId': 1, 'createdAt': -1}"),
-    @CompoundIndex(name = "idx_room_role_created", def = "{'roomId': 1, 'role': 1, 'createdAt': -1}")
+    @CompoundIndex(name = "idx_room_role_created", def = "{'roomId': 1, 'role': 1, 'createdAt': -1}"),
+    @CompoundIndex(name = "idx_rating_created", def = "{'rating': 1, 'createdAt': -1}")
 })
 @Getter
 @NoArgsConstructor
@@ -78,12 +78,22 @@ public class ChatLogDocument {
     @Field("rating")
     private String rating;
 
+    /**
+     * [Phase 5.2] 싫어요 사유 카테고리
+     * rating == "DISLIKE"일 때만 유효.
+     *
+     * 값: OOC | HALLUCINATION | BORING | REPETITIVE | CONTEXT_MISMATCH | OTHER | null
+     */
+    @Field("dislikeReason")
+    private String dislikeReason;
+
     @CreatedDate
     @Field("createdAt")
     private LocalDateTime createdAt;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.1] Rating 업데이트
+    //  [Phase 5.2] DislikeReason 업데이트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
@@ -96,6 +106,13 @@ public class ChatLogDocument {
         } else {
             this.rating = newRating;
         }
+    }
+
+    /**
+     * [Phase 5.2] 싫어요 사유 업데이트
+     */
+    public void updateDislikeReason(String reason) {
+        this.dislikeReason = reason;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -14,6 +14,9 @@ import java.time.LocalDateTime;
  * [Phase 5.1] rating 필드 추가:
  * - "LIKE" / "DISLIKE" / null
  * - 프론트엔드에서 좋아요/싫어요 상태를 표시하기 위해 사용
+ *
+ * [Phase 5.2] dislikeReason 필드 추가:
+ * - OOC | HALLUCINATION | BORING | REPETITIVE | CONTEXT_MISMATCH | OTHER | null
  */
 public record ChatLogResponse(
     String logId,
@@ -22,5 +25,6 @@ public record ChatLogResponse(
     String cleanContent,
     EmotionTag emotionTag,
     LocalDateTime createdAt,
-    String rating           // [Phase 5.1] "LIKE" | "DISLIKE" | null
+    String rating,           // [Phase 5.1] "LIKE" | "DISLIKE" | null
+    String dislikeReason     // [Phase 5.2] 싫어요 사유 카테고리 | null
 ) {}

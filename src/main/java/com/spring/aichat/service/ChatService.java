@@ -52,6 +52,8 @@ import java.util.stream.Collectors;
  * [Phase 5.1]   LLM 실패 시 유저 메시지 + 에너지 롤백
  *               유저 평가(LIKE/DISLIKE) 시스템
  *               개별 대화 삭제 기능
+ * [Phase 5.2]   분산 트랜잭션 보상 패턴 (JPA/MongoDB 쓰기 분리)
+ *               RLHF 싫어요 사유(dislikeReason) 추가
  */
 @Service
 @Slf4j
@@ -81,16 +83,27 @@ public class ChatService {
     //  TX 간 데이터 전달용 내부 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private record PreProcessResult(
+    /**
+     * [Phase 5.2] JPA TX-1 결과 — MongoDB 관련 필드 분리
+     */
+    private record JpaPreResult(
         ChatRoom room,
         Long userId,
         long logCount,
         boolean wasPromotionPending,
         String username,
-        String savedUserLogId,   // [Phase 5.1] 롤백용 MongoDB 문서 ID
-        int energyCost           // [Phase 5.1] 롤백용 차감된 에너지량
-    ) {
-    }
+        int energyCost
+    ) {}
+
+    /**
+     * [Phase 5.2] 보상 트랜잭션용 롤백 컨텍스트
+     */
+    private record RollbackContext(
+        Long userId,
+        String username,
+        int energyCost,
+        String savedUserLogId   // MongoDB 문서 ID (null이면 아직 저장 안 됨)
+    ) {}
 
     private record LlmResult(
         AiJsonOutput aiOutput,
@@ -109,6 +122,9 @@ public class ChatService {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  유저 채팅 메시지 처리
+    //
+    //  [Phase 5.2] 분산 트랜잭션 보상 패턴
+    //  MongoDB 쓰기는 반드시 JPA 커밋 성공 후에 실행
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public SendChatResponse sendMessage(Long roomId, String userMessage) {
@@ -135,53 +151,66 @@ public class ChatService {
             }
         }
 
-        // ── TX-1: 전처리 ──
+        // ── TX-1: JPA only (에너지 차감) ──
         long tx1Start = System.currentTimeMillis();
-        PreProcessResult pre = txTemplate.execute(status -> {
+        JpaPreResult jpa = txTemplate.execute(status -> {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
-            // [Phase 5.1] 에너지 비용 계산 및 저장 (롤백용)
             int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
             room.getUser().consumeEnergy(cost);
 
-            // [Phase 5.1] 유저 메시지 저장 후 ID 캡처 (롤백용)
-            ChatLogDocument savedLog = chatLogRepository.save(ChatLogDocument.user(room.getId(), userMessage));
+            // [Phase 5.2] MongoDB countByRoomId는 읽기 전용이므로 TX 내에서 허용
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(
+            return new JpaPreResult(
                 room, room.getUser().getId(), logCount,
-                room.isPromotionPending(), room.getUser().getUsername(),
-                savedLog.getId(), cost    // [Phase 5.1] 롤백 정보
+                room.isPromotionPending(), room.getUser().getUsername(), cost
             );
         });
 
+        log.info("⏱ [PERF] TX-1 (JPA preprocess): {}ms | promotionPending={}",
+            System.currentTimeMillis() - tx1Start, jpa.wasPromotionPending());
+
+        cacheService.evictUserProfile(jpa.username());
+
+        // ── Prompt Injection Check (Non-blocking) ──
         PromptInjectionGuard.InjectionCheckResult injCheck =
-            injectionGuard.checkChatMessage(userMessage, pre.username());
+            injectionGuard.checkChatMessage(userMessage, jpa.username());
         if (injCheck.detected()) {
             log.warn("⚠️ [INJECTION] Detected in chat: user={}, severity={}, pattern={}",
-                pre.username(), injCheck.severity(), injCheck.matchedPattern());
+                jpa.username(), injCheck.severity(), injCheck.matchedPattern());
         }
 
-        log.info("⏱ [PERF] TX-1 (preprocess): {}ms | promotionPending={}",
-            System.currentTimeMillis() - tx1Start, pre.wasPromotionPending());
+        // ── [Phase 5.2] MongoDB: USER 메시지 저장 (JPA 커밋 성공 후) ──
+        String savedUserLogId;
+        try {
+            ChatLogDocument savedLog = chatLogRepository.save(
+                ChatLogDocument.user(jpa.room().getId(), userMessage));
+            savedUserLogId = savedLog.getId();
+        } catch (Exception e) {
+            log.error("❌ [COMPENSATION] MongoDB USER save failed — refunding energy | roomId={}", roomId, e);
+            compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "메시지 저장에 실패했습니다.");
+        }
 
-        cacheService.evictUserProfile(pre.username());
+        RollbackContext rollbackCtx = new RollbackContext(
+            jpa.userId(), jpa.username(), jpa.energyCost(), savedUserLogId
+        );
 
-        // ── [Phase 5.1] Non-TX Zone: LLM 호출 — 실패 시 롤백 ──
+        // ── Non-TX Zone: LLM 호출 — 실패 시 보상 롤백 ──
         LlmResult llmResult;
         try {
-            llmResult = callLlmAndParse(pre.room(), pre.logCount(), userMessage);
+            llmResult = callLlmAndParse(jpa.room(), jpa.logCount() + 1, userMessage);
         } catch (Exception e) {
-            // ⚡ LLM 호출 실패 → 유저 메시지 삭제 + 에너지 환불
-            log.error("❌ [ROLLBACK] LLM call failed — rolling back user message and energy | roomId={}", roomId, e);
-            rollbackPreProcess(pre);
-            throw e;  // 원래 예외를 그대로 다시 던져서 프론트에 에러 전달
+            log.error("❌ [COMPENSATION] LLM call failed — rolling back | roomId={}", roomId, e);
+            compensateFullRollback(rollbackCtx);
+            throw e;
         }
 
-        // ── TX-2: 후처리 (승급 + 엔딩 감지) ──
+        // ── TX-2: JPA only (호감도/씬/업적 업데이트) ──
         long tx2Start = System.currentTimeMillis();
-        boolean isStory = pre.room().isStoryMode();
+        boolean isStory = jpa.room().isStoryMode();
         SendChatResponse response;
         try {
             response = txTemplate.execute(status -> {
@@ -194,20 +223,14 @@ public class ChatService {
                         freshRoom,
                         llmResult.aiOutput().affectionChange(),
                         llmResult.moodScore(),
-                        pre.wasPromotionPending()
+                        jpa.wasPromotionPending()
                     );
                 } else {
                     applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
                 }
 
-                saveLog(
-                    freshRoom,
-                    ChatRole.ASSISTANT,
-                    llmResult.cleanJson(),
-                    llmResult.combinedDialogue(),
-                    llmResult.mainEmotion(),
-                    null
-                );
+                // [Phase 5.2] JPA만 — MongoDB saveLog() 제거, updateLastActive만 수행
+                freshRoom.updateLastActive(llmResult.mainEmotion());
 
                 if (isStory) {
                     freshRoom.updateSceneState(
@@ -239,7 +262,7 @@ public class ChatService {
                         EasterEggType eggType = EasterEggType.valueOf(llmResult.easterEggTrigger().toUpperCase());
 
                         AchievementResponse.UnlockNotification unlock =
-                            achievementService.unlockEasterEgg(pre.userId(), eggType);
+                            achievementService.unlockEasterEgg(jpa.userId(), eggType);
 
                         boolean revertAfter = (eggType == EasterEggType.FOURTH_WALL);
 
@@ -271,59 +294,79 @@ public class ChatService {
                 );
             });
         } catch (Exception e) {
-            // [Phase 5.1] TX-2 실패 시에도 롤백 (ASSISTANT 로그는 TX-2 안에서 저장되므로 JPA 롤백됨)
-            // 하지만 유저 메시지는 MongoDB에 이미 저장된 상태 → 삭제 필요
-            log.error("❌ [ROLLBACK] TX-2 failed — rolling back user message and energy | roomId={}", roomId, e);
-            rollbackPreProcess(pre);
+            // [Phase 5.2] TX-2 JPA 실패 시 → USER 메시지 + 에너지 보상 롤백
+            log.error("❌ [COMPENSATION] TX-2 failed — rolling back | roomId={}", roomId, e);
+            compensateFullRollback(rollbackCtx);
             throw e;
         }
 
-        log.info("⏱ [PERF] TX-2 (postprocess): {}ms", System.currentTimeMillis() - tx2Start);
+        log.info("⏱ [PERF] TX-2 (JPA postprocess): {}ms", System.currentTimeMillis() - tx2Start);
+
+        // ── [Phase 5.2] MongoDB: ASSISTANT 메시지 저장 (JPA 커밋 성공 후) ──
+        try {
+            ChatLogDocument assistantLog = ChatLogDocument.of(
+                jpa.room().getId(), ChatRole.ASSISTANT,
+                llmResult.cleanJson(), llmResult.combinedDialogue(),
+                llmResult.mainEmotion(), null
+            );
+            chatLogRepository.save(assistantLog);
+        } catch (Exception e) {
+            // JPA 이미 커밋 — 유저에겐 응답 정상 전달, 히스토리에만 누락 (경미한 불일치)
+            log.error("⚠️ [INCONSISTENCY] ASSISTANT log MongoDB save failed after JPA commit. " +
+                "Response delivered to user but history may be incomplete. roomId={}", roomId, e);
+        }
 
         cacheService.evictRoomInfo(roomId);
 
         log.info("⏱ [PERF] ====== sendMessage DONE: {}ms ======",
             System.currentTimeMillis() - totalStart);
 
-        triggerMemorySummarizationIfNeeded(roomId, pre.userId(), pre.logCount());
+        triggerMemorySummarizationIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1);
 
         return response;
     }
 
-    /**
-     * [Phase 5.1] LLM 호출 실패 시 TX-1 결과 롤백
-     *
-     * 1. MongoDB에 저장된 유저 메시지 삭제
-     * 2. JPA 새 트랜잭션으로 에너지 환불
-     */
-    private void rollbackPreProcess(PreProcessResult pre) {
-        // 1. MongoDB 유저 메시지 삭제
-        try {
-            if (pre.savedUserLogId() != null) {
-                chatLogRepository.deleteById(pre.savedUserLogId());
-                log.info("🔄 [ROLLBACK] User message deleted from MongoDB: logId={}", pre.savedUserLogId());
-            }
-        } catch (Exception ex) {
-            log.error("🔄 [ROLLBACK] Failed to delete user message: logId={}", pre.savedUserLogId(), ex);
-        }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.2] 보상 트랜잭션
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        // 2. 에너지 환불 (새 JPA 트랜잭션)
+    /**
+     * 에너지만 환불 (MongoDB USER 메시지 저장 실패 시)
+     */
+    private void compensateEnergy(Long userId, int energyCost, String username) {
         try {
             txTemplate.execute(status -> {
-                User user = userRepository.findById(pre.userId())
+                User user = userRepository.findById(userId)
                     .orElseThrow(() -> new NotFoundException("User not found for refund"));
-                user.refundEnergy(pre.energyCost());
+                user.refundEnergy(energyCost);
                 userRepository.save(user);
-                log.info("🔄 [ROLLBACK] Energy refunded: userId={}, amount={}", pre.userId(), pre.energyCost());
+                log.info("🔄 [COMPENSATION] Energy refunded: userId={}, amount={}", userId, energyCost);
                 return null;
             });
         } catch (Exception ex) {
-            log.error("🔄 [ROLLBACK] Failed to refund energy: userId={}, amount={}",
-                pre.userId(), pre.energyCost(), ex);
+            log.error("🔄 [COMPENSATION] Energy refund FAILED: userId={}, amount={}",
+                userId, energyCost, ex);
+        }
+        cacheService.evictUserProfile(username);
+    }
+
+    /**
+     * 전체 롤백: MongoDB USER 메시지 삭제 + 에너지 환불
+     */
+    private void compensateFullRollback(RollbackContext ctx) {
+        // 1. MongoDB 유저 메시지 삭제
+        if (ctx.savedUserLogId() != null) {
+            try {
+                chatLogRepository.deleteById(ctx.savedUserLogId());
+                log.info("🔄 [COMPENSATION] User message deleted: logId={}", ctx.savedUserLogId());
+            } catch (Exception ex) {
+                log.error("🔄 [COMPENSATION] User message delete FAILED: logId={}",
+                    ctx.savedUserLogId(), ex);
+            }
         }
 
-        // 3. 캐시 무효화 (에너지가 변경되었으므로)
-        cacheService.evictUserProfile(pre.username());
+        // 2. 에너지 환불
+        compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -429,14 +472,16 @@ public class ChatService {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  시스템 이벤트에 대한 캐릭터 반응 처리
+    //  [Phase 5.2] 동일 보상 패턴 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public SendChatResponse generateResponseForSystemEvent(Long roomId, String systemDetail, int energyCost) {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [PERF] ====== systemEvent START ====== roomId={}", roomId);
 
+        // ── TX-1: JPA only ──
         long tx1Start = System.currentTimeMillis();
-        PreProcessResult pre = txTemplate.execute(status -> {
+        JpaPreResult jpa = txTemplate.execute(status -> {
             ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("ChatRoom not found: " + roomId));
 
@@ -444,53 +489,86 @@ public class ChatService {
                 room.getUser().consumeEnergy(energyCost);
             }
 
-            ChatLogDocument savedLog = chatLogRepository.save(ChatLogDocument.user(room.getId(), systemDetail));
             long logCount = chatLogRepository.countByRoomId(roomId);
 
-            return new PreProcessResult(
+            return new JpaPreResult(
                 room, room.getUser().getId(), logCount,
-                room.isPromotionPending(), room.getUser().getUsername(),
-                savedLog.getId(), energyCost
+                room.isPromotionPending(), room.getUser().getUsername(), energyCost
             );
         });
         log.info("⏱ [PERF] TX-1 (event preprocess): {}ms", System.currentTimeMillis() - tx1Start);
 
-        cacheService.evictUserProfile(pre.username());
+        cacheService.evictUserProfile(jpa.username());
+
+        // ── MongoDB: USER (system detail) 저장 (JPA 커밋 후) ──
+        String savedLogId;
+        try {
+            ChatLogDocument savedLog = chatLogRepository.save(
+                ChatLogDocument.user(jpa.room().getId(), systemDetail));
+            savedLogId = savedLog.getId();
+        } catch (Exception e) {
+            log.error("❌ [COMPENSATION] MongoDB system detail save failed | roomId={}", roomId, e);
+            compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이벤트 메시지 저장에 실패했습니다.");
+        }
+
+        RollbackContext rollbackCtx = new RollbackContext(
+            jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId
+        );
 
         String ragQuery = fetchLastUserMessage(roomId);
 
-        // [Phase 5.1] 시스템 이벤트도 LLM 실패 시 롤백
+        // ── LLM 호출 ──
         LlmResult llmResult;
         try {
-            llmResult = callLlmAndParse(pre.room(), pre.logCount(), ragQuery);
+            llmResult = callLlmAndParse(jpa.room(), jpa.logCount() + 1, ragQuery);
         } catch (Exception e) {
-            log.error("❌ [ROLLBACK] LLM call failed for system event | roomId={}", roomId, e);
-            rollbackPreProcess(pre);
+            log.error("❌ [COMPENSATION] LLM call failed for system event | roomId={}", roomId, e);
+            compensateFullRollback(rollbackCtx);
             throw e;
         }
 
+        // ── TX-2: JPA only ──
         long tx2Start = System.currentTimeMillis();
-        SendChatResponse response = txTemplate.execute(status -> {
-            ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+        SendChatResponse response;
+        try {
+            response = txTemplate.execute(status -> {
+                ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-            applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
-            saveLog(freshRoom, ChatRole.ASSISTANT,
-                llmResult.cleanJson(), llmResult.combinedDialogue(), llmResult.mainEmotion(), null);
+                applyAffectionChange(freshRoom, llmResult.aiOutput().affectionChange());
 
-            freshRoom.updateSceneState(
-                llmResult.lastBgmMode(), llmResult.lastLocation(),
-                llmResult.lastOutfit(), llmResult.lastTimeOfDay()
-            );
+                // [Phase 5.2] JPA만 — updateLastActive
+                freshRoom.updateLastActive(llmResult.mainEmotion());
 
-            return new SendChatResponse(
-                roomId,
-                llmResult.sceneResponses(),
-                freshRoom.getAffectionScore(),
-                freshRoom.getStatusLevel().name()
-            );
-        });
+                freshRoom.updateSceneState(
+                    llmResult.lastBgmMode(), llmResult.lastLocation(),
+                    llmResult.lastOutfit(), llmResult.lastTimeOfDay()
+                );
+
+                return new SendChatResponse(
+                    roomId,
+                    llmResult.sceneResponses(),
+                    freshRoom.getAffectionScore(),
+                    freshRoom.getStatusLevel().name()
+                );
+            });
+        } catch (Exception e) {
+            log.error("❌ [COMPENSATION] TX-2 failed for system event | roomId={}", roomId, e);
+            compensateFullRollback(rollbackCtx);
+            throw e;
+        }
         log.info("⏱ [PERF] TX-2 (event postprocess): {}ms", System.currentTimeMillis() - tx2Start);
+
+        // ── MongoDB: ASSISTANT 저장 (JPA 커밋 후) ──
+        try {
+            chatLogRepository.save(ChatLogDocument.of(
+                jpa.room().getId(), ChatRole.ASSISTANT,
+                llmResult.cleanJson(), llmResult.combinedDialogue(),
+                llmResult.mainEmotion(), null));
+        } catch (Exception e) {
+            log.error("⚠️ [INCONSISTENCY] ASSISTANT log save failed for system event. roomId={}", roomId, e);
+        }
 
         cacheService.evictRoomInfo(roomId);
 
@@ -640,40 +718,45 @@ public class ChatService {
         cacheService.evictRoomOwner(roomId);
     }
 
-    @Transactional
+    /**
+     * [Phase 5.2] 초기화도 JPA → MongoDB 순서 보장
+     */
     public void initializeChatRoom(Long roomId) {
-        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-            .orElseThrow(() -> new NotFoundException("Room not found"));
-
         if (chatLogRepository.countByRoomId(roomId) > 0) return;
 
-        var character = room.getCharacter();
-        String introNarration = character.getIntroNarration();
+        // JPA TX: 방 상태 업데이트만
+        Character character = txTemplate.execute(status -> {
+            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("Room not found"));
+            room.updateLastActive(EmotionTag.NEUTRAL);
+            room.resetSceneState();
+            return room.getCharacter();
+        });
 
-        chatLogRepository.save(ChatLogDocument.system(room.getId(), introNarration));
+        // MongoDB: 인트로 로그 저장 (JPA 커밋 성공 후)
+        String introNarration = character.getIntroNarration();
+        chatLogRepository.save(ChatLogDocument.system(roomId, introNarration));
 
         String firstGreeting = character.getFirstGreeting();
-        ChatLogDocument assistantLog = ChatLogDocument.of(
-            room.getId(), ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null);
-        chatLogRepository.save(assistantLog);
-
-        room.updateLastActive(EmotionTag.NEUTRAL);
-        room.resetSceneState();
+        chatLogRepository.save(ChatLogDocument.of(
+            roomId, ChatRole.ASSISTANT, firstGreeting, firstGreeting, EmotionTag.NEUTRAL, null));
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.1] 유저 평가 시스템 (RLHF 데이터 수집)
+    //  [Phase 5.2] dislikeReason 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
      * ASSISTANT 메시지에 좋아요/싫어요 평가를 토글
      *
-     * @param logId  MongoDB 문서 ID
-     * @param roomId 소유권 검증용
-     * @param rating "LIKE" | "DISLIKE"
+     * @param logId         MongoDB 문서 ID
+     * @param roomId        소유권 검증용
+     * @param rating        "LIKE" | "DISLIKE"
+     * @param dislikeReason "DISLIKE" 시 사유 카테고리 (nullable)
      * @return 업데이트된 rating 값 (토글 해제 시 null)
      */
-    public String rateChatLog(String logId, Long roomId, String rating) {
+    public String rateChatLog(String logId, Long roomId, String rating, String dislikeReason) {
         ChatLogDocument doc = chatLogRepository.findById(logId)
             .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
 
@@ -688,10 +771,18 @@ public class ChatService {
         }
 
         doc.updateRating(rating);
+
+        // [Phase 5.2] 싫어요 사유 저장 — DISLIKE일 때만 유효
+        if ("DISLIKE".equals(doc.getRating()) && dislikeReason != null && !dislikeReason.isBlank()) {
+            doc.updateDislikeReason(dislikeReason);
+        } else {
+            doc.updateDislikeReason(null);  // LIKE이거나 토글 해제 시 사유 초기화
+        }
+
         chatLogRepository.save(doc);
 
-        log.info("⭐ [RATING] logId={}, roomId={}, rating={} → {}",
-            logId, roomId, rating, doc.getRating());
+        log.info("⭐ [RATING] logId={}, roomId={}, rating={} → {}, reason={}",
+            logId, roomId, rating, doc.getRating(), doc.getDislikeReason());
 
         return doc.getRating();
     }
@@ -815,13 +906,6 @@ public class ChatService {
         newScore = Math.max(-100, Math.min(100, newScore));
         room.updateAffection(newScore);
         room.updateStatusLevel(RelationStatusPolicy.fromScore(newScore));
-    }
-
-    private void saveLog(ChatRoom room, ChatRole role, String raw, String clean,
-                         EmotionTag emotion, String audioUrl) {
-        ChatLogDocument chatLog = ChatLogDocument.of(room.getId(), role, raw, clean, emotion, audioUrl);
-        chatLogRepository.save(chatLog);
-        room.updateLastActive(emotion);
     }
 
     private String stripMarkdown(String text) {
