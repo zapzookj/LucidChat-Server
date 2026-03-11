@@ -37,6 +37,10 @@ import java.util.Map;
  * [Phase 5.2] 변경:
  * - rateChatLog: dislikeReason 전달
  * - toDto: dislikeReason 포함
+ *
+ * [Phase 5.5-IT] 신규 엔드포인트:
+ * - POST /rooms/{roomId}/logs/{logId}/unlock-thought — 속마음 해금 (에너지 -1)
+ * - toDto: hasInnerThought, innerThought, thoughtUnlocked 포함
  */
 @RestController
 @RequiredArgsConstructor
@@ -157,8 +161,47 @@ public class ChatController {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-IT] 속마음 해금
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 속마음 해금 API
+     *
+     * 유저가 말풍선 클릭 시 호출.
+     * 에너지 -1 차감 후, 실제 속마음 텍스트를 반환.
+     * 이미 해금된 경우 에너지 차감 없이 텍스트만 반환.
+     *
+     * @return { "innerThought": "실제 속마음 텍스트", "energyCost": 1 }
+     */
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @PostMapping("/rooms/{roomId}/logs/{logId}/unlock-thought")
+    public Map<String, Object> unlockInnerThought(
+        @PathVariable Long roomId,
+        @PathVariable String logId,
+        Authentication authentication
+    ) {
+        String innerThought = chatService.unlockInnerThought(
+            logId, roomId, authentication.getName());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("innerThought", innerThought);
+        result.put("energyCost", 1);
+        return result;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [Phase 5.5-IT] 속마음 보안 처리 포함 toDto
+     *
+     * - hasInnerThought: 속마음 존재 여부 (항상 전달)
+     * - innerThought: 해금(thoughtUnlocked=true)된 경우만 실제 텍스트 전달, 아니면 null
+     * - thoughtUnlocked: 해금 완료 여부
+     */
     private ChatLogResponse toDto(ChatLogDocument doc) {
+        // [Phase 5.5-IT] 보안: 해금 전이면 텍스트 은닉
+        String visibleInnerThought = doc.isThoughtUnlocked() ? doc.getInnerThought() : null;
+
         return new ChatLogResponse(
             doc.getId(),
             doc.getRole(),
@@ -166,8 +209,11 @@ public class ChatController {
             doc.getCleanContent(),
             doc.getEmotionTag(),
             doc.getCreatedAt(),
-            doc.getRating(),         // [Phase 5.1] 평가 필드
-            doc.getDislikeReason()   // [Phase 5.2] 싫어요 사유
+            doc.getRating(),
+            doc.getDislikeReason(),
+            doc.hasInnerThought(),       // [Phase 5.5-IT] 존재 플래그
+            visibleInnerThought,         // [Phase 5.5-IT] 보안 처리된 텍스트
+            doc.isThoughtUnlocked()      // [Phase 5.5-IT] 해금 여부
         );
     }
 }

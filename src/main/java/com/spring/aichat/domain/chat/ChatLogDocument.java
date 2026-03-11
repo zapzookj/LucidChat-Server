@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
  *
  * [Phase 5.1] rating 필드 추가 — RLHF 데이터 수집용
  * [Phase 5.2] dislikeReason 필드 추가 — 싫어요 사유 카테고리
+ * [Phase 5.5-IT] innerThought + thoughtUnlocked 필드 추가 — 속마음 시스템
  */
 @Document(collection = "chat_logs")
 @CompoundIndexes({
@@ -87,6 +88,28 @@ public class ChatLogDocument {
     @Field("dislikeReason")
     private String dislikeReason;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-IT] 속마음 시스템
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 캐릭터의 속마음 텍스트 (LLM inner_thought 필드에서 추출)
+     * - ASSISTANT 메시지에만 존재 가능
+     * - LLM이 "겉과 속이 다를 때만" 생성하므로 대부분 null
+     * - 보안: 프론트에 전달 시 해금(thoughtUnlocked=true) 전까지 텍스트 은닉
+     */
+    @Field("innerThought")
+    private String innerThought;
+
+    /**
+     * 속마음 해금 여부
+     * - false: 유저 미해금 (프론트에 hasInnerThought=true 플래그만 전달)
+     * - true: 유저가 에너지 소모하여 해금 완료 (실제 텍스트 전달)
+     */
+    @Field("thoughtUnlocked")
+    @Builder.Default
+    private boolean thoughtUnlocked = false;
+
     @CreatedDate
     @Field("createdAt")
     private LocalDateTime createdAt;
@@ -101,7 +124,6 @@ public class ChatLogDocument {
      */
     public void updateRating(String newRating) {
         if (newRating != null && newRating.equals(this.rating)) {
-            // 토글: 같은 평가를 다시 누르면 해제
             this.rating = null;
         } else {
             this.rating = newRating;
@@ -113,6 +135,24 @@ public class ChatLogDocument {
      */
     public void updateDislikeReason(String reason) {
         this.dislikeReason = reason;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-IT] 속마음 해금
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 속마음 존재 여부 (텍스트가 있는지)
+     */
+    public boolean hasInnerThought() {
+        return this.innerThought != null && !this.innerThought.isBlank();
+    }
+
+    /**
+     * 속마음 해금 처리
+     */
+    public void unlockThought() {
+        this.thoughtUnlocked = true;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -158,6 +198,24 @@ public class ChatLogDocument {
             .cleanContent(clean)
             .emotionTag(emotion)
             .audioUrl(audioUrl)
+            .build();
+    }
+
+    /**
+     * [Phase 5.5-IT] 속마음 포함 ASSISTANT 메시지 팩토리
+     */
+    public static ChatLogDocument assistantWithThought(Long roomId, String raw, String clean,
+                                                       EmotionTag emotion, String audioUrl,
+                                                       String innerThought) {
+        return ChatLogDocument.builder()
+            .roomId(roomId)
+            .role(ChatRole.ASSISTANT)
+            .rawContent(raw)
+            .cleanContent(clean)
+            .emotionTag(emotion)
+            .audioUrl(audioUrl)
+            .innerThought(innerThought)
+            .thoughtUnlocked(false)
             .build();
     }
 }

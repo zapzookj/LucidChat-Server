@@ -12,6 +12,8 @@ import java.util.List;
  * [Phase 4.4]  easter_egg_trigger 필드 (이스터에그 트리거)
  * [Phase 5.5]  stat_changes 필드 (5각 레이더 차트 스탯)
  *              bpm 필드 (심박수)
+ * [Phase 5.5-IT] inner_thought 필드 (속마음 시스템)
+ *                겉과 속이 다를 때만 LLM이 선택적으로 출력
  */
 public record AiJsonOutput(
     String reasoning,
@@ -19,18 +21,26 @@ public record AiJsonOutput(
     @JsonProperty("affection_change") int affectionChange,
     @JsonProperty("mood_score") Integer moodScore,
     @JsonProperty("easter_egg_trigger") String easterEggTrigger,
-    @JsonProperty("stat_changes") StatChanges statChanges,       // [Phase 5.5]
-    Integer bpm                                                   // [Phase 5.5]
+    @JsonProperty("stat_changes") StatChanges statChanges,
+    Integer bpm,
+    @JsonProperty("inner_thought") String innerThought    // [Phase 5.5-IT]
 ) {
+    /** 하위 호환: innerThought 없는 경우 */
+    public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
+                        Integer moodScore, String easterEggTrigger,
+                        StatChanges statChanges, Integer bpm) {
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, statChanges, bpm, null);
+    }
+
     /** 하위 호환: statChanges/bpm 없는 경우 */
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, null, null, null);
     }
 
     /** 하위 호환: easterEggTrigger 없는 경우 */
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange, Integer moodScore) {
-        this(reasoning, scenes, affectionChange, moodScore, null, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, null, null, null, null);
     }
 
     public record Scene(

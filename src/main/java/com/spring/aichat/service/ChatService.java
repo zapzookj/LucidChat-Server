@@ -108,7 +108,7 @@ public class ChatService {
     ) {}
 
     /**
-     * [Phase 5.5] LLM 결과에 statChanges, bpm 추가
+     * [Phase 5.5-IT] LLM 결과에 innerThought 추가
      */
     private record LlmResult(
         AiJsonOutput aiOutput,
@@ -122,8 +122,9 @@ public class ChatService {
         String lastTimeOfDay,
         Integer moodScore,
         String easterEggTrigger,
-        AiJsonOutput.StatChanges statChanges,     // [Phase 5.5]
-        Integer bpm                                // [Phase 5.5]
+        AiJsonOutput.StatChanges statChanges,
+        Integer bpm,
+        String innerThought          // [Phase 5.5-IT] 추가
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -327,14 +328,25 @@ public class ChatService {
 
         log.info("⏱ [PERF] TX-2 (JPA postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
-        // ── MongoDB: ASSISTANT 메시지 저장 ──
+        // ── MongoDB: ASSISTANT 메시지 저장 (속마음 포함) ──
+        String assistantLogId = null;
+        boolean hasInnerThought = false;
         try {
-            ChatLogDocument assistantLog = ChatLogDocument.of(
-                jpa.room().getId(), ChatRole.ASSISTANT,
+            ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
+                jpa.room().getId(),
                 llmResult.cleanJson(), llmResult.combinedDialogue(),
-                llmResult.mainEmotion(), null
+                llmResult.mainEmotion(), null,
+                llmResult.innerThought()   // [Phase 5.5-IT] 속마음 텍스트 (nullable)
             );
-            chatLogRepository.save(assistantLog);
+            ChatLogDocument savedAssistant = chatLogRepository.save(assistantLog);
+            assistantLogId = savedAssistant.getId();
+            hasInnerThought = savedAssistant.hasInnerThought();
+
+            if (hasInnerThought) {
+                log.info("💭 [INNER_THOUGHT] Saved: roomId={} | logId={} | preview='{}'",
+                    roomId, assistantLogId,
+                    llmResult.innerThought().substring(0, Math.min(30, llmResult.innerThought().length())));
+            }
         } catch (Exception e) {
             log.error("⚠️ [INCONSISTENCY] ASSISTANT log MongoDB save failed after JPA commit. roomId={}", roomId, e);
         }
@@ -349,7 +361,23 @@ public class ChatService {
         // [Phase 5.5] 캐릭터 생각 비동기 생성 트리거
         triggerCharacterThoughtIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode);
 
-        return response;
+        // [Phase 5.5-IT] 응답에 속마음 플래그 + logId 추가
+        // response는 TX-2에서 만들어졌으므로, 새 record로 래핑
+        return new SendChatResponse(
+            response.roomId(),
+            response.scenes(),
+            response.currentAffection(),
+            response.relationStatus(),
+            response.promotionEvent(),
+            response.endingTrigger(),
+            response.easterEgg(),
+            response.stats(),
+            response.bpm(),
+            response.dynamicRelationTag(),
+            response.characterThought(),
+            hasInnerThought,           // [Phase 5.5-IT]
+            assistantLogId             // [Phase 5.5-IT]
+        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -744,21 +772,40 @@ public class ChatService {
         }
 
         // ── MongoDB: ASSISTANT 저장 ──
+        String evtAssistantLogId = null;
+        boolean evtHasInnerThought = false;
         try {
-            chatLogRepository.save(ChatLogDocument.of(
-                jpa.room().getId(), ChatRole.ASSISTANT,
+            ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
+                jpa.room().getId(),
                 llmResult.cleanJson(), llmResult.combinedDialogue(),
-                llmResult.mainEmotion(), null));
+                llmResult.mainEmotion(), null,
+                llmResult.innerThought()
+            );
+            ChatLogDocument savedLog = chatLogRepository.save(assistantLog);
+            evtAssistantLogId = savedLog.getId();
+            evtHasInnerThought = savedLog.hasInnerThought();
         } catch (Exception e) {
             log.error("⚠️ [INCONSISTENCY] ASSISTANT log save failed for system event. roomId={}", roomId, e);
         }
 
         cacheService.evictRoomInfo(roomId);
 
-        log.info("⏱ [PERF] ====== systemEvent DONE: {}ms ======",
-            System.currentTimeMillis() - totalStart);
-
-        return response;
+        // response에 속마음 플래그 추가
+        return new SendChatResponse(
+            response.roomId(),
+            response.scenes(),
+            response.currentAffection(),
+            response.relationStatus(),
+            response.promotionEvent(),
+            response.endingTrigger(),
+            response.easterEgg(),
+            response.stats(),
+            response.bpm(),
+            response.dynamicRelationTag(),
+            response.characterThought(),
+            evtHasInnerThought,
+            evtAssistantLogId
+        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -839,9 +886,15 @@ public class ChatService {
             AiJsonOutput.StatChanges statChanges = aiOutput.statChanges();
             Integer bpm = aiOutput.bpm();
 
+            // [Phase 5.5-IT] 속마음 추출 — null/blank는 null로 정규화
+            String innerThought = aiOutput.innerThought();
+            if (innerThought != null && innerThought.isBlank()) {
+                innerThought = null;
+            }
+
             return new LlmResult(aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
                 lastBgm, lastLoc, lastOutfit, lastTime, moodScore, easterEggTrigger,
-                statChanges, bpm);
+                statChanges, bpm, innerThought);
 
         } catch (JsonProcessingException e) {
             log.error("JSON Parsing Error: {}", rawAssistant, e);
@@ -1104,5 +1157,68 @@ public class ChatService {
             if (val != null) return val;
         }
         return null;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-IT] 속마음 해금
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final int INNER_THOUGHT_UNLOCK_COST = 1;
+
+    /**
+     * 속마음(Inner Thought) 해금
+     *
+     * 1. 로그 유효성 검증 (존재 여부, 방 소유권, 속마음 존재 여부)
+     * 2. 이미 해금된 경우 → 중복 과금 방지, 바로 텍스트 반환
+     * 3. 에너지 차감 (1 에너지)
+     * 4. thoughtUnlocked = true로 업데이트
+     * 5. 실제 속마음 텍스트 반환
+     *
+     * @param logId  ASSISTANT 로그 ID
+     * @param roomId 채팅방 ID (소유권 검증용)
+     * @param username 유저명 (캐시 무효화용)
+     * @return 속마음 텍스트
+     */
+    @Transactional
+    public String unlockInnerThought(String logId, Long roomId, String username) {
+        // 1. 로그 조회 및 검증
+        ChatLogDocument doc = chatLogRepository.findById(logId)
+            .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
+
+        if (!doc.getRoomId().equals(roomId)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
+        }
+
+        if (doc.getRole() != ChatRole.ASSISTANT) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "캐릭터 응답에만 속마음이 존재합니다.");
+        }
+
+        if (!doc.hasInnerThought()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이 응답에는 속마음이 없습니다.");
+        }
+
+        // 2. 이미 해금된 경우 — 에너지 차감 없이 바로 반환
+        if (doc.isThoughtUnlocked()) {
+            log.info("💭 [INNER_THOUGHT] Already unlocked: logId={}", logId);
+            return doc.getInnerThought();
+        }
+
+        // 3. 에너지 차감
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+        user.consumeEnergy(INNER_THOUGHT_UNLOCK_COST);
+        userRepository.save(user);
+
+        // 4. 해금 처리
+        doc.unlockThought();
+        chatLogRepository.save(doc);
+
+        // 5. 캐시 무효화
+        cacheService.evictUserProfile(username);
+
+        log.info("💭 [INNER_THOUGHT] Unlocked: logId={} | user={} | cost={}",
+            logId, username, INNER_THOUGHT_UNLOCK_COST);
+
+        return doc.getInnerThought();
     }
 }

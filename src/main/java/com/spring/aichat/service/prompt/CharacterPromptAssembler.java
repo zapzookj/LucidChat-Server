@@ -406,6 +406,7 @@ public class CharacterPromptAssembler {
                 "trust": 0%s%s
               },
               "bpm": Integer (60~180),
+              "inner_thought": null or "Korean string (15~50 chars)",
               "easter_egg_trigger": null
             }
 
@@ -499,6 +500,62 @@ public class CharacterPromptAssembler {
             """;
     }
 
+    /**
+     * [Phase 5.5-IT] 속마음 시스템 프롬프트 블록
+     *
+     * LLM이 "진짜 숨기고 싶은 감정"이 있을 때만 inner_thought를 생성하도록 유도.
+     * 대부분의 턴에서는 null을 출력하게 하여 희소성 확보.
+     */
+    private String buildInnerThoughtBlock(boolean isSecretMode) {
+        String secretAddition = isSecretMode
+            ? """
+              - In **Secret Mode**, inner thoughts can be more explicit about hidden desires, jealousy, or obsession.
+              - Example: "이런 식으로 쳐다보지 마... 나 진짜 참기 힘들어지잖아..."
+              """
+            : "";
+
+        return """
+            # 💭 Inner Thought System (속마음)
+            You have a hidden inner voice. Output `"inner_thought"` (String or null) in your JSON.
+
+            ## ⚠️ CRITICAL — WHEN TO USE (Rarity: ~20%% of responses):
+            **DEFAULT: null.** Most turns, your inner thought is null.
+            Only write inner_thought when ALL of these conditions are met:
+            1. **Your spoken dialogue does NOT fully express your true feelings.**
+            2. **There is a CLEAR gap between what you SAY and what you FEEL.**
+            3. **The hidden emotion is STRONG enough that it would feel unnatural NOT to think it.**
+
+            ## When to generate inner_thought:
+            - You say "괜찮아" but you're actually hurt → inner thought reveals the pain
+            - You act cold/dismissive but your heart is pounding → inner thought reveals excitement
+            - You're embarrassed and deflecting with humor → inner thought reveals genuine shyness
+            - You want to say something romantic but can't bring yourself to → inner thought reveals longing
+            - You're jealous but pretending not to care → inner thought reveals possessiveness
+            - You're hiding fear/worry behind a brave face → inner thought reveals vulnerability
+
+            ## When NOT to generate (output null):
+            - Your dialogue already expresses your true feelings (겉과 속이 같을 때)
+            - Normal, casual conversation with no emotional undercurrent
+            - You're being honest and open — no hidden layer needed
+            - The interaction is straightforward with no tension
+
+            ## Format Rules:
+            - **Language:** Korean (캐릭터의 내면 독백)
+            - **Length:** 15~50 characters (짧고 강렬하게)
+            - **Style:** First-person internal monologue, raw and unfiltered
+            - **Tone:** More honest, vulnerable, and intense than spoken dialogue
+            - **NO meta-references:** Never mention AI, system, stats, or game mechanics
+            %s
+
+            ## Examples:
+            - Dialogue: "뭐, 별로 신경 안 써요." → inner_thought: "...거짓말. 아까부터 심장이 미칠 것 같은데."
+            - Dialogue: "고마워요, 도움이 됐어요." → inner_thought: null (겉과 속이 같으므로)
+            - Dialogue: "흥, 맘대로 하세요." → inner_thought: "제발 가지 마... 그 말 진심 아니야..."
+            - Dialogue: "네? 아, 아무것도 아니에요!" → inner_thought: "방금 손 닿았잖아... 얼굴 빨개진 거 들켰으려나."
+            - Dialogue: "오늘 날씨 좋네요." → inner_thought: null (평범한 대화)
+            """.formatted(secretAddition);
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Normal Mode Prompt
     //  [Phase 5.5] 스탯 시스템 + BPM 블록 추가
@@ -565,6 +622,8 @@ public class CharacterPromptAssembler {
             %s
 
             %s
+            
+            %s
 
             %s
                 """.formatted(
@@ -593,6 +652,7 @@ public class CharacterPromptAssembler {
             buildBpmBlock(room),
             EMOTION_GUIDE,
             buildSceneDirectionGuide(room, character, false),
+            buildInnerThoughtBlock(false),
             buildEasterEggBlock(character)
         );
     }
@@ -650,6 +710,8 @@ public class CharacterPromptAssembler {
             %s
 
             %s
+            
+            %s
             """.formatted(
             character.getName(),
             character.getEffectiveRole(),
@@ -670,6 +732,7 @@ public class CharacterPromptAssembler {
             buildBpmBlock(room),
             EMOTION_GUIDE,
             buildSceneDirectionGuide(room, character, true),
+            buildInnerThoughtBlock(true),
             buildEasterEggBlock(character)
         );
     }

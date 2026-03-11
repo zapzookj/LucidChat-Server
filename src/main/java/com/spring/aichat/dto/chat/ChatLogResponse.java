@@ -17,6 +17,11 @@ import java.time.LocalDateTime;
  *
  * [Phase 5.2] dislikeReason 필드 추가:
  * - OOC | HALLUCINATION | BORING | REPETITIVE | CONTEXT_MISMATCH | OTHER | null
+ *
+ * [Phase 5.5-IT] 속마음 시스템 필드 추가:
+ * - hasInnerThought: 속마음 존재 여부 (UI 트리거용)
+ * - innerThought: 실제 속마음 텍스트 (해금 전 null, 해금 후 텍스트)
+ * - thoughtUnlocked: 해금 완료 여부
  */
 public record ChatLogResponse(
     String logId,
@@ -25,6 +30,17 @@ public record ChatLogResponse(
     String cleanContent,
     EmotionTag emotionTag,
     LocalDateTime createdAt,
-    String rating,           // [Phase 5.1] "LIKE" | "DISLIKE" | null
-    String dislikeReason     // [Phase 5.2] 싫어요 사유 카테고리 | null
-) {}
+    String rating,              // [Phase 5.1] "LIKE" | "DISLIKE" | null
+    String dislikeReason,       // [Phase 5.2] 싫어요 사유 카테고리 | null
+    boolean hasInnerThought,    // [Phase 5.5-IT] 속마음 존재 여부
+    String innerThought,        // [Phase 5.5-IT] 해금된 경우만 텍스트, 아니면 null
+    boolean thoughtUnlocked     // [Phase 5.5-IT] 해금 완료 여부
+) {
+    /** 하위 호환: 속마음 필드 없는 생성자 */
+    public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
+                           EmotionTag emotionTag, LocalDateTime createdAt,
+                           String rating, String dislikeReason) {
+        this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
+            rating, dislikeReason, false, null, false);
+    }
+}

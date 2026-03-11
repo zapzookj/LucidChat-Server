@@ -15,6 +15,8 @@ import java.util.List;
  *              bpm — 심박수
  *              dynamicRelationTag — 동적 관계 태그
  *              characterThought — 캐릭터의 생각 (갱신 시에만 non-null)
+ * [Phase 5.5-IT] hasInnerThought — 속마음 존재 플래그 (보안: 실제 텍스트는 전달하지 않음)
+ *                assistantLogId — 해금 API 호출 시 필요한 로그 ID
  */
 public record SendChatResponse(
     Long roomId,
@@ -28,29 +30,40 @@ public record SendChatResponse(
     StatsSnapshot stats,
     int bpm,
     String dynamicRelationTag,
-    String characterThought       // null이면 이번 턴에 갱신 없음
+    String characterThought,       // null이면 이번 턴에 갱신 없음
+    // ── [Phase 5.5-IT] 속마음 시스템 ──
+    boolean hasInnerThought,       // 속마음 존재 여부 (true면 말풍선 표시)
+    String assistantLogId          // 해금 API용 ASSISTANT 로그 ID
 ) {
-    /** [Phase 5.5] 전체 파라미터 생성자 (메인) — 위에 자동 생성됨 */
+    /** [Phase 5.5-IT] 전체 파라미터 생성자 — 위에 자동 생성됨 */
 
-    /** 기존 호환용 생성자 (이벤트 없음, 엔딩 없음, 이스터에그 없음, 스탯 없음) */
+    /** 기존 호환용 생성자 (이벤트 없음, 엔딩 없음, 이스터에그 없음, 스탯 없음, 속마음 없음) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus) {
-        this(roomId, scenes, currentAffection, relationStatus, null, null, null, null, 65, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, null, null, null, null, 65, null, null, false, null);
     }
 
     /** [Phase 4.2] 호환용 (승급만) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus, PromotionEvent promotionEvent) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null, null, 65, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null, null, 65, null, null, false, null);
     }
 
     /** [Phase 4.3] 호환용 (승급 + 엔딩) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus, PromotionEvent promotionEvent, EndingTrigger endingTrigger) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, null, null, 65, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, null, null, 65, null, null, false, null);
     }
 
     /** [Phase 4.4] 호환용 (승급 + 엔딩 + 이스터에그, 스탯 없음) */
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg, null, 65, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg, null, 65, null, null, false, null);
+    }
+
+    /** [Phase 5.5] 호환용 (스탯 있음, 속마음 없음) */
+    public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
+                            PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
+                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought) {
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
+            stats, bpm, dynamicRelationTag, characterThought, false, null);
     }
 
     public record SceneResponse(
