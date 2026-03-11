@@ -263,20 +263,15 @@ public class ChatService {
                             freshRoom.getDynamicRelationTag(), roomId);
                     }
                 }
-                // ━━━ [Phase 5.5 END] ━━━
-
+                // ━━━ [Phase 5.5-P] 엔딩 트리거: 5개 노말 스탯 중 하나라도 ±100 도달 ━━━
                 EndingTrigger endingTrigger = null;
                 if (isStory) {
-                    if (!freshRoom.isEndingReached()) {
-                        if (freshRoom.getAffectionScore() >= 100) {
-                            endingTrigger = new EndingTrigger("HAPPY");
-                            log.info("🎬 [ENDING] HAPPY ending triggered! affection={} | roomId={}",
-                                freshRoom.getAffectionScore(), roomId);
-                        } else if (freshRoom.getAffectionScore() <= -100) {
-                            endingTrigger = new EndingTrigger("BAD");
-                            log.info("🎬 [ENDING] BAD ending triggered! affection={} | roomId={}",
-                                freshRoom.getAffectionScore(), roomId);
-                        }
+                    String endingCheck = freshRoom.checkEndingTrigger();
+                    if (endingCheck != null) {
+                        endingTrigger = new EndingTrigger(endingCheck);
+                        log.info("🎬 [ENDING] {} ending triggered via stats! max={} min={} | roomId={}",
+                            endingCheck, freshRoom.getMaxNormalStatValue(),
+                            freshRoom.getMinNormalStatValue(), roomId);
                     }
                 }
 
@@ -739,7 +734,7 @@ public class ChatService {
                     statsSnapshot,
                     freshRoom.getCurrentBpm(),
                     freshRoom.getDynamicRelationTag(),
-                    null
+                    freshRoom.getCharacterThought()
                 );
             });
         } catch (Exception e) {
@@ -1070,11 +1065,8 @@ public class ChatService {
     }
 
     private void applyAffectionChange(ChatRoom room, int change) {
-        if (change == 0) return;
-        int newScore = room.getAffectionScore() + change;
-        newScore = Math.max(-100, Math.min(100, newScore));
-        room.updateAffection(newScore);
-        room.updateStatusLevel(RelationStatusPolicy.fromScore(newScore));
+        // [Phase 5.5-P] 레거시 affection_change → statAffection에 통합 적용
+        room.applyLegacyAffectionChange(change);
     }
 
     private String stripMarkdown(String text) {

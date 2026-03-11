@@ -23,14 +23,12 @@ import java.time.LocalDateTime;
 /**
  * 채팅방 — 관계/상태 저장의 핵심 엔티티
  *
- * [Phase 4.1] 씬 상태 영속화 (bgmMode, location, outfit, timeOfDay)
- * [Phase 4.2] 관계 승급 이벤트 시스템
- * [Phase 4.5] 모드 분리 (STORY / SANDBOX)
- * [Phase 5.5] 입체적 상태창 시스템
- *             - 5개 노말 스탯 + 3개 시크릿 스탯 (0~100, 레이더 차트)
- *             - 동적 관계 태그 (최고 스탯 기반)
- *             - 캐릭터의 생각 (10턴마다 갱신)
- *             - 심박수 BPM (호감도 연동 + 대화 텐션)
+ * [Phase 5.5]   입체적 상태창 시스템
+ * [Phase 5.5-P] 피드백 반영 패치:
+ *   - affectionScore ↔ statAffection 통합 (같은 값)
+ *   - 스탯 범위: -100 ~ 100 (음수 허용)
+ *   - getAffectionScore() → statAffection 반환
+ *   - 엔딩 트리거: 5개 노말 스탯 중 하나라도 ±100 도달
  */
 public class ChatRoom {
 
@@ -47,16 +45,14 @@ public class ChatRoom {
     @JoinColumn(name = "character_id", nullable = false)
     private Character character;
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.5] 채팅 모드
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
     @Enumerated(EnumType.STRING)
     @Column(name = "chat_mode", nullable = false, length = 20)
     private ChatMode chatMode = ChatMode.STORY;
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+    /**
+     * [Phase 5.5-P] 레거시 호감도 필드 — statAffection과 항상 동기화
+     * DB 컬럼은 유지 (마이그레이션 호환), 값은 statAffection과 동일
+     */
     @Column(name = "affection_score", nullable = false)
     private int affectionScore = 0;
 
@@ -72,7 +68,7 @@ public class ChatRoom {
     private EmotionTag lastEmotion;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.1] 씬 상태 영속화
+    //  씬 상태 영속화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Enumerated(EnumType.STRING)
@@ -92,7 +88,7 @@ public class ChatRoom {
     private TimeOfDay currentTimeOfDay;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.2] 관계 승급 이벤트
+    //  관계 승급 이벤트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Column(name = "promotion_pending", nullable = false)
@@ -109,7 +105,7 @@ public class ChatRoom {
     private int promotionTurnCount = 0;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 4.3] 엔딩 이벤트
+    //  엔딩 이벤트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Column(name = "ending_reached", nullable = false)
@@ -124,63 +120,49 @@ public class ChatRoom {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5] 입체적 스탯 시스템
+    //  [Phase 5.5-P] 범위: -100 ~ 100 (음수 허용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // ── 노말 모드 스탯 (0~100) ──
+    // ── 노말 모드 스탯 (-100 ~ 100) ──
 
-    /** 친밀도 — 일상 대화/공감 */
     @Column(name = "stat_intimacy", nullable = false)
     private int statIntimacy = 0;
 
-    /** 호감도(설렘) — 플러팅/로맨틱 행동 */
+    /** [Phase 5.5-P] affectionScore와 통합 — 이 필드가 곧 호감도 */
     @Column(name = "stat_affection", nullable = false)
     private int statAffection = 0;
 
-    /** 의존도 — 유저가 캐릭터를 리드/챙김 */
     @Column(name = "stat_dependency", nullable = false)
     private int statDependency = 0;
 
-    /** 장난기 — 농담/티키타카 */
     @Column(name = "stat_playfulness", nullable = false)
     private int statPlayfulness = 0;
 
-    /** 신뢰도 — 유저의 신뢰되는 행동 */
     @Column(name = "stat_trust", nullable = false)
     private int statTrust = 0;
 
-    // ── 시크릿 모드 전용 스탯 (0~100) ──
+    // ── 시크릿 모드 전용 스탯 (-100 ~ 100) ──
 
-    /** 음란도 — 성적 텐션/스킨십 개방성 */
     @Column(name = "stat_lust", nullable = false)
     private int statLust = 0;
 
-    /** 타락도 — 원래 정체성에서 벗어나는 정도 */
     @Column(name = "stat_corruption", nullable = false)
     private int statCorruption = 0;
 
-    /** 집착도 — 유저를 독점하려는 얀데레 성향 */
     @Column(name = "stat_obsession", nullable = false)
     private int statObsession = 0;
 
-    // ── 동적 관계 태그 ──
+    // ── 동적 관계 / 생각 / BPM ──
 
-    /** 동적 관계 태그 (예: "좋은 말동무", "썸", "사랑스러운 연인") */
     @Column(name = "dynamic_relation_tag", length = 50)
     private String dynamicRelationTag;
 
-    // ── 캐릭터의 생각 ──
-
-    /** 유저에 대한 캐릭터의 현재 생각 (10턴마다 갱신) */
     @Column(name = "character_thought", columnDefinition = "TEXT")
     private String characterThought;
 
-    /** 마지막으로 생각을 갱신한 시점의 유저 턴 수 */
     @Column(name = "thought_updated_at_turn", nullable = false)
     private int thoughtUpdatedAtTurn = 0;
 
-    // ── 심박수 ──
-
-    /** 현재 심박수 BPM (60~180) */
     @Column(name = "current_bpm", nullable = false)
     private int currentBpm = 65;
 
@@ -188,10 +170,6 @@ public class ChatRoom {
     //  생성자
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * [Phase 4.5] 모드를 포함한 생성자
-     * [Phase 5]   캐릭터별 기본 복장/장소 적용
-     */
     public ChatRoom(User user, Character character, ChatMode chatMode) {
         this.user = user;
         this.character = character;
@@ -202,49 +180,44 @@ public class ChatRoom {
         this.lastEmotion = EmotionTag.NEUTRAL;
         this.currentBgmMode = BgmMode.DAILY;
         this.currentTimeOfDay = TimeOfDay.NIGHT;
-
-        // [Phase 5] 캐릭터별 기본 장소/복장
         this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
         this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
-
-        // [Phase 5.5] 초기 상태
         this.dynamicRelationTag = "낯선 사람";
         this.currentBpm = 65;
     }
 
-    /** 기존 호환성 유지 — 기본 모드 STORY */
     public ChatRoom(User user, Character character) {
         this(user, character, ChatMode.STORY);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  모드 판별
+    //  [Phase 5.5-P] 통합 호감도 접근자
+    //  affectionScore는 항상 statAffection과 동일
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    public boolean isStoryMode() {
-        return this.chatMode == ChatMode.STORY;
+    /**
+     * 호감도 조회 — statAffection 반환 (두 값은 항상 동기화)
+     */
+    public int getAffectionScore() {
+        return this.statAffection;
     }
 
-    public boolean isSandboxMode() {
-        return this.chatMode == ChatMode.SANDBOX;
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  기존 호감도/관계 메서드 (하위 호환)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    public boolean isStoryMode() { return this.chatMode == ChatMode.STORY; }
+    public boolean isSandboxMode() { return this.chatMode == ChatMode.SANDBOX; }
 
     public void touch(EmotionTag lastEmotion) {
         this.lastActiveAt = LocalDateTime.now();
         this.lastEmotion = lastEmotion;
     }
 
-    public void applyAffectionDelta(int delta) {
-        this.affectionScore = clamp(-100, 100, this.affectionScore + delta);
-        // [Phase 5.5] statusLevel은 이제 스탯 기반으로 결정하므로 여기서는 갱신하지 않음
-    }
-
+    /**
+     * [Phase 5.5-P] 호감도 직접 변경 — statAffection + affectionScore 동시 갱신
+     */
     public void updateAffection(int newScore) {
-        this.affectionScore = newScore;
+        this.statAffection = clamp(-100, 100, newScore);
+        this.affectionScore = this.statAffection; // 동기화
     }
 
     public void updateStatusLevel(RelationStatus relationStatus) {
@@ -258,37 +231,47 @@ public class ChatRoom {
 
     public void resetAffection() {
         this.affectionScore = 0;
+        this.statAffection = 0;
         this.statusLevel = RelationStatus.STRANGER;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5] 스탯 시스템 메서드
+    //  [Phase 5.5-P] 범위 -100 ~ 100, affection 동기화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 노말 모드 스탯 변화 적용 (각 스탯 0~100 클램프)
+     * 노말 모드 스탯 변화 적용 (각 스탯 -100~100 클램프)
+     * affection 변경 시 affectionScore도 자동 동기화
      */
     public void applyNormalStatChanges(int dIntimacy, int dAffection,
                                        int dDependency, int dPlayfulness, int dTrust) {
-        this.statIntimacy    = clamp(0, 100, this.statIntimacy    + dIntimacy);
-        this.statAffection   = clamp(0, 100, this.statAffection   + dAffection);
-        this.statDependency  = clamp(0, 100, this.statDependency  + dDependency);
-        this.statPlayfulness = clamp(0, 100, this.statPlayfulness + dPlayfulness);
-        this.statTrust       = clamp(0, 100, this.statTrust       + dTrust);
+        this.statIntimacy    = clamp(-100, 100, this.statIntimacy    + dIntimacy);
+        this.statAffection   = clamp(-100, 100, this.statAffection   + dAffection);
+        this.statDependency  = clamp(-100, 100, this.statDependency  + dDependency);
+        this.statPlayfulness = clamp(-100, 100, this.statPlayfulness + dPlayfulness);
+        this.statTrust       = clamp(-100, 100, this.statTrust       + dTrust);
+
+        // [Phase 5.5-P] 레거시 동기화
+        this.affectionScore = this.statAffection;
     }
 
-    /**
-     * 시크릿 모드 스탯 변화 적용 (각 스탯 0~100 클램프)
-     */
     public void applySecretStatChanges(int dLust, int dCorruption, int dObsession) {
-        this.statLust       = clamp(0, 100, this.statLust       + dLust);
-        this.statCorruption = clamp(0, 100, this.statCorruption + dCorruption);
-        this.statObsession  = clamp(0, 100, this.statObsession  + dObsession);
+        this.statLust       = clamp(-100, 100, this.statLust       + dLust);
+        this.statCorruption = clamp(-100, 100, this.statCorruption + dCorruption);
+        this.statObsession  = clamp(-100, 100, this.statObsession  + dObsession);
     }
 
     /**
-     * 5개 노말 스탯 중 최대값 반환
+     * [Phase 5.5-P] 레거시 affection_change를 statAffection에 적용
+     * ChatService에서 기존 applyAffectionChange 대신 사용
      */
+    public void applyLegacyAffectionChange(int delta) {
+        if (delta == 0) return;
+        this.statAffection = clamp(-100, 100, this.statAffection + delta);
+        this.affectionScore = this.statAffection;
+    }
+
     public int getMaxNormalStatValue() {
         return Math.max(statIntimacy,
             Math.max(statAffection,
@@ -297,30 +280,33 @@ public class ChatRoom {
     }
 
     /**
-     * 최고 노말 스탯 이름 반환 (동적 관계 태그 결정용)
+     * [Phase 5.5-P] 5개 노말 스탯 중 최솟값 (배드 엔딩 판정용)
      */
+    public int getMinNormalStatValue() {
+        return Math.min(statIntimacy,
+            Math.min(statAffection,
+                Math.min(statDependency,
+                    Math.min(statPlayfulness, statTrust))));
+    }
+
     public String getDominantStatName() {
         return RelationStatusPolicy.getDominantStat(
             statIntimacy, statAffection, statDependency, statPlayfulness, statTrust);
     }
 
     /**
-     * 스탯 기반으로 statusLevel + dynamicRelationTag 갱신
-     *
+     * 스탯 기반 statusLevel + dynamicRelationTag 갱신
      * @return 관계 레벨이 변경되었으면 true
      */
     public boolean refreshRelationFromStats() {
         RelationStatus oldStatus = this.statusLevel;
-
-        // 스탯 기반 관계 판정 (affectionScore < 0 이면 ENEMY)
         RelationStatus newStatus = RelationStatusPolicy.fromStats(
-            this.affectionScore,
+            this.statAffection,
             this.statIntimacy, this.statAffection,
             this.statDependency, this.statPlayfulness, this.statTrust
         );
         this.statusLevel = newStatus;
 
-        // 동적 관계 태그 갱신
         String dominant = getDominantStatName();
         this.dynamicRelationTag = RelationStatusPolicy.buildDynamicRelationTag(newStatus, dominant);
 
@@ -328,37 +314,35 @@ public class ChatRoom {
     }
 
     /**
-     * BPM 갱신
+     * [Phase 5.5-P] 엔딩 트리거 판정
+     * @return "HAPPY" | "BAD" | null
      */
+    public String checkEndingTrigger() {
+        if (this.endingReached) return null;
+
+        if (getMaxNormalStatValue() >= 100) return "HAPPY";
+        if (getMinNormalStatValue() <= -100) return "BAD";
+        return null;
+    }
+
     public void updateBpm(int bpm) {
         this.currentBpm = clamp(60, 180, bpm);
     }
 
-    /**
-     * 캐릭터의 생각 갱신
-     */
     public void updateCharacterThought(String thought, int currentTurnCount) {
         this.characterThought = thought;
         this.thoughtUpdatedAtTurn = currentTurnCount;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  씬 상태
+    //  씬 / 승급 / 엔딩 (기존 유지)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public void updateSceneState(String bgmMode, String location, String outfit, String timeOfDay) {
-        if (bgmMode != null) {
-            try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {}
-        }
-        if (location != null) {
-            try { this.currentLocation = Location.valueOf(location); } catch (IllegalArgumentException ignored) {}
-        }
-        if (outfit != null) {
-            try { this.currentOutfit = Outfit.valueOf(outfit); } catch (IllegalArgumentException ignored) {}
-        }
-        if (timeOfDay != null) {
-            try { this.currentTimeOfDay = TimeOfDay.valueOf(timeOfDay); } catch (IllegalArgumentException ignored) {}
-        }
+        if (bgmMode != null) { try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {} }
+        if (location != null) { try { this.currentLocation = Location.valueOf(location); } catch (IllegalArgumentException ignored) {} }
+        if (outfit != null) { try { this.currentOutfit = Outfit.valueOf(outfit); } catch (IllegalArgumentException ignored) {} }
+        if (timeOfDay != null) { try { this.currentTimeOfDay = TimeOfDay.valueOf(timeOfDay); } catch (IllegalArgumentException ignored) {} }
     }
 
     public void resetSceneState() {
@@ -367,10 +351,6 @@ public class ChatRoom {
         this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
         this.currentTimeOfDay = TimeOfDay.NIGHT;
     }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  관계 승급 이벤트
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public void startPromotion(RelationStatus targetStatus) {
         this.promotionPending = true;
@@ -389,9 +369,7 @@ public class ChatRoom {
         clearPromotion();
     }
 
-    public void completePromotionFailure() {
-        clearPromotion();
-    }
+    public void completePromotionFailure() { clearPromotion(); }
 
     private void clearPromotion() {
         this.promotionPending = false;
@@ -405,9 +383,7 @@ public class ChatRoom {
         this.endingType = endingType;
     }
 
-    public void saveEndingTitle(String title) {
-        this.endingTitle = title;
-    }
+    public void saveEndingTitle(String title) { this.endingTitle = title; }
 
     public void resetAll() {
         resetAffection();
@@ -416,8 +392,6 @@ public class ChatRoom {
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;
-
-        // [Phase 5.5] 스탯 초기화
         this.statIntimacy = 0;
         this.statAffection = 0;
         this.statDependency = 0;
@@ -432,21 +406,7 @@ public class ChatRoom {
         this.currentBpm = 65;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Private helpers
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private int clamp(int min, int max, int v) {
-        return Math.max(min, Math.min(max, v));
-    }
-
-    private static Location parseLocationOrDefault(String value) {
-        try { return Location.valueOf(value); }
-        catch (Exception e) { return Location.ENTRANCE; }
-    }
-
-    private static Outfit parseOutfitOrDefault(String value) {
-        try { return Outfit.valueOf(value); }
-        catch (Exception e) { return Outfit.MAID; }
-    }
+    private int clamp(int min, int max, int v) { return Math.max(min, Math.min(max, v)); }
+    private static Location parseLocationOrDefault(String v) { try { return Location.valueOf(v); } catch (Exception e) { return Location.ENTRANCE; } }
+    private static Outfit parseOutfitOrDefault(String v) { try { return Outfit.valueOf(v); } catch (Exception e) { return Outfit.MAID; } }
 }

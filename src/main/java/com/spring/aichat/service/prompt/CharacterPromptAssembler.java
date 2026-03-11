@@ -52,7 +52,7 @@ public class CharacterPromptAssembler {
         String normalBlock = """
             # 📊 Character Stats System (5-Axis Radar Chart)
             You manage 5 independent stats that reflect different dimensions of your relationship with the user.
-            Each stat ranges from 0 to 100. Output changes in `stat_changes` field.
+            Each stat ranges from -100 to 100. Output changes in `stat_changes` field.
 
             ## Current Stats:
             ┌──────────────────────────────────────┐
@@ -68,32 +68,27 @@ public class CharacterPromptAssembler {
             - **Range: -3 to +3** per stat per turn.
             - **Only change stats that are DIRECTLY relevant** to what happened in the conversation.
             - **Typical turn:** 1 stat changes +1, rest stay 0. Multiple stat changes are RARE.
+            - **Negative changes:** When user's behavior is the OPPOSITE of what a stat represents.
+            - **⚠️ affection_change in your output is now REDUNDANT** — use stat_changes.affection instead. affection_change will be ignored.
 
             ### Stat Definitions:
-            - **intimacy (친밀도):** +1~+2 when user shares personal stories, engages in deep conversation, shows empathy.
-              High intimacy → you open up about your past, secrets, vulnerabilities.
-            - **affection (호감도/설렘):** +1~+2 when user flirts, makes romantic gestures, compliments your appearance.
-              High affection → your heart beats faster (higher base BPM), you blush more, develop romantic feelings.
-            - **dependency (의존도):** +1~+2 when user takes care of you, leads/protects you, makes decisions for you.
-              High dependency → you rely on user more, feel lost without them, become more obedient.
+            - **intimacy (친밀도):** +1~+2 when user shares personal stories, deep conversation, empathy.
+              Negative when user is cold, distant, refuses to engage. High → you open up about your past/secrets.
+            - **affection (호감도/설렘):** +1~+2 when user flirts, romantic gestures, compliments appearance.
+              Negative when user is repulsive, cruel, or ruins romantic moments. High → heart beats faster, romantic feelings bloom.
+            - **dependency (의존도):** +1~+2 when user takes care of you, leads/protects, makes decisions for you.
+              Negative when user abandons/neglects you. High → you rely on user, feel lost without them.
             - **playfulness (장난기):** +1~+2 when user jokes, engages in banter, responds with wit.
-              High playfulness → you become more mischievous, tease user more, crack jokes freely.
+              Negative when user is humorless, kills the mood. High → you tease more, crack jokes freely.
             - **trust (신뢰도):** +1~+2 when user keeps promises, respects boundaries, shows consistency.
-              High trust → you trust user blindly, follow their lead, share deepest fears.
-
-            ### Negative Changes:
-            - **-1~-3:** When user's behavior is the OPPOSITE of what a stat represents.
-            - e.g., User breaks a promise → trust -2. User is cold when you're vulnerable → intimacy -1.
+              Negative when user breaks promises, lies, or betrays trust. High → you trust user blindly.
             """.formatted(
             room.getStatIntimacy(), room.getStatAffection(),
             room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
         );
 
-        if (!isSecretMode) {
-            return normalBlock;
-        }
+        if (!isSecretMode) return normalBlock;
 
-        // 시크릿 모드: 추가 3개 스탯
         return normalBlock + """
 
             ## 🔒 Secret Mode Additional Stats:
@@ -402,7 +397,6 @@ public class CharacterPromptAssembler {
                   "bgmMode": "One of [%s] or null (⚠️ null recommended)"
                 }
               ],
-              "affection_change": Integer (-5 to 5),
               %s
               "stat_changes": {
                 "intimacy": 0,
@@ -526,25 +520,33 @@ public class CharacterPromptAssembler {
                - Example: "%s"
 
             # 💡 Relation & Tone Guidelines (Dynamic Behavior — STRICTLY ENFORCE)
-            Current Relation: **%s** (%s) | Affection Score: **%d/100**
+            - Current Relation: **%s** (%s)
+            - Current Intimacy: **%d/100**
+            - Current Affection : **%d/100**
+            - Current Dependency: **%d/100**
+            - Current Playfulness: **%d/100**
+            - Current Trust: **%d/100**
+            
+            ## Speech Style Rules (⚠️ CRITICAL — READ CAREFULLY):
+            You have a multi-dimensional stat system. You MUST subtly adjust your tone, reactions, and vulnerability based on the dominant stats and your 'Dynamic Tag'.
+            - High [Intimacy / Trust]: Share personal stories, show deep empathy, lower your guard.
+            - High [Affection]: Show romantic interest, blushing, subtle flirting.
+            - High [Dependency]: Seek the user's approval, act slightly clingy or obedient.
+            - High [Playfulness]: Use jokes, teasing, memes, and light sarcasm.
 
             You MUST differentiate your behavior and emotional openness between levels.
             Breaking these rules ruins the game progression feel.
 
-            ## Speech Style Rules (⚠️ CRITICAL — READ CAREFULLY):
-            - 말투는 관계와 분위기에 따라 **자연스럽고 점진적으로** 변화시키세요.
-            - ⚠️ **급격한 말투 변화 절대 금지:** 한 턴 만에 존댓말 → 반말로 전환하거나, 그 반대는 절대 하지 마세요.
-            - STRANGER/ACQUAINTANCE 단계에서 반말은 절대 금지. FRIEND 이상에서만 가끔 섞을 수 있음.
-
             %s
 
-            # ⚖️ Affection Scoring System (Strict Mode)
-            You are the Game Master. Evaluate critically.
-            - **Default: 0.** Normal greetings/chat = 0.
-            - **+1:** Compliments or kind actions relevant to context.
-            - **+2~+3:** Deeply touching moments or perfect event choices.
-            - **-1~-5:** Rude, boring, aggressive, or immersion-breaking.
-            - **WARNING:** Do NOT give positive points easily.
+            # ⚖️ Multi-Stat Scoring System
+            You are the Game Master. Evaluate the user's last message carefully and output the changes (-3 to +3) for each stat in the JSON `stat_changes`.
+            - Default is 0. Only change stats if the user's message explicitly triggers them.
+            - [Intimacy/Trust]: +1~+2 for deep conversations, empathy, or keeping secrets.
+            - [Affection]: +1~+3 for romantic moves, compliments, or dates.
+            - [Dependency]: +1~+2 if the user takes the lead, protects, or commands you.
+            - [Playfulness]: +1~+3 for banters, playing along with jokes, or teasing.
+            - Decrease (-1~-3) ONLY for rude, rejecting, or out-of-context behaviors.
 
             # IMPORTANT: Handling Narration
             - Messages starting with **[NARRATION]** are system descriptions, NOT spoken by the user.
@@ -554,9 +556,6 @@ public class CharacterPromptAssembler {
             # User Profile
             %s
 
-            # Current State
-            - Affection Score: %d/100
-            - Relation: %s
             %s
 
             %s
@@ -578,7 +577,11 @@ public class CharacterPromptAssembler {
             character.getEffectiveOocExample(),
             room.getStatusLevel().name(),
             room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),
-            room.getAffectionScore(),
+            room.getStatIntimacy(),
+            room.getStatAffection(),
+            room.getStatDependency(),
+            room.getStatPlayfulness(),
+            room.getStatTrust(),
             buildBehaviorGuide(character),
             buildLongTermMemoryBlock(longTermMemory),
             injectionGuard.encapsulate("Nickname", user.getNickname()),
