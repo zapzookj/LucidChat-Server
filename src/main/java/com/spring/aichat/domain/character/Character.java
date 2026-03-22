@@ -84,6 +84,10 @@ public class Character {
     @Column(name = "role", length = 100)
     private String role;
 
+    /** 나이 (프롬프트 주입용, nullable) */
+    @Column(name = "age", length = 100)
+    private Integer age;
+
     /** 성격 — 일반 모드 */
     @Column(name = "personality", columnDefinition = "TEXT")
     private String personality;

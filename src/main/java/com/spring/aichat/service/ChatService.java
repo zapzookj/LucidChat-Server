@@ -41,6 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -832,20 +833,26 @@ public class ChatService {
             && secretModeService.canAccessSecretMode(
             room.getUser(), room.getCharacter().getId());
 
-        String systemPrompt = promptAssembler.assembleSystemPrompt(
+        CharacterPromptAssembler.SystemPromptPayload systemPrompt = promptAssembler.assembleSystemPrompt(
             room.getCharacter(), room, room.getUser(), longTermMemory, effectiveSecretMode
         );
 
         List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
 
         String model = boostModeResolver.resolveModel(room.getUser());
+
+        Map<String, Object> providerRouting = Map.of(
+            "order", List.of("Google AI Studio"),
+            "allow_fallbacks", false
+        );
+
         long llmStart = System.currentTimeMillis();
         log.info("⏱ [PERF] LLM call START | model={} | messages={} | promptChars={}",
             model, messages.size(),
             messages.stream().mapToInt(m -> m.content().length()).sum());
 
         String rawAssistant = openRouterClient.chatCompletion(
-            new OpenAiChatRequest(model, messages, 0.8)
+            new OpenAiChatRequest(model, messages, 0.8, providerRouting)
         );
         log.info("⏱ [PERF] LLM call DONE: {}ms | responseChars={}",
             System.currentTimeMillis() - llmStart, rawAssistant.length());
@@ -1060,14 +1067,35 @@ public class ChatService {
         }
     }
 
-    private List<OpenAiMessage> buildMessageHistory(Long roomId, String systemPrompt) {
-        List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
-        recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+    private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt) {
+        List<ChatLogDocument> history = chatLogRepository.findTop200ByRoomIdOrderByCreatedAtDesc(roomId);
+        history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
 
         List<OpenAiMessage> messages = new ArrayList<>();
-        messages.add(OpenAiMessage.system(systemPrompt));
 
-        for (ChatLogDocument chatLog : recent) {
+        // 🥪 [Top Bread] 배열의 맨 처음: 절대 변하지 않는 정적 룰 (100% 캐시 히트 타겟)
+        if (history.size() == 3 || history.size() % 20 == 0) {
+            messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
+        } else messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
+
+//        for (int i = 0; i < history.size(); i++) {
+//            ChatLogDocument chatLog = history.get(i);
+//            boolean isLastItem = (i == history.size() - 1);
+//
+//            Map<String, Object> cacheControl = isLastItem ? Map.of("type", "ephemeral") : null;
+//            switch (chatLog.getRole()) {
+//                case USER -> messages.add(new OpenAiMessage("user", chatLog.getRawContent(), cacheControl));
+//                case ASSISTANT -> {
+//                    String sanitized = buildSanitizedAssistantContent(chatLog);
+//                    messages.add(new OpenAiMessage("assistant", sanitized, cacheControl));
+//                }
+//                case SYSTEM -> messages.add(
+//                    new OpenAiMessage("user", "[NARRATION]\n" + chatLog.getRawContent(), cacheControl)
+//                );
+//            }
+//        }
+
+        for (ChatLogDocument chatLog : history) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
                 case ASSISTANT -> {
@@ -1080,9 +1108,11 @@ public class ChatService {
             }
         }
 
+        messages.add(OpenAiMessage.system(systemPrompt.dynamicRules()));
+        messages.add(OpenAiMessage.system(systemPrompt.outputFormat()));
+
         return messages;
     }
-
     private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
         try {
             String raw = chatLog.getRawContent();

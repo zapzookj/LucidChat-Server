@@ -85,4 +85,6 @@ public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument,
      * Covered by: idx_room_created (역방향)
      */
     Optional<ChatLogDocument> findTop1ByRoomIdOrderByCreatedAtAsc(Long roomId);
+
+    List<ChatLogDocument> findTop200ByRoomIdOrderByCreatedAtDesc(Long roomId);
 }

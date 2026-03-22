@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * OpenAI 호환 ChatCompletion 요청 DTO
@@ -20,20 +21,25 @@ public record OpenAiChatRequest(
     Double temperature,
     Boolean stream,
     @JsonProperty("frequency_penalty") Double frequencyPenalty,
-    @JsonProperty("presence_penalty")  Double presencePenalty
+    @JsonProperty("presence_penalty")  Double presencePenalty,
+    Map<String, Object> provider
 ) {
     /** 기본 생성자 — penalty 적용 (일반 대화용) */
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature) {
-        this(model, messages, temperature, false, 0.3, 0.15);
+        this(model, messages, temperature, false, 0.3, 0.15, null);
+    }
+
+    public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature, Map<String, Object> provider) {
+        this(model, messages, temperature, false, 0.3, 0.15, provider);
     }
 
     /** stream 지정 생성자 — penalty 적용 */
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature, Boolean stream) {
-        this(model, messages, temperature, stream, 0.3, 0.15);
+        this(model, messages, temperature, stream, 0.3, 0.15, null);
     }
 
     /** penalty 미적용 팩토리 — 엔딩 타이틀 등 창의적 생성용 */
     public static OpenAiChatRequest withoutPenalty(String model, List<OpenAiMessage> messages, Double temperature) {
-        return new OpenAiChatRequest(model, messages, temperature, false, null, null);
+        return new OpenAiChatRequest(model, messages, temperature, false, null, null, null);
     }
 }
