@@ -16,4 +16,7 @@ public enum EmotionTag {
     FRIGHTENED, // 겁먹음
     FLIRTATIOUS, // 유혹적
     HEATED, // 흥분한, 활홀
+    DUMBFOUNDED, // 황당한, 어이없는
+    SULKING, // 삐진, 뾰루퉁한
+    PLEADING, // 애원하는, 간절한
 }

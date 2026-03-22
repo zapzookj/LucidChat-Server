@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 
 /**
  * 채팅 핵심 서비스
- *
+ * <p>
  * [Phase 3]     트랜잭션 분리 + Smart RAG Skip + Redis 캐싱
  * [Phase 4]     Scene direction fields
  * [Phase 4.1]   씬 상태 영속화 + BGM 관성 시스템
@@ -55,10 +55,10 @@ import java.util.stream.Collectors;
  * [Phase 5.1]   LLM 실패 시 롤백, 유저 평가, 개별 삭제
  * [Phase 5.2]   분산 트랜잭션 보상 패턴, RLHF dislikeReason
  * [Phase 5.5]   입체적 상태창 시스템
- *               - 5개 노말 스탯 + 3개 시크릿 스탯 처리
- *               - 동적 관계 태그 갱신
- *               - BPM 심박수 처리
- *               - 캐릭터의 생각 비동기 생성 (10턴 간격)
+ * - 5개 노말 스탯 + 3개 시크릿 스탯 처리
+ * - 동적 관계 태그 갱신
+ * - BPM 심박수 처리
+ * - 캐릭터의 생각 비동기 생성 (10턴 간격)
  */
 @Service
 @Slf4j
@@ -99,14 +99,16 @@ public class ChatService {
         boolean wasPromotionPending,
         String username,
         int energyCost
-    ) {}
+    ) {
+    }
 
     private record RollbackContext(
         Long userId,
         String username,
         int energyCost,
         String savedUserLogId
-    ) {}
+    ) {
+    }
 
     /**
      * [Phase 5.5-IT] LLM 결과에 innerThought 추가
@@ -126,7 +128,8 @@ public class ChatService {
         AiJsonOutput.StatChanges statChanges,
         Integer bpm,
         String innerThought          // [Phase 5.5-IT] 추가
-    ) {}
+    ) {
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  유저 채팅 메시지 처리
@@ -444,7 +447,7 @@ public class ChatService {
 
     /**
      * 캐릭터의 생각을 비동기로 생성하여 ChatRoom에 저장.
-     *
+     * <p>
      * sentiment 모델(경량)을 사용하여 비용과 레이턴시를 최소화.
      * 실패해도 유저 경험에 영향 없음 (다음 주기에 재시도).
      */
@@ -475,22 +478,22 @@ public class ChatService {
 
             String thoughtPrompt = """
                 당신은 '%s'이라는 이름의 캐릭터입니다.
-                
+                                
                 ## 캐릭터 정보
                 - 이름: %s
                 - 성격: %s
                 - 현재 관계: %s
                 - 모드: %s
-                
+                                
                 ## 현재 스탯 (0~100)
                 친밀도: %d | 호감도: %d | 의존도: %d | 장난기: %d | 신뢰도: %d
-                
+                                
                 ## 최근 대화
                 %s
-                
+                                
                 ## 지시사항
                 위 대화를 바탕으로, '%s'가 '%s'에 대해 지금 마음속으로 생각하고 있을 법한 **내면의 독백**을 한 문장으로 작성하세요.
-                
+                                
                 규칙:
                 - 캐릭터의 말투와 성격을 반영하세요
                 - 15~40자 이내의 짧은 독백
@@ -816,17 +819,15 @@ public class ChatService {
 
     private LlmResult callLlmAndParse(ChatRoom room, long logCount, String ragQuery) {
         String longTermMemory = "";
-        if (logCount >= RAG_SKIP_LOG_THRESHOLD && ragQuery != null && !ragQuery.isEmpty()) {
+        if (logCount >= RAG_SKIP_LOG_THRESHOLD) {
             long ragStart = System.currentTimeMillis();
             try {
-                longTermMemory = memoryService.retrieveContext(room.getUser().getId(), ragQuery);
+                longTermMemory = memoryService.retrieveContext(room.getId());
             } catch (Exception e) {
                 log.warn("⏱ [PERF] RAG failed (non-blocking): {}", e.getMessage());
             }
             log.info("⏱ [PERF] RAG: {}ms | found={}",
                 System.currentTimeMillis() - ragStart, !longTermMemory.isEmpty());
-        } else {
-            log.info("⏱ [PERF] RAG SKIPPED (logCount={} < threshold={})", logCount, RAG_SKIP_LOG_THRESHOLD);
         }
 
         boolean effectiveSecretMode = room.getUser().getIsSecretMode()
@@ -969,6 +970,7 @@ public class ChatService {
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
         room.resetAll();
+        memoryService.clearMemories(roomId);
 
         cacheService.evictRoomInfo(roomId);
         cacheService.evictRoomOwner(roomId);
@@ -1113,6 +1115,7 @@ public class ChatService {
 
         return messages;
     }
+
     private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
         try {
             String raw = chatLog.getRawContent();
@@ -1197,15 +1200,15 @@ public class ChatService {
 
     /**
      * 속마음(Inner Thought) 해금
-     *
+     * <p>
      * 1. 로그 유효성 검증 (존재 여부, 방 소유권, 속마음 존재 여부)
      * 2. 이미 해금된 경우 → 중복 과금 방지, 바로 텍스트 반환
      * 3. 에너지 차감 (1 에너지)
      * 4. thoughtUnlocked = true로 업데이트
      * 5. 실제 속마음 텍스트 반환
      *
-     * @param logId  ASSISTANT 로그 ID
-     * @param roomId 채팅방 ID (소유권 검증용)
+     * @param logId    ASSISTANT 로그 ID
+     * @param roomId   채팅방 ID (소유권 검증용)
      * @param username 유저명 (캐시 무효화용)
      * @return 속마음 텍스트
      */

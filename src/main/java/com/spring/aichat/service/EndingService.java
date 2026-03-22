@@ -3,8 +3,8 @@ package com.spring.aichat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
-import com.spring.aichat.domain.chat.ChatLog;
-import com.spring.aichat.domain.chat.ChatLogRepository;
+import com.spring.aichat.domain.chat.ChatLogDocument;
+import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.EmotionTag;
@@ -33,9 +33,15 @@ import java.util.stream.Collectors;
 /**
  * 엔딩 이벤트 서비스
  *
- * [Phase 4]   분기별 엔딩 이벤트 시스템
- * [Fix  #9]   RAG 메모리 시적 변환 레이어 추가 (빨간약 제거)
- * [Fix  #12]  buildEndingContext에서 ASSISTANT 로그 reasoning 제거
+ * [Phase 4]           분기별 엔딩 이벤트 시스템
+ * [Fix  #9]           RAG 메모리 시적 변환 레이어
+ * [Fix  #12]          buildEndingContext에서 ASSISTANT 로그 reasoning 제거
+ * [Phase 5.5-Perf]    MongoDB 마이그레이션 + MemoryService 신규 API 전환
+ *
+ *   ▸ ChatLogRepository(JPA) → ChatLogMongoRepository
+ *   ▸ ChatLog → ChatLogDocument
+ *   ▸ memoryService.retrieveContext(userId, query) → memoryService.retrieveContext(roomId)
+ *   ▸ chatLogRepository.save(ChatLog.system(room, ...)) → chatLogMongoRepository.save(ChatLogDocument.system(roomId, ...))
  */
 @Service
 @Slf4j
@@ -43,7 +49,7 @@ import java.util.stream.Collectors;
 public class EndingService {
 
     private final ChatRoomRepository chatRoomRepository;
-    private final ChatLogRepository chatLogRepository;
+    private final ChatLogMongoRepository chatLogRepository;   // [Phase 5.5-Perf] MongoDB로 전환
     private final EndingPromptAssembler endingPromptAssembler;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
@@ -71,31 +77,22 @@ public class EndingService {
         boolean isSecretMode = room.getUser().getIsSecretMode();
         Long userId = room.getUser().getId();
 
-        // ── 2. RAG — 장기 기억 전체 검색 (추억 회고용) ──
+        // ── 2. RAG — 장기 기억 조회 (RDB+Redis, Pinecone 폐기) ──
         long ragStart = System.currentTimeMillis();
         String longTermMemory = "";
         List<String> rawMemoryList = new ArrayList<>();
         try {
-            String[] searchQueries = {
-                "가장 기억에 남는 순간",
-                "함께 했던 특별한 이벤트",
-                "감동적인 대화",
-                "처음 만났을 때"
-            };
-            for (String query : searchQueries) {
-                String result = memoryService.retrieveContext(userId, query);
-                if (!result.isEmpty()) {
-                    for (String line : result.split("\n")) {
-                        String cleaned = line.startsWith("- ") ? line.substring(2).trim() : line.trim();
-                        if (!cleaned.isEmpty() && !rawMemoryList.contains(cleaned)) {
-                            rawMemoryList.add(cleaned);
-                        }
+            // [Phase 5.5-Perf] 새로운 API: roomId 기반 시간순 전체 기억 조회
+            String memoryText = memoryService.retrieveContext(roomId);
+            if (!memoryText.isEmpty()) {
+                for (String line : memoryText.split("\n")) {
+                    String cleaned = line.startsWith("- ") ? line.substring(2).trim() : line.trim();
+                    if (!cleaned.isEmpty() && !rawMemoryList.contains(cleaned)) {
+                        rawMemoryList.add(cleaned);
                     }
                 }
+                longTermMemory = memoryText;
             }
-            longTermMemory = rawMemoryList.stream()
-                .map(m -> "- " + m)
-                .collect(Collectors.joining("\n"));
         } catch (Exception e) {
             log.warn("🎬 [ENDING] RAG retrieval failed (non-blocking): {}", e.getMessage());
         }
@@ -104,9 +101,9 @@ public class EndingService {
         // ── 2.5 [Fix #9] RAG 메모리 → 시적 1인칭 변환 (빨간약 제거) ──
         List<String> transformedMemoryList = transformMemoriesToPoetic(rawMemoryList, characterName, userNickname, endingType);
 
-        // ── 3. 최근 대화 요약 (타이틀 생성용) ──
-        List<ChatLog> recentLogs = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        recentLogs.sort(Comparator.comparing(ChatLog::getCreatedAt));
+        // ── 3. 최근 대화 요약 (타이틀 생성용) — MongoDB ──
+        List<ChatLogDocument> recentLogs = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+        recentLogs.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
         String recentSummary = recentLogs.stream()
             .map(l -> l.getRole().name() + ": " + l.getCleanContent())
             .collect(Collectors.joining("\n"));
@@ -136,18 +133,18 @@ public class EndingService {
         ).trim().replaceAll("[\"']", "");
         log.info("🎬 [ENDING] Title LLM: {}ms | title={}", System.currentTimeMillis() - titleStart, endingTitle);
 
-        // ── 6. 플레이 통계 집계 ──
+        // ── 6. 플레이 통계 집계 — MongoDB ──
         EndingStats stats = collectStats(roomId, room);
 
-        // ── 7. 엔딩 로그 저장 (히스토리용) ──
+        // ── 7. 엔딩 로그 저장 — MongoDB + JPA(ChatRoom 상태만) ──
+        String endingNarration = "[ENDING:" + endingType.name() + "] " + endingTitle;
+        chatLogRepository.save(ChatLogDocument.system(roomId, endingNarration));
+
         txTemplate.execute(status -> {
             ChatRoom freshRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("Room not found"));
-
-            String endingNarration = "[ENDING:" + endingType.name() + "] " + endingTitle;
-            chatLogRepository.save(ChatLog.system(freshRoom, endingNarration));
-
             freshRoom.markEndingReached(endingType);
+            freshRoom.saveEndingTitle(endingTitle);
             return null;
         });
 
@@ -182,7 +179,7 @@ public class EndingService {
             endingType.name(),
             endingTitle,
             endingScenes,
-            transformedMemoryList,  // [Fix #9] 변환된 시적 메모리 사용
+            transformedMemoryList,
             characterQuote,
             stats
         );
@@ -192,19 +189,11 @@ public class EndingService {
     //  [Fix #9] RAG 메모리 → 시적 1인칭 변환
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * RAG에서 추출한 메타적 메모리를 캐릭터의 1인칭 시적 회상으로 변환.
-     *
-     * 입력: "유저가 AI 캐릭터와 정원에서 산책하며 별을 보았다"
-     * 출력: "주인님과 정원에서 올려다본 그 밤하늘의 별빛..."
-     *
-     * sentimentModel(경량 모델) 사용, 비용 미미.
-     * 실패 시 원본 메모리를 그대로 반환 (폴백).
-     */
-    private List<String> transformMemoriesToPoetic(
-        List<String> rawMemories, String characterName, String userNickname, EndingType endingType
-    ) {
-        if (rawMemories.isEmpty()) return rawMemories;
+    private List<String> transformMemoriesToPoetic(List<String> rawMemories,
+                                                   String characterName, String userNickname, EndingType endingType) {
+        if (rawMemories == null || rawMemories.isEmpty()) {
+            return rawMemories != null ? rawMemories : new ArrayList<>();
+        }
 
         String moodGuide = endingType == EndingType.HAPPY
             ? "따뜻하고 사랑스러운 톤으로"
@@ -231,11 +220,7 @@ public class EndingService {
             
             ## 출력:
             변환된 기억만 출력하세요. 설명이나 부연은 금지.
-            """.formatted(
-            characterName, characterName, userNickname,
-            moodGuide,
-            memoriesText
-        );
+            """.formatted(characterName, characterName, userNickname, moodGuide, memoriesText);
 
         try {
             long transformStart = System.currentTimeMillis();
@@ -244,7 +229,6 @@ public class EndingService {
             ).trim();
             log.info("🎬 [ENDING] Memory transform: {}ms", System.currentTimeMillis() - transformStart);
 
-            // 변환 결과 파싱
             List<String> result = new ArrayList<>();
             for (String line : transformed.split("\n")) {
                 String cleaned = line.startsWith("- ") ? line.substring(2).trim() : line.trim();
@@ -252,32 +236,30 @@ public class EndingService {
                     result.add(cleaned);
                 }
             }
-
-            // 변환 결과가 비어있으면 원본 반환
             return result.isEmpty() ? rawMemories : result;
 
         } catch (Exception e) {
             log.warn("🎬 [ENDING] Memory transformation failed (using raw): {}", e.getMessage());
-            return rawMemories; // 폴백: 원본 메모리
+            return rawMemories;
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  내부 헬퍼
+    //  내부 헬퍼 — MongoDB 기반으로 전환
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
      * 엔딩 컨텍스트 구성 — 최근 대화 + 엔딩 시스템 프롬프트
-     * [Fix #12] ASSISTANT 로그에서 reasoning 제거
+     * [Phase 5.5-Perf] ChatLogDocument(MongoDB) 사용
      */
     private List<OpenAiMessage> buildEndingContext(Long roomId, String systemPrompt) {
-        List<ChatLog> recent = chatLogRepository.findTop20ByRoom_IdOrderByCreatedAtDesc(roomId);
-        recent.sort(Comparator.comparing(ChatLog::getCreatedAt));
+        List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+        recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
 
         List<OpenAiMessage> messages = new ArrayList<>();
         messages.add(OpenAiMessage.system(systemPrompt));
 
-        for (ChatLog chatLog : recent) {
+        for (ChatLogDocument chatLog : recent) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
                 case ASSISTANT -> messages.add(
@@ -292,9 +274,9 @@ public class EndingService {
 
     /**
      * [Fix #12] ASSISTANT 로그 정제 — reasoning 제거, scenes만 추출
-     * ChatService.sanitizeAssistantLog()와 동일한 로직
+     * [Phase 5.5-Perf] ChatLogDocument 사용
      */
-    private String sanitizeAssistantLog(ChatLog chatLog) {
+    private String sanitizeAssistantLog(ChatLogDocument chatLog) {
         String raw = chatLog.getRawContent();
         if (raw == null || raw.isBlank()) {
             return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
@@ -321,7 +303,6 @@ public class EndingService {
                 }
                 sb.append("\n");
             }
-
             return sb.toString().trim();
 
         } catch (Exception e) {
@@ -330,12 +311,12 @@ public class EndingService {
     }
 
     /**
-     * 플레이 통계 집계
+     * 플레이 통계 집계 — MongoDB 기반
      */
     private EndingStats collectStats(Long roomId, ChatRoom room) {
         long totalMessages = chatLogRepository.countByRoomId(roomId);
 
-        ChatLog firstLog = chatLogRepository.findTop1ByRoom_IdOrderByCreatedAtAsc(roomId).orElse(null);
+        ChatLogDocument firstLog = chatLogRepository.findTop1ByRoomIdOrderByCreatedAtAsc(roomId).orElse(null);
         String firstDate = "알 수 없음";
         long totalDays = 0;
 
