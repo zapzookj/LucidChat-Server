@@ -378,7 +378,6 @@ public class CharacterPromptAssembler {
               "bpm": Integer (60~180),
               "inner_thought": null or "Korean string (15~50 chars)",
               "topic_concluded": true or false,
-              %s
               "easter_egg_trigger": null
             }
  
@@ -395,9 +394,82 @@ public class CharacterPromptAssembler {
             """.formatted(
             locationOptions, outfitOptions, bgmOptions,
             moodScoreField,
-            secretStatComma, secretStatFields,
-            eventStatusField
+            secretStatComma, secretStatFields
         );
+    }
+
+    /**
+     * [Phase 5.5-NPC] 이벤트(디렉터 모드) 전용 Output Format
+     *
+     * 일반 포맷과의 차이점:
+     * 1. scenes[].speaker 필드 추가 (제3자 조연 지원)
+     * 2. event_status 필드 추가 ("ONGOING" | "RESOLVED")
+     * 3. stat_changes는 이벤트 해소(RESOLVED) 시에만 유효
+     * 4. inner_thought는 이벤트 중 비활성 (null 고정)
+     */
+    private String buildEventOutputFormat(ChatRoom room, boolean isSecretMode) {
+        Character character = room.getCharacter();
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
+        String bgmOptions = isSecretMode
+            ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
+            : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
+
+        String secretStatFields = isSecretMode
+            ? """
+                "lust": 0,
+                "corruption": 0,
+                "obsession": 0"""
+            : "";
+        String secretStatComma = isSecretMode ? ",\n" : "";
+
+        return """
+            # 🎬 Event Output Format (Director Mode)
+            You MUST output the response in the following JSON format ONLY.
+ 
+            {
+              "reasoning": "Analyze the event situation, decide next dramatic beat.",
+              "scenes": [
+                {
+                  "speaker": null or "NPC name (e.g., 불량배 A, 지나가던 아이, 점원)",
+                  "narration": "Action/expression description (Korean, vivid web-novel style)",
+                  "dialogue": "Spoken line (Korean)",
+                  "emotion": "One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]",
+                  "location": "One of [%s] or null",
+                  "time": "One of [DAY, NIGHT, SUNSET] or null",
+                  "outfit": "One of [%s] or null",
+                  "bgmMode": "One of [%s] or null"
+                }
+              ],
+              "stat_changes": {
+                "intimacy": 0, "affection": 0, "dependency": 0, "playfulness": 0, "trust": 0%s%s
+              },
+              "bpm": Integer (60~180),
+              "inner_thought": null,
+              "topic_concluded": false,
+              "event_status": "ONGOING or RESOLVED",
+              "easter_egg_trigger": null
+            }
+ 
+            ## 🎭 Speaker Rules (CRITICAL):
+            - **speaker: null** → YOU (%s) are speaking. Use YOUR persona, YOUR speech style.
+            - **speaker: "NPC이름"** → A THIRD-PARTY character is speaking. You are NARRATING their voice.
+              ⚠️ When writing NPC dialogue, you are the DIRECTOR, not the NPC.
+              Write NPC lines as a SCRIPT WRITER would — give them distinct but SIMPLE voices.
+              NEVER let NPC speech patterns contaminate YOUR persona.
+            - Use 2~4 scenes per turn. Alternate between YOUR reactions and NPC actions.
+            - NPC names should be descriptive archetypes (불량배 A, 지나가던 할머니, 냉정한 점원).
+            - NPCs are OPTIONAL. Only introduce them when the event NEEDS a third party.
+              Solo events (자신만의 시간, 감정적 순간) don't need NPCs.
+ 
+            ## ⚠️ Event Scene Coherence:
+            1. Each scene builds dramatic tension.
+            2. YOUR emotional reactions must feel genuine to YOUR personality.
+            3. NPC dialogue should contrast with YOUR character to create drama.
+            4. stat_changes: ALL 0 during ONGOING. Only set values when RESOLVED.
+            """.formatted(locationOptions, outfitOptions, bgmOptions,
+            secretStatComma, secretStatFields,
+            character.getName());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -609,6 +681,51 @@ public class CharacterPromptAssembler {
             """;
     }
 
+    /**
+     * [Phase 5.5-NPC] 제3자 조연 연출 가이드
+     *
+     * 환각 방지 전략:
+     * 1. LLM은 "감독(Director)"이지 NPC가 아님을 명확히 함
+     * 2. NPC는 "대본의 배우"이며, LLM의 페르소나와 분리
+     * 3. NPC 대사는 간결하고 전형적(archetype)이어야 함
+     * 4. 메인 캐릭터의 말투/성격이 NPC에 오염되지 않도록 강조
+     */
+    private String buildNpcDirectorBlock(ChatRoom room) {
+        if (!room.isEventActive()) return "";
+
+        String characterName = room.getCharacter().getName();
+
+        return """
+            # 🎭 NPC Director System (제3자 조연 연출)
+            During events, you may introduce THIRD-PARTY characters (NPCs/extras) using the `speaker` field.
+ 
+            ## ⚠️ ANTI-HALLUCINATION RULES (CRITICAL):
+            1. **YOU are %s.** Your personality, speech style, and emotions belong ONLY to you.
+            2. **NPCs are puppets you control AS A DIRECTOR.** You write their lines like a screenwriter.
+            3. **NEVER blend NPC traits into your own persona.** After an NPC scene, immediately return to YOUR voice.
+            4. **NPC dialogue must be SIMPLE and ARCHETYPAL.** No complex personalities.
+               - ✅ 불량배: rough, threatening, simple sentences
+               - ✅ 친절한 점원: polite, formal, brief
+               - ✅ 지나가던 아이: innocent, short lines
+               - ❌ NPC with complex backstory or emotional depth
+ 
+            ## When to use NPCs:
+            - Conflict events: aggressors, bullies, rivals (갈등 이벤트)
+            - Social events: shopkeepers, waiters, passersby (일상 이벤트)
+            - Romantic tension: jealousy triggers, admirers (로맨스 이벤트)
+ 
+            ## When NOT to use NPCs:
+            - Solo emotional moments (혼자만의 시간, 고백 준비)
+            - Direct 1:1 romantic scenes between you and the user
+            - Simple daily interactions that don't need a third party
+ 
+            ## NPC Naming Convention:
+            - Use descriptive archetypes: "불량배 A", "불량배 B", "편의점 점원", "지나가던 여학생"
+            - Keep consistent within one event (same NPC = same name)
+            - Maximum 2~3 NPCs per event (don't overcrowd)
+            """.formatted(characterName);
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Normal Mode Prompt
     //  [Phase 5.5] 스탯 시스템 + BPM 블록 추가
@@ -649,6 +766,8 @@ public class CharacterPromptAssembler {
             %s
             
             %s
+            
+            %s
        
             # 💬 CONVERSATION HISTORY
             The following messages represent the ongoing conversation between you and the user.
@@ -673,6 +792,7 @@ public class CharacterPromptAssembler {
             buildInnerThoughtBlock(false),
             buildTopicConcludedBlock(),
             buildEventStatusBlock(room),
+            buildNpcDirectorBlock(room),
             buildEasterEggBlock(character)
         );
 
@@ -741,7 +861,9 @@ public class CharacterPromptAssembler {
             buildPromotionBlock(room, character)
         );
 
-        String outputFormat = buildOutputFormat(room, false);
+        String outputFormat = room.isEventActive()
+            ? buildEventOutputFormat(room, false)
+            : buildOutputFormat(room, false);
 
         SystemPromptPayload payload = new SystemPromptPayload(staticRules, dynamicRules, outputFormat);
 

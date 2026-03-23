@@ -725,6 +725,7 @@ public class ChatStreamService {
                     AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
                     EmotionTag emotion = parseEmotion(scene.emotion());
                     SceneResponse firstScene = new SceneResponse(
+                        scene.speaker(),                    // [Phase 5.5-NPC] 화자
                         scene.narration(), scene.dialogue(), emotion,
                         safeUpperCase(scene.location()), safeUpperCase(scene.time()),
                         safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
@@ -763,7 +764,9 @@ public class ChatStreamService {
         EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
 
         List<SceneResponse> sceneResponses = aiOutput.scenes().stream()
-            .map(s -> new SceneResponse(s.narration(), s.dialogue(), parseEmotion(s.emotion()),
+            .map(s -> new SceneResponse(
+                s.speaker(),                        // [Phase 5.5-NPC] 화자
+                s.narration(), s.dialogue(), parseEmotion(s.emotion()),
                 safeUpperCase(s.location()), safeUpperCase(s.time()),
                 safeUpperCase(s.outfit()), safeUpperCase(s.bgmMode())))
             .collect(Collectors.toList());

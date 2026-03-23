@@ -3,6 +3,7 @@ package com.spring.aichat.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.ChatLogDocument;
 import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.memory.MemorySummary;
@@ -19,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -27,28 +27,9 @@ import java.util.stream.Collectors;
 /**
  * [Phase 5.5-Perf] 장기 기억 서비스 — RDB + Redis 캐싱
  *
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *  Pinecone RAG 폐기 → RDB + Redis 아키텍처 전환
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *
- * [기존 (Phase 3)]
- *   retrieveContext: OpenAI Embedding(~500ms) → Pinecone Search(~2s) → 합계 ~2.5s/요청
- *   summarizeAndSave: LLM 요약 → Embedding → Pinecone Upsert
- *
- * [개선 (Phase 5.5-Perf)]
- *   retrieveContext: Redis GET(~1ms) → 캐시 미스 시 MariaDB SELECT(~5ms) → 합계 ~1-5ms/요청
- *   summarizeAndSave: LLM 요약 → MariaDB INSERT → Redis Evict
- *
- * [성능 개선 효과]
- *   - 매 요청 레이턴시: 2.5s → 1ms (2500배 개선, 캐시 히트 시)
- *   - 비동기 저장 시간: ~4s → ~2s (Embedding + Pinecone 오버헤드 제거)
- *   - 외부 API 의존성: OpenAI Embedding + Pinecone → 없음 (자체 인프라만)
- *
- * [캐시 전략]
- *   Key: "memory:{roomId}"
- *   Value: JSON 배열 (요약 텍스트 목록, 시간순)
- *   TTL: 2시간 (충분히 긴 세션 커버, 메모리 방어)
- *   Eviction: 새 기억 저장 시 / 대화 초기화 시
+ * [Phase 5.5-EV Fix] 모델명 하드코딩 버그 수정
+ *   - 기존: "gpt-4o-mini" (OpenRouter에서 400 Bad Request → 조용히 실패)
+ *   - 수정: props.sentimentModel() 사용 (OpenRouter 호환 모델명)
  */
 @Service
 @Slf4j
@@ -60,6 +41,7 @@ public class MemoryService {
     private final ChatLogMongoRepository chatLogRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final OpenAiProperties props;  // [Fix] 추가 — 모델명 참조용
 
     private static final String MEMORY_CACHE_PREFIX = "memory:";
     private static final long MEMORY_CACHE_TTL_HOURS = 2;
@@ -68,14 +50,6 @@ public class MemoryService {
     //  [READ] 장기 기억 조회 — Redis 우선, RDB 폴백
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 현재 채팅방의 장기 기억을 프롬프트 주입용 텍스트로 반환.
-     *
-     * 조회 경로: Redis Cache → MariaDB → Empty
-     *
-     * @param roomId 채팅방 ID
-     * @return 기억 텍스트 (프롬프트에 그대로 삽입), 없으면 빈 문자열
-     */
     public String retrieveContext(Long roomId) {
         long start = System.currentTimeMillis();
         String cacheKey = MEMORY_CACHE_PREFIX + roomId;
@@ -122,17 +96,12 @@ public class MemoryService {
     //  [WRITE] 장기 기억 생성 — LLM 요약 → RDB 저장 → 캐시 무효화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 최근 대화(20턴)를 LLM으로 요약하여 장기 기억에 저장.
-     * 비동기 실행 (@Async) — 유저 응답에 영향 없음.
-     */
     @Async
     public void summarizeAndSaveMemory(Long roomId, Long userId) {
         long asyncStart = System.currentTimeMillis();
         String threadName = Thread.currentThread().getName();
         log.info("⏱️ [MEMORY-WRITE] START | thread={} | roomId={}", threadName, roomId);
 
-        // 스레드 검증 (@Async 정상 동작 확인)
         if (threadName.contains("http-nio") || threadName.contains("tomcat")) {
             log.error("🚨 [MEMORY-WRITE] Running on HTTP thread — @Async NOT working!");
         }
@@ -153,12 +122,23 @@ public class MemoryService {
                 .collect(Collectors.joining("\n"));
 
             // 2. LLM 요약 생성
+            // [Fix] props.sentimentModel() 사용 — 기존 "gpt-4o-mini" 하드코딩은
+            //        OpenRouter에서 400 Bad Request를 발생시켜 메모리 저장이 실패했음
             long t2 = System.currentTimeMillis();
             String summaryPrompt = buildSummaryPrompt(conversationText);
+            String model = props.sentimentModel();
+
+            log.info("⏱️ [MEMORY-WRITE] [2] LLM summarize START | model={}", model);
+
             String summary = openRouterClient.chatCompletion(
-                new OpenAiChatRequest("gpt-4o-mini", List.of(OpenAiMessage.system(summaryPrompt)), 0.5)
+                OpenAiChatRequest.withoutPenalty(
+                    model,
+                    List.of(OpenAiMessage.system(summaryPrompt)),
+                    0.5
+                )
             );
-            log.info("⏱️ [MEMORY-WRITE] [2] LLM summarize: {}ms", System.currentTimeMillis() - t2);
+            log.info("⏱️ [MEMORY-WRITE] [2] LLM summarize: {}ms | model={}",
+                System.currentTimeMillis() - t2, model);
 
             // 3. RDB 저장
             long t3 = System.currentTimeMillis();
@@ -170,13 +150,13 @@ public class MemoryService {
             // 4. Redis 캐시 무효화 (다음 읽기 시 재캐싱)
             evictMemoryCache(roomId);
 
-            log.info("⏱️ [MEMORY-WRITE] DONE: {}ms total | roomId={} | summary='{}'",
-                System.currentTimeMillis() - asyncStart, roomId,
+            log.info("✅ [MEMORY-WRITE] DONE: {}ms total | roomId={} | model={} | summary='{}'",
+                System.currentTimeMillis() - asyncStart, roomId, model,
                 summary.substring(0, Math.min(80, summary.length())));
 
         } catch (Exception e) {
-            log.error("⏱️ [MEMORY-WRITE] FAILED after {}ms | roomId={}",
-                System.currentTimeMillis() - asyncStart, roomId, e);
+            log.error("❌ [MEMORY-WRITE] FAILED after {}ms | roomId={} | error={}",
+                System.currentTimeMillis() - asyncStart, roomId, e.getMessage(), e);
         }
     }
 
@@ -184,9 +164,6 @@ public class MemoryService {
     //  캐시 관리
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 대화 초기화 시 기억 전체 삭제 (RDB + Redis)
-     */
     @Transactional
     public void clearMemories(Long roomId) {
         memorySummaryRepository.deleteByRoomId(roomId);
@@ -194,9 +171,6 @@ public class MemoryService {
         log.info("🗑️ [MEMORY] Cleared all memories: roomId={}", roomId);
     }
 
-    /**
-     * Redis 캐시 무효화
-     */
     public void evictMemoryCache(Long roomId) {
         redisTemplate.delete(MEMORY_CACHE_PREFIX + roomId);
     }
