@@ -426,9 +426,10 @@ public class CharacterPromptAssembler {
         return """
             # 🎬 Event Output Format (Director Mode)
             You MUST output the response in the following JSON format ONLY.
- 
+            
             {
               "reasoning": "Analyze the event situation, decide next dramatic beat.",
+              "event_status": "ONGOING or RESOLVED",
               "scenes": [
                 {
                   "speaker": null or "NPC name (e.g., 불량배 A, 지나가던 아이, 점원)",
@@ -447,7 +448,6 @@ public class CharacterPromptAssembler {
               "bpm": Integer (60~180),
               "inner_thought": null,
               "topic_concluded": false,
-              "event_status": "ONGOING or RESOLVED",
               "easter_egg_trigger": null
             }
  

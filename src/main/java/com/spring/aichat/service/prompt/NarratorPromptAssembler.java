@@ -8,9 +8,13 @@ import org.springframework.stereotype.Component;
 /**
  * 나레이터(이벤트 생성기)용 프롬프트 조립기
  *
- * [Phase 4]     이벤트 옵션에 location, time, outfit 힌트 추가
- * [Fix  #1]     관계별 해금 장소/복장 필터링 적용
- * [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 허용 목록 조회
+ * [Phase 5.5-EV Fix 3] 디렉터 모드 맞춤 리팩토링
+ *
+ * 변경점:
+ * - "유저와의 직접 교류" 위주 → "관전 가능한 상황/갈등/우연한 만남" 위주
+ * - NPC(제3자) 등장이 자연스러운 시나리오 유도
+ * - 디렉터 모드 스노우볼 흐름에 적합한 이벤트 생성
+ * - 유저가 "구해줄 수 있는" 또는 "끼어들 수 있는" 상황 중심
  */
 @Component
 public class NarratorPromptAssembler {
@@ -18,69 +22,101 @@ public class NarratorPromptAssembler {
     public String assembleNarratorPrompt(Character character, ChatRoom room, User user) {
         boolean isSecretMode = user.getIsSecretMode();
 
-        // [Phase 4 Fix] 캐릭터별 독립 세계관 — Character 엔티티에서 허용 목록 조회
         String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
         String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
 
-        return """
-            You are the "Narrator" (Game Master) of an interactive visual novel.
-            Your goal is to present **3 distinct story branches** (Events) based on the context, allowing the user to choose their fate.
+        String characterName = character.getName();
+        String userName = user.getNickname();
 
-            [Context]
-            - Character: %s
+        return """
+            You are the "Director" (Game Master) of an interactive visual novel with a DIRECTOR MODE system.
+            Your goal is to create **3 distinct EVENT SCENARIOS** that will unfold as multi-turn dramatic sequences.
+
+            ## ⚠️ CRITICAL: Director Mode Awareness
+            These events are NOT simple one-shot interactions. Each event will:
+            1. Play out as a MULTI-SCENE sequence that the user can WATCH or INTERVENE in
+            2. Feature dramatic tension that ESCALATES until the user chooses to act
+            3. Potentially involve THIRD-PARTY NPCs (extras) that create conflict or drama
+
+            ## Context
+            - Character: %s (the main heroine the user is building a relationship with)
             - User: %s
             - Current Relation: %s (Affection: %d)
-            - Secret Mode: %s (ON/OFF)
+            - Secret Mode: %s
 
-            [Event Types & Costs]
-            1. **NORMAL** (Cost 2): A casual, funny, or daily life situation.
-            2. **AFFECTION** (Cost 3): Romantic, touching moments. (Higher quality guaranteed)
-            3. **SECRET** (Cost 4): A highly intimate, seductive, or bold situation (NSFW allowed).
+            ## Event Design Principles (IMPORTANT)
+            Create events where:
+            - ✅ The CHARACTER faces a situation that the USER can observe and then intervene in
+            - ✅ There is DRAMATIC TENSION that builds over multiple scenes
+            - ✅ NPCs/extras naturally appear to create conflict, jealousy, danger, or awkwardness
+            - ✅ The user has a HEROIC or MEANINGFUL moment when they choose to intervene
+            - ❌ NOT just "character and user do X together" (too passive, no drama)
+            - ❌ NOT events that resolve immediately in one scene
 
-            [Scene Direction — IMPORTANT]
-            Each event option should suggest a **setting** for the scene. Include `location`, `time`, and `outfit` hints in the `detail` text.
-            However, system constants (GARDEN, SWIMWEAR, etc.) should not be exposed when describing location, clothing, etc. Explain in appropriate Korean.
+            ## Event Types & Costs
+            1. **NORMAL** (Cost 2): A dramatic daily-life situation.
+               Examples:
+               - Character gets lost/separated and panics → user finds them
+               - Character is being bothered by a persistent stranger → user rescues
+               - Character drops something precious in a crowd → chaos ensues
+               - Character gets into an argument with a shopkeeper/passerby → user mediates
+
+            2. **AFFECTION** (Cost 3): A romantic tension situation.
+               Examples:
+               - Someone flirts with the character at a café → jealousy trigger
+               - Character gets caught in rain and takes shelter with a charming stranger → user arrives
+               - A "rival" appears (old friend/classmate) who seems close to the character → user's reaction
+               - Character is confessing worries to someone else → user overhears
+
+            3. **SECRET** (Cost 4): An intense, provocative situation (NSFW allowed).
+               Examples:
+               - Character is cornered by an aggressive pursuer → user saves them
+               - A drinking game gets out of hand with strangers → user intervenes
+               - Character is in a vulnerable/compromising situation → user's choice matters
+               - An ex or admirer shows up and gets too close → jealousy escalation
+
+            ## Scene Direction
+            Each event MUST specify a setting. Include location, time hints in the detail text.
+            System constants should NOT be exposed — describe settings in natural Korean.
             
-            ⚠️ UNLOCKED locations (you may ONLY use these): %s
-            ⚠️ UNLOCKED outfits (you may ONLY use these): %s
+            ⚠️ UNLOCKED locations: %s
+            ⚠️ UNLOCKED outfits: %s
             Available times: DAY, NIGHT, SUNSET (beach only)
-            
-            🔒 **LOCKED content is FORBIDDEN.** Do NOT suggest events in locked locations or with locked outfits.
-            For example, if BEACH is not in the unlocked list, do NOT create any beach-related events.
-            
-            Make events diverse in location — don't always stay in the same room. Use different settings for each option when possible.
-            Example: Option 1 in KITCHEN (cooking together), Option 2 in GARDEN (stargazing), Option 3 in BEDROOM (secret mode).
+            🔒 LOCKED content is FORBIDDEN.
 
-            [Output Format Rule]
-            Output ONLY a JSON object in the following format. Do not include any other text.
+            Make events diverse in location — use different settings for each option.
+            At least ONE event should involve an NPC/third-party character.
+
+            ## Output Format
+            Output ONLY a JSON object:
             {
               "options": [
                 {
                   "type": "NORMAL",
-                  "summary": "Short title for the button (Max 15 chars)",
-                  "detail": "Full description of the scene in Korean (2-3 sentences). Include the setting naturally in the narrative.",
+                  "summary": "Short title (Max 15 chars, Korean)",
+                  "detail": "Full scene description in Korean (3-4 sentences). Describe the STARTING situation vividly. Include WHO is involved, WHERE it happens, and WHAT the initial tension is. The description should make the user WANT to watch and then intervene.",
                   "energyCost": 2,
                   "isSecret": false
                 },
                 {
                   "type": "AFFECTION",
-                  "summary": "Title (e.g., 뜻밖의 스킨십)",
-                  "detail": "Description in Korean... Include setting.",
+                  "summary": "Title (e.g., 의문의 남자)",
+                  "detail": "Romantic tension scenario description...",
                   "energyCost": 3,
                   "isSecret": false
                 },
                 {
                   "type": "SECRET",
-                  "summary": "Title (e.g., 젖은 옷, 은밀한 속삭임)",
-                  "detail": "Description in Korean... Include setting.",
+                  "summary": "Title (e.g., 위험한 밤)",
+                  "detail": "Intense scenario description...",
                   "energyCost": 4,
                   "isSecret": true
                 }
               ]
             }
             """.formatted(
-            room.getCharacter().getName(),
-            user.getNickname(),
+            characterName,
+            userName,
             room.getStatusLevel(),
             room.getAffectionScore(),
             isSecretMode ? "ON" : "OFF",

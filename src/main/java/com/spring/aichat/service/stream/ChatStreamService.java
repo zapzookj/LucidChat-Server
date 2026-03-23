@@ -201,11 +201,10 @@ public class ChatStreamService {
 
                     // [Phase 5.5-EV] 이벤트 상태 업데이트 (유저 개입 시)
                     if (wasEventActive) {
-                        String resolvedStatus = parsed.eventStatus();
-                        if (resolvedStatus == null || resolvedStatus.isBlank()) {
-                            resolvedStatus = "RESOLVED"; // 유저 개입 시 기본 RESOLVED
-                        }
-                        freshRoom.updateEventStatus(resolvedStatus);
+                        // [Fix 1] 유저가 실제 채팅으로 개입한 경우 → 무조건 RESOLVED
+                        // LLM이 ONGOING을 뱉어도 백엔드에서 강제 오버라이드
+                        freshRoom.updateEventStatus("RESOLVED");
+                        log.info("🎬 [DIRECTOR] User intervention → forced RESOLVED | roomId={} | llmSaid={}", roomId, parsed.eventStatus());
                     }
 
                     // 스탯 적용 (이벤트 ONGOING 중에는 BPM만 적용, 스탯 동결)
@@ -255,7 +254,7 @@ public class ChatStreamService {
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
                         freshRoom.isTopicConcluded(),
-                        freshRoom.isEventActive() ? freshRoom.getEventStatus() : null);
+                        wasEventActive ? "RESOLVED" : (freshRoom.isEventActive() ? freshRoom.getEventStatus() : null));
                 });
             } catch (Exception e) {
                 log.error("❌ TX-2 failed | roomId={}", roomId, e);
@@ -720,21 +719,36 @@ public class ChatStreamService {
         // ── LLM 스트림 ──
         StreamResult streamResult;
         try {
-            streamResult = streamClient.streamCompletion(llmRequest, firstSceneJson -> {
-                try {
-                    AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
-                    EmotionTag emotion = parseEmotion(scene.emotion());
-                    SceneResponse firstScene = new SceneResponse(
-                        scene.speaker(),                    // [Phase 5.5-NPC] 화자
-                        scene.narration(), scene.dialogue(), emotion,
-                        safeUpperCase(scene.location()), safeUpperCase(scene.time()),
-                        safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
-                    emitter.send(SseEmitter.event().name("first_scene")
-                        .data(objectMapper.writeValueAsString(firstScene)));
-                } catch (Exception e) {
-                    log.warn("first_scene send failed: {}", e.getMessage());
+            streamResult = streamClient.streamCompletion(
+                llmRequest,
+                // ── 콜백 1: 첫 번째 씬 완성 시점 ──
+                firstSceneJson -> {
+                    try {
+                        AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
+                        EmotionTag emotion = parseEmotion(scene.emotion());
+                        SceneResponse firstScene = new SceneResponse(
+                            scene.speaker(),
+                            scene.narration(), scene.dialogue(), emotion,
+                            safeUpperCase(scene.location()), safeUpperCase(scene.time()),
+                            safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
+                        emitter.send(SseEmitter.event().name("first_scene")
+                            .data(objectMapper.writeValueAsString(firstScene)));
+                    } catch (Exception e) {
+                        log.warn("first_scene send failed: {}", e.getMessage());
+                    }
+                },
+                // ── [Fix 2] 콜백 2: event_status 선행 전송 ──
+                eventStatus -> {
+                    try {
+                        Map<String, String> meta = Map.of("eventStatus", eventStatus);
+                        emitter.send(SseEmitter.event().name("event_meta")
+                            .data(objectMapper.writeValueAsString(meta)));
+                        log.info("🎬 [SSE] event_meta sent: {} (before first_scene)", eventStatus);
+                    } catch (Exception e) {
+                        log.warn("event_meta send failed: {}", e.getMessage());
+                    }
                 }
-            });
+            );
         } catch (Exception e) {
             log.error("LLM stream failed | roomId={}", room.getId(), e);
             compensateFullRollback(rollbackCtx);
@@ -746,7 +760,7 @@ public class ChatStreamService {
         AiJsonOutput aiOutput;
         String cleanJson;
         try {
-            cleanJson = stripMarkdown(streamResult.fullResponse());
+            cleanJson = extractJson(streamResult.fullResponse());
             aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
         } catch (JsonProcessingException e) {
             log.error("JSON Parse Error: {}", streamResult.fullResponse(), e);
@@ -931,7 +945,7 @@ public class ChatStreamService {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
-            String cleaned = stripMarkdown(raw);
+            String cleaned = extractJson(raw);
             AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
@@ -947,10 +961,46 @@ public class ChatStreamService {
         }
     }
 
-    private String stripMarkdown(String text) {
-        if (text.startsWith("```json")) text = text.substring(7);
-        else if (text.startsWith("```")) text = text.substring(3);
-        if (text.endsWith("```")) text = text.substring(0, text.length() - 3);
+    private String extractJson(String raw) {
+        if (raw == null || raw.isBlank()) return raw;
+
+        String text = raw.trim();
+
+        // Step 1: Markdown 코드 블록 제거
+        if (text.startsWith("```json")) {
+            text = text.substring(7);
+        } else if (text.startsWith("```")) {
+            text = text.substring(3);
+        }
+        if (text.endsWith("```")) {
+            text = text.substring(0, text.length() - 3);
+        }
+        text = text.trim();
+
+        // Step 2: 첫 번째 '{' 위치 찾기
+        int jsonStart = text.indexOf('{');
+        if (jsonStart < 0) {
+            // JSON 객체가 없으면 원본 반환 (파싱 단계에서 에러 처리)
+            return text;
+        }
+
+        if (jsonStart > 0) {
+            // JSON 앞에 프리앰블 텍스트가 있으면 경고 로그 + 제거
+            String preamble = text.substring(0, jsonStart).trim();
+            if (!preamble.isEmpty()) {
+                log.warn("⚠️ [JSON] Stripped preamble before JSON ({}chars): '{}'",
+                    preamble.length(),
+                    preamble.substring(0, Math.min(80, preamble.length())));
+            }
+            text = text.substring(jsonStart);
+        }
+
+        // Step 3: 마지막 '}' 이후 텍스트 제거
+        int lastBrace = text.lastIndexOf('}');
+        if (lastBrace >= 0 && lastBrace < text.length() - 1) {
+            text = text.substring(0, lastBrace + 1);
+        }
+
         return text.trim();
     }
 

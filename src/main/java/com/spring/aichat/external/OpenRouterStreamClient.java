@@ -21,28 +21,9 @@ import java.util.function.Consumer;
 /**
  * [Phase 5.5-Perf] OpenRouter 스트리밍 호출 클라이언트
  *
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *  Dual-Streaming Architecture의 첫 번째 구간:
- *  OpenRouter(LLM) → Spring Boot (토큰 스트림)
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *
- * [역할]
- *   1. OpenRouter에 stream=true 요청 전송
- *   2. SSE 응답(data: {...})을 라인별로 파싱
- *   3. delta.content 토큰을 StringBuilder에 누적
- *   4. SceneStreamExtractor를 통해 첫 번째 씬 완성 시점 포착
- *   5. 콜백(onFirstScene)으로 첫 번째 씬 JSON 즉시 전달
- *   6. 전체 스트림 완료 후 전체 응답 문자열 반환
- *
- * [OpenRouter SSE 포맷]
- *   data: {"id":"gen-...","choices":[{"index":0,"delta":{"content":"토큰"},"finish_reason":null}]}
- *   data: {"id":"gen-...","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
- *   data: [DONE]
- *
- * [Java HttpClient 선택 근거]
- *   - Spring WebFlux(WebClient) 불필요 — 이 호출은 @Async 스레드에서 블로킹으로 실행
- *   - Java 17 내장 HttpClient는 HTTP/2, 스트리밍을 네이티브 지원
- *   - 외부 의존성 제로 (webflux 라이브러리 추가 불필요)
+ * [Phase 5.5-EV Fix 2] event_status 선행 추출 콜백 추가
+ *   - onEventStatus: event_status가 추출되는 즉시 호출 (first_scene보다 먼저)
+ *   - 기존 onFirstScene 콜백은 그대로 유지
  */
 @Component
 @Slf4j
@@ -66,14 +47,6 @@ public class OpenRouterStreamClient {
         this.appTitle = props.appTitle();
     }
 
-    /**
-     * 스트리밍 결과 DTO
-     *
-     * @param fullResponse   전체 LLM 응답 텍스트
-     * @param firstSceneJson 첫 번째 씬 JSON (추출 실패 시 null)
-     * @param ttft           Time To First Token (ms)
-     * @param ttfs           Time To First Scene (ms)
-     */
     public record StreamResult(
         String fullResponse,
         String firstSceneJson,
@@ -82,16 +55,24 @@ public class OpenRouterStreamClient {
     ) {}
 
     /**
-     * OpenRouter 스트리밍 호출 + 첫 번째 씬 추출
-     *
-     * @param request       ChatCompletion 요청 (stream=true가 강제 적용됨)
-     * @param onFirstScene  첫 번째 씬 JSON이 완성되는 즉시 호출되는 콜백
-     * @return StreamResult (전체 응답 + 첫 번째 씬)
+     * 스트리밍 호출 (기존 시그니처 유지 — 하위 호환)
      */
     public StreamResult streamCompletion(OpenAiChatRequest request, Consumer<String> onFirstScene) {
+        return streamCompletion(request, onFirstScene, null);
+    }
+
+    /**
+     * [Fix 2] 스트리밍 호출 + event_status 선행 추출
+     *
+     * @param request        ChatCompletion 요청
+     * @param onFirstScene   첫 번째 씬 JSON 완성 시 콜백
+     * @param onEventStatus  event_status 추출 시 콜백 (first_scene보다 먼저 발화)
+     */
+    public StreamResult streamCompletion(OpenAiChatRequest request,
+                                         Consumer<String> onFirstScene,
+                                         Consumer<String> onEventStatus) {
         long startTime = System.currentTimeMillis();
 
-        // stream=true 강제 적용
         OpenAiChatRequest streamRequest = new OpenAiChatRequest(
             request.model(), request.messages(), request.temperature(),
             true, request.frequencyPenalty(), request.presencePenalty(), request.provider()
@@ -117,8 +98,8 @@ public class OpenRouterStreamClient {
 
         StringBuilder fullBuffer = new StringBuilder(4096);
         SceneStreamExtractor extractor = new SceneStreamExtractor();
-        long ttft = -1;  // Time To First Token
-        long ttfs = -1;  // Time To First Scene
+        long ttft = -1;
+        long ttfs = -1;
 
         try {
             HttpResponse<java.io.InputStream> response = httpClient.send(
@@ -138,18 +119,15 @@ public class OpenRouterStreamClient {
 
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    // SSE 포맷: "data: {...}" 또는 "data: [DONE]" 또는 빈 줄
                     if (!line.startsWith("data: ")) continue;
 
                     String data = line.substring(6).trim();
                     if ("[DONE]".equals(data)) break;
                     if (data.isEmpty()) continue;
 
-                    // delta.content 추출
                     String token = extractDeltaContent(data);
                     if (token == null || token.isEmpty()) continue;
 
-                    // TTFT 기록
                     if (ttft < 0) {
                         ttft = System.currentTimeMillis() - startTime;
                         log.info("⏱️ [STREAM] TTFT: {}ms | model={}", ttft, request.model());
@@ -157,15 +135,28 @@ public class OpenRouterStreamClient {
 
                     fullBuffer.append(token);
 
-                    // 첫 번째 씬 추출 시도
+                    String bufferStr = fullBuffer.toString();
+
+                    // [Fix 2] event_status 선행 추출 (first_scene보다 먼저)
+                    if (!extractor.isEventStatusExtracted() && onEventStatus != null) {
+                        String eventStatus = extractor.tryExtractEventStatus(bufferStr);
+                        if (eventStatus != null) {
+                            try {
+                                onEventStatus.accept(eventStatus);
+                            } catch (Exception cbErr) {
+                                log.warn("⚠️ [STREAM] onEventStatus callback failed", cbErr);
+                            }
+                        }
+                    }
+
+                    // 첫 번째 씬 추출
                     if (!extractor.isFirstSceneExtracted()) {
-                        String firstScene = extractor.tryExtractFirstScene(fullBuffer.toString());
+                        String firstScene = extractor.tryExtractFirstScene(bufferStr);
                         if (firstScene != null) {
                             ttfs = System.currentTimeMillis() - startTime;
                             log.info("🎬 [STREAM] First scene extracted: {}ms | chars={}",
                                 ttfs, firstScene.length());
 
-                            // 콜백 발사 — 프론트엔드로 첫 번째 씬 전송
                             if (onFirstScene != null) {
                                 try {
                                     onFirstScene.accept(firstScene);
@@ -182,12 +173,7 @@ public class OpenRouterStreamClient {
             log.info("⏱️ [STREAM] Complete: {}ms | ttft={}ms | ttfs={}ms | chars={} | model={}",
                 totalTime, ttft, ttfs, fullBuffer.length(), request.model());
 
-            return new StreamResult(
-                fullBuffer.toString(),
-                extractor.isFirstSceneExtracted() ? null : null, // firstScene은 이미 콜백으로 전달됨
-                ttft,
-                ttfs
-            );
+            return new StreamResult(fullBuffer.toString(), null, ttft, ttfs);
 
         } catch (ExternalApiException e) {
             throw e;
@@ -197,27 +183,17 @@ public class OpenRouterStreamClient {
         }
     }
 
-    /**
-     * OpenAI SSE chunk에서 delta.content 추출
-     *
-     * 입력: {"id":"...","choices":[{"index":0,"delta":{"content":"토큰"},"finish_reason":null}]}
-     * 출력: "토큰"
-     */
     private String extractDeltaContent(String jsonChunk) {
         try {
             JsonNode root = objectMapper.readTree(jsonChunk);
             JsonNode choices = root.get("choices");
             if (choices == null || !choices.isArray() || choices.isEmpty()) return null;
-
             JsonNode delta = choices.get(0).get("delta");
             if (delta == null) return null;
-
             JsonNode content = delta.get("content");
             if (content == null || content.isNull()) return null;
-
             return content.asText();
         } catch (Exception e) {
-            // 파싱 실패 라인은 무시 (정상적인 SSE에서 발생하지 않음)
             return null;
         }
     }
