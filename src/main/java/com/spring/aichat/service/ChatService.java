@@ -926,7 +926,6 @@ public class ChatService {
                     && secretModeService.canAccessSecretMode(
                     room.getUser(), room.getCharacter().getId());
 
-                // [Phase 5.5] 스탯 스냅샷
                 StatsSnapshot statsSnapshot = buildStatsSnapshot(room, isSecret);
 
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
@@ -954,11 +953,14 @@ public class ChatService {
                     statsSnapshot,
                     room.getCurrentBpm(),
                     room.getDynamicRelationTag(),
-                    room.getCharacterThought()
+                    room.getCharacterThought(),
+                    // [Phase 5.5-EV] 이벤트 시스템 강화
+                    room.isTopicConcluded(),
+                    room.isEventActive(),
+                    room.getEventStatus()
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);
-                log.debug("🏠 [CACHE] ChatRoomInfo cached: roomId={}", roomId);
                 return response;
             });
     }

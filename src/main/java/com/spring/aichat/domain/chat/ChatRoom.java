@@ -23,12 +23,11 @@ import java.time.LocalDateTime;
 /**
  * 채팅방 — 관계/상태 저장의 핵심 엔티티
  *
- * [Phase 5.5]   입체적 상태창 시스템
- * [Phase 5.5-P] 피드백 반영 패치:
- *   - affectionScore ↔ statAffection 통합 (같은 값)
- *   - 스탯 범위: -100 ~ 100 (음수 허용)
- *   - getAffectionScore() → statAffection 반환
- *   - 엔딩 트리거: 5개 노말 스탯 중 하나라도 ±100 도달
+ * [Phase 5.5-P]  입체적 상태창 시스템 / 스탯 통합
+ * [Phase 5.5-EV] 이벤트 시스템 강화:
+ *   - topicConcluded: LLM이 판단한 주제 종료 플래그
+ *   - eventActive / eventStatus: 디렉터 모드 이벤트 진행 상태
+ *   - promotionWaitingForTopic: 임계값 도달 후 topic_concluded 대기
  */
 public class ChatRoom {
 
@@ -49,10 +48,6 @@ public class ChatRoom {
     @Column(name = "chat_mode", nullable = false, length = 20)
     private ChatMode chatMode = ChatMode.STORY;
 
-    /**
-     * [Phase 5.5-P] 레거시 호감도 필드 — statAffection과 항상 동기화
-     * DB 컬럼은 유지 (마이그레이션 호환), 값은 statAffection과 동일
-     */
     @Column(name = "affection_score", nullable = false)
     private int affectionScore = 0;
 
@@ -104,6 +99,18 @@ public class ChatRoom {
     @Column(name = "promotion_turn_count", nullable = false)
     private int promotionTurnCount = 0;
 
+    /**
+     * [Phase 5.5-EV] 임계값 도달 후 topic_concluded 대기 상태
+     * true: 스탯이 승급 임계값에 도달했지만 아직 topic이 끝나지 않아 대기 중
+     * topic_concluded=true가 오면 실제 promotionPending으로 전환
+     */
+    @Column(name = "promotion_waiting_for_topic", nullable = false)
+    private boolean promotionWaitingForTopic = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "promotion_waiting_target", length = 30)
+    private RelationStatus promotionWaitingTarget;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  엔딩 이벤트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -120,15 +127,11 @@ public class ChatRoom {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5] 입체적 스탯 시스템
-    //  [Phase 5.5-P] 범위: -100 ~ 100 (음수 허용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    // ── 노말 모드 스탯 (-100 ~ 100) ──
 
     @Column(name = "stat_intimacy", nullable = false)
     private int statIntimacy = 0;
 
-    /** [Phase 5.5-P] affectionScore와 통합 — 이 필드가 곧 호감도 */
     @Column(name = "stat_affection", nullable = false)
     private int statAffection = 0;
 
@@ -140,8 +143,6 @@ public class ChatRoom {
 
     @Column(name = "stat_trust", nullable = false)
     private int statTrust = 0;
-
-    // ── 시크릿 모드 전용 스탯 (-100 ~ 100) ──
 
     @Column(name = "stat_lust", nullable = false)
     private int statLust = 0;
@@ -165,6 +166,22 @@ public class ChatRoom {
 
     @Column(name = "current_bpm", nullable = false)
     private int currentBpm = 65;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-EV] 이벤트 시스템 강화
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** LLM이 마지막으로 보고한 topic_concluded 상태 */
+    @Column(name = "topic_concluded", nullable = false)
+    private boolean topicConcluded = false;
+
+    /** 디렉터 모드 이벤트 진행 중 여부 */
+    @Column(name = "event_active", nullable = false)
+    private boolean eventActive = false;
+
+    /** 디렉터 모드 이벤트 상태 ("ONGOING" | "RESOLVED" | null) */
+    @Column(name = "event_status", length = 20)
+    private String eventStatus;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자
@@ -192,12 +209,8 @@ public class ChatRoom {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5-P] 통합 호감도 접근자
-    //  affectionScore는 항상 statAffection과 동일
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 호감도 조회 — statAffection 반환 (두 값은 항상 동기화)
-     */
     public int getAffectionScore() {
         return this.statAffection;
     }
@@ -212,12 +225,9 @@ public class ChatRoom {
         this.lastEmotion = lastEmotion;
     }
 
-    /**
-     * [Phase 5.5-P] 호감도 직접 변경 — statAffection + affectionScore 동시 갱신
-     */
     public void updateAffection(int newScore) {
         this.statAffection = clamp(-100, 100, newScore);
-        this.affectionScore = this.statAffection; // 동기화
+        this.affectionScore = this.statAffection;
     }
 
     public void updateStatusLevel(RelationStatus relationStatus) {
@@ -237,13 +247,8 @@ public class ChatRoom {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5] 스탯 시스템 메서드
-    //  [Phase 5.5-P] 범위 -100 ~ 100, affection 동기화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 노말 모드 스탯 변화 적용 (각 스탯 -100~100 클램프)
-     * affection 변경 시 affectionScore도 자동 동기화
-     */
     public void applyNormalStatChanges(int dIntimacy, int dAffection,
                                        int dDependency, int dPlayfulness, int dTrust) {
         this.statIntimacy    = clamp(-100, 100, this.statIntimacy    + dIntimacy);
@@ -251,8 +256,6 @@ public class ChatRoom {
         this.statDependency  = clamp(-100, 100, this.statDependency  + dDependency);
         this.statPlayfulness = clamp(-100, 100, this.statPlayfulness + dPlayfulness);
         this.statTrust       = clamp(-100, 100, this.statTrust       + dTrust);
-
-        // [Phase 5.5-P] 레거시 동기화
         this.affectionScore = this.statAffection;
     }
 
@@ -262,10 +265,6 @@ public class ChatRoom {
         this.statObsession  = clamp(-100, 100, this.statObsession  + dObsession);
     }
 
-    /**
-     * [Phase 5.5-P] 레거시 affection_change를 statAffection에 적용
-     * ChatService에서 기존 applyAffectionChange 대신 사용
-     */
     public void applyLegacyAffectionChange(int delta) {
         if (delta == 0) return;
         this.statAffection = clamp(-100, 100, this.statAffection + delta);
@@ -273,20 +272,13 @@ public class ChatRoom {
     }
 
     public int getMaxNormalStatValue() {
-        return Math.max(statIntimacy,
-            Math.max(statAffection,
-                Math.max(statDependency,
-                    Math.max(statPlayfulness, statTrust))));
+        return Math.max(statIntimacy, Math.max(statAffection,
+            Math.max(statDependency, Math.max(statPlayfulness, statTrust))));
     }
 
-    /**
-     * [Phase 5.5-P] 5개 노말 스탯 중 최솟값 (배드 엔딩 판정용)
-     */
     public int getMinNormalStatValue() {
-        return Math.min(statIntimacy,
-            Math.min(statAffection,
-                Math.min(statDependency,
-                    Math.min(statPlayfulness, statTrust))));
+        return Math.min(statIntimacy, Math.min(statAffection,
+            Math.min(statDependency, Math.min(statPlayfulness, statTrust))));
     }
 
     public String getDominantStatName() {
@@ -294,10 +286,6 @@ public class ChatRoom {
             statIntimacy, statAffection, statDependency, statPlayfulness, statTrust);
     }
 
-    /**
-     * 스탯 기반 statusLevel + dynamicRelationTag 갱신
-     * @return 관계 레벨이 변경되었으면 true
-     */
     public boolean refreshRelationFromStats() {
         RelationStatus oldStatus = this.statusLevel;
         RelationStatus newStatus = RelationStatusPolicy.fromStats(
@@ -306,20 +294,13 @@ public class ChatRoom {
             this.statDependency, this.statPlayfulness, this.statTrust
         );
         this.statusLevel = newStatus;
-
         String dominant = getDominantStatName();
         this.dynamicRelationTag = RelationStatusPolicy.buildDynamicRelationTag(newStatus, dominant);
-
         return oldStatus != newStatus;
     }
 
-    /**
-     * [Phase 5.5-P] 엔딩 트리거 판정
-     * @return "HAPPY" | "BAD" | null
-     */
     public String checkEndingTrigger() {
         if (this.endingReached) return null;
-
         if (getMaxNormalStatValue() >= 100) return "HAPPY";
         if (getMinNormalStatValue() <= -100) return "BAD";
         return null;
@@ -332,6 +313,70 @@ public class ChatRoom {
     public void updateCharacterThought(String thought, int currentTurnCount) {
         this.characterThought = thought;
         this.thoughtUpdatedAtTurn = currentTurnCount;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-EV] 이벤트 시스템 강화 메서드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** LLM 응답의 topic_concluded 반영 */
+    public void updateTopicConcluded(boolean concluded) {
+        this.topicConcluded = concluded;
+    }
+
+    /** 디렉터 모드 이벤트 시작 */
+    public void startDirectorEvent() {
+        this.eventActive = true;
+        this.eventStatus = "ONGOING";
+        // 이벤트 시작 시 topic은 아직 진행 중
+        this.topicConcluded = false;
+    }
+
+    /** 디렉터 모드 이벤트 상태 업데이트 (LLM 응답 기반) */
+    public void updateEventStatus(String status) {
+        if ("RESOLVED".equalsIgnoreCase(status)) {
+            this.eventActive = false;
+            this.eventStatus = "RESOLVED";
+        } else if ("ONGOING".equalsIgnoreCase(status)) {
+            this.eventStatus = "ONGOING";
+        }
+    }
+
+    /** 이벤트 강제 종료 (초기화 등) */
+    public void clearDirectorEvent() {
+        this.eventActive = false;
+        this.eventStatus = null;
+    }
+
+    // ── 승급 대기 (topic_concluded 게이팅) ──
+
+    /**
+     * [Phase 5.5-EV] 승급 임계값 도달 시 호출 — topic_concluded 대기 상태 진입
+     */
+    public void markPromotionWaiting(RelationStatus target) {
+        this.promotionWaitingForTopic = true;
+        this.promotionWaitingTarget = target;
+    }
+
+    /**
+     * [Phase 5.5-EV] topic_concluded=true일 때 실제 승급 이벤트 개시
+     * @return 승급이 시작되었으면 true
+     */
+    public boolean tryStartPromotionFromWaiting() {
+        if (!this.promotionWaitingForTopic || this.promotionWaitingTarget == null) {
+            return false;
+        }
+        // 대기 해제 → 실제 승급 이벤트 시작 (디렉터 모드)
+        RelationStatus target = this.promotionWaitingTarget;
+        clearPromotionWaiting();
+        startPromotion(target);
+        startDirectorEvent(); // 승급도 디렉터 모드로 진행
+        return true;
+    }
+
+    private void clearPromotionWaiting() {
+        this.promotionWaitingForTopic = false;
+        this.promotionWaitingTarget = null;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -359,17 +404,25 @@ public class ChatRoom {
         this.promotionTurnCount = 0;
     }
 
-    public void advancePromotionTurn(int moodScore) {
+    /**
+     * [Phase 5.5-EV] 승급 턴 진행 — mood_score를 5종 스탯 변화량 합산으로 대체
+     * @param statDeltaSum 해당 턴의 5종 노말 스탯 변화량 절대값 합산
+     */
+    public void advancePromotionTurn(int statDeltaSum) {
         this.promotionTurnCount++;
-        this.promotionMoodScore += moodScore;
+        this.promotionMoodScore += statDeltaSum;
     }
 
     public void completePromotionSuccess() {
         this.statusLevel = this.pendingTargetStatus;
         clearPromotion();
+        clearDirectorEvent(); // 승급 완료 → 디렉터 모드 종료
     }
 
-    public void completePromotionFailure() { clearPromotion(); }
+    public void completePromotionFailure() {
+        clearPromotion();
+        clearDirectorEvent();
+    }
 
     private void clearPromotion() {
         this.promotionPending = false;
@@ -389,6 +442,8 @@ public class ChatRoom {
         resetAffection();
         resetSceneState();
         clearPromotion();
+        clearPromotionWaiting();
+        clearDirectorEvent();
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;
@@ -404,6 +459,7 @@ public class ChatRoom {
         this.characterThought = null;
         this.thoughtUpdatedAtTurn = 0;
         this.currentBpm = 65;
+        this.topicConcluded = false;
     }
 
     private int clamp(int min, int max, int v) { return Math.max(min, Math.min(max, v)); }

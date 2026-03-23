@@ -36,44 +36,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * [Phase 5.5-Perf] SSE Dual-Streaming 채팅 서비스
  *
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *  "백엔드에서 완벽하게 조립된 박스(JSON)만 검수해서 던져주는
- *   스마트 컨베이어 벨트"
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- *
- * [SSE 이벤트 시퀀스]
- *
- *   ┌─ 유저 전송 ─┐
- *   │             │
- *   │  TX-1       │  에너지 차감 + MongoDB 유저 메시지 저장
- *   │  (동기)     │
- *   │             │
- *   │  LLM 스트림  │  OpenRouter → 백엔드 (토큰 누적)
- *   │  ~1.5초 ──► │ ── SSE: first_scene ──►  프론트에서 즉시 캐릭터 대사 렌더링
- *   │             │                          유저는 글을 읽기 시작 (체감 로딩 종료)
- *   │  ~4초  ──►  │  전체 JSON 완성
- *   │             │
- *   │  TX-2       │  스탯/승급/엔딩/이스터에그 처리
- *   │  (동기)     │
- *   │             │
- *   │  MongoDB    │  ASSISTANT 메시지 + 속마음 저장
- *   │             │
- *   │  ───────►   │ ── SSE: final_result ──► 호감도/BPM/스탯 UI 업데이트
- *   │             │                          다음 씬 큐 준비
- *   │  비동기     │  메모리 요약 + 캐릭터 생각 트리거
- *   └─────────────┘
- *
- * [기존 sendMessage와의 공존]
- *   - ChatService.sendMessage()는 그대로 유지 (폴백/시스템 이벤트용)
- *   - 프론트엔드는 stream 엔드포인트를 우선 사용
- *   - 네트워크 문제로 SSE 실패 시 기존 REST 폴백 가능
+ * [Phase 5.5-EV] 이벤트 시스템 강화:
+ *   - topic_concluded: LLM이 판단한 주제 종료 플래그
+ *   - Director Mode: 이벤트를 "스노우볼" 형태로 진행
+ *   - sendEventSelectStream(): 이벤트 선택 → 디렉터 모드 시작
+ *   - sendDirectorWatchStream(): [👀 계속 지켜보기] → SYSTEM_DIRECTOR 주입
+ *   - sendTimeSkipStream(): [시간 넘기기] → 시간/장소 전환 나레이션
+ *   - 승급 판정: 5종 스탯 변화량 합산 기반
+ *   - 승급 게이팅: topic_concluded=true 시에만 발동
  */
 @Service
 @Slf4j
@@ -84,7 +60,7 @@ public class ChatStreamService {
     private final ChatLogMongoRepository chatLogRepository;
     private final CharacterPromptAssembler promptAssembler;
     private final OpenRouterStreamClient streamClient;
-    private final OpenRouterClient openRouterClient;  // 폴백용
+    private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
     private final MemoryService memoryService;
@@ -96,13 +72,31 @@ public class ChatStreamService {
     private final ContentModerationService contentModerationService;
     private final UserRepository userRepository;
     private final SecretModeService secretModeService;
-    private final ChatService chatService;   // 공유 헬퍼 (캐릭터 생각, 메모리 트리거 등)
+    private final ChatService chatService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
 
+    /** [Phase 5.5-EV] 시간 넘기기 에너지 비용 */
+    private static final int TIME_SKIP_ENERGY_COST = 1;
+
+    /** [Phase 5.5-EV] SYSTEM_DIRECTOR 프롬프트 (지켜보기 시 LLM에 주입) */
+    private static final String SYSTEM_DIRECTOR_PROMPT = """
+        [SYSTEM_DIRECTOR] 유저는 아직 개입하지 않고 상황을 숨죽여 지켜보고 있습니다.
+        현재의 갈등이나 상황을 한 단계 더 심화시키고 긴장감을 높이는 방향으로 2~3개의 씬을 추가 연출하세요.
+        상황을 스스로 종료시키지 마세요. 캐릭터를 더 곤경에 빠뜨리거나, 묘한 분위기를 고조시키세요.
+        반드시 "event_status": "ONGOING" 을 출력하세요.
+        """;
+
+    /** [Phase 5.5-EV] 시간 넘기기 시스템 나레이션 프롬프트 */
+    private static final String TIME_SKIP_PROMPT = """
+        [TIME_SKIP] 시간이 흘렀습니다. 자연스러운 시간 경과를 나레이션으로 표현하고,
+        새로운 시간대/장소에서 캐릭터가 유저에게 먼저 말을 거는 씬을 1~2개 만들어주세요.
+        반드시 location, time 필드를 적절히 변경하세요.
+        """;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  TX 간 데이터 전달 DTO (ChatService와 동일)
+    //  TX 간 데이터 전달 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private record JpaPreResult(
@@ -114,16 +108,19 @@ public class ChatStreamService {
         Long userId, String username, int energyCost, String savedUserLogId
     ) {}
 
+    /** LLM 결과 파싱 후 중간 데이터 */
+    private record ParsedLlmResult(
+        AiJsonOutput aiOutput, String cleanJson, String combinedDialogue,
+        EmotionTag mainEmotion, List<SceneResponse> sceneResponses,
+        String lastBgm, String lastLoc, String lastOutfit, String lastTime,
+        AiJsonOutput.StatChanges statChanges, Integer bpm,
+        String innerThought, boolean topicConcluded, String eventStatus
+    ) {}
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  메인 스트리밍 메서드
+    //  1. 메인 스트리밍 (유저 채팅) — 기존 + topic_concluded/promotion gating
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * SSE 기반 스트리밍 메시지 전송
-     *
-     * @Async로 실행 — 컨트롤러는 SseEmitter를 즉시 반환하고,
-     * 실제 처리는 별도 스레드에서 비동기로 진행.
-     */
     @Async
     public void sendMessageStream(Long roomId, String userMessage, SseEmitter emitter) {
         long totalStart = System.currentTimeMillis();
@@ -144,8 +141,7 @@ public class ChatStreamService {
                 return;
             }
 
-            // ── TX-1: JPA (에너지 차감) ──
-            long tx1Start = System.currentTimeMillis();
+            // ── TX-1 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
@@ -155,24 +151,22 @@ public class ChatStreamService {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.isPromotionPending(), room.getUser().getUsername(), cost);
             });
-            log.info("⏱ [STREAM-PERF] TX-1: {}ms", System.currentTimeMillis() - tx1Start);
             cacheService.evictUserProfile(jpa.username());
 
             // ── Prompt Injection Check ──
             PromptInjectionGuard.InjectionCheckResult injCheck =
                 injectionGuard.checkChatMessage(userMessage, jpa.username());
             if (injCheck.detected()) {
-                log.warn("⚠️ [INJECTION] Detected: user={}, severity={}", jpa.username(), injCheck.severity());
+                log.warn("⚠️ [INJECTION] Detected: user={}", jpa.username());
             }
 
             // ── MongoDB: USER 메시지 저장 ──
             String savedUserLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.user(jpa.room().getId(), userMessage));
+                    ChatLogDocument.user(roomId, userMessage));
                 savedUserLogId = savedLog.getId();
             } catch (Exception e) {
-                log.error("❌ [COMPENSATION] MongoDB USER save failed", e);
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장에 실패했습니다.");
                 return;
@@ -181,350 +175,668 @@ public class ChatStreamService {
             RollbackContext rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energyCost(), savedUserLogId);
 
-            // ── RAG 메모리 조회 (Redis/RDB) ──
-            String longTermMemory = "";
-            long logCountForRag = jpa.logCount() + 1;
-            if (logCountForRag >= RAG_SKIP_LOG_THRESHOLD) {
-                long ragStart = System.currentTimeMillis();
-                try {
-                    longTermMemory = memoryService.retrieveContext(roomId);
-                } catch (Exception e) {
-                    log.warn("⏱ [STREAM-PERF] RAG failed (non-blocking): {}", e.getMessage());
-                }
-                log.info("⏱ [STREAM-PERF] RAG: {}ms | found={}",
-                    System.currentTimeMillis() - ragStart, !longTermMemory.isEmpty());
-            } else {
-                log.info("⏱ [STREAM-PERF] RAG SKIPPED (logCount={} < {})", logCountForRag, RAG_SKIP_LOG_THRESHOLD);
-            }
+            // [Phase 5.5-EV] 유저 개입인지 판단 (디렉터 모드 중 유저가 직접 채팅)
+            boolean isUserIntervention = jpa.room().isEventActive();
 
-            // ── 프롬프트 조립 ──
-            boolean effectiveSecretMode = jpa.room().getUser().getIsSecretMode()
-                && secretModeService.canAccessSecretMode(
-                jpa.room().getUser(), jpa.room().getCharacter().getId());
-
-            CharacterPromptAssembler.SystemPromptPayload systemPrompt =
-                promptAssembler.assembleSystemPrompt(
-                    jpa.room().getCharacter(), jpa.room(), jpa.room().getUser(),
-                    longTermMemory, effectiveSecretMode);
-
-            List<OpenAiMessage> messages = buildMessageHistory(jpa.room().getId(), systemPrompt);
-            String model = boostModeResolver.resolveModel(jpa.room().getUser());
-
-            Map<String, Object> providerRouting = Map.of(
-                "order", List.of("Google AI Studio"),
-                "allow_fallbacks", false
-            );
-
-            OpenAiChatRequest llmRequest = new OpenAiChatRequest(
-                model, messages, 0.8, true, 0.3, 0.15, providerRouting);
-
-            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            //  🚀 Dual-Streaming LLM 호출
-            //  첫 번째 씬 완성 → SSE first_scene 발사
-            //  전체 완성 → 후처리 → SSE final_result 발사
-            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-            long llmStart = System.currentTimeMillis();
-            log.info("⏱ [STREAM-PERF] LLM stream START | model={} | messages={}",
-                model, messages.size());
-
-            StreamResult streamResult;
-            try {
-                streamResult = streamClient.streamCompletion(llmRequest, firstSceneJson -> {
-                    // ── 콜백: 첫 번째 씬 완성 시점 ──
-                    try {
-                        // 검증: 파싱 가능한지 확인
-                        AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
-                        EmotionTag emotion = parseEmotion(scene.emotion());
-
-                        SceneResponse firstScene = new SceneResponse(
-                            scene.narration(), scene.dialogue(), emotion,
-                            safeUpperCase(scene.location()), safeUpperCase(scene.time()),
-                            safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode())
-                        );
-
-                        // SSE 발사: first_scene
-                        String json = objectMapper.writeValueAsString(firstScene);
-                        emitter.send(SseEmitter.event()
-                            .name("first_scene")
-                            .data(json));
-
-                        log.info("🚀 [SSE] first_scene sent: emotion={} | dialogueLen={}",
-                            emotion, scene.dialogue() != null ? scene.dialogue().length() : 0);
-
-                    } catch (Exception e) {
-                        log.warn("⚠️ [SSE] first_scene send failed: {}", e.getMessage());
-                    }
-                });
-            } catch (Exception e) {
-                log.error("❌ [COMPENSATION] LLM stream failed | roomId={}", roomId, e);
-                compensateFullRollback(rollbackCtx);
-                sendSseError(emitter, "LLM_ERROR", "AI 응답 생성에 실패했습니다.");
-                return;
-            }
-
-            log.info("⏱ [STREAM-PERF] LLM stream DONE: {}ms | chars={}",
-                System.currentTimeMillis() - llmStart, streamResult.fullResponse().length());
-
-            // ── 전체 JSON 파싱 ──
-            AiJsonOutput aiOutput;
-            String cleanJson;
-            try {
-                cleanJson = stripMarkdown(streamResult.fullResponse());
-                aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
-            } catch (JsonProcessingException e) {
-                log.error("❌ JSON Parsing Error: {}", streamResult.fullResponse(), e);
-                compensateFullRollback(rollbackCtx);
-                sendSseError(emitter, "PARSE_ERROR", "AI 응답 형식이 올바르지 않습니다.");
-                return;
-            }
-
-            // ── 파싱 결과 정리 ──
-            String combinedDialogue = aiOutput.scenes().stream()
-                .map(AiJsonOutput.Scene::dialogue)
-                .collect(Collectors.joining(" "));
-
-            String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
-                : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
-            EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
-
-            List<SceneResponse> sceneResponses = aiOutput.scenes().stream()
-                .map(s -> new SceneResponse(
-                    s.narration(), s.dialogue(), parseEmotion(s.emotion()),
-                    safeUpperCase(s.location()), safeUpperCase(s.time()),
-                    safeUpperCase(s.outfit()), safeUpperCase(s.bgmMode())))
-                .collect(Collectors.toList());
-
-            String lastBgm = extractLastNonNull(sceneResponses, SceneResponse::bgmMode);
-            String lastLoc = extractLastNonNull(sceneResponses, SceneResponse::location);
-            String lastOutfit = extractLastNonNull(sceneResponses, SceneResponse::outfit);
-            String lastTime = extractLastNonNull(sceneResponses, SceneResponse::time);
-
-            AiJsonOutput.StatChanges statChanges = aiOutput.statChanges();
-            Integer bpm = aiOutput.bpm();
-            String innerThought = aiOutput.innerThought();
-            if (innerThought != null && innerThought.isBlank()) innerThought = null;
+            // ── LLM 호출 + 파싱 ──
+            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
+            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
+                effectiveSecretMode, emitter, rollbackCtx);
+            if (parsed == null) return; // 에러 시 이미 emitter 처리됨
 
             boolean isStory = jpa.room().isStoryMode();
 
-            // ── TX-2: JPA (스탯/승급/엔딩/이스터에그) ──
-            long tx2Start = System.currentTimeMillis();
-            final String finalInnerThought = innerThought;
+            // [Phase 5.5-EV] 디렉터 모드 중 유저 개입 → RESOLVED 판정
+            boolean wasEventActive = jpa.room().isEventActive();
 
+            // ── TX-2 ──
             SendChatResponse response;
             try {
                 response = txTemplate.execute(status -> {
                     ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
+                    // [Phase 5.5-EV] topic_concluded 상태 업데이트
+                    freshRoom.updateTopicConcluded(parsed.topicConcluded());
+
+                    // [Phase 5.5-EV] 이벤트 상태 업데이트 (유저 개입 시)
+                    if (wasEventActive) {
+                        String resolvedStatus = parsed.eventStatus();
+                        if (resolvedStatus == null || resolvedStatus.isBlank()) {
+                            resolvedStatus = "RESOLVED"; // 유저 개입 시 기본 RESOLVED
+                        }
+                        freshRoom.updateEventStatus(resolvedStatus);
+                    }
+
+                    // 스탯 적용 (이벤트 ONGOING 중에는 BPM만 적용, 스탯 동결)
+                    boolean suppressStats = freshRoom.isEventActive() && !isUserIntervention;
+                    if (!suppressStats) {
+                        applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
+                    }
+                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+
+                    // 승급 이벤트 처리
                     PromotionEvent promoEvent = null;
                     if (isStory) {
-                        promoEvent = resolveAffectionAndPromotion(freshRoom, aiOutput.affectionChange(),
-                            aiOutput.moodScore(), jpa.wasPromotionPending());
-                    } else {
-                        freshRoom.applyLegacyAffectionChange(aiOutput.affectionChange());
+                        promoEvent = resolvePromotionLogic(freshRoom, parsed, jpa.wasPromotionPending(),
+                            isUserIntervention);
                     }
 
-                    freshRoom.updateLastActive(mainEmotion);
+                    freshRoom.updateLastActive(parsed.mainEmotion());
                     if (isStory) {
-                        freshRoom.updateSceneState(lastBgm, lastLoc, lastOutfit, lastTime);
+                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                            parsed.lastOutfit(), parsed.lastTime());
                     }
 
-                    // 스탯 + BPM + 관계
-                    applyStatChanges(freshRoom, statChanges, effectiveSecretMode);
-                    if (bpm != null) freshRoom.updateBpm(bpm);
                     if (!freshRoom.isPromotionPending()) {
                         freshRoom.refreshRelationFromStats();
                     }
+
+                    // [Phase 5.5-EV] 승급 대기 처리 (topic_concluded 게이팅)
+                    PromotionEvent deferredPromo = checkAndStartDeferredPromotion(freshRoom, parsed.topicConcluded());
+                    if (deferredPromo != null) promoEvent = deferredPromo;
 
                     // 엔딩 트리거
                     EndingTrigger endingTrigger = null;
                     if (isStory) {
                         String endingCheck = freshRoom.checkEndingTrigger();
-                        if (endingCheck != null) {
-                            endingTrigger = new EndingTrigger(endingCheck);
-                        }
+                        if (endingCheck != null) endingTrigger = new EndingTrigger(endingCheck);
                     }
 
                     // 이스터에그
-                    EasterEggEvent easterEggEvent = null;
-                    String eggTrigger = aiOutput.easterEggTrigger();
-                    if (eggTrigger != null && !eggTrigger.isBlank()) {
-                        try {
-                            EasterEggType eggType = EasterEggType.valueOf(eggTrigger.toUpperCase());
-                            var unlock = achievementService.unlockEasterEgg(jpa.userId(), eggType);
-                            boolean revert = (eggType == EasterEggType.FOURTH_WALL);
-                            easterEggEvent = new EasterEggEvent(eggType.name(),
-                                new AchievementInfo(unlock.code(), unlock.title(), unlock.titleKo(),
-                                    unlock.description(), unlock.icon(), unlock.isNew()), revert);
-                        } catch (IllegalArgumentException ignored) {}
-                    }
+                    EasterEggEvent easterEgg = processEasterEgg(parsed.aiOutput(), jpa.userId());
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
 
-                    return new SendChatResponse(roomId, sceneResponses,
+                    return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
-                        promoEvent, endingTrigger, easterEggEvent,
+                        promoEvent, endingTrigger, easterEgg,
                         statsSnapshot, freshRoom.getCurrentBpm(),
-                        freshRoom.getDynamicRelationTag(), null);
+                        freshRoom.getDynamicRelationTag(), null,
+                        false, null,
+                        freshRoom.isTopicConcluded(),
+                        freshRoom.isEventActive() ? freshRoom.getEventStatus() : null);
                 });
             } catch (Exception e) {
-                log.error("❌ [COMPENSATION] TX-2 failed | roomId={}", roomId, e);
+                log.error("❌ TX-2 failed | roomId={}", roomId, e);
                 compensateFullRollback(rollbackCtx);
                 sendSseError(emitter, "TX_ERROR", "응답 처리 중 오류가 발생했습니다.");
                 return;
             }
-            log.info("⏱ [STREAM-PERF] TX-2: {}ms", System.currentTimeMillis() - tx2Start);
 
-            // ── MongoDB: ASSISTANT 저장 (속마음 포함) ──
+            // ── MongoDB: ASSISTANT 저장 ──
             String assistantLogId = null;
             boolean hasInnerThought = false;
             try {
                 ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
-                    roomId, cleanJson, combinedDialogue, mainEmotion, null, finalInnerThought);
+                    roomId, parsed.cleanJson(), parsed.combinedDialogue(),
+                    parsed.mainEmotion(), null, parsed.innerThought());
                 ChatLogDocument saved = chatLogRepository.save(assistantLog);
                 assistantLogId = saved.getId();
                 hasInnerThought = saved.hasInnerThought();
             } catch (Exception e) {
-                log.error("⚠️ [INCONSISTENCY] ASSISTANT log save failed | roomId={}", roomId, e);
+                log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
             }
             cacheService.evictRoomInfo(roomId);
 
-            // ── SSE 발사: final_result ──
-            try {
-                SendChatResponse finalResponse = new SendChatResponse(
-                    response.roomId(), response.scenes(),
-                    response.currentAffection(), response.relationStatus(),
-                    response.promotionEvent(), response.endingTrigger(), response.easterEgg(),
-                    response.stats(), response.bpm(),
-                    response.dynamicRelationTag(), response.characterThought(),
-                    hasInnerThought, assistantLogId);
-
-                String finalJson = objectMapper.writeValueAsString(finalResponse);
-                emitter.send(SseEmitter.event()
-                    .name("final_result")
-                    .data(finalJson));
-
-                log.info("🚀 [SSE] final_result sent | roomId={} | scenes={}",
-                    roomId, sceneResponses.size());
-            } catch (Exception e) {
-                log.warn("⚠️ [SSE] final_result send failed: {}", e.getMessage());
-            }
-
-            // ── SSE 완료 ──
+            // ── SSE: final_result ──
+            sendFinalResult(emitter, response, hasInnerThought, assistantLogId);
             emitter.complete();
 
-            log.info("⏱ [STREAM-PERF] ====== sendMessageStream DONE: {}ms ======",
-                System.currentTimeMillis() - totalStart);
+            log.info("⏱ [STREAM-PERF] sendMessageStream DONE: {}ms", System.currentTimeMillis() - totalStart);
 
-            // ── 비동기 후처리 (메모리/캐릭터 생각) ──
             triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode);
 
         } catch (Exception e) {
-            log.error("❌ [STREAM] Unexpected error | roomId={}", roomId, e);
+            log.error("❌ Unexpected error | roomId={}", roomId, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  SSE 유틸
+    //  2. [Phase 5.5-EV] 이벤트 선택 → 디렉터 모드 시작 (SSE)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private void sendSseError(SseEmitter emitter, String errorCode, String message) {
+    @Async
+    public void sendEventSelectStream(Long roomId, String eventDetail, int energyCost, SseEmitter emitter) {
+        log.info("🎬 [DIRECTOR] Event select START | roomId={}", roomId);
+
         try {
-            Map<String, String> error = Map.of("errorCode", errorCode, "message", message);
-            emitter.send(SseEmitter.event()
-                .name("error")
-                .data(objectMapper.writeValueAsString(error)));
+            // ── TX-1: 에너지 차감 + 디렉터 모드 시작 ──
+            JpaPreResult jpa = txTemplate.execute(status -> {
+                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+                room.getUser().consumeEnergy(energyCost);
+                room.startDirectorEvent(); // 디렉터 모드 시작
+                long logCount = chatLogRepository.countByRoomId(roomId);
+                return new JpaPreResult(room, room.getUser().getId(), logCount,
+                    room.isPromotionPending(), room.getUser().getUsername(), energyCost);
+            });
+            cacheService.evictUserProfile(jpa.username());
+
+            // ── MongoDB: 시스템 나레이션 저장 ──
+            String savedLogId;
+            try {
+                ChatLogDocument savedLog = chatLogRepository.save(
+                    ChatLogDocument.user(roomId, "[EVENT_START]\n" + eventDetail));
+                savedLogId = savedLog.getId();
+            } catch (Exception e) {
+                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                sendSseError(emitter, "INTERNAL_ERROR", "이벤트 저장 실패");
+                return;
+            }
+
+            RollbackContext rollbackCtx = new RollbackContext(
+                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+
+            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
+
+            // ── LLM 스트림 ──
+            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
+                effectiveSecretMode, emitter, rollbackCtx);
+            if (parsed == null) return;
+
+            // ── TX-2: 이벤트 상태 업데이트 (스탯 동결, BPM만 업데이트) ──
+            SendChatResponse response;
+            try {
+                response = txTemplate.execute(status -> {
+                    ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                        .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                    freshRoom.updateEventStatus(
+                        parsed.eventStatus() != null ? parsed.eventStatus() : "ONGOING");
+                    freshRoom.updateTopicConcluded(false); // 이벤트 중 topic은 미종료
+
+                    // 스탯 동결, BPM만 업데이트
+                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+                    freshRoom.updateLastActive(parsed.mainEmotion());
+                    if (jpa.room().isStoryMode()) {
+                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                            parsed.lastOutfit(), parsed.lastTime());
+                    }
+
+                    StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
+                    return new SendChatResponse(roomId, parsed.sceneResponses(),
+                        freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
+                        null, null, null,
+                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        freshRoom.getDynamicRelationTag(), null,
+                        false, null,
+                        false, // topicConcluded
+                        freshRoom.getEventStatus()); // eventStatus
+                });
+            } catch (Exception e) {
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "TX_ERROR", "이벤트 처리 실패");
+                return;
+            }
+
+            // ── MongoDB: ASSISTANT 저장 ──
+            String assistantLogId = saveAssistantLog(roomId, parsed);
+            cacheService.evictRoomInfo(roomId);
+
+            sendFinalResult(emitter, response, false, assistantLogId);
             emitter.complete();
+
+            log.info("🎬 [DIRECTOR] Event select DONE | roomId={} | eventStatus={}",
+                roomId, parsed.eventStatus());
+
         } catch (Exception e) {
-            log.warn("Failed to send SSE error: {}", e.getMessage());
-            try { emitter.completeWithError(e); } catch (Exception ignored) {}
+            log.error("❌ Event select error | roomId={}", roomId, e);
+            sendSseError(emitter, "UNEXPECTED_ERROR", "이벤트 처리 중 오류 발생");
         }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  ChatService 로직 위임 헬퍼 (중복 최소화)
+    //  3. [Phase 5.5-EV] 👀 계속 지켜보기 (SSE)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount, boolean isSecretMode) {
-        // 메모리 요약
-        long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
-        if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
-            log.info("🧠 [MEMORY] Summarization TRIGGERED | roomId={} | userMsgCount={}", roomId, userMsgCount);
-            memoryService.summarizeAndSaveMemory(roomId, userId);
-        }
+    @Async
+    public void sendDirectorWatchStream(Long roomId, SseEmitter emitter) {
+        log.info("👀 [DIRECTOR] Watch START | roomId={}", roomId);
 
-        // 캐릭터 생각 (ChatService에 위임)
-        long thoughtCycle = 10, thoughtOffset = 5;
-        if (userMsgCount > 0 && userMsgCount % thoughtCycle == thoughtOffset) {
-            chatService.generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
+        try {
+            // ── TX-1: 에너지 차감 (일반 채팅과 동일) ──
+            JpaPreResult jpa = txTemplate.execute(status -> {
+                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                if (!room.isEventActive()) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "진행 중인 이벤트가 없습니다.");
+                }
+
+                int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
+                room.getUser().consumeEnergy(cost);
+                long logCount = chatLogRepository.countByRoomId(roomId);
+                return new JpaPreResult(room, room.getUser().getId(), logCount,
+                    room.isPromotionPending(), room.getUser().getUsername(), cost);
+            });
+            cacheService.evictUserProfile(jpa.username());
+
+            // ── MongoDB: SYSTEM_DIRECTOR 메시지 저장 (유저에게는 보이지 않음) ──
+            String savedLogId;
+            try {
+                ChatLogDocument savedLog = chatLogRepository.save(
+                    ChatLogDocument.user(roomId, SYSTEM_DIRECTOR_PROMPT));
+                savedLogId = savedLog.getId();
+            } catch (Exception e) {
+                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
+                return;
+            }
+
+            RollbackContext rollbackCtx = new RollbackContext(
+                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+
+            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
+
+            // ── LLM 스트림 (SYSTEM_DIRECTOR가 포함된 히스토리) ──
+            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
+                effectiveSecretMode, emitter, rollbackCtx);
+            if (parsed == null) return;
+
+            // ── TX-2: 스탯 동결, BPM만 업데이트 ──
+            SendChatResponse response;
+            try {
+                response = txTemplate.execute(status -> {
+                    ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                        .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                    freshRoom.updateEventStatus(
+                        parsed.eventStatus() != null ? parsed.eventStatus() : "ONGOING");
+
+                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+                    freshRoom.updateLastActive(parsed.mainEmotion());
+                    if (jpa.room().isStoryMode()) {
+                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                            parsed.lastOutfit(), parsed.lastTime());
+                    }
+
+                    StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
+                    return new SendChatResponse(roomId, parsed.sceneResponses(),
+                        freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
+                        null, null, null,
+                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        freshRoom.getDynamicRelationTag(), null,
+                        false, null,
+                        false,
+                        freshRoom.getEventStatus());
+                });
+            } catch (Exception e) {
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "TX_ERROR", "지켜보기 처리 실패");
+                return;
+            }
+
+            String assistantLogId = saveAssistantLog(roomId, parsed);
+            cacheService.evictRoomInfo(roomId);
+
+            sendFinalResult(emitter, response, false, assistantLogId);
+            emitter.complete();
+
+            log.info("👀 [DIRECTOR] Watch DONE | roomId={} | eventStatus={}",
+                roomId, parsed.eventStatus());
+
+        } catch (Exception e) {
+            log.error("❌ Watch error | roomId={}", roomId, e);
+            sendSseError(emitter, "UNEXPECTED_ERROR", "지켜보기 처리 중 오류 발생");
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  4. [Phase 5.5-EV] 시간 넘기기 (SSE)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Async
+    public void sendTimeSkipStream(Long roomId, SseEmitter emitter) {
+        log.info("⏭ [TIME_SKIP] START | roomId={}", roomId);
+
+        try {
+            // ── TX-1: 에너지 1 차감 ──
+            JpaPreResult jpa = txTemplate.execute(status -> {
+                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+                room.getUser().consumeEnergy(TIME_SKIP_ENERGY_COST);
+                long logCount = chatLogRepository.countByRoomId(roomId);
+                return new JpaPreResult(room, room.getUser().getId(), logCount,
+                    room.isPromotionPending(), room.getUser().getUsername(), TIME_SKIP_ENERGY_COST);
+            });
+            cacheService.evictUserProfile(jpa.username());
+
+            // ── MongoDB: 시간 넘기기 시스템 메시지 저장 ──
+            String savedLogId;
+            try {
+                ChatLogDocument savedLog = chatLogRepository.save(
+                    ChatLogDocument.user(roomId, TIME_SKIP_PROMPT));
+                savedLogId = savedLog.getId();
+            } catch (Exception e) {
+                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
+                return;
+            }
+
+            RollbackContext rollbackCtx = new RollbackContext(
+                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+
+            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
+
+            // ── LLM 스트림 ──
+            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
+                effectiveSecretMode, emitter, rollbackCtx);
+            if (parsed == null) return;
+
+            // ── TX-2: 일반적 스탯 적용 + topic 리셋 ──
+            SendChatResponse response;
+            try {
+                response = txTemplate.execute(status -> {
+                    ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                        .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                    applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
+                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+                    freshRoom.updateLastActive(parsed.mainEmotion());
+                    freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                        parsed.lastOutfit(), parsed.lastTime());
+                    freshRoom.updateTopicConcluded(false); // 시간 넘기기 후 → 새 주제 시작
+
+                    if (!freshRoom.isPromotionPending()) {
+                        freshRoom.refreshRelationFromStats();
+                    }
+
+                    StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
+                    return new SendChatResponse(roomId, parsed.sceneResponses(),
+                        freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
+                        null, null, null,
+                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        freshRoom.getDynamicRelationTag(), null,
+                        false, null,
+                        false, null); // topic/event 리셋
+                });
+            } catch (Exception e) {
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "TX_ERROR", "시간 넘기기 처리 실패");
+                return;
+            }
+
+            String assistantLogId = saveAssistantLog(roomId, parsed);
+            cacheService.evictRoomInfo(roomId);
+
+            sendFinalResult(emitter, response, false, assistantLogId);
+            emitter.complete();
+
+            log.info("⏭ [TIME_SKIP] DONE | roomId={}", roomId);
+
+        } catch (Exception e) {
+            log.error("❌ Time skip error | roomId={}", roomId, e);
+            sendSseError(emitter, "UNEXPECTED_ERROR", "시간 넘기기 처리 중 오류 발생");
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-EV] 승급 로직 (스탯 변화량 기반)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 승급 로직 — mood_score를 스탯 변화량 합산으로 대체
+     *
+     * @param isUserIntervention 디렉터 모드 중 유저 개입 턴인지 (이때만 턴 카운트)
+     */
+    private PromotionEvent resolvePromotionLogic(ChatRoom room, ParsedLlmResult parsed,
+                                                 boolean wasPending, boolean isUserIntervention) {
+        if (wasPending) {
+            // 디렉터 모드 중 지켜보기 턴은 카운트하지 않음
+            if (!isUserIntervention && room.isEventActive()) {
+                return new PromotionEvent("IN_PROGRESS",
+                    room.getPendingTargetStatus().name(),
+                    RelationStatusPolicy.getDisplayName(room.getPendingTargetStatus()),
+                    RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
+                    room.getPromotionMoodScore(), null);
+            }
+
+            // [Phase 5.5-EV] 5종 스탯 변화량 합산으로 mood_score 대체
+            int statDelta = parsed.statChanges() != null
+                ? parsed.statChanges().totalNormalStatDelta() : 0;
+            room.advancePromotionTurn(statDelta);
+
+            log.info("🎯 [PROMOTION] Turn {}/{} | statDelta={} (total: {}) | roomId={}",
+                room.getPromotionTurnCount(), RelationStatusPolicy.PROMOTION_MAX_TURNS,
+                statDelta, room.getPromotionMoodScore(), room.getId());
+
+            if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
+                return resolvePromotionResult(room);
+            }
+
+            RelationStatus target = room.getPendingTargetStatus();
+            return new PromotionEvent("IN_PROGRESS", target.name(),
+                RelationStatusPolicy.getDisplayName(target),
+                RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
+                room.getPromotionMoodScore(), null);
+
+        } else {
+            // [Phase 5.5-EV] 승급 감지 → 즉시 시작하지 않고, 대기(waiting) 상태로 전환
+            RelationStatus oldStatus = room.getStatusLevel();
+            room.applyLegacyAffectionChange(parsed.aiOutput().affectionChange());
+            RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
+
+            if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
+                log.info("🎯 [PROMOTION] Upgrade detected → WAITING for topic_concluded | {} → {} | roomId={}",
+                    oldStatus, newStatus, room.getId());
+
+                int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
+                room.updateAffection(thresholdEdge);
+                room.updateStatusLevel(oldStatus);
+                room.markPromotionWaiting(newStatus); // 즉시 시작 대신 대기
+            }
+            return null;
         }
     }
 
     /**
-     * 메시지 히스토리 빌드 (ChatService.buildMessageHistory와 동일 로직)
+     * [Phase 5.5-EV] topic_concluded=true 시 대기 중인 승급 이벤트 개시
      */
-    private List<OpenAiMessage> buildMessageHistory(Long roomId,
-                                                    CharacterPromptAssembler.SystemPromptPayload systemPrompt) {
-        List<ChatLogDocument> history = chatLogRepository.findTop200ByRoomIdOrderByCreatedAtDesc(roomId);
-        history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+    private PromotionEvent checkAndStartDeferredPromotion(ChatRoom room, boolean topicConcluded) {
+        if (!topicConcluded || !room.isPromotionWaitingForTopic()) {
+            return null;
+        }
 
-        List<OpenAiMessage> messages = new ArrayList<>();
+        boolean started = room.tryStartPromotionFromWaiting();
+        if (!started) return null;
 
-        if (history.size() == 3 || history.size() % 20 == 0) {
-            messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
+        RelationStatus target = room.getPendingTargetStatus();
+        log.info("🎯 [PROMOTION] Deferred promotion STARTED | target={} | roomId={}",
+            target, room.getId());
+
+        return new PromotionEvent("STARTED", target.name(),
+            RelationStatusPolicy.getDisplayName(target),
+            RelationStatusPolicy.PROMOTION_MAX_TURNS, 0, null);
+    }
+
+    private PromotionEvent resolvePromotionResult(ChatRoom room) {
+        int totalStatDelta = room.getPromotionMoodScore();
+        RelationStatus target = room.getPendingTargetStatus();
+        boolean success = totalStatDelta >= RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD;
+
+        log.info("🎯 [PROMOTION] RESULT: {} | statDelta={}/{} | target={} | roomId={}",
+            success ? "SUCCESS" : "FAILURE",
+            totalStatDelta, RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD,
+            target, room.getId());
+
+        if (success) {
+            room.completePromotionSuccess();
+            room.updateAffection(RelationStatusPolicy.getThresholdScore(target));
+            List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target).stream()
+                .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
+                .collect(Collectors.toList());
+            return new PromotionEvent("SUCCESS", target.name(),
+                RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, unlocks);
         } else {
-            messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
+            room.completePromotionFailure();
+            int penalty = RelationStatusPolicy.PROMOTION_FAILURE_PENALTY;
+            int penalized = Math.max(0, RelationStatusPolicy.getThresholdScore(target) - 1 - penalty);
+            room.updateAffection(penalized);
+            room.updateStatusLevel(RelationStatusPolicy.fromScore(penalized));
+            return new PromotionEvent("FAILURE", target.name(),
+                RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, null);
         }
+    }
 
-        for (ChatLogDocument chatLog : history) {
-            switch (chatLog.getRole()) {
-                case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
-                case ASSISTANT -> {
-                    String sanitized = buildSanitizedAssistantContent(chatLog);
-                    messages.add(OpenAiMessage.assistant(sanitized));
-                }
-                case SYSTEM -> messages.add(
-                    OpenAiMessage.user("[NARRATION]\n" + chatLog.getRawContent()));
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  공통 LLM 스트림 호출 + 파싱
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private ParsedLlmResult streamLlmAndParse(ChatRoom room, long logCountForRag,
+                                              boolean effectiveSecretMode,
+                                              SseEmitter emitter, RollbackContext rollbackCtx) {
+        // RAG 메모리
+        String longTermMemory = "";
+        if (logCountForRag >= RAG_SKIP_LOG_THRESHOLD) {
+            try {
+                longTermMemory = memoryService.retrieveContext(room.getId());
+            } catch (Exception e) {
+                log.warn("RAG failed (non-blocking): {}", e.getMessage());
             }
         }
 
-        messages.add(OpenAiMessage.system(systemPrompt.dynamicRules()));
-        messages.add(OpenAiMessage.system(systemPrompt.outputFormat()));
-        return messages;
-    }
+        // 프롬프트 조립
+        CharacterPromptAssembler.SystemPromptPayload systemPrompt =
+            promptAssembler.assembleSystemPrompt(
+                room.getCharacter(), room, room.getUser(),
+                longTermMemory, effectiveSecretMode);
 
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
+        List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
+        String model = boostModeResolver.resolveModel(room.getUser());
+
+        Map<String, Object> providerRouting = Map.of(
+            "order", List.of("Google AI Studio"),
+            "allow_fallbacks", false
+        );
+
+        OpenAiChatRequest llmRequest = new OpenAiChatRequest(
+            model, messages, 0.8, true, 0.3, 0.15, providerRouting);
+
+        // ── LLM 스트림 ──
+        StreamResult streamResult;
         try {
-            String raw = chatLog.getRawContent();
-            if (raw == null || raw.isBlank()) {
-                return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
-            }
-            String cleaned = stripMarkdown(raw);
-            AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
-            StringBuilder sb = new StringBuilder();
-            for (AiJsonOutput.Scene scene : parsed.scenes()) {
-                if (scene.narration() != null && !scene.narration().isBlank())
-                    sb.append("(").append(scene.narration().trim()).append(") ");
-                if (scene.dialogue() != null && !scene.dialogue().isBlank())
-                    sb.append(scene.dialogue().trim());
-                if (scene.emotion() != null)
-                    sb.append(" [").append(scene.emotion()).append("]");
-                sb.append("\n");
-            }
-            String result = sb.toString().trim();
-            return result.isEmpty()
-                ? (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
-                : result;
+            streamResult = streamClient.streamCompletion(llmRequest, firstSceneJson -> {
+                try {
+                    AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
+                    EmotionTag emotion = parseEmotion(scene.emotion());
+                    SceneResponse firstScene = new SceneResponse(
+                        scene.narration(), scene.dialogue(), emotion,
+                        safeUpperCase(scene.location()), safeUpperCase(scene.time()),
+                        safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
+                    emitter.send(SseEmitter.event().name("first_scene")
+                        .data(objectMapper.writeValueAsString(firstScene)));
+                } catch (Exception e) {
+                    log.warn("first_scene send failed: {}", e.getMessage());
+                }
+            });
         } catch (Exception e) {
-            return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
+            log.error("LLM stream failed | roomId={}", room.getId(), e);
+            compensateFullRollback(rollbackCtx);
+            sendSseError(emitter, "LLM_ERROR", "AI 응답 생성 실패");
+            return null;
         }
+
+        // ── JSON 파싱 ──
+        AiJsonOutput aiOutput;
+        String cleanJson;
+        try {
+            cleanJson = stripMarkdown(streamResult.fullResponse());
+            aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
+        } catch (JsonProcessingException e) {
+            log.error("JSON Parse Error: {}", streamResult.fullResponse(), e);
+            compensateFullRollback(rollbackCtx);
+            sendSseError(emitter, "PARSE_ERROR", "AI 응답 형식 오류");
+            return null;
+        }
+
+        // ── 결과 정리 ──
+        String combinedDialogue = aiOutput.scenes().stream()
+            .map(AiJsonOutput.Scene::dialogue).collect(Collectors.joining(" "));
+
+        String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
+            : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
+        EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
+
+        List<SceneResponse> sceneResponses = aiOutput.scenes().stream()
+            .map(s -> new SceneResponse(s.narration(), s.dialogue(), parseEmotion(s.emotion()),
+                safeUpperCase(s.location()), safeUpperCase(s.time()),
+                safeUpperCase(s.outfit()), safeUpperCase(s.bgmMode())))
+            .collect(Collectors.toList());
+
+        String innerThought = aiOutput.innerThought();
+        if (innerThought != null && innerThought.isBlank()) innerThought = null;
+
+        return new ParsedLlmResult(
+            aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
+            extractLastNonNull(sceneResponses, SceneResponse::bgmMode),
+            extractLastNonNull(sceneResponses, SceneResponse::location),
+            extractLastNonNull(sceneResponses, SceneResponse::outfit),
+            extractLastNonNull(sceneResponses, SceneResponse::time),
+            aiOutput.statChanges(), aiOutput.bpm(), innerThought,
+            aiOutput.isTopicConcluded(),
+            aiOutput.eventStatus()
+        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  스탯/승급/보상 헬퍼 (ChatService와 동일 로직)
+    //  공통 헬퍼
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private boolean resolveSecretMode(ChatRoom room) {
+        return room.getUser().getIsSecretMode()
+            && secretModeService.canAccessSecretMode(room.getUser(), room.getCharacter().getId());
+    }
+
+    private String saveAssistantLog(Long roomId, ParsedLlmResult parsed) {
+        try {
+            ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
+                roomId, parsed.cleanJson(), parsed.combinedDialogue(),
+                parsed.mainEmotion(), null, parsed.innerThought());
+            return chatLogRepository.save(assistantLog).getId();
+        } catch (Exception e) {
+            log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
+            return null;
+        }
+    }
+
+    private void sendFinalResult(SseEmitter emitter, SendChatResponse response,
+                                 boolean hasInnerThought, String assistantLogId) {
+        try {
+            SendChatResponse finalResponse = new SendChatResponse(
+                response.roomId(), response.scenes(),
+                response.currentAffection(), response.relationStatus(),
+                response.promotionEvent(), response.endingTrigger(), response.easterEgg(),
+                response.stats(), response.bpm(),
+                response.dynamicRelationTag(), response.characterThought(),
+                hasInnerThought, assistantLogId,
+                response.topicConcluded(), response.eventStatus());
+
+            emitter.send(SseEmitter.event().name("final_result")
+                .data(objectMapper.writeValueAsString(finalResponse)));
+        } catch (Exception e) {
+            log.warn("final_result send failed: {}", e.getMessage());
+        }
+    }
+
+    private EasterEggEvent processEasterEgg(AiJsonOutput aiOutput, Long userId) {
+        String eggTrigger = aiOutput.easterEggTrigger();
+        if (eggTrigger == null || eggTrigger.isBlank()) return null;
+        try {
+            EasterEggType eggType = EasterEggType.valueOf(eggTrigger.toUpperCase());
+            var unlock = achievementService.unlockEasterEgg(userId, eggType);
+            boolean revert = (eggType == EasterEggType.FOURTH_WALL);
+            return new EasterEggEvent(eggType.name(),
+                new AchievementInfo(unlock.code(), unlock.title(), unlock.titleKo(),
+                    unlock.description(), unlock.icon(), unlock.isNew()), revert);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
 
     private void applyStatChanges(ChatRoom room, AiJsonOutput.StatChanges sc, boolean isSecretMode) {
         if (sc == null) return;
@@ -543,56 +855,13 @@ public class ChatStreamService {
             isSecretMode ? room.getStatObsession() : null);
     }
 
-    private PromotionEvent resolveAffectionAndPromotion(
-        ChatRoom room, int affectionChange, Integer moodScore, boolean wasPending) {
-        if (wasPending) {
-            int resolved = (moodScore != null) ? moodScore : 1;
-            room.advancePromotionTurn(resolved);
-            if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
-                return resolvePromotionResult(room);
-            }
-            RelationStatus target = room.getPendingTargetStatus();
-            return new PromotionEvent("IN_PROGRESS", target.name(),
-                RelationStatusPolicy.getDisplayName(target),
-                RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
-                room.getPromotionMoodScore(), null);
-        } else {
-            RelationStatus oldStatus = room.getStatusLevel();
-            room.applyLegacyAffectionChange(affectionChange);
-            RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
-            if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
-                int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
-                room.updateAffection(thresholdEdge);
-                room.updateStatusLevel(oldStatus);
-                room.startPromotion(newStatus);
-                return new PromotionEvent("STARTED", newStatus.name(),
-                    RelationStatusPolicy.getDisplayName(newStatus),
-                    RelationStatusPolicy.PROMOTION_MAX_TURNS, 0, null);
-            }
-            return null;
-        }
-    }
-
-    private PromotionEvent resolvePromotionResult(ChatRoom room) {
-        int totalMood = room.getPromotionMoodScore();
-        RelationStatus target = room.getPendingTargetStatus();
-        boolean success = totalMood >= RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD;
-        if (success) {
-            room.completePromotionSuccess();
-            room.updateAffection(RelationStatusPolicy.getThresholdScore(target));
-            List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target).stream()
-                .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
-                .collect(Collectors.toList());
-            return new PromotionEvent("SUCCESS", target.name(),
-                RelationStatusPolicy.getDisplayName(target), 0, totalMood, unlocks);
-        } else {
-            room.completePromotionFailure();
-            int penalty = RelationStatusPolicy.PROMOTION_FAILURE_PENALTY;
-            int penalized = Math.max(0, RelationStatusPolicy.getThresholdScore(target) - 1 - penalty);
-            room.updateAffection(penalized);
-            room.updateStatusLevel(RelationStatusPolicy.fromScore(penalized));
-            return new PromotionEvent("FAILURE", target.name(),
-                RelationStatusPolicy.getDisplayName(target), 0, totalMood, null);
+    private void sendSseError(SseEmitter emitter, String errorCode, String message) {
+        try {
+            emitter.send(SseEmitter.event().name("error")
+                .data(objectMapper.writeValueAsString(Map.of("errorCode", errorCode, "message", message))));
+            emitter.complete();
+        } catch (Exception e) {
+            try { emitter.completeWithError(e); } catch (Exception ignored) {}
         }
     }
 
@@ -606,7 +875,7 @@ public class ChatStreamService {
                 return null;
             });
         } catch (Exception ex) {
-            log.error("🔄 [COMPENSATION] Energy refund FAILED: userId={}", userId, ex);
+            log.error("Energy refund FAILED: userId={}", userId, ex);
         }
         cacheService.evictUserProfile(username);
     }
@@ -614,14 +883,66 @@ public class ChatStreamService {
     private void compensateFullRollback(RollbackContext ctx) {
         if (ctx.savedUserLogId() != null) {
             try { chatLogRepository.deleteById(ctx.savedUserLogId()); }
-            catch (Exception ex) { log.error("🔄 [COMPENSATION] User msg delete FAILED", ex); }
+            catch (Exception ex) { log.error("User msg delete FAILED", ex); }
         }
         compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  텍스트 유틸
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount, boolean isSecretMode) {
+        long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
+        if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
+            memoryService.summarizeAndSaveMemory(roomId, userId);
+        }
+        long thoughtCycle = 10, thoughtOffset = 5;
+        if (userMsgCount > 0 && userMsgCount % thoughtCycle == thoughtOffset) {
+            chatService.generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
+        }
+    }
+
+    private List<OpenAiMessage> buildMessageHistory(Long roomId,
+                                                    CharacterPromptAssembler.SystemPromptPayload systemPrompt) {
+        List<ChatLogDocument> history = chatLogRepository.findTop200ByRoomIdOrderByCreatedAtDesc(roomId);
+        history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+        List<OpenAiMessage> messages = new ArrayList<>();
+
+        if (history.size() == 3 || history.size() % 20 == 0) {
+            messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
+        } else {
+            messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
+        }
+
+        for (ChatLogDocument chatLog : history) {
+            switch (chatLog.getRole()) {
+                case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
+                case ASSISTANT -> messages.add(OpenAiMessage.assistant(buildSanitizedAssistantContent(chatLog)));
+                case SYSTEM -> messages.add(OpenAiMessage.user("[NARRATION]\n" + chatLog.getRawContent()));
+            }
+        }
+
+        messages.add(OpenAiMessage.system(systemPrompt.dynamicRules()));
+        messages.add(OpenAiMessage.system(systemPrompt.outputFormat()));
+        return messages;
+    }
+
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
+        try {
+            String raw = chatLog.getRawContent();
+            if (raw == null || raw.isBlank()) return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
+            String cleaned = stripMarkdown(raw);
+            AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
+            StringBuilder sb = new StringBuilder();
+            for (AiJsonOutput.Scene scene : parsed.scenes()) {
+                if (scene.narration() != null && !scene.narration().isBlank()) sb.append("(").append(scene.narration().trim()).append(") ");
+                if (scene.dialogue() != null && !scene.dialogue().isBlank()) sb.append(scene.dialogue().trim());
+                if (scene.emotion() != null) sb.append(" [").append(scene.emotion()).append("]");
+                sb.append("\n");
+            }
+            String result = sb.toString().trim();
+            return result.isEmpty() ? (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "") : result;
+        } catch (Exception e) {
+            return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
+        }
+    }
 
     private String stripMarkdown(String text) {
         if (text.startsWith("```json")) text = text.substring(7);
@@ -631,8 +952,7 @@ public class ChatStreamService {
     }
 
     private EmotionTag parseEmotion(String s) {
-        try { return EmotionTag.valueOf(s.toUpperCase()); }
-        catch (Exception e) { return EmotionTag.NEUTRAL; }
+        try { return EmotionTag.valueOf(s.toUpperCase()); } catch (Exception e) { return EmotionTag.NEUTRAL; }
     }
 
     private String safeUpperCase(String v) {
@@ -640,8 +960,7 @@ public class ChatStreamService {
         return v.toUpperCase().trim();
     }
 
-    private String extractLastNonNull(List<SceneResponse> scenes,
-                                      java.util.function.Function<SceneResponse, String> ext) {
+    private String extractLastNonNull(List<SceneResponse> scenes, java.util.function.Function<SceneResponse, String> ext) {
         for (int i = scenes.size() - 1; i >= 0; i--) {
             String val = ext.apply(scenes.get(i));
             if (val != null) return val;

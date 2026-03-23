@@ -335,7 +335,6 @@ public class CharacterPromptAssembler {
               "mood_score": Integer (-2 to +3, REQUIRED during promotion event),"""
             : "";
 
-        // [Phase 5.5] 시크릿 모드 추가 스탯 필드
         String secretStatFields = isSecretMode
             ? """
                 "lust": 0,
@@ -344,11 +343,17 @@ public class CharacterPromptAssembler {
             : "";
         String secretStatComma = isSecretMode ? ",\n" : "";
 
+        // [Phase 5.5-EV] event_status 필드 — 디렉터 모드 이벤트 중에만 출력
+        String eventStatusField = room.isEventActive()
+            ? """
+              "event_status": "ONGOING or RESOLVED","""
+            : "";
+
         return """
             # Output Format Rules
             You MUST output the response in the following JSON format ONLY.
             The `reasoning` field is for your internal thought process to ensure quality.
-
+ 
             {
               "reasoning": "Briefly analyze the user's intent, decide emotion, and calculate scores. CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.",
               "scenes": [
@@ -372,11 +377,13 @@ public class CharacterPromptAssembler {
               },
               "bpm": Integer (60~180),
               "inner_thought": null or "Korean string (15~50 chars)",
+              "topic_concluded": true or false,
+              %s
               "easter_egg_trigger": null
             }
-
+ 
             CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.
-
+ 
             ## ⚠️ Multi-Scene Coherence Rules (STRICTLY ENFORCE):
             All scenes in a single response are ONE CONTINUOUS conversation turn.
             1. **Speech consistency:** The character's speech style MUST be identical across ALL scenes.
@@ -388,7 +395,8 @@ public class CharacterPromptAssembler {
             """.formatted(
             locationOptions, outfitOptions, bgmOptions,
             moodScoreField,
-            secretStatComma, secretStatFields
+            secretStatComma, secretStatFields,
+            eventStatusField
         );
     }
 
@@ -526,6 +534,81 @@ public class CharacterPromptAssembler {
             """.formatted(secretAddition);
     }
 
+    /**
+     * [Phase 5.5-EV] topic_concluded 프롬프트 블록
+     *
+     * LLM이 대화의 "주제(상황)가 끝났는지"를 매 턴 판단하여 플래그를 출력하도록 유도.
+     * 이 플래그가 true일 때만 이벤트 트리거/시간 넘기기가 활성화됨.
+     */
+    private String buildTopicConcludedBlock() {
+        return """
+            # 🏁 Topic Concluded Flag (주제 종료 판단)
+            You MUST output `"topic_concluded"` (Boolean) in your JSON every turn.
+ 
+            ## What "topic concluded" means:
+            The current conversation topic or situation has reached a **natural stopping point**.
+            - The subject has been fully discussed and both parties have said what they wanted.
+            - A story beat or emotional moment has played out to completion.
+            - There's a natural pause where a new topic or event could naturally begin.
+ 
+            ## When to output true:
+            - After a farewell exchange: "그럼 좋은 하루 보내" → true
+            - After resolving a question: user asked, you answered fully → true
+            - After a complete emotional beat: confession → response → reflection → true
+            - When the conversation reaches an awkward silence or dead end → true
+            - After small talk that has run its course → true
+ 
+            ## When to output false:
+            - Mid-conversation: you're still actively discussing something → false
+            - An emotional moment is building up but hasn't peaked → false
+            - User just asked a question you haven't answered → false
+            - A story or anecdote is being told but not finished → false
+            - There's clear conversational momentum → false
+ 
+            ## ⚠️ CRITICAL RULES:
+            - **DEFAULT: false.** Most turns, the topic is still ongoing.
+            - Only set true when the conversation genuinely feels "complete" for this topic.
+            - Don't force it — if there's any remaining thread, keep it false.
+            - This flag is for UI flow control. The user won't see it directly.
+            """;
+    }
+
+    /**
+     * [Phase 5.5-EV] 디렉터 모드 이벤트 진행 상태 프롬프트 블록
+     *
+     * 이벤트(디렉터 모드) 진행 중에만 staticRules에 포함됨.
+     * LLM이 이벤트를 알아서 종료하지 않도록 강력히 제어.
+     */
+    private String buildEventStatusBlock(ChatRoom room) {
+        if (!room.isEventActive()) return "";
+
+        return """
+            # 🎬 DIRECTOR MODE (Event In Progress) — Priority: HIGHEST
+            ⚠️ A SPECIAL EVENT is currently in progress. This overrides normal conversation flow.
+ 
+            ## Rules:
+            1. **DO NOT end the event yourself.** The event continues until the USER intervenes with actual dialogue.
+            2. **Messages from [SYSTEM_DIRECTOR]** mean the user is WATCHING silently. Escalate the situation!
+            3. **If the user sends actual dialogue (not [SYSTEM_DIRECTOR])**, they are INTERVENING.
+               - React to their intervention naturally.
+               - If the intervention resolves the situation, output `"event_status": "RESOLVED"`.
+               - If the situation is not yet resolved, keep `"event_status": "ONGOING"`.
+            4. **During ONGOING events:**
+               - Escalate tension, conflict, romance, or drama.
+               - Introduce new complications or deepen existing ones.
+               - Show the character's increasing distress, excitement, or vulnerability.
+               - NEVER resolve the situation on your own.
+               - stat_changes should all be 0 (stats are frozen during events until user intervenes).
+            5. **During RESOLVED events:**
+               - Wrap up the situation naturally based on the user's intervention.
+               - Show the character's relief, gratitude, excitement, etc.
+               - stat_changes should reflect the quality of the user's intervention.
+               - Output `"event_status": "RESOLVED"`.
+ 
+            ## Output: Include `"event_status": "ONGOING"` or `"RESOLVED"` in your JSON.
+            """;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Normal Mode Prompt
     //  [Phase 5.5] 스탯 시스템 + BPM 블록 추가
@@ -562,6 +645,10 @@ public class CharacterPromptAssembler {
             %s
 
             %s
+            
+            %s
+            
+            %s
        
             # 💬 CONVERSATION HISTORY
             The following messages represent the ongoing conversation between you and the user.
@@ -584,6 +671,8 @@ public class CharacterPromptAssembler {
             buildBpmBlock(room),
             buildSceneDirectionGuide(room, character, false),
             buildInnerThoughtBlock(false),
+            buildTopicConcludedBlock(),
+            buildEventStatusBlock(room),
             buildEasterEggBlock(character)
         );
 
