@@ -94,7 +94,8 @@ public class ChatController {
         @RequestParam(defaultValue = "50") int size
     ) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return chatLogRepository.findByRoomId(roomId, pageable).map(this::toDto);
+        // [Phase 5.5-Fix] hidden=false인 로그만 조회
+        return chatLogRepository.findByRoomIdAndHiddenFalse(roomId, pageable).map(this::toDto);
     }
 
     @PostMapping("/rooms/{roomId}/init")
@@ -162,6 +163,7 @@ public class ChatController {
         return new ChatLogResponse(
             doc.getId(), doc.getRole(), doc.getRawContent(), doc.getCleanContent(),
             doc.getEmotionTag(), doc.getCreatedAt(), doc.getRating(), doc.getDislikeReason(),
-            doc.hasInnerThought(), visibleInnerThought, doc.isThoughtUnlocked());
+            doc.hasInnerThought(), visibleInnerThought, doc.isThoughtUnlocked(),
+            doc.getScenesJson());
     }
 }

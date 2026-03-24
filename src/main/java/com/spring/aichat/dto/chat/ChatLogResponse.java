@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
  * - hasInnerThought: 속마음 존재 여부 (UI 트리거용)
  * - innerThought: 실제 속마음 텍스트 (해금 전 null, 해금 후 텍스트)
  * - thoughtUnlocked: 해금 완료 여부
+ *
+ * [Phase 5.5-Fix] scenesJson 필드 추가:
+ * - ASSISTANT 메시지의 구조화된 씬 데이터 (재로딩 시 씬별 분리 복원용)
  */
 public record ChatLogResponse(
     String logId,
@@ -34,13 +37,23 @@ public record ChatLogResponse(
     String dislikeReason,       // [Phase 5.2] 싫어요 사유 카테고리 | null
     boolean hasInnerThought,    // [Phase 5.5-IT] 속마음 존재 여부
     String innerThought,        // [Phase 5.5-IT] 해금된 경우만 텍스트, 아니면 null
-    boolean thoughtUnlocked     // [Phase 5.5-IT] 해금 완료 여부
+    boolean thoughtUnlocked,    // [Phase 5.5-IT] 해금 완료 여부
+    String scenesJson           // [Phase 5.5-Fix] 구조화된 씬 배열 JSON (ASSISTANT만, 나머지 null)
 ) {
+    /** 하위 호환: scenesJson 없는 생성자 */
+    public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
+                           EmotionTag emotionTag, LocalDateTime createdAt,
+                           String rating, String dislikeReason,
+                           boolean hasInnerThought, String innerThought, boolean thoughtUnlocked) {
+        this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
+            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked, null);
+    }
+
     /** 하위 호환: 속마음 필드 없는 생성자 */
     public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
                            EmotionTag emotionTag, LocalDateTime createdAt,
                            String rating, String dislikeReason) {
         this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
-            rating, dislikeReason, false, null, false);
+            rating, dislikeReason, false, null, false, null);
     }
 }

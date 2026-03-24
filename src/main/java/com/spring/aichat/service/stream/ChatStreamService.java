@@ -114,7 +114,8 @@ public class ChatStreamService {
         EmotionTag mainEmotion, List<SceneResponse> sceneResponses,
         String lastBgm, String lastLoc, String lastOutfit, String lastTime,
         AiJsonOutput.StatChanges statChanges, Integer bpm,
-        String innerThought, boolean topicConcluded, String eventStatus
+        String innerThought, boolean topicConcluded, String eventStatus,
+        String scenesJson      // [Phase 5.5-Fix] 구조화된 씬 JSON
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -269,7 +270,7 @@ public class ChatStreamService {
             try {
                 ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
                     roomId, parsed.cleanJson(), parsed.combinedDialogue(),
-                    parsed.mainEmotion(), null, parsed.innerThought());
+                    parsed.mainEmotion(), null, parsed.innerThought(), parsed.scenesJson());
                 ChatLogDocument saved = chatLogRepository.save(assistantLog);
                 assistantLogId = saved.getId();
                 hasInnerThought = saved.hasInnerThought();
@@ -313,11 +314,11 @@ public class ChatStreamService {
             });
             cacheService.evictUserProfile(jpa.username());
 
-            // ── MongoDB: 시스템 나레이션 저장 ──
+            // ── MongoDB: 이벤트 시작 시스템 메시지 저장 (프론트 미노출) ──
             String savedLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.user(roomId, "[EVENT_START]\n" + eventDetail));
+                    ChatLogDocument.hiddenUser(roomId, "[EVENT_START]\n" + eventDetail, eventDetail));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
@@ -413,11 +414,11 @@ public class ChatStreamService {
             });
             cacheService.evictUserProfile(jpa.username());
 
-            // ── MongoDB: SYSTEM_DIRECTOR 메시지 저장 (유저에게는 보이지 않음) ──
+            // ── MongoDB: SYSTEM_DIRECTOR 메시지 저장 (프론트 미노출) ──
             String savedLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.user(roomId, SYSTEM_DIRECTOR_PROMPT));
+                    ChatLogDocument.hiddenSystem(roomId, SYSTEM_DIRECTOR_PROMPT));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
@@ -504,11 +505,11 @@ public class ChatStreamService {
             });
             cacheService.evictUserProfile(jpa.username());
 
-            // ── MongoDB: 시간 넘기기 시스템 메시지 저장 ──
+            // ── MongoDB: 시간 넘기기 시스템 메시지 저장 (프론트 미노출) ──
             String savedLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.user(roomId, TIME_SKIP_PROMPT));
+                    ChatLogDocument.hiddenSystem(roomId, TIME_SKIP_PROMPT));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
@@ -770,8 +771,8 @@ public class ChatStreamService {
         }
 
         // ── 결과 정리 ──
-        String combinedDialogue = aiOutput.scenes().stream()
-            .map(AiJsonOutput.Scene::dialogue).collect(Collectors.joining(" "));
+        // [Phase 5.5-Fix] cleanContent: 나레이션 + 대사 통합 (재로딩 시 fallback 표시용)
+        String combinedDialogue = buildRichCleanContent(aiOutput.scenes());
 
         String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
             : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
@@ -785,6 +786,9 @@ public class ChatStreamService {
                 safeUpperCase(s.outfit()), safeUpperCase(s.bgmMode())))
             .collect(Collectors.toList());
 
+        // [Phase 5.5-Fix] scenesJson: 씬 배열 구조화 저장 (재로딩 시 씬별 분리 복원용)
+        String scenesJson = buildScenesJson(sceneResponses);
+
         String innerThought = aiOutput.innerThought();
         if (innerThought != null && innerThought.isBlank()) innerThought = null;
 
@@ -796,7 +800,8 @@ public class ChatStreamService {
             extractLastNonNull(sceneResponses, SceneResponse::time),
             aiOutput.statChanges(), aiOutput.bpm(), innerThought,
             aiOutput.isTopicConcluded(),
-            aiOutput.eventStatus()
+            aiOutput.eventStatus(),
+            scenesJson
         );
     }
 
@@ -813,7 +818,7 @@ public class ChatStreamService {
         try {
             ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
                 roomId, parsed.cleanJson(), parsed.combinedDialogue(),
-                parsed.mainEmotion(), null, parsed.innerThought());
+                parsed.mainEmotion(), null, parsed.innerThought(), parsed.scenesJson());
             return chatLogRepository.save(assistantLog).getId();
         } catch (Exception e) {
             log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
@@ -1019,5 +1024,55 @@ public class ChatStreamService {
             if (val != null) return val;
         }
         return null;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-Fix] 3-Layer 통일 헬퍼
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 씬 배열에서 나레이션 + 대사 + speaker를 포함한 풍부한 cleanContent 생성.
+     * 재로딩 시 scenesJson이 없을 경우의 fallback 표시용.
+     */
+    private String buildRichCleanContent(List<AiJsonOutput.Scene> scenes) {
+        if (scenes == null || scenes.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < scenes.size(); i++) {
+            AiJsonOutput.Scene scene = scenes.get(i);
+            if (i > 0) sb.append("\n---\n"); // 씬 구분자
+            if (scene.speaker() != null && !scene.speaker().isBlank()) {
+                sb.append("[").append(scene.speaker()).append("] ");
+            }
+            if (scene.narration() != null && !scene.narration().isBlank()) {
+                sb.append("*").append(scene.narration().trim()).append("*\n");
+            }
+            if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
+                sb.append(scene.dialogue().trim());
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    /**
+     * SceneResponse 리스트를 JSON 배열 문자열로 직렬화.
+     * 프론트에서 재로딩 시 씬별 분리/speaker/narration을 완전히 복원.
+     */
+    private String buildScenesJson(List<SceneResponse> scenes) {
+        if (scenes == null || scenes.isEmpty()) return null;
+        try {
+            // SceneResponse를 가벼운 Map으로 변환 (불필요한 필드 제거)
+            List<Map<String, Object>> simplified = scenes.stream().map(s -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                if (s.speaker() != null) m.put("speaker", s.speaker());
+                if (s.narration() != null) m.put("narration", s.narration());
+                if (s.dialogue() != null) m.put("dialogue", s.dialogue());
+                if (s.emotion() != null) m.put("emotion", s.emotion().name());
+                return m;
+            }).collect(Collectors.toList());
+            return objectMapper.writeValueAsString(simplified);
+        } catch (Exception e) {
+            log.warn("scenesJson serialization failed", e);
+            return null;
+        }
     }
 }

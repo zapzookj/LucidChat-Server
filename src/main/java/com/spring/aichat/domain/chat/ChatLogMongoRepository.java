@@ -87,4 +87,18 @@ public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument,
     Optional<ChatLogDocument> findTop1ByRoomIdOrderByCreatedAtAsc(Long roomId);
 
     List<ChatLogDocument> findTop200ByRoomIdOrderByCreatedAtDesc(Long roomId);
+
+    /**
+     * [Phase 5.5-Fix] hidden이 아닌 로그만 페이지네이션 조회 (프론트 무한스크롤)
+     * hidden 필드가 없는 기존 문서도 포함 ({$ne: true} 조건)
+     * Covered by: idx_room_created
+     */
+    Page<ChatLogDocument> findByRoomIdAndHiddenNot(Long roomId, boolean hidden, Pageable pageable);
+
+    /**
+     * [Phase 5.5-Fix] 편의 메서드: hidden=true가 아닌 로그만 조회
+     */
+    default Page<ChatLogDocument> findByRoomIdAndHiddenFalse(Long roomId, Pageable pageable) {
+        return findByRoomIdAndHiddenNot(roomId, true, pageable);
+    }
 }

@@ -110,6 +110,28 @@ public class ChatLogDocument {
     @Builder.Default
     private boolean thoughtUnlocked = false;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-Fix] 3-Layer 통일 리팩토링
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 시스템 내부 메시지 은닉 플래그
+     * - true: SYSTEM_DIRECTOR, TIME_SKIP 등 프론트에 노출하면 안 되는 메시지
+     * - false: 일반 메시지 (기본값)
+     * LLM 히스토리 구축 시에는 hidden=true여도 포함하되, 프론트 조회 시 필터링.
+     */
+    @Field("hidden")
+    @Builder.Default
+    private boolean hidden = false;
+
+    /**
+     * ASSISTANT 메시지의 구조화된 씬 데이터 (JSON 배열)
+     * 재로딩 시 씬별 분리 + 나레이션 + speaker 복원에 사용.
+     * 예: [{"speaker":null,"narration":"...","dialogue":"..."},{"speaker":"점원","narration":"...","dialogue":"..."}]
+     */
+    @Field("scenesJson")
+    private String scenesJson;
+
     @CreatedDate
     @Field("createdAt")
     private LocalDateTime createdAt;
@@ -189,6 +211,39 @@ public class ChatLogDocument {
             .build();
     }
 
+    /**
+     * [Phase 5.5-Fix] 숨겨진 시스템 메시지 (SYSTEM_DIRECTOR, TIME_SKIP 등)
+     * - 프론트 로그 조회 시 필터링됨 (hidden=true)
+     * - LLM 히스토리 구축 시에는 정상 포함
+     */
+    public static ChatLogDocument hiddenSystem(Long roomId, String content) {
+        return ChatLogDocument.builder()
+            .roomId(roomId)
+            .role(ChatRole.SYSTEM)
+            .rawContent(content)
+            .cleanContent(content)
+            .emotionTag(EmotionTag.NEUTRAL)
+            .hidden(true)
+            .build();
+    }
+
+    /**
+     * [Phase 5.5-Fix] 숨겨진 유저 액션 메시지 (EVENT_START 등)
+     * - rawContent: 원본 (LLM 컨텍스트용)
+     * - cleanContent: 유저가 읽을 수 있는 정제된 텍스트
+     * - 프론트 로그 조회 시 필터링됨 (hidden=true)
+     */
+    public static ChatLogDocument hiddenUser(Long roomId, String raw, String clean) {
+        return ChatLogDocument.builder()
+            .roomId(roomId)
+            .role(ChatRole.USER)
+            .rawContent(raw)
+            .cleanContent(clean)
+            .emotionTag(EmotionTag.NEUTRAL)
+            .hidden(true)
+            .build();
+    }
+
     public static ChatLogDocument of(Long roomId, ChatRole role, String raw, String clean,
                                      EmotionTag emotion, String audioUrl) {
         return ChatLogDocument.builder()
@@ -203,10 +258,11 @@ public class ChatLogDocument {
 
     /**
      * [Phase 5.5-IT] 속마음 포함 ASSISTANT 메시지 팩토리
+     * [Phase 5.5-Fix] scenesJson 추가 — 구조화된 씬 데이터 보존
      */
     public static ChatLogDocument assistantWithThought(Long roomId, String raw, String clean,
                                                        EmotionTag emotion, String audioUrl,
-                                                       String innerThought) {
+                                                       String innerThought, String scenesJson) {
         return ChatLogDocument.builder()
             .roomId(roomId)
             .role(ChatRole.ASSISTANT)
@@ -216,6 +272,14 @@ public class ChatLogDocument {
             .audioUrl(audioUrl)
             .innerThought(innerThought)
             .thoughtUnlocked(false)
+            .scenesJson(scenesJson)
             .build();
+    }
+
+    /** 하위 호환: scenesJson 없는 버전 */
+    public static ChatLogDocument assistantWithThought(Long roomId, String raw, String clean,
+                                                       EmotionTag emotion, String audioUrl,
+                                                       String innerThought) {
+        return assistantWithThought(roomId, raw, clean, emotion, audioUrl, innerThought, null);
     }
 }
