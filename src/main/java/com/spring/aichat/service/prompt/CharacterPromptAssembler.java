@@ -35,7 +35,7 @@ public class CharacterPromptAssembler {
      * [Phase 5 Fix] effectiveSecretMode 매개변수 추가
      */
     public SystemPromptPayload assembleSystemPrompt(Character character, ChatRoom room, User user,
-                                       String longTermMemory, boolean effectiveSecretMode) {
+                                                    String longTermMemory, boolean effectiveSecretMode) {
         if (effectiveSecretMode) {
 //            return getSecretModePrompt(character, room, user, longTermMemory);
             return null; // 노말 모드와 통합 예정
@@ -321,11 +321,24 @@ public class CharacterPromptAssembler {
     //  [Phase 5.5] stat_changes + bpm 추가
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [Phase 5.5-Fix] 통합 Output Format
+     *
+     * 이벤트/일반 채팅의 JSON 스키마를 100% 통일.
+     * - speaker: 항상 포함 (일반: null 고정, 이벤트: NPC name 허용)
+     * - event_status: 항상 포함 (일반: null 고정, 이벤트: ONGOING/RESOLVED)
+     * - inner_thought: 항상 포함 (이벤트 ONGOING 중: null 권장)
+     * - topic_concluded: 항상 포함 (이벤트 ONGOING 중: false 고정)
+     * - emotion: 15종으로 통일
+     *
+     * 차이는 "값의 가이드라인"과 "하단 가이드 블록"에서만 조건부 분기.
+     */
     private String buildOutputFormat(ChatRoom room, boolean isSecretMode) {
         Character character = room.getCharacter();
+        boolean isEvent = room.isEventActive();
+
         String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
         String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
-
         String bgmOptions = isSecretMode
             ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
             : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
@@ -343,24 +356,45 @@ public class CharacterPromptAssembler {
             : "";
         String secretStatComma = isSecretMode ? ",\n" : "";
 
-        // [Phase 5.5-EV] event_status 필드 — 디렉터 모드 이벤트 중에만 출력
-        String eventStatusField = room.isEventActive()
-            ? """
-              "event_status": "ONGOING or RESOLVED","""
+        // ── 조건부 값 가이드라인 ──
+        String speakerGuide = isEvent
+            ? "null or \"NPC name (e.g., 불량배 A, 지나가던 아이, 점원)\""
+            : "null (⚠️ ALWAYS null in normal conversation)";
+
+        String eventStatusGuide = isEvent
+            ? "\"ONGOING\" or \"RESOLVED\""
+            : "null";
+
+        String innerThoughtGuide = isEvent
+            ? "null (disabled during events)"
+            : "null or \"Korean string (15~50 chars)\"";
+
+        String topicConcludedGuide = isEvent
+            ? "false (events always false)"
+            : "true or false";
+
+        String reasoningGuide = isEvent
+            ? "Analyze the event situation, decide next dramatic beat. Use 2~4 scenes with tension."
+            : "Briefly analyze the user's intent, decide emotion, and calculate scores. Use several scenes when the situation warrants it.";
+
+        String statChangesNote = isEvent
+            ? "\n              // ⚠️ During ONGOING events: ALL stats 0. Only set values when RESOLVED."
             : "";
 
-        return """
+        // ── JSON 스키마 (항상 동일 구조) ──
+        String jsonSchema = """
             # Output Format Rules
             You MUST output the response in the following JSON format ONLY.
-            The `reasoning` field is for your internal thought process to ensure quality.
  
             {
-              "reasoning": "Briefly analyze the user's intent, decide emotion, and calculate scores. CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.",
+              "reasoning": "%s",
+              "event_status": %s,
               "scenes": [
                 {
+                  "speaker": %s,
                   "narration": "Character's action/expression (Korean, vivid web-novel style)",
                   "dialogue": "Character's spoken line (Korean)",
-                  "emotion": "One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED]",
+                  "emotion": "One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]",
                   "location": "One of [%s] or null",
                   "time": "One of [DAY, NIGHT, SUNSET] or null",
                   "outfit": "One of [%s] or null",
@@ -368,7 +402,7 @@ public class CharacterPromptAssembler {
                 }
               ],
               %s
-              "stat_changes": {
+              "stat_changes": {%s
                 "intimacy": 0,
                 "affection": 0,
                 "dependency": 0,
@@ -376,81 +410,23 @@ public class CharacterPromptAssembler {
                 "trust": 0%s%s
               },
               "bpm": Integer (60~180),
-              "inner_thought": null or "Korean string (15~50 chars)",
-              "topic_concluded": true or false,
+              "inner_thought": %s,
+              "topic_concluded": %s,
               "easter_egg_trigger": null
             }
- 
-            CRITICAL : Depending on the situation, use several scenes to proceed with the situation in detail.
- 
-            ## ⚠️ Multi-Scene Coherence Rules (STRICTLY ENFORCE):
-            All scenes in a single response are ONE CONTINUOUS conversation turn.
-            1. **Speech consistency:** The character's speech style MUST be identical across ALL scenes.
-            2. **Emotional continuity:** Emotions should progress gradually.
-            3. **Temporal continuity:** Each scene follows immediately after the previous one.
-            4. **Context awareness:** Each scene must build on the previous scene's context.
-            
-            
             """.formatted(
+            reasoningGuide, eventStatusGuide, speakerGuide,
             locationOptions, outfitOptions, bgmOptions,
             moodScoreField,
-            secretStatComma, secretStatFields
+            statChangesNote,
+            secretStatComma, secretStatFields,
+            innerThoughtGuide, topicConcludedGuide
         );
-    }
 
-    /**
-     * [Phase 5.5-NPC] 이벤트(디렉터 모드) 전용 Output Format
-     *
-     * 일반 포맷과의 차이점:
-     * 1. scenes[].speaker 필드 추가 (제3자 조연 지원)
-     * 2. event_status 필드 추가 ("ONGOING" | "RESOLVED")
-     * 3. stat_changes는 이벤트 해소(RESOLVED) 시에만 유효
-     * 4. inner_thought는 이벤트 중 비활성 (null 고정)
-     */
-    private String buildEventOutputFormat(ChatRoom room, boolean isSecretMode) {
-        Character character = room.getCharacter();
-        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
-        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
-        String bgmOptions = isSecretMode
-            ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
-            : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
-
-        String secretStatFields = isSecretMode
-            ? """
-                "lust": 0,
-                "corruption": 0,
-                "obsession": 0"""
-            : "";
-        String secretStatComma = isSecretMode ? ",\n" : "";
-
-        return """
-            # 🎬 Event Output Format (Director Mode)
-            You MUST output the response in the following JSON format ONLY.
-            
-            {
-              "reasoning": "Analyze the event situation, decide next dramatic beat.",
-              "event_status": "ONGOING or RESOLVED",
-              "scenes": [
-                {
-                  "speaker": null or "NPC name (e.g., 불량배 A, 지나가던 아이, 점원)",
-                  "narration": "Action/expression description (Korean, vivid web-novel style)",
-                  "dialogue": "Spoken line (Korean)",
-                  "emotion": "One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]",
-                  "location": "One of [%s] or null",
-                  "time": "One of [DAY, NIGHT, SUNSET] or null",
-                  "outfit": "One of [%s] or null",
-                  "bgmMode": "One of [%s] or null"
-                }
-              ],
-              "stat_changes": {
-                "intimacy": 0, "affection": 0, "dependency": 0, "playfulness": 0, "trust": 0%s%s
-              },
-              "bpm": Integer (60~180),
-              "inner_thought": null,
-              "topic_concluded": false,
-              "easter_egg_trigger": null
-            }
- 
+        // ── 하단 가이드 블록 (조건부) ──
+        String guideBlock;
+        if (isEvent) {
+            guideBlock = """
             ## 🎭 Speaker Rules (CRITICAL):
             - **speaker: null** → YOU (%s) are speaking. Use YOUR persona, YOUR speech style.
             - **speaker: "NPC이름"** → A THIRD-PARTY character is speaking. You are NARRATING their voice.
@@ -461,15 +437,30 @@ public class CharacterPromptAssembler {
             - NPC names should be descriptive archetypes (불량배 A, 지나가던 할머니, 냉정한 점원).
             - NPCs are OPTIONAL. Only introduce them when the event NEEDS a third party.
               Solo events (자신만의 시간, 감정적 순간) don't need NPCs.
- 
+
             ## ⚠️ Event Scene Coherence:
             1. Each scene builds dramatic tension.
             2. YOUR emotional reactions must feel genuine to YOUR personality.
             3. NPC dialogue should contrast with YOUR character to create drama.
             4. stat_changes: ALL 0 during ONGOING. Only set values when RESOLVED.
-            """.formatted(locationOptions, outfitOptions, bgmOptions,
-            secretStatComma, secretStatFields,
-            character.getName());
+            """.formatted(character.getName());
+        } else {
+            guideBlock = """
+            ## ⚠️ Speaker Rule:
+            - speaker is ALWAYS null. You are the ONLY speaker in normal conversation.
+            - Do NOT invent or introduce NPCs outside of event/director mode.
+
+            ## ⚠️ Multi-Scene Coherence Rules (STRICTLY ENFORCE):
+            CRITICAL: Depending on the situation, use several scenes to proceed with the situation in detail.
+            All scenes in a single response are ONE CONTINUOUS conversation turn.
+            1. **Speech consistency:** The character's speech style MUST be identical across ALL scenes.
+            2. **Emotional continuity:** Emotions should progress gradually.
+            3. **Temporal continuity:** Each scene follows immediately after the previous one.
+            4. **Context awareness:** Each scene must build on the previous scene's context.
+            """;
+        }
+
+        return jsonSchema + guideBlock;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -861,9 +852,8 @@ public class CharacterPromptAssembler {
             buildPromotionBlock(room, character)
         );
 
-        String outputFormat = room.isEventActive()
-            ? buildEventOutputFormat(room, false)
-            : buildOutputFormat(room, false);
+        // [Phase 5.5-Fix] 통합 output format — 이벤트/일반 분기 제거
+        String outputFormat = buildOutputFormat(room, false);
 
         SystemPromptPayload payload = new SystemPromptPayload(staticRules, dynamicRules, outputFormat);
 
