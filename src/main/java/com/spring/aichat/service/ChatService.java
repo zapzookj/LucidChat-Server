@@ -838,7 +838,9 @@ public class ChatService {
             room.getCharacter(), room, room.getUser(), longTermMemory, effectiveSecretMode
         );
 
-        List<OpenAiMessage> messages = buildMessageHistory(room.getId(), systemPrompt);
+        List<OpenAiMessage> messages = buildMessageHistory(
+            room.getId(), systemPrompt,
+            room.getCharacter().getName(), room.getUser().getNickname());
 
         String model = boostModeResolver.resolveModel(room.getUser());
 
@@ -1071,8 +1073,12 @@ public class ChatService {
         }
     }
 
-    private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt) {
-        List<ChatLogDocument> history = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+    /**
+     * [Phase 5.5-Fix] LLM 히스토리 구성 (이름표 부착 + 포맷 디커플링)
+     */
+    private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt,
+                                                    String characterName, String userNickname) {
+        List<ChatLogDocument> history = chatLogRepository.findTop200ByRoomIdOrderByCreatedAtDesc(roomId);
         history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
 
         List<OpenAiMessage> messages = new ArrayList<>();
@@ -1082,32 +1088,18 @@ public class ChatService {
             messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
         } else messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
 
-//        for (int i = 0; i < history.size(); i++) {
-//            ChatLogDocument chatLog = history.get(i);
-//            boolean isLastItem = (i == history.size() - 1);
-//
-//            Map<String, Object> cacheControl = isLastItem ? Map.of("type", "ephemeral") : null;
-//            switch (chatLog.getRole()) {
-//                case USER -> messages.add(new OpenAiMessage("user", chatLog.getRawContent(), cacheControl));
-//                case ASSISTANT -> {
-//                    String sanitized = buildSanitizedAssistantContent(chatLog);
-//                    messages.add(new OpenAiMessage("assistant", sanitized, cacheControl));
-//                }
-//                case SYSTEM -> messages.add(
-//                    new OpenAiMessage("user", "[NARRATION]\n" + chatLog.getRawContent(), cacheControl)
-//                );
-//            }
-//        }
+        // [Phase 5.5-Fix] 이름표 prefix
+        String userTag = "[" + (userNickname != null && !userNickname.isBlank() ? userNickname : "유저") + "]: ";
 
         for (ChatLogDocument chatLog : history) {
             switch (chatLog.getRole()) {
-                case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
+                case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
                 case ASSISTANT -> {
-                    String sanitized = buildSanitizedAssistantContent(chatLog);
+                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName);
                     messages.add(OpenAiMessage.assistant(sanitized));
                 }
                 case SYSTEM -> messages.add(
-                    OpenAiMessage.user("[NARRATION]\n" + chatLog.getRawContent())
+                    OpenAiMessage.user("[NARRATION]: " + chatLog.getRawContent())
                 );
             }
         }
@@ -1118,11 +1110,16 @@ public class ChatService {
         return messages;
     }
 
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog) {
+    /**
+     * [Phase 5.5-Fix] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제
+     * (ChatStreamService와 동일 로직)
+     */
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) {
-                return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
+                return "[" + characterName + "]: " +
+                    (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "");
             }
 
             String cleaned = stripMarkdown(raw);
@@ -1130,25 +1127,36 @@ public class ChatService {
 
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
+                // ── 화자 이름표 ──
+                String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
+                    ? scene.speaker() : characterName;
+                sb.append("[").append(speaker).append("] ");
+
+                // ── 감정 태그를 앞으로 이동 (디커플링) ──
+                if (scene.emotion() != null && !scene.emotion().isBlank()) {
+                    sb.append("{Emotion: ").append(scene.emotion()).append("} ");
+                }
+
+                // ── 나레이션 ──
                 if (scene.narration() != null && !scene.narration().isBlank()) {
                     sb.append("(").append(scene.narration().trim()).append(") ");
                 }
+
+                // ── 대사 (인용부호) ──
                 if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
-                    sb.append(scene.dialogue().trim());
-                }
-                if (scene.emotion() != null) {
-                    sb.append(" [").append(scene.emotion()).append("]");
+                    sb.append("\"").append(scene.dialogue().trim()).append("\"");
                 }
                 sb.append("\n");
             }
 
             String result = sb.toString().trim();
             return result.isEmpty()
-                ? (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
+                ? "[" + characterName + "]: " + (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
                 : result;
 
         } catch (Exception e) {
-            return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
+            String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
+            return "[" + characterName + "]: " + content;
         }
     }
 
