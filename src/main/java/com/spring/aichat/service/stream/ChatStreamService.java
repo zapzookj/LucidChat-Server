@@ -80,6 +80,9 @@ public class ChatStreamService {
     /** [Phase 5.5-EV] 시간 넘기기 에너지 비용 */
     private static final int TIME_SKIP_ENERGY_COST = 1;
 
+    // [Phase 5.5-Fix-IT] 속마음 히스토리 포함 윈도우 — 최근 N개 ASSISTANT 메시지에만 속마음 포함
+    private static final int INNER_THOUGHT_HISTORY_WINDOW = 3;
+
     /** [Phase 5.5-EV] SYSTEM_DIRECTOR 프롬프트 (지켜보기 시 LLM에 주입) */
     private static final String SYSTEM_DIRECTOR_PROMPT = """
         [SYSTEM_DIRECTOR] 유저는 아직 개입하지 않고 상황을 숨죽여 지켜보고 있습니다.
@@ -924,104 +927,120 @@ public class ChatStreamService {
     }
 
     /**
-     * [Phase 5.5-Fix] LLM 히스토리 구성
+     * [Phase 5.5-Fix-IT] LLM 히스토리 구성 (이름표 부착 + 속마음 컨텍스트 주입)
      *
-     * Bug Fix 1 (Role Reversal): 모든 메시지에 화자 이름표 강제 부착
-     *   - USER: "[유저닉네임]: 원본 메시지"
-     *   - ASSISTANT: "[캐릭터이름]: 파싱된 대사" (NPC 씬은 "[NPC이름]: ...")
-     *   - SYSTEM: "[NARRATION]: 내용"
-     *
-     * Bug Fix 2 (Format Inertia): buildSanitizedAssistantContent 포맷 디커플링
-     *   - AS-IS: (나레이션) 대사 [JOY]
-     *   - TO-BE: [Emotion: JOY] (나레이션) 대사
-     *
-     * @param characterName 캐릭터 이름 (assistant 메시지 이름표용)
-     * @param userNickname  유저 닉네임 (user 메시지 이름표용)
+     * 최근 N개의 ASSISTANT 메시지에 속마음(inner_thought)을 포함하여
+     * LLM이 이전 속마음을 인지하고 반복을 회피하도록 유도.
      */
-    private List<OpenAiMessage> buildMessageHistory(Long roomId,
-                                                    CharacterPromptAssembler.SystemPromptPayload systemPrompt,
+    private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt,
                                                     String characterName, String userNickname) {
         List<ChatLogDocument> history = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
         history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+
         List<OpenAiMessage> messages = new ArrayList<>();
 
         if (history.size() == 3 || history.size() % 20 == 0) {
             messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
-        } else {
-            messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
+        } else messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
+
+        // [Phase 5.5-Fix-IT] ASSISTANT 메시지 역순 카운팅 — 최근 N개 판별
+        int totalAssistantCount = 0;
+        for (ChatLogDocument log : history) {
+            if (log.getRole() == ChatRole.ASSISTANT) totalAssistantCount++;
         }
+        int assistantThreshold = totalAssistantCount - INNER_THOUGHT_HISTORY_WINDOW;
 
-        // [Phase 5.5-Fix] 이름표 prefix
         String userTag = "[" + (userNickname != null && !userNickname.isBlank() ? userNickname : "유저") + "]: ";
-        String charTag = "[" + characterName + "]: ";
 
+        int assistantIdx = 0;
         for (ChatLogDocument chatLog : history) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
-                case ASSISTANT -> messages.add(OpenAiMessage.assistant(
-                    buildSanitizedAssistantContent(chatLog, characterName)));
-                case SYSTEM -> messages.add(OpenAiMessage.user("[NARRATION]: " + chatLog.getRawContent()));
+                case ASSISTANT -> {
+                    boolean includeThought = assistantIdx >= assistantThreshold;
+                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName, includeThought);
+                    messages.add(OpenAiMessage.assistant(sanitized));
+                    assistantIdx++;
+                }
+                case SYSTEM -> messages.add(
+                    OpenAiMessage.user("[NARRATION]: " + chatLog.getRawContent())
+                );
             }
         }
 
         messages.add(OpenAiMessage.system(systemPrompt.dynamicRules()));
         messages.add(OpenAiMessage.system(systemPrompt.outputFormat()));
+
         return messages;
     }
 
     /**
-     * [Phase 5.5-Fix] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제
+     * [Phase 5.5-Fix-IT] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제 (속마음 포함)
      *
-     * Bug Fix 1 (Role Reversal):
-     *   - 씬별로 화자 이름표 부착: [캐릭터이름] 또는 [NPC이름]
-     *   - LLM이 "이 대사를 누가 했는지"를 절대 혼동하지 않음
-     *
-     * Bug Fix 2 (Format Inertia):
-     *   - AS-IS: (나레이션) 대사 [JOY]  ← LLM이 이 패턴을 dialogue 필드에 모방
-     *   - TO-BE: [Emotion: JOY] (나레이션) "대사" ← 감정 위치 이동 + 대사 인용부호
-     *   - output JSON과 구조적으로 이질적이므로 패턴 모방(Few-Shot Leakage) 방지
+     * includeInnerThought=true일 때, 속마음 텍스트를 히스토리에 포함.
+     * 포맷: {💭 Previous thought: "..."} — output JSON과 의도적으로 다른 형식으로
+     * Few-Shot Leakage(패턴 모방) 방지.
      */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName, boolean includeInnerThought) {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) {
                 return "[" + characterName + "]: " +
                     (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "");
             }
+
             String cleaned = extractJson(raw);
             AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
+
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
-                // ── 화자 이름표 (speaker 필드 or 메인 캐릭터) ──
                 String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
                     ? scene.speaker() : characterName;
                 sb.append("[").append(speaker).append("] ");
 
-                // ── 감정 태그를 앞으로 이동 (디커플링) ──
                 if (scene.emotion() != null && !scene.emotion().isBlank()) {
                     sb.append("{Emotion: ").append(scene.emotion()).append("} ");
                 }
 
-                // ── 나레이션 (괄호 유지) ──
                 if (scene.narration() != null && !scene.narration().isBlank()) {
                     sb.append("(").append(scene.narration().trim()).append(") ");
                 }
 
-                // ── 대사 (인용부호로 감싸서 output format과 구분) ──
                 if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
                     sb.append("\"").append(scene.dialogue().trim()).append("\"");
                 }
                 sb.append("\n");
             }
+
+            // [Phase 5.5-Fix-IT] 속마음 컨텍스트 주입 (최근 N턴만)
+            if (includeInnerThought) {
+                String thought = chatLog.getInnerThought();
+                if (thought != null && !thought.isBlank()) {
+                    sb.append("{💭 Previous thought: \"").append(thought.trim()).append("\"}\n");
+                }
+            }
+
             String result = sb.toString().trim();
             return result.isEmpty()
                 ? "[" + characterName + "]: " + (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
                 : result;
+
         } catch (Exception e) {
-            // JSON 파싱 실패 시 fallback — 이름표는 붙인다
             String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
-            return "[" + characterName + "]: " + content;
+            StringBuilder fallback = new StringBuilder("[" + characterName + "]: " + content);
+            if (includeInnerThought) {
+                String thought = chatLog.getInnerThought();
+                if (thought != null && !thought.isBlank()) {
+                    fallback.append("\n{💭 Previous thought: \"").append(thought.trim()).append("\"}");
+                }
+            }
+            return fallback.toString();
         }
+    }
+
+    /** 하위 호환: 2-param 버전 유지 */
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
+        return buildSanitizedAssistantContent(chatLog, characterName, false);
     }
 
     private String extractJson(String raw) {

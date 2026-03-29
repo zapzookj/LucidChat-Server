@@ -579,6 +579,19 @@ public class CharacterPromptAssembler {
             - Normal, casual conversation with no emotional undercurrent
             - You're being honest and open — no hidden layer needed
             - The interaction is straightforward with no tension
+            
+            ## 🔁 Anti-Repetition Rule (⚠️ STRICTLY ENFORCE):
+            Your recent inner thoughts are visible in the conversation history as `{💭 Previous thought: "..."}`.
+            **You MUST follow these rules:**
+            1. **NEVER repeat the same idea, theme, or phrasing** as any previous thought.
+               - ❌ Previous: "심장 소리 들리면 어떡하지" → ❌ New: "심장이 터질 것 같아" (same theme: heartbeat)
+               - ✅ Previous: "심장 소리 들리면 어떡하지" → ✅ New: "왜 이렇게 눈을 못 떼겠지..." (different theme: gaze)
+            2. **Explore a DIFFERENT emotional layer** each time:
+               - If previous thoughts were about physical reactions (심장, 얼굴) → think about desires, worries, or memories
+               - If previous thoughts were about longing → think about insecurity, pride, or curiosity
+               - If previous thoughts were about embarrassment → think about anticipation or secret happiness
+            3. **If you can't think of something genuinely NEW and different → output null.**
+               A missing inner thought is ALWAYS better than a repetitive one.
 
             ## Format Rules:
             - **Language:** Korean (캐릭터의 내면 독백)

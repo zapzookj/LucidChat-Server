@@ -88,6 +88,9 @@ public class ChatService {
     private static final long THOUGHT_UPDATE_CYCLE = 10;
     private static final long THOUGHT_UPDATE_OFFSET = 5; // 5, 15, 25턴에 트리거
 
+    // [Phase 5.5-Fix-IT] 속마음 히스토리 포함 윈도우 — 최근 N개 ASSISTANT 메시지에만 속마음 포함
+    private static final int INNER_THOUGHT_HISTORY_WINDOW = 3;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  TX 간 데이터 전달용 내부 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1074,7 +1077,10 @@ public class ChatService {
     }
 
     /**
-     * [Phase 5.5-Fix] LLM 히스토리 구성 (이름표 부착 + 포맷 디커플링)
+     * [Phase 5.5-Fix-IT] LLM 히스토리 구성 (이름표 부착 + 속마음 컨텍스트 주입)
+     *
+     * 최근 N개의 ASSISTANT 메시지에 속마음(inner_thought)을 포함하여
+     * LLM이 이전 속마음을 인지하고 반복을 회피하도록 유도.
      */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt,
                                                     String characterName, String userNickname) {
@@ -1083,20 +1089,28 @@ public class ChatService {
 
         List<OpenAiMessage> messages = new ArrayList<>();
 
-        // 🥪 [Top Bread] 배열의 맨 처음: 절대 변하지 않는 정적 룰 (100% 캐시 히트 타겟)
         if (history.size() == 3 || history.size() % 20 == 0) {
             messages.add(OpenAiMessage.systemCached(systemPrompt.staticRules(), Map.of("type", "ephemeral")));
         } else messages.add(OpenAiMessage.system(systemPrompt.staticRules()));
 
-        // [Phase 5.5-Fix] 이름표 prefix
+        // [Phase 5.5-Fix-IT] ASSISTANT 메시지 역순 카운팅 — 최근 N개 판별
+        int totalAssistantCount = 0;
+        for (ChatLogDocument log : history) {
+            if (log.getRole() == ChatRole.ASSISTANT) totalAssistantCount++;
+        }
+        int assistantThreshold = totalAssistantCount - INNER_THOUGHT_HISTORY_WINDOW;
+
         String userTag = "[" + (userNickname != null && !userNickname.isBlank() ? userNickname : "유저") + "]: ";
 
+        int assistantIdx = 0;
         for (ChatLogDocument chatLog : history) {
             switch (chatLog.getRole()) {
                 case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
                 case ASSISTANT -> {
-                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName);
+                    boolean includeThought = assistantIdx >= assistantThreshold;
+                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName, includeThought);
                     messages.add(OpenAiMessage.assistant(sanitized));
+                    assistantIdx++;
                 }
                 case SYSTEM -> messages.add(
                     OpenAiMessage.user("[NARRATION]: " + chatLog.getRawContent())
@@ -1111,10 +1125,13 @@ public class ChatService {
     }
 
     /**
-     * [Phase 5.5-Fix] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제
-     * (ChatStreamService와 동일 로직)
+     * [Phase 5.5-Fix-IT] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제 (속마음 포함)
+     *
+     * includeInnerThought=true일 때, 속마음 텍스트를 히스토리에 포함.
+     * 포맷: {💭 Previous thought: "..."} — output JSON과 의도적으로 다른 형식으로
+     * Few-Shot Leakage(패턴 모방) 방지.
      */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName, boolean includeInnerThought) {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) {
@@ -1127,26 +1144,30 @@ public class ChatService {
 
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
-                // ── 화자 이름표 ──
                 String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
                     ? scene.speaker() : characterName;
                 sb.append("[").append(speaker).append("] ");
 
-                // ── 감정 태그를 앞으로 이동 (디커플링) ──
                 if (scene.emotion() != null && !scene.emotion().isBlank()) {
                     sb.append("{Emotion: ").append(scene.emotion()).append("} ");
                 }
 
-                // ── 나레이션 ──
                 if (scene.narration() != null && !scene.narration().isBlank()) {
                     sb.append("(").append(scene.narration().trim()).append(") ");
                 }
 
-                // ── 대사 (인용부호) ──
                 if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
                     sb.append("\"").append(scene.dialogue().trim()).append("\"");
                 }
                 sb.append("\n");
+            }
+
+            // [Phase 5.5-Fix-IT] 속마음 컨텍스트 주입 (최근 N턴만)
+            if (includeInnerThought) {
+                String thought = chatLog.getInnerThought();
+                if (thought != null && !thought.isBlank()) {
+                    sb.append("{💭 Previous thought: \"").append(thought.trim()).append("\"}\n");
+                }
             }
 
             String result = sb.toString().trim();
@@ -1156,8 +1177,20 @@ public class ChatService {
 
         } catch (Exception e) {
             String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
-            return "[" + characterName + "]: " + content;
+            StringBuilder fallback = new StringBuilder("[" + characterName + "]: " + content);
+            if (includeInnerThought) {
+                String thought = chatLog.getInnerThought();
+                if (thought != null && !thought.isBlank()) {
+                    fallback.append("\n{💭 Previous thought: \"").append(thought.trim()).append("\"}");
+                }
+            }
+            return fallback.toString();
         }
+    }
+
+    /** 하위 호환: 2-param 버전 유지 */
+    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
+        return buildSanitizedAssistantContent(chatLog, characterName, false);
     }
 
     private void applyAffectionChange(ChatRoom room, int change) {
