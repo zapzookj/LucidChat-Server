@@ -717,7 +717,7 @@ public class ChatStreamService {
         );
 
         OpenAiChatRequest llmRequest = new OpenAiChatRequest(
-            model, messages, 0.8, true, 0.3, 0.15, providerRouting);
+            model, messages, 0.8, true, 0.3, 0.15, providerRouting, Map.of("type", "json_object"));
 
         // ── LLM 스트림 ──
         StreamResult streamResult;
@@ -941,7 +941,7 @@ public class ChatStreamService {
     private List<OpenAiMessage> buildMessageHistory(Long roomId,
                                                     CharacterPromptAssembler.SystemPromptPayload systemPrompt,
                                                     String characterName, String userNickname) {
-        List<ChatLogDocument> history = chatLogRepository.findTop200ByRoomIdOrderByCreatedAtDesc(roomId);
+        List<ChatLogDocument> history = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
         history.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
         List<OpenAiMessage> messages = new ArrayList<>();
 

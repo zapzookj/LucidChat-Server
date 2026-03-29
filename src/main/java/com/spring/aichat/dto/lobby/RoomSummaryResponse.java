@@ -7,6 +7,11 @@ import java.time.LocalDateTime;
  *
  * '기억의 끈' (Continue / Load Game) 화면에서 사용
  * - 각 카드: 캐릭터 썸네일, 이름, 호감도, 마지막 대화 시간, 모드 뱃지
+ *
+ * [Phase 5.5-Fix] 지배 스탯 정보 추가
+ * - dominantStatName: 5종 스탯 중 가장 높은 스탯의 키 (intimacy, affection, dependency, playfulness, trust)
+ * - dominantStatValue: 해당 스탯의 현재 수치
+ * - dynamicRelationTag: 동적 관계 태그 텍스트
  */
 public record RoomSummaryResponse(
     Long roomId,
@@ -23,5 +28,9 @@ public record RoomSummaryResponse(
     // 엔딩 상태
     boolean endingReached,
     String endingType,         // HAPPY, BAD, null
-    String endingTitle
+    String endingTitle,
+    // [Phase 5.5-Fix] 지배 스탯 정보
+    String dominantStatName,   // intimacy, affection, dependency, playfulness, trust
+    int dominantStatValue,
+    String dynamicRelationTag  // 동적 관계 태그
 ) {}

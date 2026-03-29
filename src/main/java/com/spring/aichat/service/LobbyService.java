@@ -24,6 +24,8 @@ import java.util.List;
  * [Phase 4.5] 로비 서비스
  *
  * 캐릭터 목록, 채팅방 목록, 채팅방 생성 비즈니스 로직
+ *
+ * [Phase 5.5-Fix] toRoomSummary: 지배 스탯 정보 추가
  */
 @Service
 @Slf4j
@@ -128,7 +130,11 @@ public class LobbyService {
             room.getLastActiveAt(),
             room.isEndingReached(),
             room.getEndingType() != null ? room.getEndingType().name() : null,
-            room.getEndingTitle()
+            room.getEndingTitle(),
+            // [Phase 5.5-Fix] 지배 스탯 정보
+            room.getDominantStatName(),
+            room.getMaxNormalStatValue(),
+            room.getDynamicRelationTag()
         );
     }
 }

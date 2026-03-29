@@ -22,24 +22,25 @@ public record OpenAiChatRequest(
     Boolean stream,
     @JsonProperty("frequency_penalty") Double frequencyPenalty,
     @JsonProperty("presence_penalty")  Double presencePenalty,
-    Map<String, Object> provider
+    Map<String, Object> provider,
+    @JsonProperty("response_format") Map<String, String> responseFormat
 ) {
     /** 기본 생성자 — penalty 적용 (일반 대화용) */
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature) {
-        this(model, messages, temperature, false, 0.3, 0.15, null);
+        this(model, messages, temperature, false, 0.3, 0.15, null, null);
     }
 
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature, Map<String, Object> provider) {
-        this(model, messages, temperature, false, 0.3, 0.15, provider);
+        this(model, messages, temperature, false, 0.3, 0.15, provider, Map.of("type", "json_object"));
     }
 
     /** stream 지정 생성자 — penalty 적용 */
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature, Boolean stream) {
-        this(model, messages, temperature, stream, 0.3, 0.15, null);
+        this(model, messages, temperature, stream, 0.3, 0.15, null, null);
     }
 
     /** penalty 미적용 팩토리 — 엔딩 타이틀 등 창의적 생성용 */
     public static OpenAiChatRequest withoutPenalty(String model, List<OpenAiMessage> messages, Double temperature) {
-        return new OpenAiChatRequest(model, messages, temperature, false, null, null, null);
+        return new OpenAiChatRequest(model, messages, temperature, false, null, null, null, null);
     }
 }
