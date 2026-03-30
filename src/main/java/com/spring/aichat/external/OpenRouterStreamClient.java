@@ -16,6 +16,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -75,7 +76,7 @@ public class OpenRouterStreamClient {
 
         OpenAiChatRequest streamRequest = new OpenAiChatRequest(
             request.model(), request.messages(), request.temperature(),
-            true, request.frequencyPenalty(), request.presencePenalty(), request.provider()
+            true, request.frequencyPenalty(), request.presencePenalty(), request.provider(), Map.of("type", "json_object")
         );
 
         String jsonBody;

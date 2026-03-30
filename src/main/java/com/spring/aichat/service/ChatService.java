@@ -5,10 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.*;
-import com.spring.aichat.domain.enums.ChatRole;
-import com.spring.aichat.domain.enums.EasterEggType;
-import com.spring.aichat.domain.enums.EmotionTag;
-import com.spring.aichat.domain.enums.RelationStatus;
+import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.achievement.AchievementResponse;
@@ -283,8 +280,9 @@ public class ChatService {
                     }
                 }
 
+                // [Phase 5.5-Sep] 이스터에그: 스토리 모드 전용
                 SendChatResponse.EasterEggEvent easterEggEvent = null;
-                if (llmResult.easterEggTrigger() != null && !llmResult.easterEggTrigger().isBlank()) {
+                if (isStory && llmResult.easterEggTrigger() != null && !llmResult.easterEggTrigger().isBlank()) {
                     try {
                         EasterEggType eggType = EasterEggType.valueOf(llmResult.easterEggTrigger().toUpperCase());
 
@@ -335,15 +333,17 @@ public class ChatService {
 
         log.info("⏱ [PERF] TX-2 (JPA postprocess): {}ms", System.currentTimeMillis() - tx2Start);
 
-        // ── MongoDB: ASSISTANT 메시지 저장 (속마음 포함) ──
+        // ── MongoDB: ASSISTANT 메시지 저장 ──
+        // [Phase 5.5-Sep] 속마음: 스토리 모드 전용 — Sandbox는 항상 null
         String assistantLogId = null;
         boolean hasInnerThought = false;
+        String innerThoughtToSave = isStory ? llmResult.innerThought() : null;
         try {
             ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
                 jpa.room().getId(),
                 llmResult.cleanJson(), llmResult.combinedDialogue(),
                 llmResult.mainEmotion(), null,
-                llmResult.innerThought()   // [Phase 5.5-IT] 속마음 텍스트 (nullable)
+                innerThoughtToSave
             );
             ChatLogDocument savedAssistant = chatLogRepository.save(assistantLog);
             assistantLogId = savedAssistant.getId();
@@ -363,10 +363,10 @@ public class ChatService {
         log.info("⏱ [PERF] ====== sendMessage DONE: {}ms ======",
             System.currentTimeMillis() - totalStart);
 
-        triggerMemorySummarizationIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1);
+        triggerMemorySummarizationIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1, jpa.room().getChatMode());
 
         // [Phase 5.5] 캐릭터 생각 비동기 생성 트리거
-        triggerCharacterThoughtIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode);
+        triggerCharacterThoughtIfNeeded(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode, jpa.room().getChatMode());
 
         // [Phase 5.5-IT] 응답에 속마음 플래그 + logId 추가
         // response는 TX-2에서 만들어졌으므로, 새 record로 래핑
@@ -438,10 +438,12 @@ public class ChatService {
     //  [Phase 5.5] 캐릭터의 생각 생성 (비동기)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private void triggerCharacterThoughtIfNeeded(Long roomId, Long userId, long totalLogCount, boolean isSecretMode) {
+    private void triggerCharacterThoughtIfNeeded(Long roomId, Long userId, long totalLogCount, boolean isSecretMode, ChatMode chatMode) {
         long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
+        long cycle = ChatModePolicy.getCharacterThoughtCycle(chatMode);
+        long offset = ChatModePolicy.getCharacterThoughtOffset(chatMode);
 
-        if (userMsgCount > 0 && userMsgCount % THOUGHT_UPDATE_CYCLE == THOUGHT_UPDATE_OFFSET) {
+        if (userMsgCount > 0 && userMsgCount % cycle == offset) {
             log.info("💭 [THOUGHT] Generation TRIGGERED | roomId={} | userMsgCount={}",
                 roomId, userMsgCount);
             generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
@@ -822,7 +824,8 @@ public class ChatService {
 
     private LlmResult callLlmAndParse(ChatRoom room, long logCount, String ragQuery) {
         String longTermMemory = "";
-        if (logCount >= RAG_SKIP_LOG_THRESHOLD) {
+        long ragThreshold = ChatModePolicy.getRagSkipThreshold(room.getChatMode());
+        if (logCount >= ragThreshold) {
             long ragStart = System.currentTimeMillis();
             try {
                 longTermMemory = memoryService.retrieveContext(room.getId());
@@ -1066,10 +1069,11 @@ public class ChatService {
             .orElse("");
     }
 
-    private void triggerMemorySummarizationIfNeeded(Long roomId, Long userId, long totalLogCount) {
+    private void triggerMemorySummarizationIfNeeded(Long roomId, Long userId, long totalLogCount, ChatMode chatMode) {
         long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
+        long cycle = ChatModePolicy.getMemorySummarizationCycle(chatMode);
 
-        if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
+        if (userMsgCount > 0 && userMsgCount % cycle == 0) {
             log.info("🧠 [MEMORY] Summarization TRIGGERED | roomId={} | userMsgCount={}",
                 roomId, userMsgCount);
             memoryService.summarizeAndSaveMemory(roomId, userId);

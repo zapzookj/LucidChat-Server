@@ -200,11 +200,12 @@ public class ChatStreamService {
                     ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                    // [Phase 5.5-EV] topic_concluded 상태 업데이트
-                    freshRoom.updateTopicConcluded(parsed.topicConcluded());
+                    // [Phase 5.5-Sep] topic_concluded + event: 스토리 모드 전용
+                    if (ChatModePolicy.supportsTopicConcluded(freshRoom.getChatMode())) {
+                        freshRoom.updateTopicConcluded(parsed.topicConcluded());
+                    }
 
-                    // [Phase 5.5-EV] 이벤트 상태 업데이트 (유저 개입 시)
-                    if (wasEventActive) {
+                    if (wasEventActive && ChatModePolicy.supportsEvents(freshRoom.getChatMode())) {
                         // [Fix 1] 유저가 실제 채팅으로 개입한 경우 → 무조건 RESOLVED
                         // LLM이 ONGOING을 뱉어도 백엔드에서 강제 오버라이드
                         freshRoom.updateEventStatus("RESOLVED");
@@ -235,8 +236,9 @@ public class ChatStreamService {
                         freshRoom.refreshRelationFromStats();
                     }
 
-                    // [Phase 5.5-EV] 승급 대기 처리 (topic_concluded 게이팅)
-                    PromotionEvent deferredPromo = checkAndStartDeferredPromotion(freshRoom, parsed.topicConcluded());
+                    // [Phase 5.5-Sep] 승급 대기: 스토리 모드 전용
+                    PromotionEvent deferredPromo = isStory
+                        ? checkAndStartDeferredPromotion(freshRoom, parsed.topicConcluded()) : null;
                     if (deferredPromo != null) promoEvent = deferredPromo;
 
                     // 엔딩 트리거
@@ -246,8 +248,9 @@ public class ChatStreamService {
                         if (endingCheck != null) endingTrigger = new EndingTrigger(endingCheck);
                     }
 
-                    // 이스터에그
-                    EasterEggEvent easterEgg = processEasterEgg(parsed.aiOutput(), jpa.userId());
+                    // [Phase 5.5-Sep] 이스터에그: 스토리 모드 전용
+                    EasterEggEvent easterEgg = isStory
+                        ? processEasterEgg(parsed.aiOutput(), jpa.userId()) : null;
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
 
@@ -257,8 +260,8 @@ public class ChatStreamService {
                         statsSnapshot, freshRoom.getCurrentBpm(),
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
-                        freshRoom.isTopicConcluded(),
-                        wasEventActive ? "RESOLVED" : (freshRoom.isEventActive() ? freshRoom.getEventStatus() : null));
+                        isStory ? freshRoom.isTopicConcluded() : false,
+                        isStory ? (wasEventActive ? "RESOLVED" : (freshRoom.isEventActive() ? freshRoom.getEventStatus() : null)) : null);
                 });
             } catch (Exception e) {
                 log.error("❌ TX-2 failed | roomId={}", roomId, e);
@@ -271,9 +274,11 @@ public class ChatStreamService {
             String assistantLogId = null;
             boolean hasInnerThought = false;
             try {
+                // [Phase 5.5-Sep] 속마음: 스토리 모드 전용
+                String innerThoughtToSave = isStory ? parsed.innerThought() : null;
                 ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
                     roomId, parsed.cleanJson(), parsed.combinedDialogue(),
-                    parsed.mainEmotion(), null, parsed.innerThought(), parsed.scenesJson());
+                    parsed.mainEmotion(), null, innerThoughtToSave, parsed.scenesJson());
                 ChatLogDocument saved = chatLogRepository.save(assistantLog);
                 assistantLogId = saved.getId();
                 hasInnerThought = saved.hasInnerThought();
@@ -283,12 +288,12 @@ public class ChatStreamService {
             cacheService.evictRoomInfo(roomId);
 
             // ── SSE: final_result ──
-            sendFinalResult(emitter, response, hasInnerThought, assistantLogId);
+            sendFinalResult(emitter, response, isStory && hasInnerThought, assistantLogId);
             emitter.complete();
 
             log.info("⏱ [STREAM-PERF] sendMessageStream DONE: {}ms", System.currentTimeMillis() - totalStart);
 
-            triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode);
+            triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode, jpa.room().getChatMode());
 
         } catch (Exception e) {
             log.error("❌ Unexpected error | roomId={}", roomId, e);
@@ -305,6 +310,13 @@ public class ChatStreamService {
         log.info("🎬 [DIRECTOR] Event select START | roomId={}", roomId);
 
         try {
+            // [Phase 5.5-Sep] 이벤트: 스토리 모드 전용
+            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (!ChatModePolicy.supportsEvents(modeCheck.getChatMode())) {
+                sendSseError(emitter, "MODE_RESTRICTED", "이벤트는 스토리 모드에서만 사용할 수 있습니다.");
+                return;
+            }
             // ── TX-1: 에너지 차감 + 디렉터 모드 시작 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -400,6 +412,13 @@ public class ChatStreamService {
         log.info("👀 [DIRECTOR] Watch START | roomId={}", roomId);
 
         try {
+            // [Phase 5.5-Sep] 디렉터 모드: 스토리 모드 전용
+            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (!ChatModePolicy.supportsDirectorMode(modeCheck.getChatMode())) {
+                sendSseError(emitter, "MODE_RESTRICTED", "디렉터 모드는 스토리 모드에서만 사용할 수 있습니다.");
+                return;
+            }
             // ── TX-1: 에너지 차감 (일반 채팅과 동일) ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -497,6 +516,13 @@ public class ChatStreamService {
         log.info("⏭ [TIME_SKIP] START | roomId={}", roomId);
 
         try {
+            // [Phase 5.5-Sep] 시간 넘기기: 스토리 모드 전용
+            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (!ChatModePolicy.supportsDirectorMode(modeCheck.getChatMode())) {
+                sendSseError(emitter, "MODE_RESTRICTED", "시간 넘기기는 스토리 모드에서만 사용할 수 있습니다.");
+                return;
+            }
             // ── TX-1: 에너지 1 차감 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -695,7 +721,8 @@ public class ChatStreamService {
                                               SseEmitter emitter, RollbackContext rollbackCtx) {
         // RAG 메모리
         String longTermMemory = "";
-        if (logCountForRag >= RAG_SKIP_LOG_THRESHOLD) {
+        long ragThreshold = ChatModePolicy.getRagSkipThreshold(room.getChatMode());
+        if (logCountForRag >= ragThreshold) {
             try {
                 longTermMemory = memoryService.retrieveContext(room.getId());
             } catch (Exception e) {
@@ -915,12 +942,16 @@ public class ChatStreamService {
         compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
-    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount, boolean isSecretMode) {
+    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount, boolean isSecretMode, ChatMode chatMode) {
         long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
-        if (userMsgCount > 0 && userMsgCount % USER_TURN_MEMORY_CYCLE == 0) {
+
+        long memoryCycle = ChatModePolicy.getMemorySummarizationCycle(chatMode);
+        if (userMsgCount > 0 && userMsgCount % memoryCycle == 0) {
             memoryService.summarizeAndSaveMemory(roomId, userId);
         }
-        long thoughtCycle = 10, thoughtOffset = 5;
+
+        long thoughtCycle = ChatModePolicy.getCharacterThoughtCycle(chatMode);
+        long thoughtOffset = ChatModePolicy.getCharacterThoughtOffset(chatMode);
         if (userMsgCount > 0 && userMsgCount % thoughtCycle == thoughtOffset) {
             chatService.generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
         }
