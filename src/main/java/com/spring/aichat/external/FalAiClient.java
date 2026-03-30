@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.spring.aichat.config.FalAiProperties;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -23,6 +25,13 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * 캐릭터 일러스트와 장소 배경 모두 이 클라이언트를 통해 생성.
  * ComfyUI 워크플로우 JSON을 { "workflow": {...} } 형태로 래핑하여 전송.
+ *
+ * [Phase 5.5-Fix] JDK HttpClient 헤더 버그 회피
+ *   - JdkClientHttpRequestFactory(기본값)는 GET 요청에도 Content-Length: 0 또는
+ *     Transfer-Encoding: chunked를 강제 삽입하는 JDK 버그(JDK-8283544)가 있음.
+ *   - Fal.ai 백엔드(Python/uvicorn)가 이 두 헤더의 공존을 400으로 거부.
+ *   - 해결: SimpleClientHttpRequestFactory(HttpURLConnection 기반)를 명시 지정하여 회피.
+ *   - 부수 효과: 매 호출마다 RestClient 재생성 → 단일 인스턴스 재사용으로 성능 개선.
  */
 @Component
 @Slf4j
@@ -31,6 +40,31 @@ public class FalAiClient {
 
     private final FalAiProperties props;
     private final ObjectMapper objectMapper;
+
+    /**
+     * [Phase 5.5-Fix] Fal.ai 전용 RestClient (단일 인스턴스 재사용)
+     *
+     * SimpleClientHttpRequestFactory를 명시하여 JDK HttpClient의
+     * Content-Length/Transfer-Encoding 충돌 버그를 회피한다.
+     */
+    private RestClient falRestClient;
+
+    /**
+     * [Phase 5.5-Fix] Bean 초기화 시 단일 RestClient 생성
+     */
+    @PostConstruct
+    void init() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10_000);  // 10초
+        requestFactory.setReadTimeout(30_000);     // 30초
+
+        this.falRestClient = RestClient.builder()
+            .requestFactory(requestFactory)
+            .defaultHeader(HttpHeaders.AUTHORIZATION, "Key " + props.apiKey())
+            .build();
+
+        log.info("[FAL] RestClient initialized with SimpleClientHttpRequestFactory (JDK HttpClient header bug bypass)");
+    }
 
     /**
      * 비동기 큐에 ComfyUI 워크플로우 제출
@@ -48,14 +82,10 @@ public class FalAiClient {
 
         log.info("[FAL] Submitting to queue: {}", url);
 
-        RestClient client = RestClient.builder()
-            .defaultHeader(HttpHeaders.AUTHORIZATION, "Key " + props.apiKey())
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .build();
-
         try {
-            String responseStr = client.post()
+            String responseStr = falRestClient.post()
                 .uri(url)
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
                 .body(String.class);
@@ -81,12 +111,8 @@ public class FalAiClient {
      * @return 완료 시 이미지 URL이 담긴 JsonNode, 미완료 시 null
      */
     public PollResult pollStatus(String statusUrl) {
-        RestClient client = RestClient.builder()
-            .defaultHeader(HttpHeaders.AUTHORIZATION, "Key " + props.apiKey())
-            .build();
-
         try {
-            String responseStr = client.get()
+            String responseStr = falRestClient.get()
                 .uri(statusUrl)
                 .retrieve()
                 .body(String.class);
@@ -94,7 +120,8 @@ public class FalAiClient {
             JsonNode resp = objectMapper.readTree(responseStr);
             String status = resp.path("status").asText("UNKNOWN");
 
-            log.debug("[FAL] Poll status: {} → {}", statusUrl, status);
+            // [Phase 5.5-Fix] DEBUG → INFO: 폴링 상태 가시성 확보 (호출부에서 주기 제어)
+            log.info("[FAL] Poll: status={}", status);
 
             if ("COMPLETED".equalsIgnoreCase(status)) {
                 return new PollResult(true, status, resp);
@@ -102,7 +129,7 @@ public class FalAiClient {
             return new PollResult(false, status, resp);
 
         } catch (Exception e) {
-            log.warn("[FAL] Poll failed: {}", e.getMessage());
+            log.warn("[FAL] Poll failed: {} — {}", e.getClass().getSimpleName(), e.getMessage());
             return new PollResult(false, "ERROR", null);
         }
     }
@@ -111,12 +138,8 @@ public class FalAiClient {
      * response_url로 최종 결과 직접 조회
      */
     public JsonNode fetchResult(String responseUrl) {
-        RestClient client = RestClient.builder()
-            .defaultHeader(HttpHeaders.AUTHORIZATION, "Key " + props.apiKey())
-            .build();
-
         try {
-            String responseStr = client.get()
+            String responseStr = falRestClient.get()
                 .uri(responseUrl)
                 .retrieve()
                 .body(String.class);
@@ -231,8 +254,8 @@ public class FalAiClient {
             workflow.set("49", objectMapper.readTree("""
                 {
                   "inputs": { "dimensions": "1024 x 1024 (1:1)", "invert": false, "batch_size": 1 },
-                  "class_type": "EmptyLatentImagePresets",
-                  "_meta": { "title": "Empty Latent Image Presets" }
+                  "class_type": "EmptyLatentImage",
+                  "_meta": { "title": "Empty Latent Image" }
                 }
                 """));
 
@@ -344,8 +367,8 @@ public class FalAiClient {
             workflow.set("49", objectMapper.readTree("""
                 {
                   "inputs": { "dimensions": "1344 x 768 (1.75:1)", "invert": false, "batch_size": 1 },
-                  "class_type": "EmptyLatentImagePresets",
-                  "_meta": { "title": "Empty Latent Image Presets" }
+                  "class_type": "EmptyLatentImage",
+                  "_meta": { "title": "Empty Latent Image" }
                 }
                 """));
 
