@@ -53,7 +53,8 @@ public class SecurityConfig {
                 "/login/**",            // 로그인 페이지 등
                 "/swagger-ui/**", "/v3/api-docs/**", // Swagger
                 "/actuator/**",          // (선택) 헬스 체크 등
-                "/api/v1/payments/webhook"   // Phase 5: PortOne webhook (no JWT)
+                "/api/v1/payments/webhook",   // Phase 5: PortOne webhook (no JWT)
+                "/api/v1/webhook/**"
             ).permitAll()
             .anyRequest().authenticated()
         );

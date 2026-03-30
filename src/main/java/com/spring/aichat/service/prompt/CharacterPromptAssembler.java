@@ -100,6 +100,8 @@ public class CharacterPromptAssembler {
         // ── [스토리 전용] 추가 블록들 ──
         if (ChatModePolicy.supportsSceneDirection(mode)) {
             staticBuilder.append(buildSceneDirectionGuide(room, character, effectiveSecretMode));
+            staticBuilder.append(buildIllustrationTriggerBlock());
+            staticBuilder.append(buildDynamicLocationBlock(character));
         }
 
         if (ChatModePolicy.supportsInnerThought(mode)) {
@@ -508,6 +510,89 @@ public class CharacterPromptAssembler {
         """;
     }
 
+    /**
+     * [Phase 5.5-Illust] 실시간 일러스트 생성 트리거 프롬프트 블록
+     *
+     * LLM이 극적인 순간을 판단하여 generate_illustration: true를 출력하도록 유도.
+     * 스토리 모드 전용. 샌드박스 모드에서는 이 블록을 추가하지 않는다.
+     */
+    private String buildIllustrationTriggerBlock() {
+        return """
+ 
+        # 🎨 Illustration Trigger System
+        Output `"generate_illustration"` (boolean) in your JSON.
+ 
+        ## When to trigger (generate_illustration: true):
+        **DEFAULT: false.** Only set true in genuinely dramatic, visually stunning moments.
+        Rarity: ~5-10%% of responses. This triggers a real-time AI illustration for the user.
+ 
+        ### Trigger Conditions (ALL must be met):
+        1. **The moment is visually dramatic or emotionally peak:**
+           - First confession of love
+           - A tearful reunion or farewell
+           - A breathtaking scenery change (first time seeing cherry blossoms, sunset on a rooftop)
+           - An intense emotional climax (anger, crying, passionate moment)
+           - A vulnerable, intimate moment (falling asleep on shoulder, holding hands for the first time)
+        2. **The visual would be meaningfully different from the default character pose.**
+        3. **It hasn't been triggered in the last 5+ turns.**
+ 
+        ### When NOT to trigger (generate_illustration: false):
+        - Normal conversation with no visual peak
+        - Already triggered recently (within last 5 turns)
+        - The scene is mundane or repetitive
+        - The user just said something casual
+ 
+        ⚠️ Over-triggering devalues the experience. Be VERY selective.
+        """;
+    }
+
+    /**
+     * [Phase 5.5-Illust] 동적 장소 전환 프롬프트 블록
+     *
+     * LLM이 기존 정적 Location enum에 없는 새로운 장소로 이동할 때,
+     * new_location_name과 location_description을 출력하도록 유도.
+     *
+     * 기존 정적 장소(Character의 baseLocations + 해금 장소)는 기존 location 필드로 처리.
+     * 완전히 새로운 장소(바다, 놀이공원, 영화관 등)만 이 필드를 사용.
+     */
+    private String buildDynamicLocationBlock(Character character) {
+        // 이 캐릭터의 정적 장소 목록 나열
+        String staticLocations = String.join(", ", character.getAllLocations());
+
+        return """
+ 
+        # 🗺️ Dynamic Location System
+        You have two location systems:
+ 
+        ## 1. Static Locations (use `location` field in scenes):
+        These are pre-defined locations with existing background images: [%s]
+        **DEFAULT: Use these whenever possible.** They load instantly with no delay.
+ 
+        ## 2. Dynamic New Locations (use `new_location_name` + `location_description`):
+        When the story NATURALLY leads to a completely new place that is NOT in the static list above,
+        output these TWO fields at the JSON root level (not inside scenes):
+ 
+        - `"new_location_name"`: A short name for the new place (Korean, 2-5 words)
+          Example: "해변", "놀이공원", "영화관", "옥상 정원", "시골 할머니 댁"
+ 
+        - `"location_description"`: A detailed English prompt describing the scene for image generation.
+          This should be vivid, specific, and painterly. Include:
+          - Indoor/outdoor, architecture style
+          - Key visual elements (furniture, vegetation, signage)
+          - Lighting and atmosphere
+          - DO NOT include characters or people in the description
+          Example: "indoors, cozy movie theater, red velvet seats, dim ambient lighting, large screen glowing, warm atmosphere, popcorn on armrest"
+ 
+        ### Rules:
+        - **PREFER static locations.** Only use dynamic locations when the narrative genuinely requires a new setting.
+        - **Maximum 1 new location per conversation session.** Don't hop between new places constantly.
+        - **If the user suggests going somewhere new**, that's a valid trigger.
+        - **If you used a dynamic location recently**, return to a static location before creating another new one.
+        - When using a dynamic location, still set the `location` field in scenes to the CLOSEST static location as a fallback.
+        - `new_location_name` and `location_description` are ROOT-level fields, NOT inside individual scenes.
+        """.formatted(staticLocations);
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Output Format (모드별 분기)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -637,7 +722,10 @@ public class CharacterPromptAssembler {
               "bpm": Integer (60~180),
               "inner_thought": %s,
               "topic_concluded": %s,
-              "easter_egg_trigger": null
+              "easter_egg_trigger": null,
+              "generate_illustration": false,
+              "new_location_name": null,
+              "location_description": null
             }
             """.formatted(
             reasoningGuide, eventStatusGuide, speakerGuide,

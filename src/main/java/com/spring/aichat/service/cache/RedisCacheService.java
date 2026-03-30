@@ -92,4 +92,23 @@ public class RedisCacheService {
     public <T> void cacheRoomInfo(Long roomId, T info) { put(ROOM_INFO_PREFIX + roomId, info, 60, TimeUnit.SECONDS); }
     public <T> Optional<T> getRoomInfo(Long roomId, Class<T> type) { return get(ROOM_INFO_PREFIX + roomId, type); }
     public void evictRoomInfo(Long roomId) { evict(ROOM_INFO_PREFIX + roomId); }
+
+    //   /** [Phase 5.5-Illust] 배경 캐시 조회 */
+   public String getBackgroundCache(String key) {
+       try {
+           return redisTemplate.opsForValue().get(key);
+       } catch (Exception e) {
+           log.warn("Redis bg cache get failed: {}", e.getMessage());
+           return null;
+       }
+   }
+
+   /** [Phase 5.5-Illust] 배경 캐시 저장 (영구) */
+   public void setBackgroundCache(String key, String url) {
+       try {
+           redisTemplate.opsForValue().set(key, url);
+       } catch (Exception e) {
+           log.warn("Redis bg cache set failed: {}", e.getMessage());
+       }
+   }
 }

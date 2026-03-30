@@ -3,7 +3,6 @@ package com.spring.aichat.service.stream;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
-import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
@@ -14,7 +13,6 @@ import com.spring.aichat.dto.chat.SendChatResponse.*;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
-import com.spring.aichat.exception.ContentModerationException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.OpenRouterClient;
@@ -26,6 +24,8 @@ import com.spring.aichat.service.ChatService;
 import com.spring.aichat.service.ContentModerationService;
 import com.spring.aichat.service.MemoryService;
 import com.spring.aichat.service.cache.RedisCacheService;
+import com.spring.aichat.service.illustration.BackgroundGenerationService;
+import com.spring.aichat.service.illustration.IllustrationService;
 import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
@@ -73,6 +73,8 @@ public class ChatStreamService {
     private final UserRepository userRepository;
     private final SecretModeService secretModeService;
     private final ChatService chatService;
+    private final IllustrationService illustrationService;
+    private final BackgroundGenerationService backgroundGenerationService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -118,7 +120,10 @@ public class ChatStreamService {
         String lastBgm, String lastLoc, String lastOutfit, String lastTime,
         AiJsonOutput.StatChanges statChanges, Integer bpm,
         String innerThought, boolean topicConcluded, String eventStatus,
-        String scenesJson      // [Phase 5.5-Fix] 구조화된 씬 JSON
+        String scenesJson,      // [Phase 5.5-Fix] 구조화된 씬 JSON
+        boolean generateIllustration,
+        String newLocationName,
+        String locationDescription
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -245,7 +250,14 @@ public class ChatStreamService {
                     EndingTrigger endingTrigger = null;
                     if (isStory) {
                         String endingCheck = freshRoom.checkEndingTrigger();
-                        if (endingCheck != null) endingTrigger = new EndingTrigger(endingCheck);
+                        if (endingCheck != null) {
+                           endingTrigger = new EndingTrigger(endingCheck);
+
+                           // ★ [Phase 5.5-Illust] 엔딩 도달 시 자동 일러스트 생성
+                           illustrationService.generateAutoIllustration(
+                               freshRoom.getUser().getId(), freshRoom.getCharacter().getId(),
+                               freshRoom.getId(), "ENDING");
+                        }
                     }
 
                     // [Phase 5.5-Sep] 이스터에그: 스토리 모드 전용
@@ -287,8 +299,31 @@ public class ChatStreamService {
             }
             cacheService.evictRoomInfo(roomId);
 
+            // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
+            LocationTransition locationTransition = null;
+            if (isStory && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
+               String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+               BackgroundGenerationService.BackgroundResult bgResult =
+                   backgroundGenerationService.resolveBackground(
+                       parsed.newLocationName(), parsed.locationDescription(),
+                       timeOfDay, jpa.room().getCharacter().getId());
+
+               if (bgResult.isCacheHit()) {
+                   locationTransition = LocationTransition.cached(
+                       parsed.newLocationName(), bgResult.imageUrl());
+               } else {
+                   locationTransition = LocationTransition.generating(
+                       parsed.newLocationName(), bgResult.cacheHash());
+                   // 비동기로 배경 생성 시작
+                   backgroundGenerationService.generateBackgroundAsync(
+                       parsed.newLocationName(), parsed.locationDescription(),
+                       timeOfDay, jpa.room().getCharacter().getId());
+               }
+            }
+
             // ── SSE: final_result ──
-            sendFinalResult(emitter, response, isStory && hasInnerThought, assistantLogId);
+            sendFinalResult(emitter, response, isStory && hasInnerThought, assistantLogId,
+                isStory && parsed.generateIllustration(), locationTransition);
             emitter.complete();
 
             log.info("⏱ [STREAM-PERF] sendMessageStream DONE: {}ms", System.currentTimeMillis() - totalStart);
@@ -391,7 +426,7 @@ public class ChatStreamService {
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
 
-            sendFinalResult(emitter, response, false, assistantLogId);
+            sendFinalResult(emitter, response, false, assistantLogId, false, null);
             emitter.complete();
 
             log.info("🎬 [DIRECTOR] Event select DONE | roomId={} | eventStatus={}",
@@ -495,7 +530,7 @@ public class ChatStreamService {
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
 
-            sendFinalResult(emitter, response, false, assistantLogId);
+            sendFinalResult(emitter, response, false, assistantLogId, false, null);
             emitter.complete();
 
             log.info("👀 [DIRECTOR] Watch DONE | roomId={} | eventStatus={}",
@@ -593,7 +628,28 @@ public class ChatStreamService {
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
 
-            sendFinalResult(emitter, response, false, assistantLogId);
+            //   // ★ [Phase 5.5-Illust] 시간 넘기기에서도 장소 전환 가능 ★
+            SendChatResponse.LocationTransition timeSkipLocationTransition = null;
+            if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
+               String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+               BackgroundGenerationService.BackgroundResult bgResult =
+                   backgroundGenerationService.resolveBackground(
+                       parsed.newLocationName(), parsed.locationDescription(),
+                       timeOfDay, jpa.room().getCharacter().getId());
+
+               if (bgResult.isCacheHit()) {
+                   timeSkipLocationTransition = SendChatResponse.LocationTransition.cached(
+                       parsed.newLocationName(), bgResult.imageUrl());
+               } else {
+                   timeSkipLocationTransition = SendChatResponse.LocationTransition.generating(
+                       parsed.newLocationName(), bgResult.cacheHash());
+                   backgroundGenerationService.generateBackgroundAsync(
+                       parsed.newLocationName(), parsed.locationDescription(),
+                       timeOfDay, jpa.room().getCharacter().getId());
+               }
+            }
+
+            sendFinalResult(emitter, response, false, assistantLogId, false, timeSkipLocationTransition);
             emitter.complete();
 
             log.info("⏭ [TIME_SKIP] DONE | roomId={}", roomId);
@@ -699,6 +755,10 @@ public class ChatStreamService {
             List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target).stream()
                 .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
                 .collect(Collectors.toList());
+            // ★ [Phase 5.5-Illust] 승급 성공 시 자동 일러스트 생성
+            illustrationService.generateAutoIllustration(
+               room.getUser().getId(), room.getCharacter().getId(),
+               room.getId(), "PROMOTION");
             return new PromotionEvent("SUCCESS", target.name(),
                 RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, unlocks);
         } else {
@@ -833,7 +893,10 @@ public class ChatStreamService {
             aiOutput.statChanges(), aiOutput.bpm(), innerThought,
             aiOutput.isTopicConcluded(),
             aiOutput.eventStatus(),
-            scenesJson
+            scenesJson,
+            aiOutput.shouldGenerateIllustration(),
+            aiOutput.newLocationName(),
+            aiOutput.locationDescription()
         );
     }
 
@@ -859,7 +922,9 @@ public class ChatStreamService {
     }
 
     private void sendFinalResult(SseEmitter emitter, SendChatResponse response,
-                                 boolean hasInnerThought, String assistantLogId) {
+                                 boolean hasInnerThought, String assistantLogId,
+                                 boolean generateIllustration,
+                                 LocationTransition locationTransition) {
         try {
             SendChatResponse finalResponse = new SendChatResponse(
                 response.roomId(), response.scenes(),
@@ -868,7 +933,8 @@ public class ChatStreamService {
                 response.stats(), response.bpm(),
                 response.dynamicRelationTag(), response.characterThought(),
                 hasInnerThought, assistantLogId,
-                response.topicConcluded(), response.eventStatus());
+                response.topicConcluded(), response.eventStatus(),
+                generateIllustration, locationTransition);
 
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));
