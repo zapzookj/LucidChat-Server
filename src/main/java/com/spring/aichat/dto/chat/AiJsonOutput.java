@@ -6,6 +6,7 @@ import java.util.List;
 /**
  * [Phase 5.5-NPC] Scene.speaker 필드 추가
  * [Phase 5.5-EV]  topic_concluded, event_status 필드
+ * [Phase 5.5-Illust] generate_illustration, new_location_name, location_description 추가
  */
 public record AiJsonOutput(
     String reasoning, List<Scene> scenes,
@@ -16,41 +17,63 @@ public record AiJsonOutput(
     Integer bpm,
     @JsonProperty("inner_thought") String innerThought,
     @JsonProperty("topic_concluded") Boolean topicConcluded,
-    @JsonProperty("event_status") String eventStatus
+    @JsonProperty("event_status") String eventStatus,
+
+    // ── [Phase 5.5-Illust] 실시간 일러스트 생성 트리거 ──
+    @JsonProperty("generate_illustration") Boolean generateIllustration,
+
+    // ── [Phase 5.5-Illust] 새로운 장소 전환 ──
+    @JsonProperty("new_location_name") String newLocationName,
+    @JsonProperty("location_description") String locationDescription
 ) {
+    // ── 하위 호환 생성자 체인 ──
+    public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
+                        Integer moodScore, String easterEggTrigger,
+                        StatChanges statChanges, Integer bpm, String innerThought,
+                        Boolean topicConcluded, String eventStatus) {
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
+            statChanges, bpm, innerThought, topicConcluded, eventStatus,
+            null, null, null);
+    }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger,
                         StatChanges statChanges, Integer bpm, String innerThought) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, statChanges, bpm, innerThought, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, statChanges, bpm, innerThought, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger, StatChanges statChanges, Integer bpm) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, statChanges, bpm, null, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, statChanges, bpm, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, null, null, null, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange, Integer moodScore) {
-        this(reasoning, scenes, affectionChange, moodScore, null, null, null, null, null, null);
+        this(reasoning, scenes, affectionChange, moodScore, null, null, null, null, null, null, null, null, null);
     }
 
     public boolean isTopicConcluded() { return Boolean.TRUE.equals(topicConcluded); }
     public boolean isEventOngoing()   { return "ONGOING".equalsIgnoreCase(eventStatus); }
     public boolean isEventResolved()  { return "RESOLVED".equalsIgnoreCase(eventStatus); }
 
+    /** [Phase 5.5-Illust] LLM이 극적 순간에 일러스트 생성을 제안했는지 */
+    public boolean shouldGenerateIllustration() { return Boolean.TRUE.equals(generateIllustration); }
+
+    /** [Phase 5.5-Illust] 새로운 장소 전환이 발생했는지 */
+    public boolean hasNewLocation() {
+        return newLocationName != null && !newLocationName.isBlank()
+            && locationDescription != null && !locationDescription.isBlank();
+    }
+
     /**
      * [Phase 5.5-NPC] speaker 필드가 있는 Scene
-     * - null/캐릭터이름: 메인 캐릭터 발화
-     * - 다른 이름: 제3자(조연) 발화
      */
     public record Scene(
-        String speaker,       // [Phase 5.5-NPC] nullable → 메인 캐릭터
+        String speaker,
         String narration, String dialogue, String emotion,
         String location, String time, String outfit,
         @JsonProperty("bgmMode") String bgmMode
     ) {
-        /** 하위 호환: speaker 없는 Scene (Jackson은 추가 필드 무시) */
         public Scene(String narration, String dialogue, String emotion,
                      String location, String time, String outfit, String bgmMode) {
             this(null, narration, dialogue, emotion, location, time, outfit, bgmMode);
