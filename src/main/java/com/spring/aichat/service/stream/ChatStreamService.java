@@ -802,7 +802,7 @@ public class ChatStreamService {
         String model = boostModeResolver.resolveModel(room.getUser());
 
         Map<String, Object> providerRouting = Map.of(
-            "order", List.of("Google AI Studio"),
+            "order", List.of("google-ai-studio"),
             "allow_fallbacks", false
         );
 

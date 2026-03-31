@@ -45,22 +45,22 @@ public class IllustrationPromptAssembler {
     static {
         CHARACTER_VISUALS.put("airi", new CharacterVisual(
             "lcn_char02",
-            "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, medium hair",
+            "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, short hair, medium hair, bangs",
             "lucid_airi_v1.safetensors"
         ));
         CHARACTER_VISUALS.put("taeri", new CharacterVisual(
             "lcn_char03",
-            "brown eyes, black hair, long hair, side ponytail, hair ribbon",
+            "purple eyes, grey hair, medium hair",
             "lucid_taeri_v1.safetensors"
         ));
         CHARACTER_VISUALS.put("luna", new CharacterVisual(
             "lcn_char01",
-            "purple eyes, light purple hair, short hair, messy hair, hair clips",
+            "blue eyes, black hair, blonde inner hair, multicolored hair, two-tone hair, bangs, short hair, colored inner hair",
             "lucid_luna_v2.safetensors"
         ));
         CHARACTER_VISUALS.put("yeonhwa", new CharacterVisual(
             "lcn_char04",
-            "golden eyes, white hair, very long hair, fox ears, fox tail",
+            "red eyes, animal ear fluff, fox girl, white hair, long hair,  animal ears, fox ears, fox tail, breasts, multiple tails, facial mark,bangs,",
             "lucid_yeonhwa_v1.safetensors"
         ));
     }
@@ -72,22 +72,22 @@ public class IllustrationPromptAssembler {
     private static final Map<String, String> AIRI_OUTFIT_PROMPTS = new LinkedHashMap<>();
     static {
         AIRI_OUTFIT_PROMPTS.put("MAID", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
-        AIRI_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
-        AIRI_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+        AIRI_OUTFIT_PROMPTS.put("DATE", "bag, shirt, hairband, blue cardigan, jewelry, necklace, white shirt, pleated skirt, long sleeves, black skirt, black hairband, handbag");
+        AIRI_OUTFIT_PROMPTS.put("SWIMSUIT", "swimsuit, bikini, navel, cleavage,  sarong, blue bikini, collarbone, frills, ribbon, frilled bikini, hair ribbon,  open clothes, thighs, long sleeves,  cardigan, stomach, front-tie top, blue ribbon");
     }
 
     private static final Map<String, String> TAERI_OUTFIT_PROMPTS = new LinkedHashMap<>();
     static {
-        TAERI_OUTFIT_PROMPTS.put("DAILY", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
-        TAERI_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
-        TAERI_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+        TAERI_OUTFIT_PROMPTS.put("DAILY", "crop top, shirt, purple headphones around neck, navel, shorts, oversized black leather jacket, midriff, white shirt, choker, black shorts, stomach, headphones, black choker, open jacket, short shorts, open clothes,  black jacket, belt, long sleeves, crop top overhang, thighs, leather");
+        TAERI_OUTFIT_PROMPTS.put("DATE", "hair tied up, skirt, jewelry, bag, necklace, shirt, off-shoulder white blouse, white shirt, shirt tucked in, collarbone, off shoulder, bare shoulders, blue skirt,  short sleeves, shoulder bag, handbag,high-waist skirt, belt, miniskirt");
+        TAERI_OUTFIT_PROMPTS.put("SWIMSUIT", "crop top overhang, crop top, choker, black choker, shirt, navel, sunglasses, swimsuit, stomach, eyewear on head, black shirt, bikini, short sleeves, thighs, black bikini, side-tie bikini bottom, string bikini");
     }
 
     private static final Map<String, String> LUNA_OUTFIT_PROMPTS = new LinkedHashMap<>();
     static {
-        LUNA_OUTFIT_PROMPTS.put("DAILY", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
-        LUNA_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
-        LUNA_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+        LUNA_OUTFIT_PROMPTS.put("DAILY", "animal ear headphones, black cat ear headphones with glowing blue accents, cat ear headphones, headphones, hood, hoodie, hood down, long sleeves,  oversized white hoodie, sleeves past wrists, drawstring, bare legs, bottomless");
+        LUNA_OUTFIT_PROMPTS.put("DATE", "oversized fluffy cardigan, off shoulder, collarbone, ribbon, white plain blouse, pleated skirt, mini skirt, plaid skirt");
+//        LUNA_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
     }
 
     private static final Map<String, String> YEONHWA_OUTFIT_PROMPTS = new LinkedHashMap<>();
@@ -122,22 +122,79 @@ public class IllustrationPromptAssembler {
     //  감정 프롬프트 매핑
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private static final Map<String, String> EMOTION_PROMPTS = new LinkedHashMap<>();
+    private static final Map<String, String> AIRI_EMOTION_PROMPTS = new LinkedHashMap<>();
     static {
-        EMOTION_PROMPTS.put("NEUTRAL", "neutral expression, gentle smile, looking at viewer, relaxed posture");
-        EMOTION_PROMPTS.put("JOY", "happy, bright smile, sparkling eyes, joyful, cheerful");
-        EMOTION_PROMPTS.put("SHY", "blushing, shy smile, looking away, fidgeting, embarrassed");
-        EMOTION_PROMPTS.put("SAD", "sad expression, teary eyes, looking down, melancholy");
-        EMOTION_PROMPTS.put("ANGRY", "angry expression, furrowed brows, clenched fists, intense gaze");
-        EMOTION_PROMPTS.put("SURPRISE", "surprised, wide eyes, open mouth, hands up");
-        EMOTION_PROMPTS.put("LOVE", "loving gaze, warm smile, heart eyes, blushing cheeks, dreamy");
-        EMOTION_PROMPTS.put("FLIRTATIOUS", "flirty expression, wink, playful smile, leaning forward, alluring");
-        EMOTION_PROMPTS.put("HEATED", "intense gaze, heavy breathing, flushed cheeks, passionate");
-        EMOTION_PROMPTS.put("DISGUST", "disgusted face, grimace, stepping back");
-        EMOTION_PROMPTS.put("FRIGHTENED", "scared, trembling, wide eyes, clutching self");
-        EMOTION_PROMPTS.put("RELAX", "relaxed, peaceful, eyes closed, serene smile, content");
-        EMOTION_PROMPTS.put("PANIC", "panicking, frantic, sweatdrop, waving hands");
-        EMOTION_PROMPTS.put("DUMBFOUNDED", "dumbfounded, blank stare, open mouth, confused");
+        AIRI_EMOTION_PROMPTS.put("NEUTRAL", "neutral, gentle smile, warm vibe");
+        AIRI_EMOTION_PROMPTS.put("JOY", "joy, bright smile, closed eyes smile, happy");
+        AIRI_EMOTION_PROMPTS.put("SHY", "shy, deep blush, averting gaze, looking down and to the side");
+        AIRI_EMOTION_PROMPTS.put("SAD", "sad, worried expression, looking down, eyebrows furrowed");
+        AIRI_EMOTION_PROMPTS.put("ANGRY", "angry, slight frown, pouting, scolding playfully");
+        AIRI_EMOTION_PROMPTS.put("SURPRISE", "surprise, wide eyes, slightly open mouth, :o, blinking");
+        AIRI_EMOTION_PROMPTS.put("SULKING", "sulking, pouty mouth, looking away");
+        AIRI_EMOTION_PROMPTS.put("FLIRTATIOUS", "flirtatious, sweet smile, head tilt, looking up through eyelashes, blush, leaning forward slightly");
+        AIRI_EMOTION_PROMPTS.put("HEATED", "heated, heavy blush, half-closed eyes, looking down slightly, flustered, shy smile");
+        AIRI_EMOTION_PROMPTS.put("DISGUST", "disgust, troubled expression, looking away slightly, sweatdrop");
+        AIRI_EMOTION_PROMPTS.put("FRIGHTENED", "frightened, wide eyes, shrinking back, nervous, slight tears");
+        AIRI_EMOTION_PROMPTS.put("RELAX", "relaxed, peaceful, eyes closed, serene smile, content");
+        AIRI_EMOTION_PROMPTS.put("PANIC", "panic, wide eyes, closed mouth, multiple sweatdrops, waving hands frantically, flustered");
+        AIRI_EMOTION_PROMPTS.put("DUMBFOUNDED", "dumbfounded, blank stare, blinking, tilted head, sweatdrop");
+        AIRI_EMOTION_PROMPTS.put("PLEADING", "pleading, puppy-dog eyes, looking up, looking at viewer, slight blush");
+    }
+
+    private static final Map<String, String> TAERI_EMOTION_PROMPTS = new LinkedHashMap<>();
+    static {
+        TAERI_EMOTION_PROMPTS.put("NEUTRAL", "neutral expression, cool vibe, slightly tilted head");
+        TAERI_EMOTION_PROMPTS.put("JOY", "joy, genuine smile, closed eyes smile");
+        TAERI_EMOTION_PROMPTS.put("SHY", "shy, looking away, heavy blush, tsundere, averting gaze");
+        TAERI_EMOTION_PROMPTS.put("SAD", "sad, tearful, gloomy");
+        TAERI_EMOTION_PROMPTS.put("ANGRY", "frown, closed mouth, v-shaped eyebrows");
+        TAERI_EMOTION_PROMPTS.put("SURPRISE", "surprise, slight open mouth");
+        TAERI_EMOTION_PROMPTS.put("SULKING", "sulking, puffed cheeks, looking away, tsundere pout");
+        TAERI_EMOTION_PROMPTS.put("FLIRTATIOUS", "flirtatious, smile, closed mouth, half-closed eyes, blush");
+        TAERI_EMOTION_PROMPTS.put("HEATED", "heated, heavy blush, looking away, half-closed eyes, flustered");
+        TAERI_EMOTION_PROMPTS.put("DISGUST", "disgust, looking down, contemptuous look");
+        TAERI_EMOTION_PROMPTS.put("FRIGHTENED", "nervous, sweatdrop, trying to act tough, tsundere, shrinking back, defensive posture");
+        TAERI_EMOTION_PROMPTS.put("RELAX", "relax, soft smile, leaning back slightly");
+        TAERI_EMOTION_PROMPTS.put("PANIC", "wide eyes, closed mouth, sweatdrop, waving hands frantically, flustered");
+        TAERI_EMOTION_PROMPTS.put("DUMBFOUNDED", "dumbfounded, flat expression, half-closed eyes, sweatdrop, sighing");
+        TAERI_EMOTION_PROMPTS.put("PLEADING", "pleading, looking up, heavy blush, hesitant");
+    }
+
+    private static final Map<String, String> LUNA_EMOTION_PROMPTS = new LinkedHashMap<>();
+    static {
+        LUNA_EMOTION_PROMPTS.put("NEUTRAL", "neutral, timid, slight blush");
+        LUNA_EMOTION_PROMPTS.put("JOY", " joy, bright smile, closed eyes smile, open mouth");
+        LUNA_EMOTION_PROMPTS.put("SHY", "shy, averting gaze, heavy blush, fidgeting, looking sideways");
+        LUNA_EMOTION_PROMPTS.put("SAD", "sad, crying, looking down, wiping tears, sniffling");
+        LUNA_EMOTION_PROMPTS.put("ANGRY", "pout, blush");
+        LUNA_EMOTION_PROMPTS.put("SURPRISE", "surprise, wide eyes, mouth open in an O shape");
+        LUNA_EMOTION_PROMPTS.put("SULKING", "pout, blush, looking sideways, half-closed eyes");
+        LUNA_EMOTION_PROMPTS.put("FLIRTATIOUS", "flirtatious, shy smile, looking up through eyelashes, heavy blush");
+        LUNA_EMOTION_PROMPTS.put("HEATED", "heated, heavy blush, panting, half-closed eyes");
+        LUNA_EMOTION_PROMPTS.put("DISGUST", "disgust, troubled expression, looking away slightly, sweatdrop");
+        LUNA_EMOTION_PROMPTS.put("FRIGHTENED", "frightened, wide eyes, trembling, tears");
+        LUNA_EMOTION_PROMPTS.put("RELAX", "relax, soft smile");
+        LUNA_EMOTION_PROMPTS.put("PANIC", "panic, wide eyes, chaotic expression, multiple sweatdrops");
+        LUNA_EMOTION_PROMPTS.put("DUMBFOUNDED", "dumbfounded, blank stare, half-closed eyes, sweatdrop, slack-jawed");
+        LUNA_EMOTION_PROMPTS.put("PLEADING", "pleading, puppy-dog eyes, looking up, hands clasped together begging, leaning forward");
+    }
+
+    private static final Map<String, String> YEONHWA_EMOTION_PROMPTS = new LinkedHashMap<>();
+    static {
+        YEONHWA_EMOTION_PROMPTS.put("NEUTRAL", "neutral expression, gentle smile, looking at viewer, relaxed posture");
+        YEONHWA_EMOTION_PROMPTS.put("JOY", "happy, bright smile, sparkling eyes, joyful, cheerful");
+        YEONHWA_EMOTION_PROMPTS.put("SHY", "blushing, shy smile, looking away, fidgeting, embarrassed");
+        YEONHWA_EMOTION_PROMPTS.put("SAD", "sad expression, teary eyes, looking down, melancholy");
+        YEONHWA_EMOTION_PROMPTS.put("ANGRY", "angry expression, furrowed brows, clenched fists, intense gaze");
+        YEONHWA_EMOTION_PROMPTS.put("SURPRISE", "surprised, wide eyes, open mouth, hands up");
+        YEONHWA_EMOTION_PROMPTS.put("LOVE", "loving gaze, warm smile, heart eyes, blushing cheeks, dreamy");
+        YEONHWA_EMOTION_PROMPTS.put("FLIRTATIOUS", "flirty expression, wink, playful smile, leaning forward, alluring");
+        YEONHWA_EMOTION_PROMPTS.put("HEATED", "intense gaze, heavy breathing, flushed cheeks, passionate");
+        YEONHWA_EMOTION_PROMPTS.put("DISGUST", "disgusted face, grimace, stepping back");
+        YEONHWA_EMOTION_PROMPTS.put("FRIGHTENED", "scared, trembling, wide eyes, clutching self");
+        YEONHWA_EMOTION_PROMPTS.put("RELAX", "relaxed, peaceful, eyes closed, serene smile, content");
+        YEONHWA_EMOTION_PROMPTS.put("PANIC", "panicking, frantic, sweatdrop, waving hands");
+        YEONHWA_EMOTION_PROMPTS.put("DUMBFOUNDED", "dumbfounded, blank stare, open mouth, confused");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -177,9 +234,16 @@ public class IllustrationPromptAssembler {
         sb.append(locationPrompt).append(", ");
 
         // (5) 감정/표정
-        String emotionPrompt = EMOTION_PROMPTS.getOrDefault(
-            normalize(emotion), EMOTION_PROMPTS.get("NEUTRAL"));
-        sb.append(emotionPrompt);
+        switch (characterSlug) {
+            case "taeri" -> sb.append(TAERI_EMOTION_PROMPTS.getOrDefault(
+                normalize(emotion), TAERI_EMOTION_PROMPTS.get("NEUTRAL"))).append(", ");
+            case "luna" -> sb.append(LUNA_EMOTION_PROMPTS.getOrDefault(
+                normalize(emotion), LUNA_EMOTION_PROMPTS.get("NEUTRAL"))).append(", ");
+            case "airi" -> sb.append(AIRI_EMOTION_PROMPTS.getOrDefault(
+                normalize(emotion), AIRI_EMOTION_PROMPTS.get("NEUTRAL"))).append(", ");
+            default -> sb.append(YEONHWA_EMOTION_PROMPTS.getOrDefault(
+                normalize(emotion), YEONHWA_EMOTION_PROMPTS.get("NEUTRAL"))).append(", ");
+        }
 
         String prompt = sb.toString();
         log.info("[ILLUST-PROMPT] Assembled positive: slug={}, len={}", characterSlug, prompt.length());
