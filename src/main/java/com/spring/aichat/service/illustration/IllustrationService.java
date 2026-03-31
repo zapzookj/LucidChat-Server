@@ -28,19 +28,9 @@ import java.util.List;
 /**
  * [Phase 5.5-Illust] 캐릭터 일러스트 생성 서비스
  *
- * 전체 흐름:
- *   1. 유저 에너지 차감 (10)
- *   2. 프롬프트 조립 (캐릭터 slug + 현재 감정/장소/복장)
- *   3. ComfyUI 워크플로우 빌드 → Fal.ai 비동기 큐 제출
- *   4. UserIllustration PENDING 레코드 생성 (requestId 기록)
- *   5. 비동기 폴링 루프 또는 웹훅으로 완료 대기
- *   6. 완료 시: Fal.ai 임시 URL → S3 영구 적재 → DB 상태 COMPLETED
- *   7. 프론트에서 폴링 API로 상태 확인 → 완료 시 이미지 URL 반환
- *
- * 트리거 유형:
- *   - MANUAL: 유저가 직접 "일러스트 생성" 버튼 클릭
- *   - PROMOTION: 관계 승급 이벤트 성공 시 자동
- *   - ENDING: 엔딩 크레딧 도달 시 자동
+ * [Phase 5.5-RunPod] Fal.ai → RunPod 전환에 따른 변경:
+ *   - 이미지가 URL이 아닌 Base64 raw data로 반환
+ *   - handleCompletion() → extractImageBase64() → uploadIllustrationFromBase64()
  */
 @Service
 @Slf4j
@@ -56,26 +46,18 @@ public class IllustrationService {
     private final ChatRoomRepository chatRoomRepository;
     private final RedisCacheService cacheService;
 
-    /** 일러스트 생성 에너지 비용 */
     private static final int ILLUSTRATION_ENERGY_COST = 10;
 
-    /** 폴링 최대 시도 횟수 (1초 간격 × 60 = 최대 60초) */
-    private static final int MAX_POLL_ATTEMPTS = 60;
-
-    /** 폴링 간격 (ms) */
+    /** 폴링 최대 시도 횟수 — ComfyUI cold start 고려하여 3분 */
+    private static final int MAX_POLL_ATTEMPTS = 180;
     private static final long POLL_INTERVAL_MS = 1000;
+    /** 연속 에러 허용 횟수 */
+    private static final int MAX_CONSECUTIVE_ERRORS = 10;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 유저 수동 일러스트 생성 요청
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 유저가 직접 일러스트 생성 버튼을 클릭한 경우
-     *
-     * @param username  인증된 유저명
-     * @param roomId    현재 채팅방 ID (씬 상태 조회용)
-     * @return 생성 요청 결과 (requestId, 폴링 URL)
-     */
     @Transactional
     public IllustrationRequestResult requestIllustration(String username, Long roomId) {
         User user = userRepository.findByUsername(username)
@@ -84,17 +66,14 @@ public class IllustrationService {
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "ChatRoom not found"));
 
-        // 권한 확인
         if (!room.getUser().getId().equals(user.getId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Not your chat room");
         }
 
-        // 에너지 차감
         user.consumeEnergy(ILLUSTRATION_ENERGY_COST);
         userRepository.save(user);
         cacheService.evictUserProfile(username);
 
-        // 현재 씬 상태에서 프롬프트 조립
         Character character = room.getCharacter();
         String emotion = room.getLastEmotion() != null ? room.getLastEmotion().name() : "NEUTRAL";
         String location = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation();
@@ -107,9 +86,6 @@ public class IllustrationService {
     //  2. 자동 일러스트 생성 (승급/엔딩)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 관계 승급 성공 또는 엔딩 도달 시 자동 생성 (에너지 미차감)
-     */
     @Async
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId, String triggerType) {
         try {
@@ -119,22 +95,20 @@ public class IllustrationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Character not found"));
             ChatRoom room = chatRoomRepository.findById(roomId).orElse(null);
 
-            String emotion = "LOVE"; // 승급/엔딩 기본 감정
+            String emotion = "LOVE";
             String location = room != null && room.getCurrentLocation() != null
                 ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation();
             String outfit = room != null && room.getCurrentOutfit() != null
                 ? room.getCurrentOutfit().name() : character.getEffectiveDefaultOutfit();
 
             if ("ENDING".equals(triggerType)) {
-                emotion = "JOY"; // 해피엔딩
+                emotion = "JOY";
             }
 
             IllustrationRequestResult result = submitGeneration(user, character, emotion, location, outfit, triggerType);
-
-            // 자동 생성은 폴링까지 백그라운드에서 완료
             processPollingInBackground(result.requestId());
 
-            log.info("[ILLUST] Auto generation completed: trigger={}, userId={}, charId={}", triggerType, userId, characterId);
+            log.info("[ILLUST] Auto generation submitted: trigger={}, userId={}, charId={}", triggerType, userId, characterId);
         } catch (Exception e) {
             log.error("[ILLUST] Auto generation failed: trigger={}, userId={}, charId={}", triggerType, userId, characterId, e);
         }
@@ -144,14 +118,10 @@ public class IllustrationService {
     //  3. 폴링으로 상태 확인 (프론트 → 백엔드 API)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 프론트엔드가 주기적으로 호출하여 생성 상태를 확인
-     */
     public IllustrationStatusResult checkStatus(String requestId, String username) {
         UserIllustration illust = illustrationRepository.findByFalRequestId(requestId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Illustration not found"));
 
-        // 권한 확인
         if (!illust.getUser().getUsername().equals(username)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Not your illustration");
         }
@@ -164,12 +134,11 @@ public class IllustrationService {
             return new IllustrationStatusResult("FAILED", null, illust.getErrorMessage());
         }
 
-        // 아직 진행 중 → Fal.ai에 직접 폴링
+        // 아직 진행 중 → RunPod에 직접 폴링
         if (illust.isPending() && illust.getStatusUrl() != null) {
             try {
                 PollResult poll = falAiClient.pollStatus(illust.getStatusUrl());
                 if (poll.completed()) {
-                    // 완료 → 결과 처리
                     handleCompletion(illust, poll.payload());
                     return new IllustrationStatusResult("COMPLETED", illust.getImageUrl(), null);
                 }
@@ -184,24 +153,18 @@ public class IllustrationService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  4. 웹훅 콜백 처리 (Fal.ai → 백엔드)
+    //  4. 웹훅 콜백 처리
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * Fal.ai 웹훅으로 완료 통보 수신
-     */
     @Transactional
     public void handleWebhookCallback(String requestId, JsonNode payload) {
         log.info("[ILLUST-WEBHOOK] Received: requestId={}", requestId);
 
-        UserIllustration illust = illustrationRepository.findByFalRequestId(requestId)
-            .orElse(null);
-
+        UserIllustration illust = illustrationRepository.findByFalRequestId(requestId).orElse(null);
         if (illust == null) {
             log.warn("[ILLUST-WEBHOOK] Illustration not found for requestId={}", requestId);
             return;
         }
-
         if (illust.isCompleted()) {
             log.info("[ILLUST-WEBHOOK] Already completed (idempotent): {}", requestId);
             return;
@@ -214,9 +177,6 @@ public class IllustrationService {
     //  5. 갤러리 조회
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * 특정 유저의 완료된 일러스트 갤러리
-     */
     public List<IllustrationGalleryItem> getGallery(String username, Long characterId) {
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
@@ -248,18 +208,13 @@ public class IllustrationService {
     ) {
         String slug = character.getSlug();
 
-        // 프롬프트 조립
         String positivePrompt = promptAssembler.assemblePositivePrompt(slug, emotion, location, outfit);
         String negativePrompt = promptAssembler.getNegativePrompt();
         String loraUrl = promptAssembler.getLoraUrl(slug);
 
-        // ComfyUI 워크플로우 빌드
         JsonNode workflow = falAiClient.buildCharacterWorkflow(loraUrl, positivePrompt, negativePrompt);
-
-        // Fal.ai 비동기 큐 제출
         QueueResponse queueResp = falAiClient.submitToQueue(workflow);
 
-        // DB에 PENDING 레코드 생성
         UserIllustration illust = UserIllustration.createPending(
             user, character.getId(), character.getName(),
             queueResp.requestId(), queueResp.statusUrl(), queueResp.responseUrl(),
@@ -270,35 +225,39 @@ public class IllustrationService {
         log.info("[ILLUST] Submitted: requestId={}, slug={}, trigger={}, userId={}",
             queueResp.requestId(), slug, triggerType, user.getId());
 
-        return new IllustrationRequestResult(
-            queueResp.requestId(), illust.getId(), "PENDING");
+        return new IllustrationRequestResult(queueResp.requestId(), illust.getId(), "PENDING");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  내부: 완료 처리 (S3 업로드 + DB 상태 전이)
+    //  내부: 완료 처리 (Base64 → S3 업로드 + DB 상태 전이)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [Phase 5.5-RunPod] Base64 이미지 데이터를 S3에 업로드하고 DB 상태 전이
+     */
     @Transactional
     protected void handleCompletion(UserIllustration illust, JsonNode payload) {
         try {
-            String falImageUrl = falAiClient.extractImageUrl(payload);
-            if (falImageUrl == null) {
-                illust.markFailed("No image in Fal.ai response");
+            // [RunPod] Base64 데이터 추출
+            String base64Data = falAiClient.extractImageBase64(payload);
+            if (base64Data == null) {
+                illust.markFailed("No image data in RunPod response");
                 illustrationRepository.save(illust);
                 return;
             }
 
-            // S3 영구 적재
-            String s3Url = s3StorageService.downloadAndUpload(
-                falImageUrl, "illustrations/",
-                "user_%d_char_%d_%s".formatted(
-                    illust.getUser().getId(), illust.getCharacterId(),
-                    illust.getFalRequestId().substring(0, 8)));
+            // Base64 → S3 직접 업로드
+            String s3Url = s3StorageService.uploadIllustrationFromBase64(
+                base64Data,
+                illust.getUser().getId(),
+                illust.getCharacterId(),
+                illust.getFalRequestId()
+            );
 
-            illust.markCompleted(s3Url, falImageUrl);
+            illust.markCompleted(s3Url, "runpod:base64"); // falTempUrl 대신 출처 마커
             illustrationRepository.save(illust);
 
-            log.info("[ILLUST] Completed: requestId={}, s3Url={}", illust.getFalRequestId(), s3Url);
+            log.info("[ILLUST] ✅ Completed: requestId={}, s3Url={}", illust.getFalRequestId(), s3Url);
         } catch (Exception e) {
             log.error("[ILLUST] Completion failed: requestId={}", illust.getFalRequestId(), e);
             illust.markFailed(e.getMessage());
@@ -316,30 +275,66 @@ public class IllustrationService {
             UserIllustration illust = illustrationRepository.findByFalRequestId(requestId).orElse(null);
             if (illust == null) return;
 
+            String lastStatus = "";
+            int consecutiveErrors = 0;
+            long startTime = System.currentTimeMillis();
+
             for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
                 Thread.sleep(POLL_INTERVAL_MS);
 
                 PollResult poll = falAiClient.pollStatus(illust.getStatusUrl());
+                String currentStatus = poll.status();
+
+                // 상태 변화 감지 로깅
+                if (!currentStatus.equals(lastStatus)) {
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    log.info("[ILLUST] Status changed: {} → {} | elapsed={}s | requestId={}",
+                        lastStatus.isEmpty() ? "(start)" : lastStatus,
+                        currentStatus, elapsed, requestId);
+                    lastStatus = currentStatus;
+                }
+
+                // 10초마다 진행률 로깅
+                if (i > 0 && i % 10 == 0) {
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    log.info("[ILLUST] Still polling: status={} | attempt={}/{} | elapsed={}s | requestId={}",
+                        currentStatus, i, MAX_POLL_ATTEMPTS, elapsed, requestId);
+                }
+
                 if (poll.completed()) {
-                    // response_url로 전체 결과 조회
-                    JsonNode fullResult = illust.getResponseUrl() != null
-                        ? falAiClient.fetchResult(illust.getResponseUrl())
-                        : poll.payload();
-                    handleCompletion(illust, fullResult);
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    log.info("[ILLUST] ✅ Generation completed in {}s | requestId={}", elapsed, requestId);
+                    handleCompletion(illust, poll.payload()); // RunPod은 페이로드에 결과 포함
                     return;
                 }
 
-                if ("FAILED".equalsIgnoreCase(poll.status())) {
-                    illust.markFailed("Fal.ai generation failed");
+                if ("FAILED".equalsIgnoreCase(currentStatus)) {
+                    illust.markFailed("RunPod generation failed");
                     illustrationRepository.save(illust);
+                    log.error("[ILLUST] ❌ RunPod generation FAILED: requestId={}", requestId);
                     return;
+                }
+
+                // 연속 에러 감지
+                if ("ERROR".equalsIgnoreCase(currentStatus)) {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        illust.markFailed("Aborted after " + consecutiveErrors + " consecutive poll errors");
+                        illustrationRepository.save(illust);
+                        log.error("[ILLUST] ❌ {} consecutive poll errors, aborting | requestId={}",
+                            consecutiveErrors, requestId);
+                        return;
+                    }
+                } else {
+                    consecutiveErrors = 0;
                 }
             }
 
-            // 타임아웃
-            illust.markFailed("Generation timed out after " + MAX_POLL_ATTEMPTS + " seconds");
+            long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+            illust.markFailed("Generation timed out after " + elapsed + " seconds");
             illustrationRepository.save(illust);
-            log.warn("[ILLUST] Polling timed out: requestId={}", requestId);
+            log.warn("[ILLUST] ⏱ Polling timed out after {}s | lastStatus={} | requestId={}",
+                elapsed, lastStatus, requestId);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

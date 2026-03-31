@@ -45,23 +45,23 @@ public class IllustrationPromptAssembler {
     static {
         CHARACTER_VISUALS.put("airi", new CharacterVisual(
             "lcn_char02",
-            "multicolored eyes, blue eyes, yellow eyes, gradient eyes, silver hair, medium hair, maid headdress, bunny hair ornament",
-            "https://lucid-chat-model.s3.ap-northeast-2.amazonaws.com/lucid_airi_v1.safetensors"
+            "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, medium hair",
+            "lucid_airi_v1.safetensors"
         ));
         CHARACTER_VISUALS.put("taeri", new CharacterVisual(
-            "lcn_taeri",
+            "lcn_char03",
             "brown eyes, black hair, long hair, side ponytail, hair ribbon",
-            "https://lucid-chat-model.s3.ap-northeast-2.amazonaws.com/lucid_taeri_v1.safetensors"
+            "lucid_taeri_v1.safetensors"
         ));
         CHARACTER_VISUALS.put("luna", new CharacterVisual(
-            "lcn_luna",
+            "lcn_char01",
             "purple eyes, light purple hair, short hair, messy hair, hair clips",
-            "https://lucid-chat-model.s3.ap-northeast-2.amazonaws.com/lucid_luna_v2.safetensors"
+            "lucid_luna_v2.safetensors"
         ));
         CHARACTER_VISUALS.put("yeonhwa", new CharacterVisual(
-            "lcn_yeonhwa",
+            "lcn_char04",
             "golden eyes, white hair, very long hair, fox ears, fox tail",
-            "https://lucid-chat-model.s3.ap-northeast-2.amazonaws.com/lucid_yeonhwa_v1.safetensors"
+            "lucid_yeonhwa_v1.safetensors"
         ));
     }
 
@@ -69,18 +69,31 @@ public class IllustrationPromptAssembler {
     //  복장 프롬프트 매핑
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private static final Map<String, String> OUTFIT_PROMPTS = new LinkedHashMap<>();
+    private static final Map<String, String> AIRI_OUTFIT_PROMPTS = new LinkedHashMap<>();
     static {
-        OUTFIT_PROMPTS.put("MAID", "classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
-        OUTFIT_PROMPTS.put("CASUAL", "casual outfit, white blouse, denim skirt, sneakers");
-        OUTFIT_PROMPTS.put("DATE", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
-        OUTFIT_PROMPTS.put("PAJAMA", "silk pajamas, loose shirt, shorts, barefoot, relaxed");
-        OUTFIT_PROMPTS.put("SCHOOL", "school uniform, blazer, plaid skirt, knee socks, loafers");
-        OUTFIT_PROMPTS.put("HANBOK", "traditional hanbok, jeogori, chima, ornamental hairpin");
-        OUTFIT_PROMPTS.put("SWIMSUIT", "white swimsuit, beach, summer vibes");
-        OUTFIT_PROMPTS.put("GYM", "sportswear, tank top, leggings, ponytail, energetic");
-        OUTFIT_PROMPTS.put("TRADITIONAL", "traditional east-asian outfit, flowing robes, ornate patterns");
-        OUTFIT_PROMPTS.put("STREAMER", "oversized hoodie, headphones around neck, cat ear headband, gaming setup");
+        AIRI_OUTFIT_PROMPTS.put("MAID", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
+        AIRI_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
+        AIRI_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+    }
+
+    private static final Map<String, String> TAERI_OUTFIT_PROMPTS = new LinkedHashMap<>();
+    static {
+        TAERI_OUTFIT_PROMPTS.put("DAILY", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
+        TAERI_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
+        TAERI_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+    }
+
+    private static final Map<String, String> LUNA_OUTFIT_PROMPTS = new LinkedHashMap<>();
+    static {
+        LUNA_OUTFIT_PROMPTS.put("DAILY", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
+        LUNA_OUTFIT_PROMPTS.put("DATE", "casual outfit, white blouse, denim skirt, sneakers");
+        LUNA_OUTFIT_PROMPTS.put("SWIMSUIT", "elegant date outfit, off-shoulder sweater, pleated skirt, ankle boots");
+    }
+
+    private static final Map<String, String> YEONHWA_OUTFIT_PROMPTS = new LinkedHashMap<>();
+    static {
+        YEONHWA_OUTFIT_PROMPTS.put("HANBOK", "maid headdress, bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, black thighhighs, mary janes");
+        AIRI_OUTFIT_PROMPTS.put("CASUAL", "casual outfit, white blouse, denim skirt, sneakers");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -147,9 +160,16 @@ public class IllustrationPromptAssembler {
         sb.append(visual.identityPrompt).append(", ");
 
         // (3) 복장
-        String outfitPrompt = OUTFIT_PROMPTS.getOrDefault(
-            normalize(outfit), OUTFIT_PROMPTS.get("MAID"));
-        sb.append(outfitPrompt).append(", ");
+        switch (characterSlug) {
+            case "taeri" -> sb.append(TAERI_OUTFIT_PROMPTS.getOrDefault(
+                normalize(outfit), TAERI_OUTFIT_PROMPTS.get("DAILY"))).append(", ");
+            case "luna" -> sb.append(LUNA_OUTFIT_PROMPTS.getOrDefault(
+                normalize(outfit), LUNA_OUTFIT_PROMPTS.get("DAILY"))).append(", ");
+            case "yeonhwa" -> sb.append(YEONHWA_OUTFIT_PROMPTS.getOrDefault(
+                normalize(outfit), YEONHWA_OUTFIT_PROMPTS.get("HANBOK"))).append(", ");
+            default -> sb.append(AIRI_OUTFIT_PROMPTS.getOrDefault(
+                normalize(outfit), AIRI_OUTFIT_PROMPTS.get("MAID"))).append(", ");
+        }
 
         // (4) 장소 배경
         String locationPrompt = LOCATION_PROMPTS.getOrDefault(

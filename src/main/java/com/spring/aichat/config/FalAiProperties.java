@@ -30,7 +30,7 @@ public record FalAiProperties(
 
     /** 비동기 큐 URL */
     public String queueUrl() {
-        return "https://queue.fal.run/" + endpointId;
+        return "https://api.runpod.ai/v2/" + endpointId + "/run";
     }
 
     /** 웹훅이 활성화된 비동기 큐 URL */
