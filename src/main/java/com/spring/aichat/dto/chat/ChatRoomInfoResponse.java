@@ -37,5 +37,8 @@ public record ChatRoomInfoResponse(
     // ── [Phase 5.5-EV] 이벤트 시스템 강화 ──
     boolean topicConcluded,
     boolean eventActive,
-    String eventStatus
+    String eventStatus,
+    // ── [Phase 5.5-Fix] 동적 배경 영속화 ──
+    String currentDynamicLocationName,
+    String currentDynamicBgUrl
 ) {}

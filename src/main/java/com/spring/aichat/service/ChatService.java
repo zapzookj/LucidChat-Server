@@ -77,6 +77,7 @@ public class ChatService {
     private final ContentModerationService contentModerationService;
     private final UserRepository userRepository;
     private final SecretModeService secretModeService;
+    private final com.spring.aichat.domain.illustration.BackgroundCacheRepository backgroundCacheRepository;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -612,11 +613,17 @@ public class ChatService {
         } else {
             RelationStatus oldStatus = room.getStatusLevel();
             applyAffectionChange(room, affectionChange);
-            RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
+
+            // [Phase 5.5-Fix] fromScore(affectionOnly) → fromStats(max of all 5 stats)
+            RelationStatus newStatus = RelationStatusPolicy.fromStats(
+                room.getStatAffection(),
+                room.getStatIntimacy(), room.getStatAffection(),
+                room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
+            );
 
             if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
-                log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | affection={} | roomId={}",
-                    oldStatus, newStatus, room.getAffectionScore(), room.getId());
+                log.info("🎯 [PROMOTION] Upgrade detected: {} → {} | maxStat={} | roomId={}",
+                    oldStatus, newStatus, room.getMaxNormalStatValue(), room.getId());
 
                 int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
                 room.updateAffection(thresholdEdge);
@@ -936,6 +943,24 @@ public class ChatService {
 
                 StatsSnapshot statsSnapshot = buildStatsSnapshot(room, isSecret);
 
+                // [Phase 5.5-Fix] 동적 배경 URL 해상도:
+                // 1) ChatRoom에 URL이 이미 저장되어 있으면 그대로 사용
+                // 2) locationName만 있고 URL이 null이면 BackgroundCache에서 조회 (비동기 생성 완료 후)
+                String dynamicBgUrl = room.getCurrentDynamicBgUrl();
+                String dynamicLocationName = room.getCurrentDynamicLocationName();
+                if (dynamicLocationName != null && !dynamicLocationName.isBlank() && dynamicBgUrl == null) {
+                    String timeOfDay = room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "DAY";
+                    String cacheHash = com.spring.aichat.domain.illustration.BackgroundCache.computeHash(dynamicLocationName, timeOfDay);
+                    dynamicBgUrl = backgroundCacheRepository.findByCacheHash(cacheHash)
+                        .map(cache -> {
+                            // ChatRoom에도 캐싱하여 다음 조회 시 DB 히트 방지
+                            room.updateDynamicBackground(dynamicLocationName, cache.getImageUrl());
+                            chatRoomRepository.save(room);
+                            return cache.getImageUrl();
+                        })
+                        .orElse(null);
+                }
+
                 ChatRoomInfoResponse response = new ChatRoomInfoResponse(
                     room.getId(),
                     character.getName(),
@@ -965,7 +990,10 @@ public class ChatService {
                     // [Phase 5.5-EV] 이벤트 시스템 강화
                     room.isTopicConcluded(),
                     room.isEventActive(),
-                    room.getEventStatus()
+                    room.getEventStatus(),
+                    // [Phase 5.5-Fix] 동적 배경 영속화
+                    dynamicLocationName,
+                    dynamicBgUrl
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);

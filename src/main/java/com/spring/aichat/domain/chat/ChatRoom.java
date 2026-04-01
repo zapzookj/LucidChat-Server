@@ -184,6 +184,18 @@ public class ChatRoom {
     private String eventStatus;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-Fix] 동적 배경 영속화
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** AI 생성 배경의 장소명 (LLM이 제공한 자유텍스트, 예: "해변", "놀이공원") */
+    @Column(name = "current_dynamic_location_name", length = 100)
+    private String currentDynamicLocationName;
+
+    /** AI 생성 배경의 S3 URL (캐시 히트 시 즉시 저장, 미스 시 생성 완료 후 저장) */
+    @Column(name = "current_dynamic_bg_url", length = 1000)
+    private String currentDynamicBgUrl;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -348,6 +360,26 @@ public class ChatRoom {
         this.eventStatus = null;
     }
 
+    // ── [Phase 5.5-Fix] 동적 배경 영속화 메서드 ──
+
+    /** 동적 배경 URL + 장소명 갱신 (캐시 히트 시 또는 생성 완료 시) */
+    public void updateDynamicBackground(String locationName, String bgUrl) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicBgUrl = bgUrl;
+    }
+
+    /** 동적 배경 장소명만 갱신 (캐시 미스, 비동기 생성 시작 시) */
+    public void updateDynamicLocationName(String locationName) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicBgUrl = null; // 아직 URL 미확정
+    }
+
+    /** 동적 배경 클리어 (enum 기반 정적 장소로 전환 시) */
+    public void clearDynamicBackground() {
+        this.currentDynamicLocationName = null;
+        this.currentDynamicBgUrl = null;
+    }
+
     // ── 승급 대기 (topic_concluded 게이팅) ──
 
     /**
@@ -385,7 +417,15 @@ public class ChatRoom {
 
     public void updateSceneState(String bgmMode, String location, String outfit, String timeOfDay) {
         if (bgmMode != null) { try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {} }
-        if (location != null) { try { this.currentLocation = Location.valueOf(location); } catch (IllegalArgumentException ignored) {} }
+        if (location != null) {
+            try {
+                this.currentLocation = Location.valueOf(location);
+                // [Phase 5.5-Fix] enum 장소로 전환 시 AI 생성 배경 클리어
+                clearDynamicBackground();
+            } catch (IllegalArgumentException ignored) {
+                // AI 생성 동적 장소 — enum 매핑 불가, 무시 (동적 배경은 별도 경로로 처리)
+            }
+        }
         if (outfit != null) { try { this.currentOutfit = Outfit.valueOf(outfit); } catch (IllegalArgumentException ignored) {} }
         if (timeOfDay != null) { try { this.currentTimeOfDay = TimeOfDay.valueOf(timeOfDay); } catch (IllegalArgumentException ignored) {} }
     }
@@ -444,6 +484,7 @@ public class ChatRoom {
         clearPromotion();
         clearPromotionWaiting();
         clearDirectorEvent();
+        clearDynamicBackground();
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;

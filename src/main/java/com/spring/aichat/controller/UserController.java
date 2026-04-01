@@ -134,4 +134,55 @@ public class UserController {
         return userRepository.findByUsername(username)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [BETA] 베타 테스터 치트 — 프로덕션 전 삭제 예정
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 로비 로고 5회 클릭 시 호출.
+     * - 성인 인증 완료 처리
+     * - 루시드 미드나잇 패스 구독 활성화
+     * - paidEnergy 300 충전
+     *
+     * 이미 적용된 유저에게는 중복 적용하지 않고 안내만 반환.
+     */
+    @PostMapping("/beta-activate")
+    public ResponseEntity<Map<String, Object>> betaActivate(Authentication authentication) {
+        User user = findUser(authentication.getName());
+
+        boolean alreadyActivated = user.isSubscriber()
+            && user.getSubscriptionTier() == com.spring.aichat.domain.enums.SubscriptionType.LUCID_MIDNIGHT_PASS
+            && Boolean.TRUE.equals(user.getIsAdult());
+
+        if (alreadyActivated) {
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "이미 베타 테스터 혜택이 적용되어 있습니다!",
+                "alreadyActivated", true
+            ));
+        }
+
+        // 1) 성인 인증 처리 (ciHash는 베타용 더미)
+        if (!Boolean.TRUE.equals(user.getIsAdult())) {
+            user.completeAdultVerification("BETA_TESTER_" + user.getId());
+        }
+
+        // 2) 루시드 미드나잇 패스 활성화
+        user.activateSubscription(com.spring.aichat.domain.enums.SubscriptionType.LUCID_MIDNIGHT_PASS);
+
+        // 3) paidEnergy 300 충전
+        user.chargePaidEnergy(300);
+
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "베타 테스터 혜택이 적용되었습니다!",
+            "alreadyActivated", false,
+            "energy", user.getEnergy(),
+            "paidEnergy", user.getPaidEnergy(),
+            "subscriptionTier", user.getSubscriptionTier().name()
+        ));
+    }
 }

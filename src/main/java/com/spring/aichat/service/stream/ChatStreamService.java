@@ -251,12 +251,12 @@ public class ChatStreamService {
                     if (isStory) {
                         String endingCheck = freshRoom.checkEndingTrigger();
                         if (endingCheck != null) {
-                           endingTrigger = new EndingTrigger(endingCheck);
+                            endingTrigger = new EndingTrigger(endingCheck);
 
-                           // ★ [Phase 5.5-Illust] 엔딩 도달 시 자동 일러스트 생성
-                           illustrationService.generateAutoIllustration(
-                               freshRoom.getUser().getId(), freshRoom.getCharacter().getId(),
-                               freshRoom.getId(), "ENDING");
+                            // ★ [Phase 5.5-Illust] 엔딩 도달 시 자동 일러스트 생성
+                            illustrationService.generateAutoIllustration(
+                                freshRoom.getUser().getId(), freshRoom.getCharacter().getId(),
+                                freshRoom.getId(), "ENDING");
                         }
                     }
 
@@ -302,23 +302,43 @@ public class ChatStreamService {
             // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
             LocationTransition locationTransition = null;
             if (isStory && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
-               String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
-               BackgroundGenerationService.BackgroundResult bgResult =
-                   backgroundGenerationService.resolveBackground(
-                       parsed.newLocationName(), parsed.locationDescription(),
-                       timeOfDay, jpa.room().getCharacter().getId());
+                String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                BackgroundGenerationService.BackgroundResult bgResult =
+                    backgroundGenerationService.resolveBackground(
+                        parsed.newLocationName(), parsed.locationDescription(),
+                        timeOfDay, jpa.room().getCharacter().getId());
 
-               if (bgResult.isCacheHit()) {
-                   locationTransition = LocationTransition.cached(
-                       parsed.newLocationName(), bgResult.imageUrl());
-               } else {
-                   locationTransition = LocationTransition.generating(
-                       parsed.newLocationName(), bgResult.cacheHash());
-                   // 비동기로 배경 생성 시작
-                   backgroundGenerationService.generateBackgroundAsync(
-                       parsed.newLocationName(), parsed.locationDescription(),
-                       timeOfDay, jpa.room().getCharacter().getId());
-               }
+                if (bgResult.isCacheHit()) {
+                    locationTransition = LocationTransition.cached(
+                        parsed.newLocationName(), bgResult.imageUrl());
+                } else {
+                    locationTransition = LocationTransition.generating(
+                        parsed.newLocationName(), bgResult.cacheHash());
+                    // 비동기로 배경 생성 시작
+                    backgroundGenerationService.generateBackgroundAsync(
+                        parsed.newLocationName(), parsed.locationDescription(),
+                        timeOfDay, jpa.room().getCharacter().getId());
+                }
+
+                // [Phase 5.5-Fix] 동적 배경 정보를 ChatRoom에 영속화 (새로고침 시 복원용)
+                final String bgUrlToStore = bgResult.isCacheHit() ? bgResult.imageUrl() : null;
+                final String locationNameToStore = parsed.newLocationName();
+                try {
+                    txTemplate.execute(status -> {
+                        ChatRoom bgRoom = chatRoomRepository.findById(roomId).orElse(null);
+                        if (bgRoom != null) {
+                            if (bgUrlToStore != null) {
+                                bgRoom.updateDynamicBackground(locationNameToStore, bgUrlToStore);
+                            } else {
+                                bgRoom.updateDynamicLocationName(locationNameToStore);
+                            }
+                        }
+                        return null;
+                    });
+                } catch (Exception e) {
+                    log.warn("⚠️ [BG] Dynamic background persistence failed (non-blocking): {}", e.getMessage());
+                }
+                cacheService.evictRoomInfo(roomId); // 동적 배경 변경 반영
             }
 
             // ── SSE: final_result ──
@@ -631,22 +651,42 @@ public class ChatStreamService {
             //   // ★ [Phase 5.5-Illust] 시간 넘기기에서도 장소 전환 가능 ★
             SendChatResponse.LocationTransition timeSkipLocationTransition = null;
             if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
-               String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
-               BackgroundGenerationService.BackgroundResult bgResult =
-                   backgroundGenerationService.resolveBackground(
-                       parsed.newLocationName(), parsed.locationDescription(),
-                       timeOfDay, jpa.room().getCharacter().getId());
+                String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                BackgroundGenerationService.BackgroundResult bgResult =
+                    backgroundGenerationService.resolveBackground(
+                        parsed.newLocationName(), parsed.locationDescription(),
+                        timeOfDay, jpa.room().getCharacter().getId());
 
-               if (bgResult.isCacheHit()) {
-                   timeSkipLocationTransition = SendChatResponse.LocationTransition.cached(
-                       parsed.newLocationName(), bgResult.imageUrl());
-               } else {
-                   timeSkipLocationTransition = SendChatResponse.LocationTransition.generating(
-                       parsed.newLocationName(), bgResult.cacheHash());
-                   backgroundGenerationService.generateBackgroundAsync(
-                       parsed.newLocationName(), parsed.locationDescription(),
-                       timeOfDay, jpa.room().getCharacter().getId());
-               }
+                if (bgResult.isCacheHit()) {
+                    timeSkipLocationTransition = SendChatResponse.LocationTransition.cached(
+                        parsed.newLocationName(), bgResult.imageUrl());
+                } else {
+                    timeSkipLocationTransition = SendChatResponse.LocationTransition.generating(
+                        parsed.newLocationName(), bgResult.cacheHash());
+                    backgroundGenerationService.generateBackgroundAsync(
+                        parsed.newLocationName(), parsed.locationDescription(),
+                        timeOfDay, jpa.room().getCharacter().getId());
+                }
+
+                // [Phase 5.5-Fix] 동적 배경 정보를 ChatRoom에 영속화
+                final String bgUrlToStore = bgResult.isCacheHit() ? bgResult.imageUrl() : null;
+                final String locationNameToStore = parsed.newLocationName();
+                try {
+                    txTemplate.execute(status -> {
+                        ChatRoom bgRoom = chatRoomRepository.findById(roomId).orElse(null);
+                        if (bgRoom != null) {
+                            if (bgUrlToStore != null) {
+                                bgRoom.updateDynamicBackground(locationNameToStore, bgUrlToStore);
+                            } else {
+                                bgRoom.updateDynamicLocationName(locationNameToStore);
+                            }
+                        }
+                        return null;
+                    });
+                } catch (Exception e) {
+                    log.warn("⚠️ [BG] Dynamic background persistence failed (non-blocking): {}", e.getMessage());
+                }
+                cacheService.evictRoomInfo(roomId); // 동적 배경 변경 반영
             }
 
             sendFinalResult(emitter, response, false, assistantLogId, false, timeSkipLocationTransition);
@@ -701,14 +741,20 @@ public class ChatStreamService {
                 room.getPromotionMoodScore(), null);
 
         } else {
-            // [Phase 5.5-EV] 승급 감지 → 즉시 시작하지 않고, 대기(waiting) 상태로 전환
+            // [Phase 5.5-Fix] 승급 감지 → 5종 스탯 MAX 기반으로 통일 (기존: affection만 사용 → 버그)
             RelationStatus oldStatus = room.getStatusLevel();
             room.applyLegacyAffectionChange(parsed.aiOutput().affectionChange());
-            RelationStatus newStatus = RelationStatusPolicy.fromScore(room.getAffectionScore());
+
+            // [Fix] fromScore(affectionOnly) → fromStats(max of all 5 stats)
+            RelationStatus newStatus = RelationStatusPolicy.fromStats(
+                room.getStatAffection(),
+                room.getStatIntimacy(), room.getStatAffection(),
+                room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
+            );
 
             if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
-                log.info("🎯 [PROMOTION] Upgrade detected → WAITING for topic_concluded | {} → {} | roomId={}",
-                    oldStatus, newStatus, room.getId());
+                log.info("🎯 [PROMOTION] Upgrade detected → WAITING for topic_concluded | {} → {} | maxStat={} | roomId={}",
+                    oldStatus, newStatus, room.getMaxNormalStatValue(), room.getId());
 
                 int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
                 room.updateAffection(thresholdEdge);
@@ -757,8 +803,8 @@ public class ChatStreamService {
                 .collect(Collectors.toList());
             // ★ [Phase 5.5-Illust] 승급 성공 시 자동 일러스트 생성
             illustrationService.generateAutoIllustration(
-               room.getUser().getId(), room.getCharacter().getId(),
-               room.getId(), "PROMOTION");
+                room.getUser().getId(), room.getCharacter().getId(),
+                room.getId(), "PROMOTION");
             return new PromotionEvent("SUCCESS", target.name(),
                 RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, unlocks);
         } else {
