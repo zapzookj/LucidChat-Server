@@ -5,11 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.exception.ExternalApiException;
+import com.spring.aichat.external.LlmCircuitBreaker.TtftTimeoutException;
 import com.spring.aichat.service.stream.SceneStreamExtractor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -17,6 +20,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -25,6 +33,11 @@ import java.util.function.Consumer;
  * [Phase 5.5-EV Fix 2] event_status 선행 추출 콜백 추가
  *   - onEventStatus: event_status가 추출되는 즉시 호출 (first_scene보다 먼저)
  *   - 기존 onFirstScene 콜백은 그대로 유지
+ *
+ * [Phase 5.5-Stability] TTFT 데드라인 워치독 추가
+ *   - ttftDeadlineMs > 0 시 ScheduledExecutorService 기반 워치독 동작
+ *   - 데드라인 초과 시 InputStream 강제 close → TtftTimeoutException throw
+ *   - 서킷 브레이커와 연동하여 AI Studio → Vertex 폴백 트리거
  */
 @Component
 @Slf4j
@@ -37,6 +50,9 @@ public class OpenRouterStreamClient {
     private final String appReferer;
     private final String appTitle;
 
+    /** TTFT 데드라인 워치독 스케줄러 (데몬 스레드) */
+    private final ScheduledExecutorService ttftWatchdog;
+
     public OpenRouterStreamClient(OpenAiProperties props, ObjectMapper objectMapper) {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -46,6 +62,13 @@ public class OpenRouterStreamClient {
         this.apiKey = props.apiKey();
         this.appReferer = props.appReferer();
         this.appTitle = props.appTitle();
+
+        // 데몬 스레드 — JVM 종료 시 자동 정리
+        this.ttftWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "ttft-watchdog");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
     public record StreamResult(
@@ -55,23 +78,41 @@ public class OpenRouterStreamClient {
         long ttfs
     ) {}
 
-    /**
-     * 스트리밍 호출 (기존 시그니처 유지 — 하위 호환)
-     */
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  하위 호환 오버로드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 기존 시그니처 (1-콜백) — 데드라인 없음 */
     public StreamResult streamCompletion(OpenAiChatRequest request, Consumer<String> onFirstScene) {
-        return streamCompletion(request, onFirstScene, null);
+        return streamCompletion(request, onFirstScene, null, 0);
     }
 
-    /**
-     * [Fix 2] 스트리밍 호출 + event_status 선행 추출
-     *
-     * @param request        ChatCompletion 요청
-     * @param onFirstScene   첫 번째 씬 JSON 완성 시 콜백
-     * @param onEventStatus  event_status 추출 시 콜백 (first_scene보다 먼저 발화)
-     */
+    /** 기존 시그니처 (2-콜백) — 데드라인 없음 */
     public StreamResult streamCompletion(OpenAiChatRequest request,
                                          Consumer<String> onFirstScene,
                                          Consumer<String> onEventStatus) {
+        return streamCompletion(request, onFirstScene, onEventStatus, 0);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-Stability] 메인 스트리밍 (TTFT 데드라인 지원)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 스트리밍 호출 + event_status 선행 추출 + TTFT 데드라인
+     *
+     * @param request          ChatCompletion 요청
+     * @param onFirstScene     첫 번째 씬 JSON 완성 시 콜백
+     * @param onEventStatus    event_status 추출 시 콜백 (first_scene보다 먼저 발화)
+     * @param ttftDeadlineMs   TTFT 데드라인 (ms). 0이면 데드라인 비활성.
+     *                         초과 시 스트림 강제 중단 + TtftTimeoutException throw.
+     * @throws TtftTimeoutException  TTFT 데드라인 초과 시
+     * @throws ExternalApiException  기타 스트리밍 오류 시
+     */
+    public StreamResult streamCompletion(OpenAiChatRequest request,
+                                         Consumer<String> onFirstScene,
+                                         Consumer<String> onEventStatus,
+                                         long ttftDeadlineMs) {
         long startTime = System.currentTimeMillis();
 
         OpenAiChatRequest streamRequest = new OpenAiChatRequest(
@@ -102,8 +143,12 @@ public class OpenRouterStreamClient {
         long ttft = -1;
         long ttfs = -1;
 
+        // [Stability] TTFT 워치독 상태
+        AtomicBoolean firstTokenReceived = new AtomicBoolean(false);
+        ScheduledFuture<?> watchdogTask = null;
+
         try {
-            HttpResponse<java.io.InputStream> response = httpClient.send(
+            HttpResponse<InputStream> response = httpClient.send(
                 httpRequest, HttpResponse.BodyHandlers.ofInputStream()
             );
 
@@ -115,8 +160,24 @@ public class OpenRouterStreamClient {
                     "OpenRouter 스트리밍 실패 (" + response.statusCode() + "): " + errorBody);
             }
 
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(response.body()))) {
+            InputStream responseBody = response.body();
+
+            // ━━━ [Stability] TTFT 워치독 설정 ━━━
+            if (ttftDeadlineMs > 0) {
+                watchdogTask = ttftWatchdog.schedule(() -> {
+                    if (!firstTokenReceived.get()) {
+                        log.warn("⏱️ [CIRCUIT] TTFT 워치독 발동: {}ms 초과 — 스트림 강제 중단 | model={}",
+                            ttftDeadlineMs, request.model());
+                        try {
+                            responseBody.close();
+                        } catch (Exception ignored) {
+                            // close 실패는 무시 (이미 닫혔거나 정리 중)
+                        }
+                    }
+                }, ttftDeadlineMs, TimeUnit.MILLISECONDS);
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(responseBody))) {
 
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -129,9 +190,19 @@ public class OpenRouterStreamClient {
                     String token = extractDeltaContent(data);
                     if (token == null || token.isEmpty()) continue;
 
+                    // ━━━ 첫 토큰 도착: TTFT 기록 + 워치독 해제 ━━━
                     if (ttft < 0) {
                         ttft = System.currentTimeMillis() - startTime;
-                        log.info("⏱️ [STREAM] TTFT: {}ms | model={}", ttft, request.model());
+                        firstTokenReceived.set(true);
+
+                        // 워치독 즉시 취소 (이미 스케줄된 경우)
+                        if (watchdogTask != null) {
+                            watchdogTask.cancel(false);
+                        }
+
+                        log.info("⏱️ [STREAM] TTFT: {}ms | model={} | deadline={}ms",
+                            ttft, request.model(),
+                            ttftDeadlineMs > 0 ? ttftDeadlineMs : "none");
                     }
 
                     fullBuffer.append(token);
@@ -176,11 +247,30 @@ public class OpenRouterStreamClient {
 
             return new StreamResult(fullBuffer.toString(), null, ttft, ttfs);
 
-        } catch (ExternalApiException e) {
+        } catch (IOException e) {
+            // ━━━ [Stability] 워치독에 의한 강제 중단 판별 ━━━
+            if (!firstTokenReceived.get() && ttftDeadlineMs > 0) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                log.warn("⏱️ [CIRCUIT] TTFT 데드라인 초과 확정: elapsed={}ms, deadline={}ms | model={}",
+                    elapsed, ttftDeadlineMs, request.model());
+                throw new TtftTimeoutException(ttftDeadlineMs);
+            }
+            // 첫 토큰 이후 IO 에러 — 일반 예외 처리
+            log.error("❌ [STREAM] IO error after TTFT ({}ms elapsed)", System.currentTimeMillis() - startTime, e);
+            throw new ExternalApiException("OpenRouter 스트리밍 중 IO 오류: " + e.getMessage(), e);
+
+        } catch (ExternalApiException | TtftTimeoutException e) {
             throw e;
+
         } catch (Exception e) {
             log.error("❌ [STREAM] Streaming failed after {}ms", System.currentTimeMillis() - startTime, e);
             throw new ExternalApiException("OpenRouter 스트리밍 중 오류: " + e.getMessage(), e);
+
+        } finally {
+            // 워치독 정리 (아직 대기 중이면 취소)
+            if (watchdogTask != null && !watchdogTask.isDone()) {
+                watchdogTask.cancel(false);
+            }
         }
     }
 

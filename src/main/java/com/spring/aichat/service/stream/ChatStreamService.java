@@ -15,6 +15,8 @@ import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
+import com.spring.aichat.external.LlmCircuitBreaker;
+import com.spring.aichat.external.LlmCircuitBreaker.TtftTimeoutException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.external.OpenRouterStreamClient;
 import com.spring.aichat.external.OpenRouterStreamClient.StreamResult;
@@ -37,6 +39,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +53,11 @@ import java.util.stream.Collectors;
  *   - sendTimeSkipStream(): [시간 넘기기] → 시간/장소 전환 나레이션
  *   - 승급 판정: 5종 스탯 변화량 합산 기반
  *   - 승급 게이팅: topic_concluded=true 시에만 발동
+ *
+ * [Phase 5.5-Stability] LLM Provider 서킷 브레이커:
+ *   - TTFT 기반 AI Studio ↔ Vertex 동적 라우팅
+ *   - Per-request fallback: TTFT 2초 초과 시 즉시 Vertex 재시도
+ *   - Circuit breaker: 연속 3회 초과 → 5분간 Vertex 전환 → 프로브 복구
  */
 @Service
 @Slf4j
@@ -75,6 +83,7 @@ public class ChatStreamService {
     private final ChatService chatService;
     private final IllustrationService illustrationService;
     private final BackgroundGenerationService backgroundGenerationService;
+    private final LlmCircuitBreaker llmCircuitBreaker;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -847,49 +856,88 @@ public class ChatStreamService {
             room.getCharacter().getName(), room.getUser().getNickname());
         String model = boostModeResolver.resolveModel(room.getUser());
 
-        Map<String, Object> providerRouting = Map.of(
-            "order", List.of("google-ai-studio"),
-            "allow_fallbacks", false
-        );
+        // ━━━ [Phase 5.5-Stability] 서킷 브레이커 기반 Provider 결정 ━━━
+        LlmCircuitBreaker.ProviderDecision decision = llmCircuitBreaker.decide();
+        log.info("🔌 [CIRCUIT] Provider decision: {} | deadline={}ms | state={} | roomId={}",
+            decision.provider(), decision.ttftDeadlineMs(), llmCircuitBreaker.getState(), room.getId());
 
-        OpenAiChatRequest llmRequest = new OpenAiChatRequest(
-            model, messages, 0.8, true, 0.3, 0.15, providerRouting, Map.of("type", "json_object"));
+        // ── SSE 콜백 정의 (Primary/Fallback 재시도 시에도 동일하게 사용) ──
+        Consumer<String> onFirstScene = firstSceneJson -> {
+            try {
+                AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
+                EmotionTag emotion = parseEmotion(scene.emotion());
+                SceneResponse firstScene = new SceneResponse(
+                    scene.speaker(),
+                    scene.narration(), scene.dialogue(), emotion,
+                    safeUpperCase(scene.location()), safeUpperCase(scene.time()),
+                    safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
+                emitter.send(SseEmitter.event().name("first_scene")
+                    .data(objectMapper.writeValueAsString(firstScene)));
+            } catch (Exception e) {
+                log.warn("first_scene send failed: {}", e.getMessage());
+            }
+        };
+        Consumer<String> onEventStatus = eventStatus -> {
+            try {
+                Map<String, String> meta = Map.of("eventStatus", eventStatus);
+                emitter.send(SseEmitter.event().name("event_meta")
+                    .data(objectMapper.writeValueAsString(meta)));
+                log.info("🎬 [SSE] event_meta sent: {} (before first_scene)", eventStatus);
+            } catch (Exception e) {
+                log.warn("event_meta send failed: {}", e.getMessage());
+            }
+        };
 
-        // ── LLM 스트림 ──
+        // ── LLM 스트림 (서킷 브레이커 연동) ──
         StreamResult streamResult;
         try {
-            streamResult = streamClient.streamCompletion(
-                llmRequest,
-                // ── 콜백 1: 첫 번째 씬 완성 시점 ──
-                firstSceneJson -> {
-                    try {
-                        AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
-                        EmotionTag emotion = parseEmotion(scene.emotion());
-                        SceneResponse firstScene = new SceneResponse(
-                            scene.speaker(),
-                            scene.narration(), scene.dialogue(), emotion,
-                            safeUpperCase(scene.location()), safeUpperCase(scene.time()),
-                            safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
-                        emitter.send(SseEmitter.event().name("first_scene")
-                            .data(objectMapper.writeValueAsString(firstScene)));
-                    } catch (Exception e) {
-                        log.warn("first_scene send failed: {}", e.getMessage());
-                    }
-                },
-                // ── [Fix 2] 콜백 2: event_status 선행 전송 ──
-                eventStatus -> {
-                    try {
-                        Map<String, String> meta = Map.of("eventStatus", eventStatus);
-                        emitter.send(SseEmitter.event().name("event_meta")
-                            .data(objectMapper.writeValueAsString(meta)));
-                        log.info("🎬 [SSE] event_meta sent: {} (before first_scene)", eventStatus);
-                    } catch (Exception e) {
-                        log.warn("event_meta send failed: {}", e.getMessage());
-                    }
-                }
+            Map<String, Object> providerRouting = Map.of(
+                "order", List.of(decision.provider()),
+                "allow_fallbacks", false
             );
+            OpenAiChatRequest llmRequest = new OpenAiChatRequest(
+                model, messages, 0.8, true, 0.3, 0.15, providerRouting, Map.of("type", "json_object"));
+
+            streamResult = streamClient.streamCompletion(
+                llmRequest, onFirstScene, onEventStatus, decision.ttftDeadlineMs());
+
+            // ✅ AI Studio 성공 → 서킷 브레이커 기록
+            if (decision.isPrimary()) {
+                llmCircuitBreaker.recordSuccess(streamResult.ttft());
+            }
+
+        } catch (TtftTimeoutException ttftEx) {
+            // ━━━ [Stability] TTFT 데드라인 초과 → 실패 기록 + Vertex 즉시 폴백 ━━━
+            llmCircuitBreaker.recordFailure(ttftEx.getDeadlineMs());
+            log.warn("🔄 [CIRCUIT] TTFT 초과 → Vertex 폴백 | deadline={}ms | state={} | roomId={}",
+                ttftEx.getDeadlineMs(), llmCircuitBreaker.getState(), room.getId());
+
+            try {
+                Map<String, Object> fallbackRouting = Map.of(
+                    "order", List.of(LlmCircuitBreaker.PROVIDER_VERTEX),
+                    "allow_fallbacks", false
+                );
+                OpenAiChatRequest fallbackRequest = new OpenAiChatRequest(
+                    model, messages, 0.8, true, 0.3, 0.15, fallbackRouting, Map.of("type", "json_object"));
+
+                streamResult = streamClient.streamCompletion(
+                    fallbackRequest, onFirstScene, onEventStatus, 0); // Vertex는 데드라인 없음
+
+                log.info("✅ [CIRCUIT] Vertex 폴백 성공 | TTFT={}ms | roomId={}", streamResult.ttft(), room.getId());
+
+            } catch (Exception fallbackEx) {
+                log.error("❌ [CIRCUIT] Vertex 폴백마저 실패 | roomId={}", room.getId(), fallbackEx);
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "LLM_ERROR", "AI 응답 생성 실패 (폴백 포함)");
+                return null;
+            }
+
         } catch (Exception e) {
-            log.error("LLM stream failed | roomId={}", room.getId(), e);
+            // 기타 예외 (네트워크 에러, 5xx 등) — AI Studio 시도였다면 실패 기록
+            if (decision.isPrimary()) {
+                llmCircuitBreaker.recordFailure(-1);
+            }
+            log.error("LLM stream failed | provider={} | roomId={}", decision.provider(), room.getId(), e);
             compensateFullRollback(rollbackCtx);
             sendSseError(emitter, "LLM_ERROR", "AI 응답 생성 실패");
             return null;
