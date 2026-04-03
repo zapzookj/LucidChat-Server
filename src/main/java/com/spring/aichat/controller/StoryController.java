@@ -1,26 +1,43 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// [Phase 5.5-Director] StoryController.java 수정 사항
+//
+// 기존 엔드포인트 유지 + 디렉터 전용 엔드포인트 추가
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 package com.spring.aichat.controller;
 
 import com.spring.aichat.dto.chat.NarratorResponse;
-import com.spring.aichat.dto.chat.SendChatResponse;
+import com.spring.aichat.dto.director.DirectorDirective;
 import com.spring.aichat.exception.RateLimitException;
 import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.NarratorService;
+import com.spring.aichat.service.director.DirectorService;
 import com.spring.aichat.service.stream.ChatStreamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Map;
+
 /**
- * 스토리/이벤트 컨트롤러
+ * 스토리/이벤트/디렉터 컨트롤러
  *
- * [Phase 5.5-EV] 이벤트 시스템 강화:
- *   - POST /events          : 이벤트 옵션 생성 (3가지 선택지)
- *   - POST /events/select   : 이벤트 선택 → 디렉터 모드 시작 (SSE)
- *   - POST /events/watch    : [👀 계속 지켜보기] — SYSTEM_DIRECTOR 주입 (SSE)
- *   - POST /time-skip       : [시간 넘기기] — 시간/장소 전환 (SSE)
+ * [Phase 5.5-Director] 디렉터 엔드포인트 추가:
+ *   - GET  /director/peek      : 대기 중인 Directive 확인 (프론트 폴링)
+ *   - POST /director/consume    : Directive 소비 + ChatRoom에 적용
+ *   - POST /director/request    : 유저 수동 디렉터 호출
+ *   - POST /director/apply-branch : BRANCH 선택 → 이벤트 시작 (SSE)
+ *   - POST /director/apply-transition : TRANSITION 적용 → 장소/시간 전환 (SSE)
+ *
+ * 기존 엔드포인트 (하위 호환):
+ *   - POST /events              : 이벤트 옵션 생성 (레거시, 디렉터 미사용 시)
+ *   - POST /events/select       : 이벤트 선택 (SSE)
+ *   - POST /events/watch        : 계속 지켜보기 (SSE)
+ *   - POST /time-skip           : 시간 넘기기 (SSE)
  */
 @RestController
 @RequiredArgsConstructor
@@ -28,13 +45,142 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class StoryController {
 
     private final NarratorService narratorService;
+    private final DirectorService directorService;
     private final ChatStreamService chatStreamService;
     private final ApiRateLimiter rateLimiter;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  1. 이벤트 옵션 생성 (3가지 선택지 반환)
+    //  [Phase 5.5-Director] 디렉터 엔드포인트
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 대기 중인 Directive 확인 (Peek — 소비하지 않음)
+     *
+     * 프론트엔드가 유저 메시지 전송 직전에 폴링.
+     * Directive가 존재하면 인터루드 시퀀스를 발동.
+     *
+     * @return Directive JSON 또는 204 No Content
+     */
+    @GetMapping("/director/peek")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ResponseEntity<DirectorDirective> peekDirective(@PathVariable Long roomId) {
+        return directorService.peekDirective(roomId)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Directive 소비 + ChatRoom에 적용
+     *
+     * 프론트가 인터루드 나레이션을 유저에게 보여준 뒤 호출.
+     * INTERLUDE/TRANSITION의 constraint를 ChatRoom에 세팅하여
+     * 다음 액터 호출에서 자동 주입되도록 한다.
+     *
+     * BRANCH의 경우 이 엔드포인트에서는 소비만 하고,
+     * 실제 선택은 /director/apply-branch에서 처리.
+     *
+     * @return 소비된 Directive 또는 404 (이미 소비/만료됨)
+     */
+    @PostMapping("/director/consume")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ResponseEntity<DirectorDirective> consumeDirective(@PathVariable Long roomId) {
+        return directorService.consumeDirective(roomId)
+            .map(directive -> {
+                // INTERLUDE / TRANSITION → ChatRoom에 constraint 적용
+                if (directive.isInterlude() || directive.isTransition()) {
+                    chatStreamService.applyDirectiveToRoom(roomId, directive);
+                }
+                return ResponseEntity.ok(directive);
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 유저 수동 디렉터 호출
+     *
+     * 기존 "이벤트 트리거" / "시간 넘기기" 버튼의 통합 대체.
+     * 디렉터가 동기적으로 판단하여 Directive를 즉시 반환.
+     *
+     * PASS가 반환되면 → 프론트에서 "지금은 적절한 타이밍이 아닌 것 같아요" 표시
+     */
+    @PostMapping("/director/request")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ResponseEntity<DirectorDirective> requestDirector(
+        @PathVariable Long roomId,
+        Authentication authentication
+    ) {
+        if (rateLimiter.checkEventTrigger(authentication.getName())) {
+            throw new RateLimitException("디렉터 요청이 너무 빠릅니다.", 3);
+        }
+
+        DirectorDirective directive = directorService.requestManualIntervention(roomId);
+        return ResponseEntity.ok(directive);
+    }
+
+    /**
+     * BRANCH 선택 → 이벤트 시작 (SSE)
+     *
+     * 디렉터가 BRANCH를 제시한 후, 유저가 선택지를 고르면 호출.
+     * 기존 /events/select와 동일한 플로우지만, 디렉터가 생성한 선택지 기반.
+     */
+    @PostMapping(value = "/director/apply-branch", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public SseEmitter applyBranch(
+        @PathVariable Long roomId,
+        @RequestBody SelectEventRequest request,
+        Authentication authentication
+    ) {
+        if (rateLimiter.checkChatSend(authentication.getName())) {
+            throw new RateLimitException("요청이 너무 빠릅니다.", 3);
+        }
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(ex -> {});
+
+        // 기존 이벤트 선택 플로우 재사용
+        chatStreamService.sendEventSelectStream(roomId, request.detail(), request.energyCost(), emitter);
+
+        return emitter;
+    }
+
+    /**
+     * TRANSITION 적용 → 시간/장소 전환 (SSE)
+     *
+     * 디렉터가 TRANSITION을 제시하고, 유저가 나레이션을 확인한 후 호출.
+     * constraint가 이미 ChatRoom에 적용된 상태에서 액터를 호출.
+     *
+     * 이 엔드포인트는 기존 /time-skip의 디렉터 버전.
+     * constraint가 적용된 상태에서의 첫 메시지 생성.
+     */
+    @PostMapping(value = "/director/apply-transition", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public SseEmitter applyTransition(
+        @PathVariable Long roomId,
+        Authentication authentication
+    ) {
+        if (rateLimiter.checkChatSend(authentication.getName())) {
+            throw new RateLimitException("요청이 너무 빠릅니다.", 3);
+        }
+
+        SseEmitter emitter = new SseEmitter(120_000L);
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(ex -> {});
+
+        // 시간 넘기기 플로우 재사용 (constraint는 이미 ChatRoom에 적용됨)
+        chatStreamService.sendTimeSkipStream(roomId, emitter);
+
+        return emitter;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  기존 엔드포인트 (레거시 호환)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [Legacy] 이벤트 옵션 생성 — NarratorService 직접 호출
+     * 디렉터 시스템이 비활성화된 경우의 폴백 경로
+     */
     @PostMapping("/events")
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     public NarratorResponse triggerEvent(@PathVariable Long roomId, Authentication authentication) {
@@ -43,10 +189,6 @@ public class StoryController {
         }
         return narratorService.triggerEvent(roomId);
     }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  2. 이벤트 선택 → 디렉터 모드 시작 (SSE)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @PostMapping(value = "/events/select", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
@@ -62,16 +204,9 @@ public class StoryController {
         SseEmitter emitter = new SseEmitter(120_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
-
-        // 이벤트 선택 → 디렉터 모드로 LLM 호출 (SSE)
         chatStreamService.sendEventSelectStream(roomId, request.detail(), request.energyCost(), emitter);
-
         return emitter;
     }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  3. [👀 계속 지켜보기] — SYSTEM_DIRECTOR 주입 (SSE)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @PostMapping(value = "/events/watch", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
@@ -86,16 +221,9 @@ public class StoryController {
         SseEmitter emitter = new SseEmitter(120_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
-
-        // SYSTEM_DIRECTOR 프롬프트 주입 → 이벤트 심화 (SSE)
         chatStreamService.sendDirectorWatchStream(roomId, emitter);
-
         return emitter;
     }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  4. [시간 넘기기] — 시간/장소 전환 (SSE)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @PostMapping(value = "/time-skip", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
@@ -110,14 +238,10 @@ public class StoryController {
         SseEmitter emitter = new SseEmitter(120_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
-
-        // 시간 넘기기 — 에너지 1, 시스템 나레이션으로 환경 전환 (SSE)
         chatStreamService.sendTimeSkipStream(roomId, emitter);
-
         return emitter;
     }
 
-    // ━━━ DTOs ━━━
-
+    // ── DTO ──
     public record SelectEventRequest(String detail, int energyCost) {}
 }

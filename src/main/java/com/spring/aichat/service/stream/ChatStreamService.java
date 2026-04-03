@@ -10,6 +10,7 @@ import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.chat.SendChatResponse.*;
+import com.spring.aichat.dto.director.DirectorDirective;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
@@ -26,11 +27,13 @@ import com.spring.aichat.service.ChatService;
 import com.spring.aichat.service.ContentModerationService;
 import com.spring.aichat.service.MemoryService;
 import com.spring.aichat.service.cache.RedisCacheService;
+import com.spring.aichat.service.director.DirectorService;
 import com.spring.aichat.service.illustration.BackgroundGenerationService;
 import com.spring.aichat.service.illustration.IllustrationService;
 import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
+import com.spring.aichat.service.prompt.DirectorPromptAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -84,6 +87,7 @@ public class ChatStreamService {
     private final IllustrationService illustrationService;
     private final BackgroundGenerationService backgroundGenerationService;
     private final LlmCircuitBreaker llmCircuitBreaker;
+    private final DirectorService directorService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -232,6 +236,17 @@ public class ChatStreamService {
                         applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
                     }
                     if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+
+                    // [Phase 5.5-Director] 디렉터 constraint 소비 (일회성)
+                    // 이 턴에서 constraint가 사용되었으면 클리어
+                    if (freshRoom.hasActiveDirectorConstraint() && !freshRoom.isEventActive()) {
+                        freshRoom.clearDirectorInterlude();
+                    }
+
+                    // 이벤트 모드에서는 RESOLVED될 때까지 constraint 유지
+                    if (wasEventActive && "RESOLVED".equalsIgnoreCase(parsed.eventStatus())) {
+                        freshRoom.clearDirectorInterlude();
+                    }
 
                     // 승급 이벤트 처리
                     PromotionEvent promoEvent = null;
@@ -473,17 +488,10 @@ public class ChatStreamService {
 
     @Async
     public void sendDirectorWatchStream(Long roomId, SseEmitter emitter) {
-        log.info("👀 [DIRECTOR] Watch START | roomId={}", roomId);
+        log.info("👀 [DIRECTOR-WATCH] START | roomId={}", roomId);
 
         try {
-            // [Phase 5.5-Sep] 디렉터 모드: 스토리 모드 전용
-            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-            if (!ChatModePolicy.supportsDirectorMode(modeCheck.getChatMode())) {
-                sendSseError(emitter, "MODE_RESTRICTED", "디렉터 모드는 스토리 모드에서만 사용할 수 있습니다.");
-                return;
-            }
-            // ── TX-1: 에너지 차감 (일반 채팅과 동일) ──
+            // ── TX-1: 에너지 차감 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
@@ -492,7 +500,7 @@ public class ChatStreamService {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "진행 중인 이벤트가 없습니다.");
                 }
 
-                int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
+                int cost = 1; // 지켜보기 비용
                 room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
@@ -500,11 +508,18 @@ public class ChatStreamService {
             });
             cacheService.evictUserProfile(jpa.username());
 
-            // ── MongoDB: SYSTEM_DIRECTOR 메시지 저장 (프론트 미노출) ──
+            // ── [Director] 강화된 지켜보기 프롬프트 ──
+            // 기존: 하드코딩된 SYSTEM_DIRECTOR_PROMPT
+            // 개선: DirectorPromptAssembler가 캐릭터/상황에 맞춤 생성
+            String eventContext = buildRecentEventContext(roomId);
+            String watchPrompt = new DirectorPromptAssembler().assembleWatchDirective(
+                jpa.room().getCharacter(), jpa.room(), eventContext);
+
+            // MongoDB에 SYSTEM_DIRECTOR 메시지 저장
             String savedLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.hiddenSystem(roomId, SYSTEM_DIRECTOR_PROMPT));
+                    ChatLogDocument.hiddenSystem(roomId, watchPrompt));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
@@ -517,27 +532,30 @@ public class ChatStreamService {
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
 
-            // ── LLM 스트림 (SYSTEM_DIRECTOR가 포함된 히스토리) ──
+            // ── LLM 스트림 ──
             ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
                 effectiveSecretMode, emitter, rollbackCtx);
             if (parsed == null) return;
 
-            // ── TX-2: 스탯 동결, BPM만 업데이트 ──
+            // ── TX-2: 이벤트 상태만 업데이트 (스탯 동결) ──
             SendChatResponse response;
             try {
                 response = txTemplate.execute(status -> {
                     ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                    freshRoom.updateEventStatus(
-                        parsed.eventStatus() != null ? parsed.eventStatus() : "ONGOING");
-
+                    // 지켜보기 중에는 스탯 동결, BPM만 갱신
                     if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
                     freshRoom.updateLastActive(parsed.mainEmotion());
-                    if (jpa.room().isStoryMode()) {
-                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
-                            parsed.lastOutfit(), parsed.lastTime());
+
+                    // event_status 업데이트 (LLM이 자체 종료하면 RESOLVED)
+                    if (parsed.eventStatus() != null) {
+                        freshRoom.updateEventStatus(parsed.eventStatus());
                     }
+
+                    // 지켜보기에서도 씬 상태는 업데이트 (장소 이동 등)
+                    freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                        parsed.lastOutfit(), parsed.lastTime());
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
 
@@ -547,8 +565,7 @@ public class ChatStreamService {
                         statsSnapshot, freshRoom.getCurrentBpm(),
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
-                        false,
-                        freshRoom.getEventStatus());
+                        false, freshRoom.getEventStatus());
                 });
             } catch (Exception e) {
                 compensateFullRollback(rollbackCtx);
@@ -562,13 +579,32 @@ public class ChatStreamService {
             sendFinalResult(emitter, response, false, assistantLogId, false, null);
             emitter.complete();
 
-            log.info("👀 [DIRECTOR] Watch DONE | roomId={} | eventStatus={}",
-                roomId, parsed.eventStatus());
+            log.info("👀 [DIRECTOR-WATCH] DONE | roomId={}", roomId);
 
         } catch (Exception e) {
-            log.error("❌ Watch error | roomId={}", roomId, e);
+            log.error("❌ Director watch error | roomId={}", roomId, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "지켜보기 처리 중 오류 발생");
         }
+    }
+
+    /**
+     * 최근 이벤트 컨텍스트 구성 (지켜보기 프롬프트용)
+     */
+    private String buildRecentEventContext(Long roomId) {
+        List<ChatLogDocument> recent = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
+        recent.sort(Comparator.comparing(ChatLogDocument::getCreatedAt));
+
+        // 이벤트 시작 이후의 로그만 추출
+        StringBuilder sb = new StringBuilder();
+        int count = 0;
+        for (int i = recent.size() - 1; i >= 0 && count < 6; i--) {
+            ChatLogDocument doc = recent.get(i);
+            String content = doc.getCleanContent() != null ? doc.getCleanContent() : "";
+            if (content.length() > 150) content = content.substring(0, 150) + "...";
+            sb.insert(0, "[" + doc.getRole().name() + "] " + content + "\n");
+            count++;
+        }
+        return sb.toString().trim();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1102,18 +1138,32 @@ public class ChatStreamService {
         compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
-    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount, boolean isSecretMode, ChatMode chatMode) {
+    /**
+     * [Phase 5.5-Director] 비동기 후처리 — 디렉터 판단 통합
+     *
+     * 기존: 메모리 요약 + 캐릭터 생각
+     * 추가: 디렉터 비동기 판단 (스토리 모드 전용)
+     */
+    private void triggerPostProcessing(Long roomId, Long userId, long totalLogCount,
+                                       boolean isSecretMode, ChatMode chatMode) {
         long userMsgCount = chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER);
 
+        // ── 기존: 메모리 요약 ──
         long memoryCycle = ChatModePolicy.getMemorySummarizationCycle(chatMode);
         if (userMsgCount > 0 && userMsgCount % memoryCycle == 0) {
             memoryService.summarizeAndSaveMemory(roomId, userId);
         }
 
+        // ── 기존: 캐릭터 생각 ──
         long thoughtCycle = ChatModePolicy.getCharacterThoughtCycle(chatMode);
         long thoughtOffset = ChatModePolicy.getCharacterThoughtOffset(chatMode);
         if (userMsgCount > 0 && userMsgCount % thoughtCycle == thoughtOffset) {
             chatService.generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
+        }
+
+        // ── [Director] 비동기 디렉터 판단 (스토리 모드 전용) ──
+        if (ChatModePolicy.supportsDirectorMode(chatMode)) {
+            directorService.evaluateAndCache(roomId, userMsgCount);
         }
     }
 
@@ -1342,5 +1392,61 @@ public class ChatStreamService {
             log.warn("scenesJson serialization failed", e);
             return null;
         }
+    }
+
+    /**
+     * [Phase 5.5-Director] Directive를 ChatRoom에 적용
+     *
+     * 프론트가 인터루드를 유저에게 보여준 뒤, 다음 액터 호출 전에 호출.
+     * Directive의 constraint/narration을 ChatRoom에 세팅하여
+     * CharacterPromptAssembler가 액터 프롬프트에 주입할 수 있게 한다.
+     *
+     * @param roomId    채팅방 ID
+     * @param directive 소비된 Directive
+     */
+    public void applyDirectiveToRoom(Long roomId, DirectorDirective directive) {
+        txTemplate.execute(status -> {
+            ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("Room not found"));
+
+            if (directive.isInterlude() && directive.interlude() != null) {
+                var interlude = directive.interlude();
+
+                if (interlude.isObserverMode()) {
+                    // OBSERVER 모드: 이벤트로 진행 (캐릭터↔디렉터 티키타카)
+                    room.startDirectorInterlude(
+                        interlude.narration(),
+                        interlude.actorConstraint());
+                } else {
+                    // FREE 모드: 일회성 constraint (다음 턴에서 자동 소비)
+                    room.setDirectorInterlude(
+                        interlude.narration(),
+                        interlude.actorConstraint());
+                }
+
+                // 환경 변경
+                if (interlude.environment() != null) {
+                    var env = interlude.environment();
+                    room.updateSceneState(env.bgm(), null, null, env.time());
+                }
+
+            } else if (directive.isTransition() && directive.transition() != null) {
+                var transition = directive.transition();
+
+                // 나레이션 + constraint 설정 (일회성)
+                room.setDirectorInterlude(
+                    transition.narration(),
+                    transition.actorConstraint());
+
+                // 시간/BGM 즉시 반영
+                room.updateSceneState(
+                    transition.newBgm(), null, null, transition.newTime());
+            }
+
+            // BRANCH는 별도 처리 (기존 이벤트 선택 플로우와 유사)
+
+            return null;
+        });
+        cacheService.evictRoomInfo(roomId);
     }
 }

@@ -129,4 +129,28 @@ public final class ChatModePolicy {
     public static String getFixedBgm(ChatMode mode) {
         return mode == ChatMode.SANDBOX ? "DAILY" : null;
     }
+
+    /** 디렉터 엔진 (비동기 선행 디렉팅) */
+    public static boolean supportsDirectorEngine(ChatMode mode) {
+        return mode == ChatMode.STORY;
+    }
+
+    /** 디렉터 인터루드 (나레이션 개입, 관찰자 모드 등) */
+    public static boolean supportsDirectorInterlude(ChatMode mode) {
+        return mode == ChatMode.STORY;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  Director Constants
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 디렉터 최소 개입 간격 (턴) */
+    public static int getDirectorMinGap(ChatMode mode) {
+        return mode == ChatMode.STORY ? 3 : Integer.MAX_VALUE;
+    }
+
+    /** 디렉터 판단 시 참조할 최근 대화 턴 수 */
+    public static int getDirectorContextTurns(ChatMode mode) {
+        return mode == ChatMode.STORY ? 10 : 0;
+    }
 }

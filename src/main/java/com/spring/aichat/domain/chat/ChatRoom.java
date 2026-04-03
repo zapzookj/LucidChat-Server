@@ -183,6 +183,26 @@ public class ChatRoom {
     @Column(name = "event_status", length = 20)
     private String eventStatus;
 
+    /** [Phase 5.5-Director] 마지막 디렉터 개입 턴 (서버 메모리/Redis와 별개로 DB 영속화) */
+    @Column(name = "last_director_turn", nullable = false)
+    private long lastDirectorTurn = 0;
+
+    /**
+     * [Phase 5.5-Director] 현재 활성화된 디렉터 인터루드의 actor_constraint
+     * 인터루드 나레이션을 유저에게 보여준 뒤, 다음 액터 호출 시 이 값을 주입.
+     * 소비 후 null로 클리어.
+     */
+    @Column(name = "active_director_constraint", columnDefinition = "TEXT")
+    private String activeDirectorConstraint;
+
+    /**
+     * [Phase 5.5-Director] 현재 활성화된 디렉터 인터루드의 나레이션 원문
+     * 액터 컨텍스트에 [DIRECTOR_NARRATION]으로 주입하여 맥락 공유.
+     * 소비 후 null로 클리어.
+     */
+    @Column(name = "active_director_narration", columnDefinition = "TEXT")
+    private String activeDirectorNarration;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5-Fix] 동적 배경 영속화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -476,6 +496,49 @@ public class ChatRoom {
         this.endingType = endingType;
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5-Director] 디렉터 인터루드 메서드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 디렉터 인터루드가 유저에게 표시된 후 호출.
+     * 다음 액터 호출에서 constraint + narration을 컨텍스트로 주입.
+     */
+    public void setDirectorInterlude(String narration, String actorConstraint) {
+        this.activeDirectorNarration = narration;
+        this.activeDirectorConstraint = actorConstraint;
+    }
+
+    /**
+     * 디렉터 인터루드의 관찰자 모드로 이벤트 시작.
+     * INTERLUDE + user_agency=OBSERVER인 경우 호출.
+     */
+    public void startDirectorInterlude(String narration, String actorConstraint) {
+        setDirectorInterlude(narration, actorConstraint);
+        this.eventActive = true;
+        this.eventStatus = "ONGOING";
+        this.topicConcluded = false;
+    }
+
+    /**
+     * 디렉터 constraint가 액터에 주입된 후 클리어.
+     * 일회성 소비.
+     */
+    public void clearDirectorInterlude() {
+        this.activeDirectorConstraint = null;
+        this.activeDirectorNarration = null;
+    }
+
+    /** 디렉터 constraint가 활성화되어 있는지 */
+    public boolean hasActiveDirectorConstraint() {
+        return this.activeDirectorConstraint != null && !this.activeDirectorConstraint.isBlank();
+    }
+
+    /** 마지막 디렉터 개입 턴 업데이트 */
+    public void updateLastDirectorTurn(long turn) {
+        this.lastDirectorTurn = turn;
+    }
+
     public void saveEndingTitle(String title) { this.endingTitle = title; }
 
     public void resetAll() {
@@ -501,6 +564,9 @@ public class ChatRoom {
         this.thoughtUpdatedAtTurn = 0;
         this.currentBpm = 65;
         this.topicConcluded = false;
+        this.lastDirectorTurn = 0;
+        this.activeDirectorConstraint = null;
+        this.activeDirectorNarration = null;
     }
 
     private int clamp(int min, int max, int v) { return Math.max(min, Math.min(max, v)); }

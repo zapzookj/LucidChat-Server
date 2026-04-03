@@ -116,7 +116,7 @@ public class CharacterPromptAssembler {
             staticBuilder.append(buildEventStatusBlock(room));
         }
 
-        if (ChatModePolicy.supportsNpc(mode)) {
+        if (ChatModePolicy.supportsNpc(mode) || room.hasActiveDirectorConstraint()) {
             staticBuilder.append(buildNpcDirectorBlock(room));
         }
 
@@ -956,17 +956,29 @@ public class CharacterPromptAssembler {
             """;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Event Status / NPC Director (스토리 전용)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+    /**
+     * [Phase 5.5-Director] 이벤트/디렉터 상태 블록
+     *
+     * 두 가지 경우를 커버:
+     * A) 디렉터 인터루드 활성화 (activeDirectorConstraint 존재)
+     *    → 캐릭터에게 "감독의 연기 지시"를 전달
+     *    → 기존 DIRECTOR MODE보다 훨씬 강력한 제어
+     *
+     * B) 기존 이벤트 모드 (레거시 호환, 디렉터 없이 이벤트 진행 중인 경우)
+     */
     private String buildEventStatusBlock(ChatRoom room) {
+        // ── [Director] 디렉터 인터루드 활성화 상태 ──
+        if (room.hasActiveDirectorConstraint()) {
+            return buildDirectorInterludeBlock(room);
+        }
+
+        // ── [Legacy] 기존 이벤트 모드 (디렉터 미개입, 레거시 호환) ──
         if (!room.isEventActive()) return "";
 
         return """
             # 🎬 DIRECTOR MODE (Event In Progress) — Priority: HIGHEST
             ⚠️ A SPECIAL EVENT is currently in progress. This overrides normal conversation flow.
-
+ 
             ## Rules:
             1. **DO NOT end the event yourself.** The event continues until the USER intervenes with actual dialogue.
             2. **Messages from [SYSTEM_DIRECTOR]** mean the user is WATCHING silently. Escalate the situation!
@@ -985,13 +997,77 @@ public class CharacterPromptAssembler {
                - Show the character's relief, gratitude, excitement, etc.
                - stat_changes should reflect the quality of the user's intervention.
                - Output `"event_status": "RESOLVED"`.
-
+ 
             ## Output: Include `"event_status": "ONGOING"` or `"RESOLVED"` in your JSON.
             """;
     }
 
+    /**
+     * [Phase 5.5-Director] 디렉터 인터루드 전용 프롬프트 블록
+     *
+     * 핵심 차이점:
+     * - 기존: "이벤트 중이다" + "유저가 지켜보고 있다" → 그래도 유저를 찾는 문제
+     * - 개선: "감독이 너에게 이 상황에서 이렇게 연기하라고 지시했다" → 명시적 연기 지시
+     *
+     * 비주얼 노벨의 '무대 지시(stage direction)' 개념을 LLM에 적용.
+     */
+    private String buildDirectorInterludeBlock(ChatRoom room) {
+        String narration = room.getActiveDirectorNarration();
+        String constraint = room.getActiveDirectorConstraint();
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("""
+            # 🎬 DIRECTOR'S STAGE DIRECTION — Priority: HIGHEST
+            ⚠️ The DIRECTOR (Game Master) has set up a specific scene for you.
+            You MUST follow the director's instructions precisely, like an actor following stage directions.
+ 
+            """);
+
+        // ── 나레이션 (유저도 이미 본 상황) ──
+        if (narration != null && !narration.isBlank()) {
+            sb.append("""
+                ## 📖 SCENE SETUP (The user has already read this narration):
+                "%s"
+                
+                The user KNOWS this situation. Your reaction must be consistent with it.
+                
+                """.formatted(narration));
+        }
+
+        // ── 연기 지시 (핵심) ──
+        sb.append("""
+            ## 🎭 YOUR ACTING INSTRUCTIONS (⚠️ FOLLOW EXACTLY):
+            %s
+ 
+            ## ⚠️ ABSOLUTE RULES DURING DIRECTOR SCENE:
+            1. **FOLLOW the acting instructions above.** They define what you do in this scene.
+            2. **React to the SITUATION, not to the user.** Unless the user directly speaks to you.
+            """.formatted(constraint));
+
+        // ── 이벤트 진행 중이면 추가 제약 ──
+        if (room.isEventActive()) {
+            sb.append("""
+                3. **Event is ONGOING.** If the user sends regular dialogue → they are INTERVENING.
+                   - React to their intervention naturally.
+                   - Output `"event_status": "RESOLVED"` if the situation is resolved.
+                   - Output `"event_status": "ONGOING"` if tension remains.
+                4. **If you see [SYSTEM_DIRECTOR]** → User is still watching. Escalate!
+                   - DO NOT seek the user. DO NOT mention the user. You don't know they're there.
+                   - stat_changes should all be 0 during ONGOING.
+                """);
+        } else {
+            sb.append("""
+                3. After reacting to the situation, you may then naturally engage with the user.
+                4. The director's setup is a ONE-TIME scene transition. After this turn, normal conversation resumes.
+                """);
+        }
+
+        return sb.toString();
+    }
+
     private String buildNpcDirectorBlock(ChatRoom room) {
-        if (!room.isEventActive()) return "";
+        if (!room.isEventActive() && !room.hasActiveDirectorConstraint()) return "";
 
         String characterName = room.getCharacter().getName();
 
