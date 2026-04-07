@@ -34,6 +34,7 @@ import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import com.spring.aichat.service.prompt.DirectorPromptAssembler;
+import com.spring.aichat.service.util.LlmOutputParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -901,12 +902,12 @@ public class ChatStreamService {
         Consumer<String> onFirstScene = firstSceneJson -> {
             try {
                 AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
-                EmotionTag emotion = parseEmotion(scene.emotion());
+                EmotionTag emotion = LlmOutputParser.parseEmotion(scene.emotion());
                 SceneResponse firstScene = new SceneResponse(
                     scene.speaker(),
                     scene.narration(), scene.dialogue(), emotion,
-                    safeUpperCase(scene.location()), safeUpperCase(scene.time()),
-                    safeUpperCase(scene.outfit()), safeUpperCase(scene.bgmMode()));
+                    LlmOutputParser.safeUpperCase(scene.location()), LlmOutputParser.safeUpperCase(scene.time()),
+                    LlmOutputParser.safeUpperCase(scene.outfit()), LlmOutputParser.safeUpperCase(scene.bgmMode()));
                 emitter.send(SseEmitter.event().name("first_scene")
                     .data(objectMapper.writeValueAsString(firstScene)));
             } catch (Exception e) {
@@ -983,7 +984,7 @@ public class ChatStreamService {
         AiJsonOutput aiOutput;
         String cleanJson;
         try {
-            cleanJson = extractJson(streamResult.fullResponse());
+            cleanJson = LlmOutputParser.extractJson(streamResult.fullResponse());
             aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
         } catch (JsonProcessingException e) {
             log.error("JSON Parse Error: {}", streamResult.fullResponse(), e);
@@ -998,14 +999,14 @@ public class ChatStreamService {
 
         String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
             : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
-        EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
+        EmotionTag mainEmotion = LlmOutputParser.parseEmotion(lastEmotionStr);
 
         List<SceneResponse> sceneResponses = aiOutput.scenes().stream()
             .map(s -> new SceneResponse(
                 s.speaker(),                        // [Phase 5.5-NPC] 화자
-                s.narration(), s.dialogue(), parseEmotion(s.emotion()),
-                safeUpperCase(s.location()), safeUpperCase(s.time()),
-                safeUpperCase(s.outfit()), safeUpperCase(s.bgmMode())))
+                s.narration(), s.dialogue(), LlmOutputParser.parseEmotion(s.emotion()),
+                LlmOutputParser.safeUpperCase(s.location()), LlmOutputParser.safeUpperCase(s.time()),
+                LlmOutputParser.safeUpperCase(s.outfit()), LlmOutputParser.safeUpperCase(s.bgmMode())))
             .collect(Collectors.toList());
 
         // [Phase 5.5-Fix] scenesJson: 씬 배열 구조화 저장 (재로딩 시 씬별 분리 복원용)
@@ -1016,10 +1017,10 @@ public class ChatStreamService {
 
         return new ParsedLlmResult(
             aiOutput, cleanJson, combinedDialogue, mainEmotion, sceneResponses,
-            extractLastNonNull(sceneResponses, SceneResponse::bgmMode),
-            extractLastNonNull(sceneResponses, SceneResponse::location),
-            extractLastNonNull(sceneResponses, SceneResponse::outfit),
-            extractLastNonNull(sceneResponses, SceneResponse::time),
+            LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::bgmMode),
+            LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::location),
+            LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::outfit),
+            LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::time),
             aiOutput.statChanges(), aiOutput.bpm(), innerThought,
             aiOutput.isTopicConcluded(),
             aiOutput.eventStatus(),
@@ -1199,7 +1200,7 @@ public class ChatStreamService {
                 case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
                 case ASSISTANT -> {
                     boolean includeThought = assistantIdx >= assistantThreshold;
-                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName, includeThought);
+                    String sanitized = LlmOutputParser.buildSanitizedAssistantContent(objectMapper, chatLog, characterName, includeThought);
                     messages.add(OpenAiMessage.assistant(sanitized));
                     assistantIdx++;
                 }
@@ -1215,134 +1216,8 @@ public class ChatStreamService {
         return messages;
     }
 
-    /**
-     * [Phase 5.5-Fix-IT] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제 (속마음 포함)
-     *
-     * includeInnerThought=true일 때, 속마음 텍스트를 히스토리에 포함.
-     * 포맷: {💭 Previous thought: "..."} — output JSON과 의도적으로 다른 형식으로
-     * Few-Shot Leakage(패턴 모방) 방지.
-     */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName, boolean includeInnerThought) {
-        try {
-            String raw = chatLog.getRawContent();
-            if (raw == null || raw.isBlank()) {
-                return "[" + characterName + "]: " +
-                    (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "");
-            }
-
-            String cleaned = extractJson(raw);
-            AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
-
-            StringBuilder sb = new StringBuilder();
-            for (AiJsonOutput.Scene scene : parsed.scenes()) {
-                String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
-                    ? scene.speaker() : characterName;
-                sb.append("[").append(speaker).append("] ");
-
-                if (scene.emotion() != null && !scene.emotion().isBlank()) {
-                    sb.append("{Emotion: ").append(scene.emotion()).append("} ");
-                }
-
-                if (scene.narration() != null && !scene.narration().isBlank()) {
-                    sb.append("(").append(scene.narration().trim()).append(") ");
-                }
-
-                if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
-                    sb.append("\"").append(scene.dialogue().trim()).append("\"");
-                }
-                sb.append("\n");
-            }
-
-            // [Phase 5.5-Fix-IT] 속마음 컨텍스트 주입 (최근 N턴만)
-            if (includeInnerThought) {
-                String thought = chatLog.getInnerThought();
-                if (thought != null && !thought.isBlank()) {
-                    sb.append("{💭 Previous thought: \"").append(thought.trim()).append("\"}\n");
-                }
-            }
-
-            String result = sb.toString().trim();
-            return result.isEmpty()
-                ? "[" + characterName + "]: " + (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
-                : result;
-
-        } catch (Exception e) {
-            String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
-            StringBuilder fallback = new StringBuilder("[" + characterName + "]: " + content);
-            if (includeInnerThought) {
-                String thought = chatLog.getInnerThought();
-                if (thought != null && !thought.isBlank()) {
-                    fallback.append("\n{💭 Previous thought: \"").append(thought.trim()).append("\"}");
-                }
-            }
-            return fallback.toString();
-        }
-    }
-
-    /** 하위 호환: 2-param 버전 유지 */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
-        return buildSanitizedAssistantContent(chatLog, characterName, false);
-    }
-
-    private String extractJson(String raw) {
-        if (raw == null || raw.isBlank()) return raw;
-
-        String text = raw.trim();
-
-        // Step 1: Markdown 코드 블록 제거
-        if (text.startsWith("```json")) {
-            text = text.substring(7);
-        } else if (text.startsWith("```")) {
-            text = text.substring(3);
-        }
-        if (text.endsWith("```")) {
-            text = text.substring(0, text.length() - 3);
-        }
-        text = text.trim();
-
-        // Step 2: 첫 번째 '{' 위치 찾기
-        int jsonStart = text.indexOf('{');
-        if (jsonStart < 0) {
-            // JSON 객체가 없으면 원본 반환 (파싱 단계에서 에러 처리)
-            return text;
-        }
-
-        if (jsonStart > 0) {
-            // JSON 앞에 프리앰블 텍스트가 있으면 경고 로그 + 제거
-            String preamble = text.substring(0, jsonStart).trim();
-            if (!preamble.isEmpty()) {
-                log.warn("⚠️ [JSON] Stripped preamble before JSON ({}chars): '{}'",
-                    preamble.length(),
-                    preamble.substring(0, Math.min(80, preamble.length())));
-            }
-            text = text.substring(jsonStart);
-        }
-
-        // Step 3: 마지막 '}' 이후 텍스트 제거
-        int lastBrace = text.lastIndexOf('}');
-        if (lastBrace >= 0 && lastBrace < text.length() - 1) {
-            text = text.substring(0, lastBrace + 1);
-        }
-
-        return text.trim();
-    }
-
-    private EmotionTag parseEmotion(String s) {
-        try { return EmotionTag.valueOf(s.toUpperCase()); } catch (Exception e) { return EmotionTag.NEUTRAL; }
-    }
-
-    private String safeUpperCase(String v) {
-        if (v == null || v.isBlank() || "null".equalsIgnoreCase(v)) return null;
-        return v.toUpperCase().trim();
-    }
-
-    private String extractLastNonNull(List<SceneResponse> scenes, java.util.function.Function<SceneResponse, String> ext) {
-        for (int i = scenes.size() - 1; i >= 0; i--) {
-            String val = ext.apply(scenes.get(i));
-            if (val != null) return val;
-        }
-        return null;
-    }
+    // [Bug #6 Fix] buildSanitizedAssistantContent, extractJson, parseEmotion,
+    // safeUpperCase, extractLastNonNull → LlmOutputParser로 통합 이관
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5-Fix] 3-Layer 통일 헬퍼

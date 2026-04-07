@@ -35,11 +35,34 @@ public record EndingResponse(
         String bgmMode              // BGM (null 가능)
     ) {}
 
+    /**
+     * [Bug #2 Fix] 엔딩 플레이 통계 — Phase 5.5 입체적 스탯 시스템 반영
+     */
     public record EndingStats(
         long totalMessages,         // 총 메시지 수
         long totalDays,             // 함께한 일수
-        int finalAffection,         // 최종 호감도
+        int finalAffection,         // 최종 호감도 (레거시 호환)
         String finalRelation,       // 최종 관계
-        String firstMessageDate     // 첫 대화 날짜
-    ) {}
+        String firstMessageDate,    // 첫 대화 날짜
+        // ── [Phase 5.5] 5종 노말 스탯 ──
+        int intimacy,
+        int affection,
+        int dependency,
+        int playfulness,
+        int trust,
+        // ── [Phase 5.5] 시크릿 스탯 (null이면 비시크릿) ──
+        Integer lust,
+        Integer corruption,
+        Integer obsession,
+        // ── [Phase 5.5] 부가 정보 ──
+        String dynamicRelationTag,  // 동적 관계 태그
+        int finalBpm                // 최종 BPM
+    ) {
+        /** 레거시 호환 생성자 (기존 5-param) — 제거 예정 */
+        public EndingStats(long totalMessages, long totalDays, int finalAffection,
+                           String finalRelation, String firstMessageDate) {
+            this(totalMessages, totalDays, finalAffection, finalRelation, firstMessageDate,
+                0, finalAffection, 0, 0, 0, null, null, null, null, 65);
+        }
+    }
 }

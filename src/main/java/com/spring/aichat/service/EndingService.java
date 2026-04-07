@@ -57,6 +57,7 @@ public class EndingService {
     private final MemoryService memoryService;
     private final TransactionTemplate txTemplate;
     private final AchievementService achievementService;
+    private final com.spring.aichat.service.payment.SecretModeService secretModeService; // [Bug #10 Fix]
 
     /**
      * 엔딩 데이터 생성 — 씬 + 타이틀 + 추억 + 통계를 한 번에 반환
@@ -74,7 +75,8 @@ public class EndingService {
         String userNickname = room.getUser().getNickname();
         int affection = room.getAffectionScore();
         String relationStatus = room.getStatusLevel().name();
-        boolean isSecretMode = room.getUser().getIsSecretMode();
+        boolean isSecretMode = room.getUser().getIsSecretMode()
+            && secretModeService.canAccessSecretMode(room.getUser(), character.getId()); // [Bug #10 Fix] 권한 검증 게이트
         Long userId = room.getUser().getId();
 
         // ── 2. RAG — 장기 기억 조회 (RDB+Redis, Pinecone 폐기) ──
@@ -133,8 +135,8 @@ public class EndingService {
         ).trim().replaceAll("[\"']", "");
         log.info("🎬 [ENDING] Title LLM: {}ms | title={}", System.currentTimeMillis() - titleStart, endingTitle);
 
-        // ── 6. 플레이 통계 집계 — MongoDB ──
-        EndingStats stats = collectStats(roomId, room);
+        // ── 6. 플레이 통계 집계 — MongoDB + Phase 5.5 스탯 ──
+        EndingStats stats = collectStats(roomId, room, isSecretMode);
 
         // ── 7. 엔딩 로그 저장 — MongoDB + JPA(ChatRoom 상태만) ──
         String endingNarration = "[ENDING:" + endingType.name() + "] " + endingTitle;
@@ -311,9 +313,9 @@ public class EndingService {
     }
 
     /**
-     * 플레이 통계 집계 — MongoDB 기반
+     * [Bug #2 Fix] 플레이 통계 집계 — Phase 5.5 입체적 스탯 포함
      */
-    private EndingStats collectStats(Long roomId, ChatRoom room) {
+    private EndingStats collectStats(Long roomId, ChatRoom room, boolean isSecretMode) {
         long totalMessages = chatLogRepository.countByRoomId(roomId);
 
         ChatLogDocument firstLog = chatLogRepository.findTop1ByRoomIdOrderByCreatedAtAsc(roomId).orElse(null);
@@ -331,7 +333,20 @@ public class EndingService {
             totalDays,
             room.getAffectionScore(),
             room.getStatusLevel().name(),
-            firstDate
+            firstDate,
+            // 5종 노말 스탯
+            room.getStatIntimacy(),
+            room.getStatAffection(),
+            room.getStatDependency(),
+            room.getStatPlayfulness(),
+            room.getStatTrust(),
+            // 시크릿 스탯 (권한 없으면 null)
+            isSecretMode ? room.getStatLust() : null,
+            isSecretMode ? room.getStatCorruption() : null,
+            isSecretMode ? room.getStatObsession() : null,
+            // 부가 정보
+            room.getDynamicRelationTag(),
+            room.getCurrentBpm()
         );
     }
 

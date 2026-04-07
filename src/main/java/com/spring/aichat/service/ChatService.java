@@ -28,6 +28,7 @@ import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
+import com.spring.aichat.service.util.LlmOutputParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -874,7 +875,7 @@ public class ChatService {
             System.currentTimeMillis() - llmStart, rawAssistant.length());
 
         try {
-            String cleanJson = stripMarkdown(rawAssistant);
+            String cleanJson = LlmOutputParser.extractJson(rawAssistant);
             AiJsonOutput aiOutput = objectMapper.readValue(cleanJson, AiJsonOutput.class);
 
             String combinedDialogue = aiOutput.scenes().stream()
@@ -883,24 +884,24 @@ public class ChatService {
 
             String lastEmotionStr = aiOutput.scenes().isEmpty() ? "NEUTRAL"
                 : aiOutput.scenes().get(aiOutput.scenes().size() - 1).emotion();
-            EmotionTag mainEmotion = parseEmotion(lastEmotionStr);
+            EmotionTag mainEmotion = LlmOutputParser.parseEmotion(lastEmotionStr);
 
             List<SendChatResponse.SceneResponse> sceneResponses = aiOutput.scenes().stream()
                 .map(s -> new SendChatResponse.SceneResponse(
                     s.narration(),
                     s.dialogue(),
-                    parseEmotion(s.emotion()),
-                    safeUpperCase(s.location()),
-                    safeUpperCase(s.time()),
-                    safeUpperCase(s.outfit()),
-                    safeUpperCase(s.bgmMode())
+                    LlmOutputParser.parseEmotion(s.emotion()),
+                    LlmOutputParser.safeUpperCase(s.location()),
+                    LlmOutputParser.safeUpperCase(s.time()),
+                    LlmOutputParser.safeUpperCase(s.outfit()),
+                    LlmOutputParser.safeUpperCase(s.bgmMode())
                 ))
                 .collect(Collectors.toList());
 
-            String lastBgm = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::bgmMode);
-            String lastLoc = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::location);
-            String lastOutfit = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::outfit);
-            String lastTime = extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
+            String lastBgm = LlmOutputParser.extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::bgmMode);
+            String lastLoc = LlmOutputParser.extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::location);
+            String lastOutfit = LlmOutputParser.extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::outfit);
+            String lastTime = LlmOutputParser.extractLastNonNull(sceneResponses, SendChatResponse.SceneResponse::time);
 
             Integer moodScore = aiOutput.moodScore();
             String easterEggTrigger = aiOutput.easterEggTrigger();
@@ -1140,7 +1141,7 @@ public class ChatService {
                 case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
                 case ASSISTANT -> {
                     boolean includeThought = assistantIdx >= assistantThreshold;
-                    String sanitized = buildSanitizedAssistantContent(chatLog, characterName, includeThought);
+                    String sanitized = LlmOutputParser.buildSanitizedAssistantContent(objectMapper, chatLog, characterName, includeThought);
                     messages.add(OpenAiMessage.assistant(sanitized));
                     assistantIdx++;
                 }
@@ -1156,115 +1157,12 @@ public class ChatService {
         return messages;
     }
 
-    /**
-     * [Phase 5.5-Fix-IT] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제 (속마음 포함)
-     *
-     * includeInnerThought=true일 때, 속마음 텍스트를 히스토리에 포함.
-     * 포맷: {💭 Previous thought: "..."} — output JSON과 의도적으로 다른 형식으로
-     * Few-Shot Leakage(패턴 모방) 방지.
-     */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName, boolean includeInnerThought) {
-        try {
-            String raw = chatLog.getRawContent();
-            if (raw == null || raw.isBlank()) {
-                return "[" + characterName + "]: " +
-                    (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "");
-            }
-
-            String cleaned = stripMarkdown(raw);
-            AiJsonOutput parsed = objectMapper.readValue(cleaned, AiJsonOutput.class);
-
-            StringBuilder sb = new StringBuilder();
-            for (AiJsonOutput.Scene scene : parsed.scenes()) {
-                String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
-                    ? scene.speaker() : characterName;
-                sb.append("[").append(speaker).append("] ");
-
-                if (scene.emotion() != null && !scene.emotion().isBlank()) {
-                    sb.append("{Emotion: ").append(scene.emotion()).append("} ");
-                }
-
-                if (scene.narration() != null && !scene.narration().isBlank()) {
-                    sb.append("(").append(scene.narration().trim()).append(") ");
-                }
-
-                if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
-                    sb.append("\"").append(scene.dialogue().trim()).append("\"");
-                }
-                sb.append("\n");
-            }
-
-            // [Phase 5.5-Fix-IT] 속마음 컨텍스트 주입 (최근 N턴만)
-            if (includeInnerThought) {
-                String thought = chatLog.getInnerThought();
-                if (thought != null && !thought.isBlank()) {
-                    sb.append("{💭 Previous thought: \"").append(thought.trim()).append("\"}\n");
-                }
-            }
-
-            String result = sb.toString().trim();
-            return result.isEmpty()
-                ? "[" + characterName + "]: " + (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
-                : result;
-
-        } catch (Exception e) {
-            String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
-            StringBuilder fallback = new StringBuilder("[" + characterName + "]: " + content);
-            if (includeInnerThought) {
-                String thought = chatLog.getInnerThought();
-                if (thought != null && !thought.isBlank()) {
-                    fallback.append("\n{💭 Previous thought: \"").append(thought.trim()).append("\"}");
-                }
-            }
-            return fallback.toString();
-        }
-    }
-
-    /** 하위 호환: 2-param 버전 유지 */
-    private String buildSanitizedAssistantContent(ChatLogDocument chatLog, String characterName) {
-        return buildSanitizedAssistantContent(chatLog, characterName, false);
-    }
+    // [Bug #6 Fix] buildSanitizedAssistantContent, stripMarkdown, parseEmotion,
+    // safeUpperCase, extractLastNonNull → LlmOutputParser로 통합 이관
 
     private void applyAffectionChange(ChatRoom room, int change) {
         // [Phase 5.5-P] 레거시 affection_change → statAffection에 통합 적용
         room.applyLegacyAffectionChange(change);
-    }
-
-    private String stripMarkdown(String text) {
-        if (text.startsWith("```json")) {
-            text = text.substring(7);
-        } else if (text.startsWith("```")) {
-            text = text.substring(3);
-        }
-        if (text.endsWith("```")) {
-            text = text.substring(0, text.length() - 3);
-        }
-        return text.trim();
-    }
-
-    private EmotionTag parseEmotion(String emotionStr) {
-        try {
-            return EmotionTag.valueOf(emotionStr.toUpperCase());
-        } catch (Exception e) {
-            return EmotionTag.NEUTRAL;
-        }
-    }
-
-    private String safeUpperCase(String value) {
-        if (value == null || value.isBlank() || "null".equalsIgnoreCase(value)) {
-            return null;
-        }
-        return value.toUpperCase().trim();
-    }
-
-    private String extractLastNonNull(
-        List<SendChatResponse.SceneResponse> scenes,
-        java.util.function.Function<SendChatResponse.SceneResponse, String> extractor) {
-        for (int i = scenes.size() - 1; i >= 0; i--) {
-            String val = extractor.apply(scenes.get(i));
-            if (val != null) return val;
-        }
-        return null;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
