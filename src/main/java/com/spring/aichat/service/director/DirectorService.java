@@ -76,7 +76,7 @@ public class DirectorService {
                 directive.decision(), directive.narrativeBeat(),
                 turnsSince, roomId, System.currentTimeMillis() - start);
 
-            if (directive.isPass()) return;
+            if (directive.checkPass()) return;
             if (!isDecisionAllowed(directive, room.isTopicConcluded())) {
                 log.warn("[DIRECTOR-AUTO] Decision {} rejected — topic={} | roomId={}",
                     directive.decision(), room.isTopicConcluded(), roomId);
@@ -165,7 +165,7 @@ public class DirectorService {
             directive.decision(), topicConcluded, roomId);
 
         // ── 가드레일 체크 → 실패 시 1회 재시도 (더 강력한 프롬프트) ──
-        if (directive.isPass() || !isDecisionAllowed(directive, topicConcluded)) {
+        if (directive.checkPass() || !isDecisionAllowed(directive, topicConcluded)) {
             log.warn("[DIRECTOR-MANUAL] 1st attempt rejected ({}), retrying with strict prompt | roomId={}",
                 directive.decision(), roomId);
 
@@ -178,7 +178,7 @@ public class DirectorService {
             log.info("🎬 [DIRECTOR-MANUAL] 2nd attempt: {} | roomId={}", directive.decision(), roomId);
 
             // 2차도 실패하면 포기
-            if (directive.isPass() || !isDecisionAllowed(directive, topicConcluded)) {
+            if (directive.checkPass() || !isDecisionAllowed(directive, topicConcluded)) {
                 log.warn("[DIRECTOR-MANUAL] 2nd attempt also failed ({}) | roomId={}",
                     directive.decision(), roomId);
                 return new DirectorDirective(DirectorDirective.DECISION_PASS,
@@ -285,21 +285,21 @@ public class DirectorService {
 
     /** 디렉터 결과 필드 검증 로그 — payload NULL 시 raw JSON 포함 */
     private void logDirectiveDetails(DirectorDirective d, String rawJson) {
-        if (d.isInterlude() && d.interlude() != null) {
+        if (d.checkInterlude() && d.interlude() != null) {
             log.info("🎬 [DETAIL] INTERLUDE — narration={} | constraint={} | agency={}",
                 d.interlude().narration() != null ? d.interlude().narration().length() + "chars" : "⚠️ NULL",
                 d.interlude().actorConstraint() != null ? "OK" : "⚠️ NULL",
                 d.interlude().userAgency() != null ? d.interlude().userAgency() : "⚠️ NULL");
-        } else if (d.isBranch() && d.branch() != null) {
+        } else if (d.checkBranch() && d.branch() != null) {
             log.info("🎬 [DETAIL] BRANCH — situation={} | options={}",
                 d.branch().situation() != null ? d.branch().situation().length() + "chars" : "⚠️ NULL",
                 d.branch().options() != null ? d.branch().options().size() + "개" : "⚠️ NULL");
-        } else if (d.isTransition() && d.transition() != null) {
+        } else if (d.checkTransition() && d.transition() != null) {
             log.info("🎬 [DETAIL] TRANSITION — narration={} | time={} | location={}",
                 d.transition().narration() != null ? d.transition().narration().length() + "chars" : "⚠️ NULL",
                 d.transition().newTime(),
                 d.transition().newLocationName());
-        } else if (!d.isPass()) {
+        } else if (!d.checkPass()) {
             // ★ payload가 NULL인 경우 raw JSON 출력하여 LLM 출력 구조 확인
             log.warn("🎬 [DETAIL] Decision={} but payload is NULL! Raw JSON:\n{}",
                 d.decision(), rawJson != null && rawJson.length() > 1000
@@ -328,10 +328,10 @@ public class DirectorService {
     }
 
     private boolean isDecisionAllowed(DirectorDirective directive, boolean topicConcluded) {
-        if (directive.isPass()) return true;
+        if (directive.checkPass()) return true;
         return topicConcluded
-            ? (directive.isBranch() || directive.isTransition())
-            : directive.isInterlude();
+            ? (directive.checkBranch() || directive.checkTransition())
+            : directive.checkInterlude();
     }
 
     private String buildRecentSummary(Long roomId, String characterName) {

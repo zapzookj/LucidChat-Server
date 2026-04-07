@@ -1,6 +1,5 @@
 package com.spring.aichat.dto.director;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -8,17 +7,10 @@ import java.util.List;
 /**
  * [Phase 5.5-Director] 디렉터 엔진의 판단 결과 DTO
  *
- * 디렉터가 비동기 후처리에서 생성하여 Redis에 캐시.
- * 다음 유저 턴 시점에 프론트가 조회 → 인터루드 시퀀스 발동.
- *
- * ┌─────────────────────────────────────────────────┐
- * │  decision 유형별 동작                              │
- * ├──────────┬──────────────────────────────────────┤
- * │ PASS     │ 개입 없음. 캐시에 저장되지 않음.         │
- * │ INTERLUDE│ 나레이션 → 유저 인지 → 행동 (대화 도중)  │
- * │ BRANCH   │ 선택지 3개 제시 (기존 이벤트의 진화형)    │
- * │ TRANSITION│ 시간/장소 전환 나레이션 (씬 마무리 후)   │
- * └──────────┴──────────────────────────────────────┘
+ * ⚠️ Java record의 is*() 메서드는 Jackson이 boolean property로 인식하여
+ *    동일 이름의 record component를 덮어쓰는 문제가 있다.
+ *    (예: isBranch() → property "branch" → BranchPayload 필드를 boolean으로 오인)
+ *    따라서 헬퍼 메서드는 check*() 패턴을 사용한다.
  */
 public record DirectorDirective(
 
@@ -44,7 +36,8 @@ public record DirectorDirective(
 ) {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  판단 유형 상수
+    //  판단 유형 상수 + 체크 메서드
+    //  ⚠️ is*() 대신 check*() 사용 — Jackson 충돌 방지
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public static final String DECISION_PASS = "PASS";
@@ -52,10 +45,10 @@ public record DirectorDirective(
     public static final String DECISION_BRANCH = "BRANCH";
     public static final String DECISION_TRANSITION = "TRANSITION";
 
-    @JsonIgnore public boolean isPass() { return DECISION_PASS.equalsIgnoreCase(decision); }
-    @JsonIgnore public boolean isInterlude() { return DECISION_INTERLUDE.equalsIgnoreCase(decision); }
-    @JsonIgnore public boolean isBranch() { return DECISION_BRANCH.equalsIgnoreCase(decision); }
-    @JsonIgnore public boolean isTransition() { return DECISION_TRANSITION.equalsIgnoreCase(decision); }
+    public boolean checkPass() { return DECISION_PASS.equalsIgnoreCase(decision); }
+    public boolean checkInterlude() { return DECISION_INTERLUDE.equalsIgnoreCase(decision); }
+    public boolean checkBranch() { return DECISION_BRANCH.equalsIgnoreCase(decision); }
+    public boolean checkTransition() { return DECISION_TRANSITION.equalsIgnoreCase(decision); }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Payload 레코드
@@ -81,7 +74,8 @@ public record DirectorDirective(
         @JsonProperty("npc_hint")
         String npcHint
     ) {
-        @JsonIgnore public boolean isObserverMode() {
+        /** ⚠️ is*() 대신 check*() — Jackson 충돌 방지 */
+        public boolean checkObserverMode() {
             return "OBSERVER".equalsIgnoreCase(userAgency);
         }
     }

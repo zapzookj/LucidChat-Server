@@ -1409,10 +1409,10 @@ public class ChatStreamService {
             ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("Room not found"));
 
-            if (directive.isInterlude() && directive.interlude() != null) {
+            if (directive.checkInterlude() && directive.interlude() != null) {
                 var interlude = directive.interlude();
 
-                if (interlude.isObserverMode()) {
+                if (interlude.checkObserverMode()) {
                     // OBSERVER 모드: 이벤트로 진행 (캐릭터↔디렉터 티키타카)
                     room.startDirectorInterlude(
                         interlude.narration(),
@@ -1430,7 +1430,7 @@ public class ChatStreamService {
                     room.updateSceneState(env.bgm(), null, null, env.time());
                 }
 
-            } else if (directive.isTransition() && directive.transition() != null) {
+            } else if (directive.checkTransition() && directive.transition() != null) {
                 var transition = directive.transition();
 
                 // 나레이션 + constraint 설정 (일회성)

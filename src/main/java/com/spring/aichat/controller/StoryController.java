@@ -87,7 +87,7 @@ public class StoryController {
         return directorService.consumeDirective(roomId)
             .map(directive -> {
                 // INTERLUDE / TRANSITION → ChatRoom에 constraint 적용
-                if (directive.isInterlude() || directive.isTransition()) {
+                if (directive.checkInterlude() || directive.checkTransition()) {
                     chatStreamService.applyDirectiveToRoom(roomId, directive);
                 }
                 return ResponseEntity.ok(directive);
