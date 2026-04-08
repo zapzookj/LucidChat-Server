@@ -75,8 +75,9 @@ public class EndingService {
         String userNickname = room.getUser().getNickname();
         int affection = room.getAffectionScore();
         String relationStatus = room.getStatusLevel().name();
-        boolean isSecretMode = room.getUser().getIsSecretMode()
-            && secretModeService.canAccessSecretMode(room.getUser(), character.getId()); // [Bug #10 Fix] 권한 검증 게이트
+        // [Bug #3 Fix] Room-level 시크릿 모드 판정
+        boolean isSecretMode = room.isSecretModeActive()
+            && secretModeService.canAccessSecretMode(room.getUser(), character.getId());
         Long userId = room.getUser().getId();
 
         // ── 2. RAG — 장기 기억 조회 (RDB+Redis, Pinecone 폐기) ──

@@ -169,7 +169,7 @@ public class CharacterPromptAssembler {
             - High [Playfulness]: Use jokes, teasing, memes, and light sarcasm.
             """.formatted(
             injectionGuard.encapsulate("Nickname", user.getNickname()),
-            injectionGuard.encapsulate("Profile", user.getProfileDescription()),
+            injectionGuard.encapsulate("Profile", room.getEffectivePersona(user)),  // [Bug #3 Fix] Room-level 페르소나
             room.getStatusLevel().name(),
             room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),
             room.getStatIntimacy(),

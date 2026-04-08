@@ -216,6 +216,26 @@ public class ChatRoom {
     private String currentDynamicBgUrl;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Bug #3 Fix] 도메인 분리 — 시크릿 모드 & 유저 페르소나
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 이 채팅방에서의 시크릿 모드 활성 여부.
+     * 기존 User.isSecretMode(전역 토글)에서 ChatRoom 단위로 이관.
+     * 활성화 시 SecretModeService.canAccessSecretMode() 검증 필수.
+     */
+    @Column(name = "secret_mode_active", nullable = false)
+    private boolean secretModeActive = false;
+
+    /**
+     * 이 채팅방 전용 유저 페르소나 (LLM 시스템 프롬프트에 주입).
+     * null이면 User.profileDescription으로 폴백.
+     * 캐릭터별로 다른 페르소나를 설정할 수 있도록 분리.
+     */
+    @Column(name = "user_persona", columnDefinition = "TEXT")
+    private String userPersona;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -539,6 +559,36 @@ public class ChatRoom {
         this.lastDirectorTurn = turn;
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Bug #3 Fix] 시크릿 모드 & 유저 페르소나 메서드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 시크릿 모드 활성화 (SecretModeService 검증 후 호출할 것) */
+    public void activateSecretMode() {
+        this.secretModeActive = true;
+    }
+
+    /** 시크릿 모드 비활성화 */
+    public void deactivateSecretMode() {
+        this.secretModeActive = false;
+    }
+
+    /** 채팅방 전용 유저 페르소나 설정 (null이면 User.profileDescription 폴백) */
+    public void updateUserPersona(String persona) {
+        this.userPersona = persona;
+    }
+
+    /**
+     * 유효 페르소나 반환 — 방 전용 페르소나 우선, 없으면 유저 기본값 폴백.
+     * CharacterPromptAssembler/SandboxPromptAssembler에서 사용.
+     */
+    public String getEffectivePersona(com.spring.aichat.domain.user.User user) {
+        if (this.userPersona != null && !this.userPersona.isBlank()) {
+            return this.userPersona;
+        }
+        return user.getProfileDescription();
+    }
+
     public void saveEndingTitle(String title) { this.endingTitle = title; }
 
     public void resetAll() {
@@ -567,6 +617,8 @@ public class ChatRoom {
         this.lastDirectorTurn = 0;
         this.activeDirectorConstraint = null;
         this.activeDirectorNarration = null;
+        this.secretModeActive = false;  // [Bug #3 Fix]
+        // userPersona는 의도적으로 리셋하지 않음 — 유저가 설정한 페르소나는 유지
     }
 
     private int clamp(int min, int max, int v) { return Math.max(min, Math.min(max, v)); }

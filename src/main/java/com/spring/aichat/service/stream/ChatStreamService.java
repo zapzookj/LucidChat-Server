@@ -153,7 +153,7 @@ public class ChatStreamService {
             // ── Content Moderation ──
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-            boolean isSecretCheck = roomForCheck.getUser().getIsSecretMode()
+            boolean isSecretCheck = roomForCheck.isSecretModeActive()
                 && secretModeService.canAccessSecretMode(
                 roomForCheck.getUser(), roomForCheck.getCharacter().getId());
 
@@ -1035,8 +1035,9 @@ public class ChatStreamService {
     //  공통 헬퍼
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    // [Bug #3 Fix] Room-level 시크릿 모드 판정
     private boolean resolveSecretMode(ChatRoom room) {
-        return room.getUser().getIsSecretMode()
+        return room.isSecretModeActive()
             && secretModeService.canAccessSecretMode(room.getUser(), room.getCharacter().getId());
     }
 

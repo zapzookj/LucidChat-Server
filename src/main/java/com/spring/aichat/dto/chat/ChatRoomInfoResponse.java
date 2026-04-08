@@ -40,5 +40,8 @@ public record ChatRoomInfoResponse(
     String eventStatus,
     // ── [Phase 5.5-Fix] 동적 배경 영속화 ──
     String currentDynamicLocationName,
-    String currentDynamicBgUrl
+    String currentDynamicBgUrl,
+    // ── [Bug #3 Fix] 도메인 분리 ──
+    boolean secretModeActive,       // 이 방에서의 시크릿 모드 활성 여부
+    String userPersona              // 이 방 전용 유저 페르소나 (null이면 유저 기본값)
 ) {}

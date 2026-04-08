@@ -1,16 +1,8 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// [Phase 5.5-Director] StoryController.java 수정 사항
-//
-// 기존 엔드포인트 유지 + 디렉터 전용 엔드포인트 추가
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 package com.spring.aichat.controller;
 
-import com.spring.aichat.dto.chat.NarratorResponse;
 import com.spring.aichat.dto.director.DirectorDirective;
 import com.spring.aichat.exception.RateLimitException;
 import com.spring.aichat.security.ApiRateLimiter;
-import com.spring.aichat.service.NarratorService;
 import com.spring.aichat.service.director.DirectorService;
 import com.spring.aichat.service.stream.ChatStreamService;
 import lombok.RequiredArgsConstructor;
@@ -21,30 +13,30 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.Map;
-
 /**
  * 스토리/이벤트/디렉터 컨트롤러
  *
- * [Phase 5.5-Director] 디렉터 엔드포인트 추가:
- *   - GET  /director/peek      : 대기 중인 Directive 확인 (프론트 폴링)
- *   - POST /director/consume    : Directive 소비 + ChatRoom에 적용
- *   - POST /director/request    : 유저 수동 디렉터 호출
- *   - POST /director/apply-branch : BRANCH 선택 → 이벤트 시작 (SSE)
- *   - POST /director/apply-transition : TRANSITION 적용 → 장소/시간 전환 (SSE)
+ * [Bug #5 Fix] NarratorService 레거시 제거:
+ *   - POST /events (triggerEvent) 제거 — 디렉터 시스템으로 완전 대체
+ *   - NarratorService 의존성 제거
  *
- * 기존 엔드포인트 (하위 호환):
- *   - POST /events              : 이벤트 옵션 생성 (레거시, 디렉터 미사용 시)
- *   - POST /events/select       : 이벤트 선택 (SSE)
- *   - POST /events/watch        : 계속 지켜보기 (SSE)
- *   - POST /time-skip           : 시간 넘기기 (SSE)
+ * [현재 엔드포인트]
+ * 디렉터:
+ *   - GET  /director/peek
+ *   - POST /director/consume
+ *   - POST /director/request
+ *   - POST /director/apply-branch (SSE)
+ *   - POST /director/apply-transition (SSE)
+ * 이벤트 SSE (유지):
+ *   - POST /events/select (SSE)
+ *   - POST /events/watch (SSE)
+ *   - POST /time-skip (SSE)
  */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/story/rooms/{roomId}")
 public class StoryController {
 
-    private final NarratorService narratorService;
     private final DirectorService directorService;
     private final ChatStreamService chatStreamService;
     private final ApiRateLimiter rateLimiter;
@@ -174,21 +166,8 @@ public class StoryController {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  기존 엔드포인트 (레거시 호환)
+    //  이벤트 SSE 엔드포인트 (유지)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * [Legacy] 이벤트 옵션 생성 — NarratorService 직접 호출
-     * 디렉터 시스템이 비활성화된 경우의 폴백 경로
-     */
-    @PostMapping("/events")
-    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
-    public NarratorResponse triggerEvent(@PathVariable Long roomId, Authentication authentication) {
-        if (rateLimiter.checkEventTrigger(authentication.getName())) {
-            throw new RateLimitException("이벤트 생성 요청이 너무 빠릅니다.", 3);
-        }
-        return narratorService.triggerEvent(roomId);
-    }
 
     @PostMapping(value = "/events/select", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")

@@ -203,7 +203,7 @@ public class SandboxPromptAssembler {
             LocalDateTime.now().toString(),
             buildMemoryBlock(longTermMemory),
             injectionGuard.encapsulate("Nickname", user.getNickname()),
-            injectionGuard.encapsulate("Persona", user.getProfileDescription()),
+            injectionGuard.encapsulate("Persona", room.getEffectivePersona(user)),  // [Bug #3 Fix] Room-level 페르소나
             room.getAffectionScore(),
             room.getStatusLevel().name(),
             room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),
