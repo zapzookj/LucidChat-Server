@@ -141,11 +141,14 @@ public final class LlmOutputParser {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * ASSISTANT 과거 대화를 LLM 히스토리용으로 정제.
+     * [Hallucination Fix] ASSISTANT 과거 대화를 LLM 히스토리용으로 정제.
      *
-     * - rawContent(JSON)를 파싱하여 [speaker] {Emotion} (narration) "dialogue" 형태로 재구성
-     * - includeInnerThought=true이면 속마음 텍스트를 {💭 Previous thought: "..."} 형태로 부착
-     *   (output JSON과 의도적으로 다른 형식으로 Few-Shot Leakage 방지)
+     * 환각 방지 원칙:
+     *   - 감정 메타데이터({Emotion: XXX}) 제거 — 시각적 렌더링용이지 대화 맥락이 아님
+     *   - [speaker] 프리픽스 유지 — NPC 구분에 필수
+     *   - (narration) 유지 — 행동 맥락 제공
+     *   - "dialogue" 유지 — 실제 대사
+     *   - 속마음: includeInnerThought=true이면 {💭 Previous thought: "..."} 형태로 부착
      *
      * @param objectMapper   JSON 파싱용
      * @param chatLog        대상 ASSISTANT 로그
@@ -161,8 +164,7 @@ public final class LlmOutputParser {
         try {
             String raw = chatLog.getRawContent();
             if (raw == null || raw.isBlank()) {
-                return "[" + characterName + "]: " +
-                    (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "");
+                return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "";
             }
 
             String cleaned = extractJson(raw);
@@ -170,18 +172,19 @@ public final class LlmOutputParser {
 
             StringBuilder sb = new StringBuilder();
             for (AiJsonOutput.Scene scene : parsed.scenes()) {
+                // NPC 발화 시에만 speaker 표기 (캐릭터 자신은 role="assistant"로 식별)
                 String speaker = (scene.speaker() != null && !scene.speaker().isBlank())
-                    ? scene.speaker() : characterName;
-                sb.append("[").append(speaker).append("] ");
-
-                if (scene.emotion() != null && !scene.emotion().isBlank()) {
-                    sb.append("{Emotion: ").append(scene.emotion()).append("} ");
+                    ? scene.speaker() : null;
+                if (speaker != null && !speaker.equals(characterName)) {
+                    sb.append("[").append(speaker).append("] ");
                 }
 
+                // 나레이션(행동 묘사) — 대화 맥락 유지
                 if (scene.narration() != null && !scene.narration().isBlank()) {
                     sb.append("(").append(scene.narration().trim()).append(") ");
                 }
 
+                // 대사 — 핵심 컨텐츠
                 if (scene.dialogue() != null && !scene.dialogue().isBlank()) {
                     sb.append("\"").append(scene.dialogue().trim()).append("\"");
                 }
@@ -198,19 +201,11 @@ public final class LlmOutputParser {
 
             String result = sb.toString().trim();
             return result.isEmpty()
-                ? "[" + characterName + "]: " + (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
+                ? (chatLog.getCleanContent() != null ? chatLog.getCleanContent() : "")
                 : result;
 
         } catch (Exception e) {
-            String content = chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
-            StringBuilder fallback = new StringBuilder("[" + characterName + "]: " + content);
-            if (includeInnerThought) {
-                String thought = chatLog.getInnerThought();
-                if (thought != null && !thought.isBlank()) {
-                    fallback.append("\n{💭 Previous thought: \"").append(thought.trim()).append("\"}");
-                }
-            }
-            return fallback.toString();
+            return chatLog.getCleanContent() != null ? chatLog.getCleanContent() : chatLog.getRawContent();
         }
     }
 

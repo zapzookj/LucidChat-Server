@@ -72,7 +72,9 @@ public class CharacterPromptAssembler {
             %s
 
             # IMPORTANT: Handling Narration
-            - Messages starting with **[NARRATION]** are system descriptions, NOT spoken by the user.
+            - System messages marked with **[NARRATION]** are objective scene descriptions from the narrator.
+            - They describe the environment, situation, or events — NOT the user's speech.
+            - NEVER attribute narration content to the user. NEVER attribute your own past actions to the user.
 
             %s
 
@@ -127,10 +129,19 @@ public class CharacterPromptAssembler {
         // ── [공통] 히스토리 가이드 ──
         staticBuilder.append("""
 
-            # 💬 CONVERSATION HISTORY
-            The following messages represent the ongoing conversation between you and the user.
-            - Read them to understand the flow, context, and emotional build-up.
-            - Messages marked with [NARRATION] are objective situation descriptions, NOT the user's spoken words.
+            # 💬 CONVERSATION HISTORY — Speaker Attribution Rules
+            The following messages represent the ongoing conversation.
+            
+            ## How to read the history:
+            - **role="user" messages** → These are ALWAYS the user's actual spoken words. Nothing else.
+            - **role="assistant" messages** → These are YOUR previous responses (dialogue and actions).
+            - **role="system" messages containing [NARRATION]** → These are objective situation descriptions from the narrator/game master. They are NOT spoken by the user and NOT spoken by you. Treat them as environmental context only.
+            
+            ## ⚠️ CRITICAL — Do NOT confuse speakers:
+            - If YOU previously apologized (in your assistant messages), do NOT later claim "the user kept apologizing."
+            - If the USER said something rude (in their user messages), do NOT later apologize for being rude yourself.
+            - When recalling past events, ALWAYS check which role (user/assistant/system) the message came from.
+            
             - After reading the history, you will receive the "CURRENT STATE" (Dynamic Rules) in the final system message.\s
             - Use BOTH the history and the current state to generate your next response.
             """);

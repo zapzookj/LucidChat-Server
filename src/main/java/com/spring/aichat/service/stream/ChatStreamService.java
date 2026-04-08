@@ -410,10 +410,13 @@ public class ChatStreamService {
             cacheService.evictUserProfile(jpa.username());
 
             // ── MongoDB: 이벤트 시작 시스템 메시지 저장 (프론트 미노출) ──
+            // [Hallucination Fix] hiddenUser → hiddenSystem
+            // 이벤트 상황 묘사(캐릭터 행동)를 role="user"로 저장하면
+            // LLM이 캐릭터의 행동을 유저 발화로 오귀속하는 환각 발생
             String savedLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.hiddenUser(roomId, "[EVENT_START]\n" + eventDetail, eventDetail));
+                    ChatLogDocument.hiddenSystem(roomId, "[EVENT_START]\n" + eventDetail));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
@@ -1173,6 +1176,16 @@ public class ChatStreamService {
      * [Phase 5.5-Fix-IT] LLM 히스토리 구성 (이름표 부착 + 속마음 컨텍스트 주입)
      *
      * 최근 N개의 ASSISTANT 메시지에 속마음(inner_thought)을 포함하여
+     /**
+     * [Hallucination Fix] LLM 컨텍스트용 대화 히스토리 구성
+     *
+     * 환각 방지를 위한 핵심 원칙:
+     *   1. USER 메시지: role="user"만으로 화자 식별 — 텍스트 태그([유저]:) 제거
+     *   2. SYSTEM 나레이션: role="system"으로 전환 — 유저 발화와 구조적 분리
+     *   3. ASSISTANT 메시지: 감정 메타데이터 제거 — 대사+나레이션만 유지
+     *
+     * [속마음 히스토리]
+     * 최근 N개 ASSISTANT 메시지에만 이전 속마음을 포함하여
      * LLM이 이전 속마음을 인지하고 반복을 회피하도록 유도.
      */
     private List<OpenAiMessage> buildMessageHistory(Long roomId, CharacterPromptAssembler.SystemPromptPayload systemPrompt,
@@ -1193,20 +1206,26 @@ public class ChatStreamService {
         }
         int assistantThreshold = totalAssistantCount - INNER_THOUGHT_HISTORY_WINDOW;
 
-        String userTag = "[" + (userNickname != null && !userNickname.isBlank() ? userNickname : "유저") + "]: ";
-
         int assistantIdx = 0;
         for (ChatLogDocument chatLog : history) {
             switch (chatLog.getRole()) {
-                case USER -> messages.add(OpenAiMessage.user(userTag + chatLog.getRawContent()));
+                // [Fix] USER: role="user"가 화자 신호 — 텍스트 태그 불필요
+                case USER -> messages.add(OpenAiMessage.user(chatLog.getRawContent()));
+
+                // [Fix] ASSISTANT: 감정 메타데이터 제거, 대사+나레이션만 유지
                 case ASSISTANT -> {
                     boolean includeThought = assistantIdx >= assistantThreshold;
-                    String sanitized = LlmOutputParser.buildSanitizedAssistantContent(objectMapper, chatLog, characterName, includeThought);
+                    String sanitized = LlmOutputParser.buildSanitizedAssistantContent(
+                        objectMapper, chatLog, characterName, includeThought);
                     messages.add(OpenAiMessage.assistant(sanitized));
                     assistantIdx++;
                 }
+
+                // [Fix 핵심] SYSTEM 나레이션: role="system"으로 전환
+                // 기존: role="user" + [NARRATION] 태그 → 유저 발화로 오귀속
+                // 수정: role="system" → 구조적으로 제3자 서술임을 명시
                 case SYSTEM -> messages.add(
-                    OpenAiMessage.user("[NARRATION]: " + chatLog.getRawContent())
+                    OpenAiMessage.system("[NARRATION] " + chatLog.getRawContent())
                 );
             }
         }
