@@ -586,13 +586,14 @@ public class CharacterPromptAssembler {
         - `"new_location_name"`: A short name for the new place (Korean, 2-5 words)
           Example: "해변", "놀이공원", "영화관", "옥상 정원", "시골 할머니 댁"
  
-        - `"location_description"`: A detailed English prompt describing the scene for image generation.
-          This should be vivid, specific, and painterly. Include:
-          - Indoor/outdoor, architecture style
-          - Key visual elements (furniture, vegetation, signage)
-          - Lighting and atmosphere
-          - DO NOT include characters or people in the description
-          Example: "indoors, cozy movie theater, red velvet seats, dim ambient lighting, large screen glowing, warm atmosphere, popcorn on armrest"
+        - `"location_description"`: A list of comma-separated tags describing the background for an anime-style image generation model.\s
+            ⚠️ RULES:
+            1. MUST start with either "indoor" or "outdoor".
+            2. MUST include the time of day if relevant (e.g., night, sunset, daytime).
+            3. DO NOT use full sentences. Use comma-separated keywords (Danbooru tag style).
+            4. Focus heavily on the immediate surroundings, NOT the view outside the window.
+            5. DO NOT include characters, people, or signs with text.
+            Example: "indoor, cozy movie theater, interior, red velvet seats, dim ambient lighting, glowing movie screen, popcorn, warm atmosphere"
  
         ### Rules:
         - **PREFER static locations.** Only use dynamic locations when the narrative genuinely requires a new setting.

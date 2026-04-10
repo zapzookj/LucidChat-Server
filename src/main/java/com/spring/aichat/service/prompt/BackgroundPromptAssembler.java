@@ -31,7 +31,8 @@ public class BackgroundPromptAssembler {
 
     private static final String FIXED_NEGATIVE_PROMPT =
         "(worst quality, low quality:1.4), (1girl, 1boy, character, person, human, silhouette:1.5), " +
-            "text, signature, watermark, blurry, out of focus";
+            "(text, signature, watermark, alphabet, kanji, japanese, typography, signboards:1.5), " +
+            "(monochrome, grayscale:1.3), blurry, out of focus";
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  시간대 → 분위기 프롬프트 매핑
@@ -39,14 +40,14 @@ public class BackgroundPromptAssembler {
 
     private static final Map<String, String> TIME_MOOD_PROMPTS = new LinkedHashMap<>();
     static {
-        TIME_MOOD_PROMPTS.put("DAWN", "(early morning, golden hour, soft pink sky, first light:1.2)");
-        TIME_MOOD_PROMPTS.put("MORNING", "(bright morning, warm sunlight, clear sky, fresh atmosphere:1.2)");
-        TIME_MOOD_PROMPTS.put("AFTERNOON", "(warm afternoon sunlight, sunbeams, floating dust:1.2)");
-        TIME_MOOD_PROMPTS.put("SUNSET", "(golden sunset, orange sky, warm glow, long shadows:1.3)");
-        TIME_MOOD_PROMPTS.put("EVENING", "(twilight, blue hour, city lights beginning, calm:1.2)");
-        TIME_MOOD_PROMPTS.put("NIGHT", "(night time, moonlight, starry sky, ambient city glow:1.2)");
-        TIME_MOOD_PROMPTS.put("LATE_NIGHT", "(deep night, dim lighting, quiet atmosphere, neon accents:1.2)");
-        TIME_MOOD_PROMPTS.put("DAY", "(daytime, clear sky, bright natural lighting:1.1)");
+        TIME_MOOD_PROMPTS.put("DAWN", "early morning, golden hour, soft pink sky, first light");
+        TIME_MOOD_PROMPTS.put("MORNING", "bright morning, warm sunlight, clear sky, fresh atmosphere");
+        TIME_MOOD_PROMPTS.put("AFTERNOON", "warm afternoon sunlight, sunbeams, floating dust");
+        TIME_MOOD_PROMPTS.put("SUNSET", "golden sunset, orange sky, warm glow, long shadows");
+        TIME_MOOD_PROMPTS.put("EVENING", "twilight, blue hour, city lights beginning, calm");
+        TIME_MOOD_PROMPTS.put("NIGHT", "night time, moonlight, starry sky, ambient city glow");
+        TIME_MOOD_PROMPTS.put("LATE_NIGHT", "deep night, dim lighting, quiet atmosphere, neon accents");
+        TIME_MOOD_PROMPTS.put("DAY", "daytime, clear sky, bright natural lighting");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -72,9 +73,10 @@ public class BackgroundPromptAssembler {
         }
 
         // (3) 시간대 분위기
-        String timeMood = TIME_MOOD_PROMPTS.getOrDefault(
-            normalize(timeOfDay), TIME_MOOD_PROMPTS.get("DAY"));
-        sb.append(timeMood).append(",\n");
+        String timeKey = normalize(timeOfDay);
+        if (TIME_MOOD_PROMPTS.containsKey(timeKey)) {
+            sb.append(TIME_MOOD_PROMPTS.get(timeKey)).append(",\n");
+        }
 
         // (4) 고정 접미사
         sb.append(FIXED_POSITIVE_SUFFIX);
@@ -92,6 +94,7 @@ public class BackgroundPromptAssembler {
     }
 
     private static String normalize(String s) {
-        return s == null ? "DAY" : s.trim().toUpperCase();
+        if (s == null || s.trim().isEmpty()) return "UNKNOWN";
+        return s.trim().toUpperCase();
     }
 }
