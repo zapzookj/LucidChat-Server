@@ -75,6 +75,12 @@ public class CharacterPromptAssembler {
             - System messages marked with **[NARRATION]** are objective scene descriptions from the narrator.
             - They describe the environment, situation, or events — NOT the user's speech.
             - NEVER attribute narration content to the user. NEVER attribute your own past actions to the user.
+            
+            ## User Action Format (⚠️ READ CAREFULLY):
+            - User messages wrapped in asterisks like **`*창밖을 바라보며*`** or **`*부엌에서 물을 마신다*`** are the USER's described actions or situations, NOT spoken dialogue.
+            - When the user sends `*action*`, treat it as the user physically doing/experiencing that action. React naturally to what they are doing.
+            - Regular user messages (without `*` wrapping) are their spoken words.
+            - The user may alternate: `*action*` for physical/situational moments, normal text for dialogue.
 
             %s
 
