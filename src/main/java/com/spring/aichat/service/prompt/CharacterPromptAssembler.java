@@ -109,7 +109,7 @@ public class CharacterPromptAssembler {
         if (ChatModePolicy.supportsSceneDirection(mode)) {
             staticBuilder.append(buildSceneDirectionGuide(room, character, effectiveSecretMode));
             staticBuilder.append(buildIllustrationTriggerBlock());
-            staticBuilder.append(buildDynamicLocationBlock(character));
+            staticBuilder.append(buildDynamicLocationBlock(character, room));
         }
 
         if (ChatModePolicy.supportsInnerThought(mode)) {
@@ -572,9 +572,38 @@ public class CharacterPromptAssembler {
      * 기존 정적 장소(Character의 baseLocations + 해금 장소)는 기존 location 필드로 처리.
      * 완전히 새로운 장소(바다, 놀이공원, 영화관 등)만 이 필드를 사용.
      */
-    private String buildDynamicLocationBlock(Character character) {
-        // 이 캐릭터의 정적 장소 목록 나열
+    /**
+     * [Phase 5.5-Fix] 동적 장소 전환 프롬프트 블록
+     *
+     * [Bug Fix] 장소 전환 반복 방지:
+     *   - 현재 활성화된 동적 장소명을 LLM에 명시적으로 전달
+     *   - 유사한 이름의 장소 재출력을 금지하는 규칙 추가
+     */
+    private String buildDynamicLocationBlock(Character character, ChatRoom room) {
         String staticLocations = String.join(", ", character.getAllLocations());
+
+        // [Bug Fix] 현재 동적 장소가 활성화되어 있으면 LLM에 명시적으로 알림
+        String currentDynamic = room.getCurrentDynamicLocationName();
+        String dynamicLocationWarning;
+        if (currentDynamic != null && !currentDynamic.isBlank()) {
+            dynamicLocationWarning = """
+
+        ## ⚠️ CURRENT DYNAMIC LOCATION — YOU ARE ALREADY HERE: "%s"
+        You are CURRENTLY at the dynamic location named "%s".
+        **DO NOT output `new_location_name` unless the story moves to a COMPLETELY DIFFERENT type of place.**
+        
+        ### What counts as the SAME place (❌ DO NOT re-trigger):
+        - Any rephrasing of "%s" (e.g., "심야의 카페" ≈ "24시 카페" ≈ "조용한 카페")
+        - Adding adjectives to the same place (e.g., "해변" → "달빛이 비치는 해변")
+        - Same place at a different time (use `time` field in scenes instead)
+        
+        ### What counts as a DIFFERENT place (✅ OK to trigger):
+        - A completely different type of location (e.g., "카페" → "공원", "도서관" → "옥상")
+        - Moving to a genuinely new area (e.g., "해변" → "해변 근처 포장마차")
+        """.formatted(currentDynamic, currentDynamic, currentDynamic);
+        } else {
+            dynamicLocationWarning = "";
+        }
 
         return """
  
@@ -600,7 +629,7 @@ public class CharacterPromptAssembler {
             4. Focus heavily on the immediate surroundings, NOT the view outside the window.
             5. DO NOT include characters, people, or signs with text.
             Example: "indoor, cozy movie theater, interior, red velvet seats, dim ambient lighting, glowing movie screen, popcorn, warm atmosphere"
- 
+        %s
         ### Rules:
         - **PREFER static locations.** Only use dynamic locations when the narrative genuinely requires a new setting.
         - **Maximum 1 new location per conversation session.** Don't hop between new places constantly.
@@ -608,7 +637,7 @@ public class CharacterPromptAssembler {
         - **If you used a dynamic location recently**, return to a static location before creating another new one.
         - When using a dynamic location, still set the `location` field in scenes to the CLOSEST static location as a fallback.
         - `new_location_name` and `location_description` are ROOT-level fields, NOT inside individual scenes.
-        """.formatted(staticLocations);
+        """.formatted(staticLocations, dynamicLocationWarning);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
