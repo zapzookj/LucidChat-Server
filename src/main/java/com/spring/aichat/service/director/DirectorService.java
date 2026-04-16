@@ -129,13 +129,11 @@ public class DirectorService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * [v2 Fix] 수동 요청도 Redis에 캐시 → consume 플로우 통일
+     * [v3] 수동 호출 → 항상 BRANCH_SCENARIO (3장 시나리오 카드)
      *
-     * 플로우:
-     *   1. LLM 호출 → Directive 생성
-     *   2. ★ Redis에 캐시 (자동 요청과 동일)
-     *   3. Directive 반환 → 프론트에서 인터루드 표시
-     *   4. 프론트: consumeDirectorDirective() → Redis에서 정상 소비
+     * 유저가 "다음 씬" 버튼 클릭 시 호출.
+     * 디렉터가 맥락을 분석하여 3개의 시나리오를 제시하고,
+     * 유저가 원하는 상황을 선택할 수 있도록 한다.
      */
     public DirectorDirective requestManualIntervention(Long roomId) {
         ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -144,97 +142,95 @@ public class DirectorService {
         String recentSummary = buildRecentSummary(roomId, room.getCharacter().getName());
         int turnsSince = getTurnsSinceLastIntervention(roomId,
             chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER));
-        boolean topicConcluded = room.isTopicConcluded();
 
-        // ── 1차 시도: 일반 프롬프트 ──
-        String allowedTypes = topicConcluded
-            ? "BRANCH or TRANSITION (INTERLUDE is FORBIDDEN because topic is concluded)"
-            : "INTERLUDE (BRANCH and TRANSITION are FORBIDDEN because topic is still ongoing)";
-
+        // 수동 호출은 항상 BRANCH_SCENARIO 강제
         String forcePrompt = """
-            The user has MANUALLY requested your intervention.
-            You MUST choose %s — PASS is NOT allowed.
-            topic_concluded=%s
-            """.formatted(allowedTypes, topicConcluded);
+            The user has MANUALLY requested the next scene.
+            You MUST output "decision": "BRANCH" with "branch_mode": "SCENARIO".
+            
+            Generate 3 distinct event SCENARIOS for the user to choose from.
+            Each scenario is a different situation that could happen next.
+            
+            ## Card Structure (EXACTLY 3 options):
+            1. **Normal** (tone: "normal", energy_cost: 2):
+               A plausible, everyday event. Slice-of-life, comedy, or mild tension.
+            2. **Affection** (tone: "affection", energy_cost: 3):
+               A romantic or heartwarming scenario that deepens the relationship.
+            3. **Secret** (tone: "secret", energy_cost: 4, is_secret: true):
+               A bold, provocative, or intimate scenario. Secret Mode flavor.
+            
+            Each option's `label` should be a short title (2-5 words).
+            Each option's `detail` should describe what happens (1-2 sentences).
+            
+            ❌ "PASS" is FORBIDDEN.
+            ❌ "INTERLUDE" is FORBIDDEN.
+            ❌ "TRANSITION" is FORBIDDEN.
+            ❌ "AWAY" is FORBIDDEN.
+            ❌ "branch_mode": "CHOICE" is FORBIDDEN. Use "SCENARIO" only.
+            
+            Output valid JSON only.
+            """;
 
         DirectorDirective directive = callDirectorLlm(
             room.getCharacter(), room, room.getUser(),
-            recentSummary, turnsSince, topicConcluded, forcePrompt);
+            recentSummary, turnsSince, room.isTopicConcluded(), forcePrompt);
 
-        log.info("🎬 [DIRECTOR-MANUAL] 1st attempt: {} | topic={} | roomId={}",
-            directive.decision(), topicConcluded, roomId);
+        log.info("🎬 [DIRECTOR-MANUAL] Decision: {} | branchMode={} | roomId={}",
+            directive.decision(),
+            directive.branch() != null ? directive.branch().branchMode() : "N/A",
+            roomId);
 
-        // ── 가드레일 체크 → 실패 시 1회 재시도 (더 강력한 프롬프트) ──
-        if (directive.checkPass() || !isDecisionAllowed(directive, topicConcluded)) {
-            log.warn("[DIRECTOR-MANUAL] 1st attempt rejected ({}), retrying with strict prompt | roomId={}",
+        // BRANCH가 아니면 1회 재시도
+        if (!directive.checkBranch()) {
+            log.warn("[DIRECTOR-MANUAL] 1st attempt not BRANCH ({}), retrying | roomId={}",
                 directive.decision(), roomId);
-
-            String strictPrompt = buildStrictRetryPrompt(topicConcluded, recentSummary);
 
             directive = callDirectorLlm(
                 room.getCharacter(), room, room.getUser(),
-                recentSummary, turnsSince, topicConcluded, strictPrompt);
+                recentSummary, turnsSince, room.isTopicConcluded(),
+                forcePrompt + "\n\n⚠️ RETRY: You MUST output BRANCH. No other type is accepted.");
 
-            log.info("🎬 [DIRECTOR-MANUAL] 2nd attempt: {} | roomId={}", directive.decision(), roomId);
-
-            // 2차도 실패하면 포기
-            if (directive.checkPass() || !isDecisionAllowed(directive, topicConcluded)) {
-                log.warn("[DIRECTOR-MANUAL] 2nd attempt also failed ({}) | roomId={}",
-                    directive.decision(), roomId);
+            if (!directive.checkBranch()) {
+                log.warn("[DIRECTOR-MANUAL] 2nd attempt also failed ({}) | roomId={}", directive.decision(), roomId);
                 return new DirectorDirective(DirectorDirective.DECISION_PASS,
-                    "LLM failed to produce valid type after retry", null, null, null, null);
+                    "LLM failed to produce BRANCH after retry", null, null, null, null, null);
             }
         }
 
-        // ── 성공: Redis에 캐시 ──
+        // Redis에 캐시
         cacheDirective(roomId, directive);
         updateLastInterventionTurn(roomId,
             chatLogRepository.countByRoomIdAndRole(roomId, ChatRole.USER));
 
-        log.info("🎬 [DIRECTOR-MANUAL] Cached | decision={} | roomId={}", directive.decision(), roomId);
-
+        log.info("🎬 [DIRECTOR-MANUAL] Cached BRANCH_SCENARIO | roomId={}", roomId);
         return directive;
     }
 
-    /**
-     * 1차 시도 실패 시 사용하는 강제 프롬프트.
-     * 허용 타입을 극도로 명확히 지정하고, 금지 타입을 반복 강조.
-     */
-    private String buildStrictRetryPrompt(boolean topicConcluded, String recentSummary) {
-        if (topicConcluded) {
-            return """
-                ⚠️ STRICT INSTRUCTION — READ VERY CAREFULLY:
-                The conversation topic has CONCLUDED. The user wants a NEW scene.
-                
-                You MUST output EXACTLY ONE of these two types:
-                
-                1. "decision": "BRANCH" — Give 2-3 choices for what happens next.
-                2. "decision": "TRANSITION" — Skip time or change location with a narration.
-                
-                ❌ "INTERLUDE" is ABSOLUTELY FORBIDDEN. Do NOT output INTERLUDE.
-                ❌ "PASS" is ABSOLUTELY FORBIDDEN. Do NOT output PASS.
-                
-                Choose BRANCH if there's a meaningful choice point.
-                Choose TRANSITION if a scene change would be more natural.
-                
-                Output valid JSON only.
-                """;
-        } else {
-            return """
-                ⚠️ STRICT INSTRUCTION — READ VERY CAREFULLY:
-                The conversation is STILL ONGOING. The user wants a surprise event.
-                
-                You MUST output:
-                "decision": "INTERLUDE" — A surprise event that interrupts the current conversation.
-                
-                ❌ "BRANCH" is ABSOLUTELY FORBIDDEN.
-                ❌ "TRANSITION" is ABSOLUTELY FORBIDDEN.
-                ❌ "PASS" is ABSOLUTELY FORBIDDEN.
-                
-                Create a surprising, plausible event in the current setting.
-                
-                Output valid JSON only.
-                """;
+    /** 디렉터 결과 필드 검증 로그 — payload NULL 시 raw JSON 포함 */
+    private void logDirectiveDetails(DirectorDirective d, String rawJson) {
+        if (d.checkInterlude() && d.interlude() != null) {
+            log.info("🎬 [DETAIL] INTERLUDE — narration={} | constraint={}",
+                d.interlude().narration() != null ? d.interlude().narration().length() + "chars" : "⚠️ NULL",
+                d.interlude().actorConstraint() != null ? "OK" : "⚠️ NULL");
+        } else if (d.checkBranch() && d.branch() != null) {
+            log.info("🎬 [DETAIL] BRANCH — mode={} | situation={} | options={}",
+                d.branch().branchMode(),
+                d.branch().situation() != null ? d.branch().situation().length() + "chars" : "null",
+                d.branch().options() != null ? d.branch().options().size() + "개" : "⚠️ NULL");
+        } else if (d.checkTransition() && d.transition() != null) {
+            log.info("🎬 [DETAIL] TRANSITION — narration={} | time={} | location={}",
+                d.transition().narration() != null ? d.transition().narration().length() + "chars" : "⚠️ NULL",
+                d.transition().newTime(),
+                d.transition().newLocationName());
+        } else if (d.checkAway() && d.away() != null) {
+            log.info("🎬 [DETAIL] AWAY — narration={} | constraint={} | npc={}",
+                d.away().narration() != null ? d.away().narration().length() + "chars" : "⚠️ NULL",
+                d.away().actorConstraint() != null ? "OK" : "⚠️ NULL",
+                d.away().npcHint());
+        } else if (!d.checkPass()) {
+            log.warn("🎬 [DETAIL] Decision={} but payload is NULL! Raw JSON:\n{}",
+                d.decision(), rawJson != null && rawJson.length() > 1000
+                    ? rawJson.substring(0, 1000) + "..." : rawJson);
         }
     }
 
@@ -270,40 +266,14 @@ public class DirectorService {
 
         try {
             String cleanJson = extractJson(rawJson);
-
             DirectorDirective directive = objectMapper.readValue(cleanJson, DirectorDirective.class);
             logDirectiveDetails(directive, cleanJson);
             return directive;
-
         } catch (Exception e) {
             log.error("[DIRECTOR-LLM] Parse failed | raw(first 500)={}",
                 rawJson.length() > 500 ? rawJson.substring(0, 500) : rawJson, e);
             return new DirectorDirective(DirectorDirective.DECISION_PASS,
-                "Parse error: " + e.getMessage(), null, null, null, null);
-        }
-    }
-
-    /** 디렉터 결과 필드 검증 로그 — payload NULL 시 raw JSON 포함 */
-    private void logDirectiveDetails(DirectorDirective d, String rawJson) {
-        if (d.checkInterlude() && d.interlude() != null) {
-            log.info("🎬 [DETAIL] INTERLUDE — narration={} | constraint={} | agency={}",
-                d.interlude().narration() != null ? d.interlude().narration().length() + "chars" : "⚠️ NULL",
-                d.interlude().actorConstraint() != null ? "OK" : "⚠️ NULL",
-                d.interlude().userAgency() != null ? d.interlude().userAgency() : "⚠️ NULL");
-        } else if (d.checkBranch() && d.branch() != null) {
-            log.info("🎬 [DETAIL] BRANCH — situation={} | options={}",
-                d.branch().situation() != null ? d.branch().situation().length() + "chars" : "⚠️ NULL",
-                d.branch().options() != null ? d.branch().options().size() + "개" : "⚠️ NULL");
-        } else if (d.checkTransition() && d.transition() != null) {
-            log.info("🎬 [DETAIL] TRANSITION — narration={} | time={} | location={}",
-                d.transition().narration() != null ? d.transition().narration().length() + "chars" : "⚠️ NULL",
-                d.transition().newTime(),
-                d.transition().newLocationName());
-        } else if (!d.checkPass()) {
-            // ★ payload가 NULL인 경우 raw JSON 출력하여 LLM 출력 구조 확인
-            log.warn("🎬 [DETAIL] Decision={} but payload is NULL! Raw JSON:\n{}",
-                d.decision(), rawJson != null && rawJson.length() > 1000
-                    ? rawJson.substring(0, 1000) + "..." : rawJson);
+                "Parse error: " + e.getMessage(), null, null, null, null, null);
         }
     }
 
@@ -329,9 +299,13 @@ public class DirectorService {
 
     private boolean isDecisionAllowed(DirectorDirective directive, boolean topicConcluded) {
         if (directive.checkPass()) return true;
-        return topicConcluded
-            ? (directive.checkBranch() || directive.checkTransition())
-            : directive.checkInterlude();
+        if (topicConcluded) {
+            // topic 종료 → BRANCH, TRANSITION, AWAY 허용
+            return directive.checkBranch() || directive.checkTransition() || directive.checkAway();
+        } else {
+            // topic 진행 중 → INTERLUDE만 허용
+            return directive.checkInterlude();
+        }
     }
 
     private String buildRecentSummary(Long roomId, String characterName) {

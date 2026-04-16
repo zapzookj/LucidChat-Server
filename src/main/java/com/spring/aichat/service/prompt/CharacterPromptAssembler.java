@@ -572,17 +572,9 @@ public class CharacterPromptAssembler {
      * 기존 정적 장소(Character의 baseLocations + 해금 장소)는 기존 location 필드로 처리.
      * 완전히 새로운 장소(바다, 놀이공원, 영화관 등)만 이 필드를 사용.
      */
-    /**
-     * [Phase 5.5-Fix] 동적 장소 전환 프롬프트 블록
-     *
-     * [Bug Fix] 장소 전환 반복 방지:
-     *   - 현재 활성화된 동적 장소명을 LLM에 명시적으로 전달
-     *   - 유사한 이름의 장소 재출력을 금지하는 규칙 추가
-     */
     private String buildDynamicLocationBlock(Character character, ChatRoom room) {
         String staticLocations = String.join(", ", character.getAllLocations());
 
-        // [Bug Fix] 현재 동적 장소가 활성화되어 있으면 LLM에 명시적으로 알림
         String currentDynamic = room.getCurrentDynamicLocationName();
         String dynamicLocationWarning;
         if (currentDynamic != null && !currentDynamic.isBlank()) {

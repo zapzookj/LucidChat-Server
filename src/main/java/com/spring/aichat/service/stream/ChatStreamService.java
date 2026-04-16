@@ -325,7 +325,7 @@ public class ChatStreamService {
             cacheService.evictRoomInfo(roomId);
 
             // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
-            // [Bug Fix] 동일 장소 반복 전환 방지 가드 추가
+            // [Bug Fix] 동일 장소 반복 전환 방지 가드
             LocationTransition locationTransition = null;
             if (isStory && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
                 String currentDynamic = jpa.room().getCurrentDynamicLocationName();
@@ -703,7 +703,7 @@ public class ChatStreamService {
             cacheService.evictRoomInfo(roomId);
 
             //   // ★ [Phase 5.5-Illust] 시간 넘기기에서도 장소 전환 가능 ★
-            // [Bug Fix] 동일 장소 반복 전환 방지 가드 추가
+            // [Bug Fix] 동일 장소 반복 전환 방지 가드
             SendChatResponse.LocationTransition timeSkipLocationTransition = null;
             if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
                 String currentDynamic = jpa.room().getCurrentDynamicLocationName();
@@ -1217,9 +1217,7 @@ public class ChatStreamService {
         }
         int assistantThreshold = totalAssistantCount - INNER_THOUGHT_HISTORY_WINDOW;
 
-        // [Bug Fix] 인트로 환각 방지: 첫 ASSISTANT 메시지 앞에 USER가 없으면 합성 삽입
-        // Gemini/OpenAI 모델 모두 user→assistant 교대 패턴을 기대.
-        // SYSTEM→ASSISTANT로 바로 이어지면 첫 assistant 대사의 화자를 혼동하는 환각 발생.
+        // [Bug Fix] 인트로 환각 방지: 첫 ASSISTANT 앞에 USER가 없으면 합성 삽입
         boolean needsSyntheticUserMsg = false;
         if (!history.isEmpty()) {
             for (ChatLogDocument log : history) {
@@ -1230,7 +1228,6 @@ public class ChatStreamService {
 
         int assistantIdx = 0;
         for (ChatLogDocument chatLog : history) {
-            // [Bug Fix] 첫 ASSISTANT 직전에 합성 USER 메시지 삽입 (1회만)
             if (needsSyntheticUserMsg && chatLog.getRole() == ChatRole.ASSISTANT) {
                 messages.add(OpenAiMessage.user("(입장)"));
                 needsSyntheticUserMsg = false;
@@ -1334,20 +1331,11 @@ public class ChatStreamService {
 
             if (directive.checkInterlude() && directive.interlude() != null) {
                 var interlude = directive.interlude();
+                // [v3] INTERLUDE는 항상 일회성 constraint (투명 처리)
+                room.setDirectorInterlude(
+                    interlude.narration(),
+                    interlude.actorConstraint());
 
-                if (interlude.checkObserverMode()) {
-                    // OBSERVER 모드: 이벤트로 진행 (캐릭터↔디렉터 티키타카)
-                    room.startDirectorInterlude(
-                        interlude.narration(),
-                        interlude.actorConstraint());
-                } else {
-                    // FREE 모드: 일회성 constraint (다음 턴에서 자동 소비)
-                    room.setDirectorInterlude(
-                        interlude.narration(),
-                        interlude.actorConstraint());
-                }
-
-                // 환경 변경
                 if (interlude.environment() != null) {
                     var env = interlude.environment();
                     room.updateSceneState(env.bgm(), null, null, env.time());
@@ -1355,18 +1343,24 @@ public class ChatStreamService {
 
             } else if (directive.checkTransition() && directive.transition() != null) {
                 var transition = directive.transition();
-
-                // 나레이션 + constraint 설정 (일회성)
                 room.setDirectorInterlude(
                     transition.narration(),
                     transition.actorConstraint());
-
-                // 시간/BGM 즉시 반영
                 room.updateSceneState(
                     transition.newBgm(), null, null, transition.newTime());
-            }
 
-            // BRANCH는 별도 처리 (기존 이벤트 선택 플로우와 유사)
+            } else if (directive.checkAway() && directive.away() != null) {
+                var away = directive.away();
+                // AWAY: 이벤트 ONGOING 모드로 진입 + constraint 설정
+                room.startDirectorInterlude(
+                    away.narration(),
+                    away.actorConstraint());
+
+                if (away.environment() != null) {
+                    var env = away.environment();
+                    room.updateSceneState(env.bgm(), null, null, env.time());
+                }
+            }
 
             return null;
         });
@@ -1374,28 +1368,158 @@ public class ChatStreamService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Bug Fix] 동적 장소 반복 전환 방지 — 유사도 가드
+    //  [v3] 투명 디렉터 자동 응답 (INTERLUDE / TRANSITION / AWAY)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 두 장소명이 의미적으로 동일한지 판별.
+     * 디렉터 Directive가 소비되고 constraint가 ChatRoom에 적용된 상태에서
+     * 캐릭터의 자동 응답을 SSE로 생성.
      *
-     * LLM이 같은 장소를 다른 이름으로 재출력하는 패턴 방지.
-     * 예: "24시 카페" ≈ "심야의 조용한 카페", "해변" ≈ "달빛 해변"
+     * INTERLUDE/TRANSITION: 원샷 응답 → constraint 자동 클리어
+     * AWAY: 이벤트 ONGOING 진입 → 유저 개입 전까지 멀티턴
      */
+    @Async
+    public void sendAutoDirectorResponse(Long roomId, String directiveType, SseEmitter emitter) {
+        log.info("🎬 [DIRECTOR-AUTO-RESPOND] START | type={} | roomId={}", directiveType, roomId);
+        boolean isAway = "AWAY".equalsIgnoreCase(directiveType);
+
+        try {
+            // ── TX-1: 에너지 차감 ──
+            JpaPreResult jpa = txTemplate.execute(status -> {
+                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                int cost = 1; // 자동 디렉터 응답은 최소 비용
+                room.getUser().consumeEnergy(cost);
+
+                if (isAway) {
+                    room.updateEventStatus("ONGOING");
+                    room.updateTopicConcluded(false);
+                }
+
+                long logCount = chatLogRepository.countByRoomId(roomId);
+                return new JpaPreResult(room, room.getUser().getId(), logCount,
+                    room.isPromotionPending(), room.getUser().getUsername(), cost);
+            });
+            cacheService.evictUserProfile(jpa.username());
+
+            // ── MongoDB: 숨겨진 시스템 메시지 저장 (LLM 컨텍스트용) ──
+            String systemContext = isAway
+                ? "[SYSTEM_DIRECTOR] 유저가 자리를 비웠습니다. 캐릭터는 혼자(또는 NPC와) 행동합니다."
+                : "[SYSTEM_DIRECTOR] 상황이 발생했습니다. 캐릭터는 자연스럽게 반응합니다.";
+
+            String savedLogId;
+            try {
+                ChatLogDocument savedLog = chatLogRepository.save(
+                    ChatLogDocument.hiddenSystem(roomId, systemContext));
+                savedLogId = savedLog.getId();
+            } catch (Exception e) {
+                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
+                return;
+            }
+
+            RollbackContext rollbackCtx = new RollbackContext(
+                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+
+            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
+
+            // ── LLM 스트림 ──
+            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
+                effectiveSecretMode, emitter, rollbackCtx);
+            if (parsed == null) return;
+
+            // ── TX-2: 상태 업데이트 ──
+            SendChatResponse response;
+            try {
+                response = txTemplate.execute(status -> {
+                    ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                        .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+                    freshRoom.updateLastActive(parsed.mainEmotion());
+
+                    if (isAway) {
+                        // AWAY: 스탯 동결, 이벤트 상태 유지
+                        freshRoom.updateEventStatus(
+                            parsed.eventStatus() != null ? parsed.eventStatus() : "ONGOING");
+                    } else {
+                        // INTERLUDE/TRANSITION: 일반 스탯 적용 + constraint 클리어
+                        applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
+                        freshRoom.clearDirectorInterlude();
+                    }
+
+                    if (jpa.room().isStoryMode()) {
+                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
+                            parsed.lastOutfit(), parsed.lastTime());
+                    }
+
+                    StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
+
+                    return new SendChatResponse(roomId, parsed.sceneResponses(),
+                        freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
+                        null, null, null,
+                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        freshRoom.getDynamicRelationTag(), null,
+                        false, null,
+                        isAway ? false : parsed.topicConcluded(),
+                        isAway ? freshRoom.getEventStatus() : null);
+                });
+            } catch (Exception e) {
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "TX_ERROR", "자동 응답 처리 실패");
+                return;
+            }
+
+            // ── 장소 전환 처리 ──
+            LocationTransition locationTransition = null;
+            if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
+                String currentDynamic = jpa.room().getCurrentDynamicLocationName();
+                if (currentDynamic == null || !isSameLocation(currentDynamic, parsed.newLocationName())) {
+                    String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    BackgroundGenerationService.BackgroundResult bgResult =
+                        backgroundGenerationService.resolveBackground(
+                            parsed.newLocationName(), parsed.locationDescription(),
+                            timeOfDay, jpa.room().getCharacter().getId());
+
+                    if (bgResult.isCacheHit()) {
+                        locationTransition = LocationTransition.cached(parsed.newLocationName(), bgResult.imageUrl());
+                    } else {
+                        locationTransition = LocationTransition.generating(parsed.newLocationName(), bgResult.cacheHash());
+                        backgroundGenerationService.generateBackgroundAsync(
+                            parsed.newLocationName(), parsed.locationDescription(),
+                            timeOfDay, jpa.room().getCharacter().getId());
+                    }
+                }
+            }
+
+            String assistantLogId = saveAssistantLog(roomId, parsed);
+            cacheService.evictRoomInfo(roomId);
+
+            sendFinalResult(emitter, response, false, assistantLogId, false, locationTransition);
+            emitter.complete();
+
+            log.info("🎬 [DIRECTOR-AUTO-RESPOND] DONE | type={} | roomId={}", directiveType, roomId);
+
+        } catch (Exception e) {
+            log.error("❌ Director auto-respond error | type={} | roomId={}", directiveType, roomId, e);
+            sendSseError(emitter, "UNEXPECTED_ERROR", "자동 응답 처리 중 오류 발생");
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Bug Fix] 동적 장소 반복 전환 방지 — 유사도 가드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     private boolean isSameLocation(String existing, String incoming) {
         if (existing == null || incoming == null) return false;
-
         String a = normalizeLocationName(existing);
         String b = normalizeLocationName(incoming);
-
         if (a.equals(b)) return true;
         if (a.contains(b) || b.contains(a)) return true;
-
         String coreA = extractCoreNoun(a);
         String coreB = extractCoreNoun(b);
         if (!coreA.isEmpty() && !coreB.isEmpty() && coreA.equals(coreB)) return true;
-
         return calculateBigramSimilarity(a, b) > 0.45;
     }
 
