@@ -1379,9 +1379,11 @@ public class ChatStreamService {
      * AWAY: 이벤트 ONGOING 진입 → 유저 개입 전까지 멀티턴
      */
     @Async
-    public void sendAutoDirectorResponse(Long roomId, String directiveType, SseEmitter emitter) {
-        log.info("🎬 [DIRECTOR-AUTO-RESPOND] START | type={} | roomId={}", directiveType, roomId);
+    public void sendAutoDirectorResponse(Long roomId, String directiveType, String eventContext, SseEmitter emitter) {
+        log.info("🎬 [DIRECTOR-AUTO-RESPOND] START | type={} | context={} | roomId={}",
+            directiveType, eventContext != null ? eventContext.length() + "chars" : "null", roomId);
         boolean isAway = "AWAY".equalsIgnoreCase(directiveType);
+        boolean isBranchResponse = "BRANCH".equalsIgnoreCase(directiveType);
 
         try {
             // ── TX-1: 에너지 차감 ──
@@ -1389,12 +1391,18 @@ public class ChatStreamService {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                int cost = 1; // 자동 디렉터 응답은 최소 비용
+                int cost = 1;
                 room.getUser().consumeEnergy(cost);
 
                 if (isAway) {
                     room.updateEventStatus("ONGOING");
                     room.updateTopicConcluded(false);
+                }
+
+                // [Bug Fix] BRANCH 카드 선택 시: constraint로 detail 적용
+                if (isBranchResponse && eventContext != null && !eventContext.isBlank()) {
+                    room.setDirectorInterlude(eventContext,
+                        "상황: " + eventContext + " — 이 상황에 자연스럽게 반응하세요.");
                 }
 
                 long logCount = chatLogRepository.countByRoomId(roomId);
@@ -1404,14 +1412,27 @@ public class ChatStreamService {
             cacheService.evictUserProfile(jpa.username());
 
             // ── MongoDB: 숨겨진 시스템 메시지 저장 (LLM 컨텍스트용) ──
-            String systemContext = isAway
-                ? "[SYSTEM_DIRECTOR] 유저가 자리를 비웠습니다. 캐릭터는 혼자(또는 NPC와) 행동합니다."
-                : "[SYSTEM_DIRECTOR] 상황이 발생했습니다. 캐릭터는 자연스럽게 반응합니다.";
+            String systemMessage;
+            if (isAway) {
+                systemMessage = "[SYSTEM_DIRECTOR] 유저가 자리를 비웠습니다. 캐릭터는 혼자(또는 NPC와) 행동합니다.";
+            } else if (isBranchResponse && eventContext != null) {
+                systemMessage = "[NARRATION] " + eventContext;
+            } else {
+                systemMessage = "[SYSTEM_DIRECTOR] 상황이 발생했습니다. 캐릭터는 자연스럽게 반응합니다.";
+            }
 
             String savedLogId;
             try {
-                ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.hiddenSystem(roomId, systemContext));
+                // [Bug Fix A] BRANCH 나레이션은 visible로 저장 (새로고침 시 히스토리에 표시)
+                // AWAY/INTERLUDE/TRANSITION은 hidden (LLM 컨텍스트 전용)
+                ChatLogDocument savedLog;
+                if (isBranchResponse && eventContext != null) {
+                    savedLog = chatLogRepository.save(
+                        ChatLogDocument.system(roomId, eventContext));
+                } else {
+                    savedLog = chatLogRepository.save(
+                        ChatLogDocument.hiddenSystem(roomId, systemMessage));
+                }
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());

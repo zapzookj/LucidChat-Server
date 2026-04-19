@@ -108,7 +108,7 @@ public class StoryController {
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
 
-        chatStreamService.sendAutoDirectorResponse(roomId, request.directiveType(), emitter);
+        chatStreamService.sendAutoDirectorResponse(roomId, request.directiveType(), request.eventContext(), emitter);
         return emitter;
     }
 
@@ -170,5 +170,5 @@ public class StoryController {
 
     // ── DTOs ──
     public record SelectEventRequest(String detail, int energyCost) {}
-    public record AutoRespondRequest(String directiveType) {}
+    public record AutoRespondRequest(String directiveType, String eventContext) {}
 }
