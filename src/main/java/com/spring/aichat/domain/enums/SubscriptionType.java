@@ -15,7 +15,8 @@ package com.spring.aichat.domain.enums;
 public enum SubscriptionType {
 
     LUCID_PASS("루시드 패스", 14900, false),
-    LUCID_MIDNIGHT_PASS("루시드 미드나잇 패스", 24900, true);
+    LUCID_MIDNIGHT_PASS("루시드 미드나잇 패스", 24900, true),
+    LUCID_PASS_PREMIUM("루시드 프리미엄 패스", 50000, true);
 
     private final String displayName;
     private final int monthlyPriceKrw;

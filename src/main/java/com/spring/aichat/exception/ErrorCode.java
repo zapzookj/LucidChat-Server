@@ -26,6 +26,6 @@ public enum ErrorCode {
     VERIFICATION_EXPIRED,
     VERIFICATION_ALREADY_DONE,
 
-    // Phase 5: Content Moderation
+    FORBIDDEN, // Phase 5: Content Moderation
     CONTENT_BLOCKED
 }
