@@ -18,9 +18,6 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     Optional<ChatRoom> findByUser_IdAndCharacter_Id(Long userId, Long characterId);
 
-    /**
-     * [Phase 4.5] 유저 + 캐릭터 + 모드 조합으로 방 조회
-     */
     Optional<ChatRoom> findByUser_IdAndCharacter_IdAndChatMode(Long userId, Long characterId, ChatMode chatMode);
 
     Optional<ChatRoom> findById(Long id);
@@ -31,20 +28,27 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     Optional<ChatRoom> findByUser_Id(Long userId);
 
-    /**
-     * [Phase 4.5] 유저의 모든 채팅방 목록 — 로비 '기억의 끈' (Continue) 용
-     * Character를 Eager Fetch하여 N+1 방지
-     */
     @EntityGraph(attributePaths = {"character"})
     List<ChatRoom> findAllByUser_IdOrderByLastActiveAtDesc(Long userId);
 
-    /**
-     * [Phase 4.5] 유저의 채팅방 개수
-     */
     long countByUser_Id(Long userId);
 
-    /**
-     * [Phase 4.5] 유저 + 캐릭터 + 모드 존재 여부 확인
-     */
     boolean existsByUser_IdAndCharacter_IdAndChatMode(Long userId, Long characterId, ChatMode chatMode);
+
+    /**
+     * [Phase 5.5-Theater] 유저의 특정 모드 방들
+     * Dialogue 탭(STORY/SANDBOX) vs Theater 탭 분리용
+     */
+    @EntityGraph(attributePaths = {"character"})
+    List<ChatRoom> findAllByUser_IdAndChatModeOrderByLastActiveAtDesc(Long userId, ChatMode chatMode);
+
+    /**
+     * [Phase 5.5-Theater] 유저의 특정 모드 중 Dialogue 그룹
+     * ChatMode.STORY, ChatMode.SANDBOX 두 모드 방
+     */
+    @EntityGraph(attributePaths = {"character"})
+    @Query("SELECT r FROM ChatRoom r WHERE r.user.id = :userId " +
+        "AND r.chatMode IN (com.spring.aichat.domain.enums.ChatMode.STORY, com.spring.aichat.domain.enums.ChatMode.SANDBOX) " +
+        "ORDER BY r.lastActiveAt DESC")
+    List<ChatRoom> findDialogueRoomsByUser(@Param("userId") Long userId);
 }

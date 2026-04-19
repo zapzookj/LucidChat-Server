@@ -6,21 +6,10 @@ import java.util.List;
 
 /**
  * [Phase 5] 멀티캐릭터 시드 설정
+ * [Phase 5.5-Theater] Theater 모드 관련 필드 추가
  *
  * 기존 DefaultCharacterProperties(단일 캐릭터)를 대체.
  * application.yml의 app.characters 리스트에서 모든 캐릭터 시드 데이터를 로드.
- *
- * 사용 예:
- *   app:
- *     characters:
- *       - name: 아이리
- *         slug: airi
- *         role: 저택의 메이드
- *         ...
- *       - name: 연화
- *         slug: yeonhwa
- *         role: 숲속의 구미호
- *         ...
  */
 @ConfigurationProperties(prefix = "app")
 public record CharacterSeedProperties(
@@ -74,6 +63,16 @@ public record CharacterSeedProperties(
         String endingQuoteHappy,
         String endingQuoteBad,
         String introNarration,
-        String firstGreeting
+        String firstGreeting,
+
+        // ── [Phase 5.5-Theater] Theater 모드 ──
+        /** 소속 세계관 (WorldId enum 문자열: MEDIEVAL_FANTASY / ORIENTAL_FANTASY / MODERN_KOREA) */
+        String worldId,
+        /** Theater 모드 지원 여부 */
+        Boolean theaterAvailable,
+        /** 영역 장소 (줄 구분, Theater 장소 선택 분기용) */
+        String homeLocations,
+        /** Theater Act 1 첫 만남 시드 나레이션 */
+        String theaterIntroBeat
     ) {}
 }
