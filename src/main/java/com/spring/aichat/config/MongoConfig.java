@@ -31,7 +31,11 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
  */
 @Configuration
 @EnableMongoAuditing
-@EnableMongoRepositories(basePackages = "com.spring.aichat.domain.chat")
+@EnableMongoRepositories(basePackages = {
+    "com.spring.aichat.domain.chat",
+    "com.spring.aichat.domain.theater"
+}
+)
 public class MongoConfig {
     // Spring Boot auto-configuration이 application.yml의 spring.data.mongodb 속성을 읽어
     // MongoClient, MongoTemplate 등을 자동으로 설정.

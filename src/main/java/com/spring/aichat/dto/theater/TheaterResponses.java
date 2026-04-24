@@ -383,4 +383,37 @@ public final class TheaterResponses {
         Map<String, Integer> finalStats,
         Map<Long, Integer> finalAffections
     ) {}
+
+    /** 대화 기록 한 항목 */
+    public record SceneHistoryItem(
+        String id,
+        int actNumber,
+        int chapterNumber,
+        int batchId,
+        int sceneIndexInBatch,
+        int sceneSeqInChapter,
+        long globalSceneSeq,
+        String narration,
+        String innerNarration,
+        String dialogue,
+        String speakerType,         // HEROINE / AVATAR / null
+        String speakerName,
+        Long heroineId,
+        String emotion,             // EmotionTag 이름
+        String location,
+        String timeOfDay,
+        String outfit,
+        String bgmMode,
+        String illustrationUrl,
+        java.time.LocalDateTime createdAt
+    ) {}
+
+    /** 대화 기록 페이지 응답 */
+    public record SceneHistoryPage(
+        java.util.List<SceneHistoryItem> items,
+        int page,
+        int size,
+        int totalPages,
+        long totalElements
+    ) {}
 }

@@ -222,6 +222,21 @@ public class TheaterPromptAssembler {
         sb.append("Generate exactly ").append(batchSize).append(" scenes in this response.\n");
         sb.append("Each scene is a cinematic beat — no rushed exposition, no bloated prose.\n\n");
 
+        // ─── 10-b. [v2 추가] 서사 페이싱 & 호감도 속도 제한 ───
+        sb.append("# ⏱ Narrative Pacing (⚠️ CRITICAL)\n");
+        sb.append("Theater is a LONG-FORM visual novel, not a short story. ");
+        sb.append("A full run takes 500~1,000 scenes across 4 Acts. Emotional distance between characters changes SLOWLY.\n\n");
+        sb.append("## Affection Progression Rules\n");
+        sb.append("- A Chapter contains 25~40 scenes. The heroine's affection should change by roughly **+10~+15 over the ENTIRE Chapter** (if relationship is going well).\n");
+        sb.append("- A single batch (5~8 scenes) should produce affection delta in the range **[-2, +2]** for the speaker heroine.\n");
+        sb.append("- **Most batches should produce delta of 0 or ±1**. +2 is reserved for emotionally meaningful beats (confession, breakthrough).\n");
+        sb.append("- For heroines NOT in this batch, delta is almost always 0 (maybe -1 if jealousy is depicted).\n");
+        sb.append("- If you are tempted to give +3 or more: RESIST. Save that for CLIMAX branches only.\n\n");
+        sb.append("## Why slow pacing matters\n");
+        sb.append("- Users feel earned emotional investment, not artificially accelerated.\n");
+        sb.append("- Act 1 ending should have affection ~20, Act 2 ~40, Act 3 ~60, Act 4 climax ~80+.\n");
+        sb.append("- If affection climbs too fast, the final acts have nothing to pay off.\n\n");
+
         // ─── 11. 시크릿 모드 해제 ───
         if (ctx.effectiveSecretMode()) {
             sb.append("# 🔓 Secret Mode (Unrestricted)\n");
@@ -287,7 +302,9 @@ public class TheaterPromptAssembler {
             - `speaker_heroine_slug` MUST be one of: %s
             - Only ONE heroine speaks across all %d scenes in this batch.
               Their `speaker` is either "%s" or "AVATAR" (for protagonist's dialogue) or "" (narration only).
-            - `heroine_affection_deltas` keys use heroine SLUG. Values in range [-5, +5].
+            - `heroine_affection_deltas` keys use heroine SLUG.
+              **Values MUST be integers in [-2, +2]. Most values should be 0 or ±1.**
+              +2 is reserved for emotionally meaningful beats. Non-speaker heroines are usually 0.
             - Set `branch_signal` only if this batch naturally ends at a pivotal choice.
             - `chapter_end_after` = true when this batch concludes the current chapter.
             """.formatted(
