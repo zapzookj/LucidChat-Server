@@ -8,6 +8,7 @@ import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AvatarStat;
 import com.spring.aichat.domain.enums.ChatMode;
+import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.theater.*;
 import com.spring.aichat.domain.user.User;
@@ -150,6 +151,8 @@ public class TheaterLobbyService {
                 state.getCurrentChapter(),
                 lead != null ? lead.getCharacter().getId() : null,
                 lead != null ? lead.getCharacter().getName() : null,
+                lead != null ? lead.getCharacter().getSlug() : null,              // [Polish-v2] leadHeroineSlug
+                lead != null ? lead.getCharacter().getThumbnailUrl() : null,      // [Polish-v2] leadHeroineThumbnailUrl
                 lead != null ? lead.getAffection() : 0,
                 state.isEndingReached(),
                 state.getEndingTitle(),
@@ -471,6 +474,7 @@ public class TheaterLobbyService {
             state.getCurrentChapter(),
             state.getScenesInCurrentChapter(),
             state.getChapterTargetScenes(),
+            ChatModePolicy.THEATER_CHAPTERS_PER_ACT_MIN,   // [Polish-v2] actTotalChapters 추가
             state.getTotalSceneCount(),
             state.getCurrentBatchId(),
             currentHeroine != null ? currentHeroine.getId() : null,
@@ -504,6 +508,7 @@ public class TheaterLobbyService {
             room.getId(),
             state.getWorldId().name(),
             worldDisplayName,
+            state.getAvatarName(),    // [Polish-v2] flat avatarName 추가
             avatar,
             progress,
             heroineSnapshots,

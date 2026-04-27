@@ -8,6 +8,7 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.*;
 import com.spring.aichat.dto.theater.LlmSceneBatchOutput;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
@@ -345,9 +346,27 @@ public class TheaterBatchGenerator {
 
     private SceneBatch convertToSceneBatch(TheaterState state, Character speaker,
                                            LlmSceneBatchOutput out) {
+        // [Polish-v2] 히로인의 허용 location/outfit enum 세트 미리 캐싱
+        // LLM이 임의 문자열을 반환할 경우 기본값으로 폴백하여 BackgroundDisplay/CharacterDisplay가 정상 동작하도록
+        Set<String> allowedLocations = null;
+        Set<String> allowedOutfits = null;
+        String fallbackLocation = speaker.getEffectiveDefaultLocation();
+        String fallbackOutfit = speaker.getEffectiveDefaultOutfit();
+        try {
+            allowedLocations = speaker.getAllowedLocations(RelationStatus.STRANGER, false);
+            allowedOutfits = speaker.getAllowedOutfits(RelationStatus.STRANGER, false);
+        } catch (Exception ignored) {
+            // 세트 조회 실패 시 sanitize 스킵
+        }
+
         List<TheaterScene> scenes = new ArrayList<>();
         int seq = 0;
         for (LlmSceneBatchOutput.LlmScene s : out.scenes()) {
+            String sanitizedLocation = sanitizeEnumValue(s.location(), allowedLocations, fallbackLocation);
+            String sanitizedOutfit = sanitizeEnumValue(s.outfit(), allowedOutfits, fallbackOutfit);
+            String sanitizedTime = sanitizeTime(s.time());
+            String sanitizedBgm = sanitizeBgmMode(s.bgmMode());
+
             scenes.add(new TheaterScene(
                 seq++,
                 resolveSpeakerName(s.speaker(), speaker, state),
@@ -355,10 +374,10 @@ public class TheaterBatchGenerator {
                 s.innerNarration(),
                 s.dialogue(),
                 s.emotion(),
-                s.location(),
-                s.time(),
-                s.outfit(),
-                s.bgmMode(),
+                sanitizedLocation,
+                sanitizedTime,
+                sanitizedOutfit,
+                sanitizedBgm,
                 null,
                 s.statReflectionHint()
             ));
@@ -420,5 +439,45 @@ public class TheaterBatchGenerator {
         }
         if (speaker.getSlug().equalsIgnoreCase(rawSpeaker.trim())) return speaker.getName();
         return rawSpeaker;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Polish-v2] Enum 필드 sanitize
+    //  LLM이 임의 문자열을 반환해도 에셋 해상도가 깨지지 않도록 방어
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 허용 enum 세트에 있으면 그대로, 없으면 fallback으로 대체. 세트가 null이면 raw 그대로. */
+    private String sanitizeEnumValue(String raw, Set<String> allowed, String fallback) {
+        if (raw == null || raw.isBlank()) return fallback;
+        if (allowed == null || allowed.isEmpty()) return raw;
+        String trimmed = raw.trim();
+        // 대소문자 무시 매칭
+        for (String a : allowed) {
+            if (a.equalsIgnoreCase(trimmed)) return a;
+        }
+        log.debug("🎭 [SANITIZE] enum out-of-range | raw='{}' | fallback='{}'", raw, fallback);
+        return fallback != null ? fallback : (allowed.iterator().next());
+    }
+
+    /** TimeOfDay enum 검증 — 시스템이 쓰는 표준 세트로 한정 */
+    private static final Set<String> VALID_TIMES = Set.of(
+        "DAY", "NIGHT", "DAWN", "SUNSET", "MORNING", "AFTERNOON", "EVENING"
+    );
+
+    private String sanitizeTime(String raw) {
+        if (raw == null || raw.isBlank()) return "NIGHT";
+        String upper = raw.trim().toUpperCase();
+        return VALID_TIMES.contains(upper) ? upper : "NIGHT";
+    }
+
+    /** BgmMode enum 검증 */
+    private static final Set<String> VALID_BGM = Set.of(
+        "DAILY", "ROMANTIC", "EXCITING", "TOUCHING", "TENSE", "EROTIC"
+    );
+
+    private String sanitizeBgmMode(String raw) {
+        if (raw == null || raw.isBlank()) return "DAILY";
+        String upper = raw.trim().toUpperCase();
+        return VALID_BGM.contains(upper) ? upper : "DAILY";
     }
 }

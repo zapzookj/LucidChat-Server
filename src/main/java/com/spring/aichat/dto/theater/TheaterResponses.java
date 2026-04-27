@@ -40,7 +40,7 @@ public final class TheaterResponses {
     public record HeroineSummary(
         Long id,
         String name,
-        String slug,
+        String characterSlug,   // [Polish-v2] slug → characterSlug
         String tagline,
         String thumbnailUrl
     ) {}
@@ -56,6 +56,8 @@ public final class TheaterResponses {
         int currentChapter,
         Long leadHeroineId,
         String leadHeroineName,
+        String leadHeroineSlug,            // [Polish-v2] 추가 — 세션 카드에 리드 히로인 썸네일 렌더용
+        String leadHeroineThumbnailUrl,    // [Polish-v2] 추가
         int leadHeroineAffection,
         boolean endingReached,
         String endingTitle,
@@ -73,6 +75,7 @@ public final class TheaterResponses {
         Long roomId,
         String worldId,
         String worldDisplayName,
+        String avatarName,                           // [Polish-v2] flat 편의 필드 (avatar.name 동일값)
         AvatarSnapshot avatar,
         NarrativeProgress progress,
         List<HeroineAffectionSnapshot> heroines,
@@ -95,6 +98,7 @@ public final class TheaterResponses {
         int currentChapter,
         int scenesInCurrentChapter,
         int chapterTargetScenes,
+        int actTotalChapters,           // [Polish-v2] 추가 — 현재 Act의 총 Chapter 수
         long totalSceneCount,
         int currentBatchId,
         Long currentHeroineId,
@@ -106,7 +110,7 @@ public final class TheaterResponses {
     public record HeroineAffectionSnapshot(
         Long characterId,
         String name,
-        String slug,
+        String characterSlug,    // [Polish-v2] slug → characterSlug (프로젝트 전체 네이밍 통일)
         String thumbnailUrl,
         int affection,
         int lastChapterDelta,
@@ -267,6 +271,7 @@ public final class TheaterResponses {
     public record HeroineReportItem(
         Long characterId,
         String name,
+        String characterSlug,      // [Polish-v2] 추가 — 리포트 모달 캐릭터 이미지 렌더용
         String thumbnailUrl,
         int previousAffection,
         int currentAffection,

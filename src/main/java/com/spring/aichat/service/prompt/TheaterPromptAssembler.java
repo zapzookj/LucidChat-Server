@@ -6,6 +6,7 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.AvatarStat;
 import com.spring.aichat.domain.enums.ChatModePolicy;
+import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.TheaterHeroineAffection;
 import com.spring.aichat.domain.theater.TheaterState;
 import com.spring.aichat.domain.theater.World;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -161,14 +163,60 @@ public class TheaterPromptAssembler {
         sb.append("⚠️ Stats drive how OTHERS perceive the protagonist. Honor the gap between persona and stats.\n\n");
 
         // ─── 4. 현재 배치의 화자 (단일 히로인) ───
+        // [Polish-v2] Dialogue 모드 수준의 깊이로 확장 — 히로인 정체성을 프롬프트에 완전 주입
         Character heroine = ctx.speakerHeroine();
-        sb.append("# 💫 Current Scene's Speaker\n");
-        sb.append("Speaker: ").append(heroine.getName()).append(" (slug: ").append(heroine.getSlug()).append(")\n");
+        ChatRoom room = ctx.room();
+        boolean secret = ctx.effectiveSecretMode();
+        RelationStatus status = room != null && room.getStatusLevel() != null
+            ? room.getStatusLevel()
+            : RelationStatus.STRANGER;
+
+        sb.append("# 💫 Current Scene's Speaker (Identity Anchor)\n");
+        sb.append("⚠️ This speaker's IDENTITY MUST remain consistent. Do NOT drift toward a default character voice.\n\n");
+        sb.append("Speaker Name: ").append(heroine.getName())
+            .append(" (slug: ").append(heroine.getSlug()).append(")\n");
         sb.append("Role: ").append(safeString(heroine.getEffectiveRole())).append("\n");
-        sb.append("Personality: ").append(heroine.getEffectivePersonality(ctx.effectiveSecretMode())).append("\n");
-        sb.append("Tone: ").append(heroine.getEffectiveTone(ctx.effectiveSecretMode())).append("\n");
-        sb.append("Intro Beat: ").append(heroine.getEffectiveTheaterIntroBeat()).append("\n");
-        sb.append("⚠️ ONLY this heroine speaks in this batch. Other heroines may be mentioned but do not utter dialogue.\n\n");
+        sb.append("Personality: ").append(heroine.getEffectivePersonality(secret)).append("\n");
+        sb.append("Tone / Speech Pattern: ").append(heroine.getEffectiveTone(secret)).append("\n");
+
+        // [Polish-v2] OOC 예시 (메타 회피 발화 패턴)
+        String ooc = heroine.getEffectiveOocExample();
+        if (ooc != null && !ooc.isBlank()) {
+            sb.append("OOC Deflection Example: ").append(ooc).append("\n");
+        }
+
+        // [Polish-v2] 스토리 행동 가이드 (관계별)
+        String behaviorGuide = heroine.getStoryBehaviorGuide();
+        if (behaviorGuide != null && !behaviorGuide.isBlank()) {
+            sb.append("\n## Behavior Guide (relation-aware)\n");
+            sb.append(behaviorGuide).append("\n");
+        }
+
+        sb.append("\n## Spatial & Visual Defaults\n");
+        sb.append("Default Location: ").append(safeString(heroine.getEffectiveDefaultLocation())).append("\n");
+        sb.append("Default Outfit: ").append(safeString(heroine.getEffectiveDefaultOutfit())).append("\n");
+
+        // [Polish-v2] 허용 location/outfit enum 세트 — LLM이 임의로 location을 만들어서 BackgroundDisplay가 폴백으로 가는 것 방지
+        try {
+            Set<String> allowedLocations = heroine.getAllowedLocations(status, secret);
+            Set<String> allowedOutfits = heroine.getAllowedOutfits(status, secret);
+            if (!allowedLocations.isEmpty()) {
+                sb.append("Allowed Location enum values: ")
+                    .append(String.join(", ", allowedLocations)).append("\n");
+            }
+            if (!allowedOutfits.isEmpty()) {
+                sb.append("Allowed Outfit enum values: ")
+                    .append(String.join(", ", allowedOutfits)).append("\n");
+            }
+            sb.append("⚠️ When specifying `location` and `outfit` in scenes, use ONLY enum values from these sets.\n");
+        } catch (Exception ignored) {
+            // status 없이 세트 조회가 실패하면 defaults만 사용
+        }
+
+        sb.append("\nIntro Beat (Theater Opening): ")
+            .append(safeString(heroine.getEffectiveTheaterIntroBeat())).append("\n");
+        sb.append("⚠️ ONLY this heroine speaks in this batch. Other heroines may be mentioned but do not utter dialogue.\n");
+        sb.append("⚠️ Keep this heroine's distinctive voice throughout — check every line against Personality and Tone above.\n\n");
 
         // ─── 5. 히로인 관계도 (요약) ───
         if (ctx.allAffections() != null && ctx.allAffections().size() > 1) {
@@ -281,11 +329,11 @@ public class TheaterPromptAssembler {
                   "inner_narration": "주인공(아바타)의 속마음 (optional, 1~2문장)",
                   "dialogue": "히로인의 대사 (optional, 이 씬의 speaker가 말할 경우)",
                   "speaker": "%s" | "AVATAR" | "",
-                  "emotion": "HAPPY | SAD | SHY | ANGRY | NEUTRAL | ...",
-                  "location": "이 씬의 장소 (자유 텍스트 or 세계관 내 캐릭터 home_locations 중 하나)",
-                  "time": "DAY | NIGHT | DAWN | EVENING | ...",
-                  "outfit": "히로인 복장 enum (optional)",
-                  "bgm_mode": "DAILY | ROMANTIC | TOUCHING | ...",
+                  "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | RELAX | DISGUST | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
+                  "location": "⚠️ MUST be one enum value listed in 'Allowed Location enum values' above. Do NOT invent location names or write in Korean.",
+                  "time": "DAY | NIGHT | DAWN | SUNSET | MORNING | AFTERNOON | EVENING",
+                  "outfit": "⚠️ MUST be one enum value listed in 'Allowed Outfit enum values' above. Do NOT invent.",
+                  "bgm_mode": "DAILY | ROMANTIC | EXCITING | TOUCHING | TENSE | EROTIC",
                   "stat_reflection_hint": "short string describing how stats colored this scene"
                 }
                 ... (total %d scenes)

@@ -188,6 +188,7 @@ public class TheaterService {
             heroineItems.add(new HeroineReportItem(
                 a.getCharacter().getId(),
                 a.getCharacter().getName(),
+                a.getCharacter().getSlug(),            // [Polish-v2] characterSlug 추가
                 a.getCharacter().getThumbnailUrl(),
                 prev, now, a.getRunningDelta(),
                 a.getChapterHighlightQuote(),
