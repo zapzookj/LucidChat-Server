@@ -45,6 +45,8 @@ public class TheaterBatchGenerator {
     private final TheaterSceneLogRepository sceneLogRepository;
     private final OpenAiProperties openAiProperties;
     private final ObjectMapper objectMapper;
+    // [Phase III · 작업 3] 2단 모델 라우팅
+    private final TheaterModelResolver modelResolver;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  호감도 클램프 상수 (v2 추가)
@@ -57,13 +59,36 @@ public class TheaterBatchGenerator {
     //  배치 생성 파라미터
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * GenerateParams
+     *
+     * @param room                   ChatRoom
+     * @param state                  Theater 세션 상태
+     * @param hintedSpeakerHeroineId 화자 힌트 (LOCATION 분기 후 등)
+     * @param branchContext          분기 컨텍스트 (Redis에서 consume된 값)
+     * @param effectiveSecretMode    시크릿 모드 활성 여부
+     * @param justBranched           [Phase III · 작업 3]
+     *                               직전 턴에 분기 적용이 있었는지.
+     *                               true면 ModelResolver가 proModel을 선택.
+     *                               (branchContext != null 과 의미상 같지만
+     *                                향후 정책 변경 여지를 위해 명시 플래그로 분리)
+     */
     public record GenerateParams(
         ChatRoom room,
         TheaterState state,
         Long hintedSpeakerHeroineId,
         String branchContext,
-        boolean effectiveSecretMode
-    ) {}
+        boolean effectiveSecretMode,
+        boolean justBranched
+    ) {
+        /** 하위 호환 — justBranched 없는 호출부 보호 (있으면 false) */
+        public GenerateParams(ChatRoom room, TheaterState state,
+                              Long hintedSpeakerHeroineId, String branchContext,
+                              boolean effectiveSecretMode) {
+            this(room, state, hintedSpeakerHeroineId, branchContext,
+                effectiveSecretMode, false);
+        }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  엔트리포인트
@@ -113,7 +138,10 @@ public class TheaterBatchGenerator {
 
         LlmSceneBatchOutput llmOutput;
         try {
-            llmOutput = invokeLlm(systemPrompt, speaker);
+            // [Phase III · 작업 3] 2단 모델 라우팅 — 분기 직후 또는 마지막 Chapter면 proModel
+            boolean isLastChapter = directorEngine.isLastChapterOfAct(state);
+            llmOutput = invokeLlm(systemPrompt, speaker, room.getUser(), state,
+                params.justBranched(), isLastChapter);
         } catch (Exception e) {
             log.error("🎭 [BATCH-GEN] LLM call failed | roomId={} | batchId={}: {}",
                 room.getId(), state.getCurrentBatchId(), e.getMessage());
@@ -279,10 +307,16 @@ public class TheaterBatchGenerator {
     //  LLM 호출
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private LlmSceneBatchOutput invokeLlm(String systemPrompt, Character speaker) {
-        String model = speaker.getLlmModelName() != null
-            ? speaker.getLlmModelName()
-            : openAiProperties.model();
+    private LlmSceneBatchOutput invokeLlm(String systemPrompt, Character speaker,
+                                          com.spring.aichat.domain.user.User user,
+                                          TheaterState state,
+                                          boolean justBranched, boolean isLastChapter) {
+        // [Phase III · 작업 3] ModelResolver가 정책 + 캐릭터 우선순위를 통합 결정
+        String model = modelResolver.resolveBatchModel(
+            user, speaker, state, justBranched, isLastChapter);
+
+        log.info("🎭 [BATCH-GEN] model={} | speaker={} | justBranched={} | lastChapter={}",
+            model, speaker.getName(), justBranched, isLastChapter);
 
         String responseText = openRouterClient.completeJson(
             model, systemPrompt,

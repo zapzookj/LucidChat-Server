@@ -78,8 +78,15 @@ public class TheaterService {
 
         if (!prefetch) chargeBatchEnergy(username);
 
+        // [Phase III · 작업 3] 분기 직후 컨텍스트 consume — 그동안 dead code였음.
+        //   BranchService.applyBranchChoice가 "active" 토큰으로 Redis에 저장한
+        //   분기 후 컨텍스트를 여기서 처음 소비한다. consume이라 1회용 — 다음
+        //   배치부터는 null로 돌아가므로 정확히 "분기 직후 첫 배치"에만 영향.
+        String branchContext = batchCache.consumeBranchContext(roomId, "active").orElse(null);
+        boolean justBranched = branchContext != null;
+
         TheaterBatchGenerator.GenerateParams params = new TheaterBatchGenerator.GenerateParams(
-            room, state, null, null, false);
+            room, state, null, branchContext, false, justBranched);
 
         SceneBatch batch = batchGenerator.generateNextBatch(params);
         room.touch(EmotionTag.NEUTRAL); // lastActiveAt 갱신
@@ -107,8 +114,15 @@ public class TheaterService {
             ChatRoom room = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("방을 찾을 수 없습니다."));
 
+            // [Phase III · 작업 3] Prefetch는 branchContext를 consume하지 않는다.
+            //   분기 직후 첫 배치는 동기 경로(requestNextBatch)에서 정확히 한 번
+            //   consume되어야 하므로, 비동기 prefetch가 미리 가져가면 안 됨.
+            //   따라서 prefetch는 항상 일반 정책(model)으로 미리 만든다.
+            //   만약 prefetch 시점에 active 컨텍스트가 살아있다면, 분기 적용
+            //   직후 BranchService가 invalidateBatchesFrom으로 캐시를 비웠을 것이고
+            //   이후 첫 동기 호출이 그것을 consume한다.
             TheaterBatchGenerator.GenerateParams params = new TheaterBatchGenerator.GenerateParams(
-                room, state, null, null, false);
+                room, state, null, null, false, false);
 
             batchGenerator.generateNextBatch(params);
             log.info("🎭 [PREFETCH] Done | roomId={} | nextBatchId={}", roomId, nextBatchId);

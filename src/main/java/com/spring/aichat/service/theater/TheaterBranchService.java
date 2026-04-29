@@ -2,7 +2,6 @@ package com.spring.aichat.service.theater;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
@@ -46,9 +45,10 @@ public class TheaterBranchService {
     private final TheaterBranchChoiceRepository branchChoiceRepository;
     private final TheaterBatchCacheService batchCache;
     private final OpenRouterClient openRouterClient;
-    private final OpenAiProperties openAiProperties;
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
+    // [Phase III · 작업 3] CLIMAX 분기는 proModel
+    private final TheaterModelResolver modelResolver;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 장소 선택 분기 (LOCATION)
@@ -114,12 +114,19 @@ public class TheaterBranchService {
     @Transactional
     public BranchOptions generateSceneBranch(Long roomId, String username,
                                              BranchLevel level, String contextSummary) {
-        getOwnedRoom(roomId, username);
+        ChatRoom room = getOwnedRoom(roomId, username);
         TheaterState state = getState(roomId);
 
         String systemPrompt = buildBranchPrompt(state, level, contextSummary);
+
+        // [Phase III · 작업 3] 2단 모델 라우팅 — CLIMAX는 proModel, 그 외는 model
+        String model = modelResolver.resolveBranchModel(room.getUser(), level);
+
+        log.info("🎭 [BRANCH] generate | roomId={} | level={} | model={}",
+            roomId, level, model);
+
         String llmResponse = openRouterClient.completeJson(
-            openAiProperties.model(), systemPrompt,
+            model, systemPrompt,
             "Generate branch options now.", 1500, 0.85
         );
 

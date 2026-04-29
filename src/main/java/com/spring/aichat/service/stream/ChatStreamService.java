@@ -34,6 +34,7 @@ import com.spring.aichat.service.payment.BoostModeResolver;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.prompt.CharacterPromptAssembler;
 import com.spring.aichat.service.prompt.DirectorPromptAssembler;
+import com.spring.aichat.service.theater.TheaterInterventionService;
 import com.spring.aichat.service.util.LlmOutputParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,17 @@ public class ChatStreamService {
     private final BackgroundGenerationService backgroundGenerationService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final DirectorService directorService;
+    /**
+     * [Phase III · 작업 4] Theater 난입 통합용
+     *
+     * Theater 모드에서 유저가 "난입" 후 ChatService를 통해 직접 대화할 때,
+     * 매 ASSISTANT 응답의 logId를 InterventionService에 알려줘야 한다.
+     * 이게 빠지면 resumeFromIntervention의 redirectHint에 "마지막 로그 ID: null"이
+     * 박혀 들어가서 LLM이 개입의 맥락을 정확히 받지 못한다.
+     *
+     * 비-Theater 방에는 아무 영향도 주지 않으므로 안전하게 주입.
+     */
+    private final TheaterInterventionService theaterInterventionService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -323,6 +335,26 @@ public class ChatStreamService {
                 log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
             }
             cacheService.evictRoomInfo(roomId);
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  [Phase III · 작업 4] Theater 난입 통합
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  Theater 모드 + 난입 활성 상태에서 발생한 ASSISTANT 응답이라면,
+            //  마지막 logId를 InterventionService에 알려서 resumeFromIntervention
+            //  시 redirectHint에 정확한 컨텍스트가 박히도록 한다.
+            //
+            //  - 비-Theater 방: chatMode 체크에서 즉시 fallthrough
+            //  - 난입 비활성: recordInterventionLog 내부에서 조용히 noop
+            //  - 어떤 실패도 채팅 흐름을 깨지 않는다 (try-catch 격리)
+            if (assistantLogId != null
+                && jpa.room().getChatMode() == ChatMode.THEATER) {
+                try {
+                    theaterInterventionService.recordInterventionLog(roomId, assistantLogId);
+                } catch (Exception e) {
+                    log.warn("🎭 [INTERVENTION] log relay failed | roomId={} | logId={}: {}",
+                        roomId, assistantLogId, e.getMessage());
+                }
+            }
 
             // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
             // [Bug Fix] 동일 장소 반복 전환 방지 가드
