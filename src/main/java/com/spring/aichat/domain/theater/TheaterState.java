@@ -74,6 +74,38 @@ public class TheaterState {
     @Column(name = "current_batch_id", nullable = false)
     private int currentBatchId = 0;
 
+    /**
+     * [Phase 5.5 UX Polish · R2] Chapter당 MAJOR 분기를 1회만 발생시키기 위한 플래그.
+     *  - false: 이번 Chapter에서 MAJOR가 아직 발생하지 않음
+     *  - true:  이번 Chapter의 MAJOR가 이미 사용됨 (그 후 배치들은 MINOR로 처리)
+     *  - completeChapter() 시 false로 리셋
+     *
+     * Boolean(객체)로 둬서 기존 데이터(NULL)에 안전 — 처음엔 null = 미사용 의미.
+     */
+    @Column(name = "major_branch_done_in_chapter")
+    private Boolean majorBranchDoneInChapter = Boolean.FALSE;
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 세션 상태 (모델 C-2: 활성 1 + 아카이브 N).
+     *
+     *  - "ACTIVE":   진행 중인 극 (유저당 1개만)
+     *  - "ARCHIVED": 새 극 시작으로 중단되어 아카이브 보존 (resume 가능)
+     *  - "ENDED":   엔딩 도달로 완결 (영구 보존, resume 불가)
+     *
+     *  String으로 둠 — enum class 추가 부담 없이 마이그레이션 친화적.
+     *  null/누락은 ACTIVE로 간주 (기존 데이터 호환).
+     */
+    @Column(name = "session_status", length = 20)
+    private String sessionStatus = "ACTIVE";
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 마지막 활성/중단 시각 — 아카이브 정렬용.
+     *  - ACTIVE → ARCHIVED 전환 시: 그 시각으로 갱신
+     *  - ENDED 전환 시: 엔딩 도달 시각으로 갱신
+     */
+    @Column(name = "session_status_changed_at")
+    private LocalDateTime sessionStatusChangedAt;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  아바타 프로필
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -234,6 +266,8 @@ public class TheaterState {
         this.scenesInCurrentChapter = 0;
         this.currentBatchId = 0;
         this.currentChapter += 1;
+        // [R2] 새 Chapter 시작 시 MAJOR 분기 가능 상태로 reset
+        this.majorBranchDoneInChapter = Boolean.FALSE;
     }
 
     public void advanceToNextAct() {
@@ -244,6 +278,56 @@ public class TheaterState {
         this.scenesInCurrentChapter = 0;
         this.currentBatchId = 0;
         this.intermissionStamina = 5;
+        // [R2] Act 전환 시도 동일 reset
+        this.majorBranchDoneInChapter = Boolean.FALSE;
+    }
+
+    /**
+     * [R2] MAJOR 분기 발동 마킹 — DirectorEngine.decideBranchAfterBatch가
+     *      MAJOR를 결정한 직후 호출되어, 같은 Chapter에서 두 번 발동 차단.
+     */
+    public void markMajorBranchDoneInChapter() {
+        this.majorBranchDoneInChapter = Boolean.TRUE;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R4] 세션 상태 전이
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public boolean isActive() {
+        return sessionStatus == null || "ACTIVE".equals(sessionStatus);
+    }
+
+    public boolean isArchived() {
+        return "ARCHIVED".equals(sessionStatus);
+    }
+
+    public boolean isEnded() {
+        return "ENDED".equals(sessionStatus);
+    }
+
+    /**
+     * 새 극 시작으로 인한 중단 — 아카이브로 보존 (resume 가능).
+     */
+    public void archiveAsInterrupted() {
+        this.sessionStatus = "ARCHIVED";
+        this.sessionStatusChangedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 엔딩 도달 — 영구 완결 상태 (resume 불가).
+     */
+    public void markEnded() {
+        this.sessionStatus = "ENDED";
+        this.sessionStatusChangedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 아카이브된 극을 다시 활성화 (resume).
+     */
+    public void resumeFromArchive() {
+        this.sessionStatus = "ACTIVE";
+        this.sessionStatusChangedAt = LocalDateTime.now();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -3,6 +3,7 @@ package com.spring.aichat.service.theater;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.TheaterAct;
 import com.spring.aichat.domain.theater.TheaterHeroineAffection;
@@ -291,6 +292,65 @@ public class TheaterDirectorEngine {
             case ACT_3_TURNING -> state.getCurrentChapter() % 2 == 1;
             case ACT_4_RESOLUTION -> false;
         };
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R2] 결정론적 배치 끝 분기
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 다가오는 배치의 끝에서 발생시킬 분기 레벨 결정.
+     *
+     * 기존: LLM이 "naturally ends at a pivotal choice"를 자율 판단 → 빈도 거의 0회
+     * 신규: 백엔드가 결정론적으로 배치마다 강제. LLM은 옵션 내용만 생성.
+     *
+     * 정책 우선순위:
+     *  1. CLIMAX  — Act의 마지막 Chapter의 마지막 배치
+     *  2. 마지막 배치(분기 없음) — Chapter 종료가 분기보다 우선
+     *  3. MAJOR — 한 Chapter 안에서 1회만, Chapter 중반 지점
+     *  4. MINOR — 그 외 모든 배치 끝
+     *
+     * 결과적으로 Chapter당 분기 발생량:
+     *  - LOCATION 0~1회 (Chapter 첫 배치 직전, 별도 trigger)
+     *  - MINOR 3~4회
+     *  - MAJOR 1회
+     *  - CLIMAX Act당 1회 (마지막 Chapter 마지막 배치에서만)
+     *
+     * @param state              현재 세션 상태
+     * @param batchSize          이번 배치의 씬 수 (5~8)
+     * @param chapterTargetTotal 이번 Chapter 목표 씬 총수 (DirectorEngine.decideChapterTargetScenes)
+     * @return BranchLevel.MINOR/MAJOR/CLIMAX or null (분기 없음)
+     */
+    public BranchLevel decideBranchAfterBatch(TheaterState state, int batchSize, int chapterTargetTotal) {
+        int scenesAfterThisBatch = state.getScenesInCurrentChapter() + batchSize;
+        boolean isLastBatchOfChapter = scenesAfterThisBatch >= chapterTargetTotal;
+        boolean isLastChapter = isLastChapterOfAct(state);
+
+        // 1. CLIMAX — Act의 마지막 Chapter + 그 Chapter의 마지막 배치
+        if (isLastChapter && isLastBatchOfChapter) {
+            return BranchLevel.CLIMAX;
+        }
+
+        // 2. 마지막 배치는 분기 없음 — Chapter end 처리가 우선
+        //    (Chapter 종료 리포트와 분기 모달이 동시에 뜨면 UX 혼란)
+        if (isLastBatchOfChapter) {
+            return null;
+        }
+
+        // 3. MAJOR — Chapter 중반(약 50% 지점)에 1회만
+        //    state에 majorBranchDoneInChapter 플래그가 false이고, 다음 배치 종료 시점이
+        //    chapter 50% 지점을 처음 넘어서면 발동.
+        if (!Boolean.TRUE.equals(state.getMajorBranchDoneInChapter())) {
+            int midpoint = chapterTargetTotal / 2;
+            int prevTotal = state.getScenesInCurrentChapter();
+            // 이번 배치가 50%를 처음 가로지르는 경우
+            if (prevTotal < midpoint && scenesAfterThisBatch >= midpoint) {
+                return BranchLevel.MAJOR;
+            }
+        }
+
+        // 4. 그 외 모든 배치 끝은 MINOR
+        return BranchLevel.MINOR;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

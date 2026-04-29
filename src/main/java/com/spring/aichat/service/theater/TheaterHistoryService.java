@@ -92,6 +92,9 @@ public class TheaterHistoryService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private SceneHistoryItem toHistoryItem(TheaterSceneLog log) {
+        // [Phase 5.5 UX Polish · R1] innerNarration은 의미상 protagonistInner와 동일.
+        // 신/구 필드 모두에 같은 값을 채워 응답 (구버전 클라이언트 호환).
+        String protagonistInner = log.getInnerNarration();
         return new SceneHistoryItem(
             log.getId(),
             log.getActNumber(),
@@ -101,11 +104,14 @@ public class TheaterHistoryService {
             log.getSceneSeqInChapter(),
             log.getGlobalSceneSeq(),
             log.getNarration(),
-            log.getInnerNarration(),
+            protagonistInner,             // 신규: protagonistInner
+            log.getHeroineInner(),        // 신규: heroineInner (UI 미노출이지만 응답엔 포함)
+            protagonistInner,             // alias: innerNarration (구버전 호환)
             log.getDialogue(),
             log.getSpeakerType(),
             log.getSpeakerName(),
             log.getHeroineId(),
+            log.getSceneType(),           // 신규: sceneType
             log.getEmotion() == null ? null : log.getEmotion().name(),
             log.getLocation(),
             log.getTimeOfDay(),

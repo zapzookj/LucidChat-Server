@@ -62,7 +62,14 @@ public final class TheaterResponses {
         boolean endingReached,
         String endingTitle,
         long totalSceneCount,
-        LocalDateTime lastActiveAt
+        LocalDateTime lastActiveAt,
+        /**
+         * [Phase 5.5 UX Polish · R4] 세션 상태 — "ACTIVE" / "ARCHIVED" / "ENDED".
+         * null/legacy는 ACTIVE로 간주.
+         */
+        String sessionStatus,
+        /** [R4] ARCHIVED/ENDED로 전환된 시각 — 아카이브 정렬용 */
+        LocalDateTime sessionStatusChangedAt
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -146,14 +153,32 @@ public final class TheaterResponses {
         Map<Long, Integer> heroineAffectionDeltas
     ) {}
 
-    /** Theater용 Scene — 기존 SceneResponse에 inner_narration 추가 */
+    /**
+     * Theater용 Scene
+     *
+     * [Phase 5.5 UX Polish · R1] 스키마 진화
+     *  - protagonistInner:  주인공(아바타)의 1인칭 속내. UI 표시.
+     *  - heroineInner:      히로인의 속내. UI 미노출 — 백엔드 자산.
+     *  - sceneType:         narration / heroine_speaks / avatar_speaks / dialogue_exchange
+     *
+     *  하위 호환:
+     *  - innerNarration 필드는 protagonistInner와 동일 값을 담아 응답 (구버전 클라이언트 보호).
+     *    프론트는 protagonistInner를 우선 사용하도록 마이그레이션됨.
+     */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record TheaterScene(
         Integer sequenceInBatch,
         String speakerName,
         String narration,
-        String innerNarration,
+        /** [R1] 주인공 속내 — 신규 정식 필드 */
+        String protagonistInner,
+        /** [R1] 히로인 속내 — UI 미노출 (옵션) */
+        String heroineInner,
+        /** @deprecated protagonistInner와 동일 값. 구버전 클라이언트 호환용. */
+        @Deprecated String innerNarration,
         String dialogue,
+        /** [R1] 씬 타입 — 배치 구성 통계용 */
+        String sceneType,
         String emotion,
         String location,
         String time,
@@ -355,7 +380,28 @@ public final class TheaterResponses {
         Long relatedHeroineId,
         String relatedHeroineName,
         String relatedIllustrationUrl,
+        /** [Phase 5.5 UX Polish · R3] 명령어 메타 — null이면 일반 메모 */
+        String commandType,
+        String validationVerdict,
+        Boolean wasUsed,
+        Integer usedInBatchId,
         LocalDateTime createdAt
+    ) {}
+
+    /**
+     * [Phase 5.5 UX Polish · R3] 감독 명령어 발동 결과
+     *
+     *  - accepted=true:  검증 통과 → activeDirectorCommand에 활성화 → 다음 배치 영향
+     *  - accepted=false: 거부됨 → 기록 보관, 활성화 안 됨
+     *  - rejectedReason: UI 표시용 사용자 친화 메시지 (REJECTED_*.userMessage())
+     *  - note:           생성된 DirectorNoteView (활성화 또는 거부 모두 보관)
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record DirectorCommandResult(
+        boolean accepted,
+        String verdict,
+        String userMessage,
+        DirectorNoteView note
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -399,11 +445,18 @@ public final class TheaterResponses {
         int sceneSeqInChapter,
         long globalSceneSeq,
         String narration,
-        String innerNarration,
+        /** [R1] 주인공 속내 — 신규 정식 필드 */
+        String protagonistInner,
+        /** [R1] 히로인 속내 — 미노출 (옵션) */
+        String heroineInner,
+        /** @deprecated protagonistInner와 동일. 구버전 클라이언트 호환용. */
+        @Deprecated String innerNarration,
         String dialogue,
         String speakerType,         // HEROINE / AVATAR / null
         String speakerName,
         Long heroineId,
+        /** [R1] scene_type */
+        String sceneType,
         String emotion,             // EmotionTag 이름
         String location,
         String timeOfDay,

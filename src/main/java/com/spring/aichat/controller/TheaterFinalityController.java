@@ -2,6 +2,7 @@ package com.spring.aichat.controller;
 
 import com.spring.aichat.dto.theater.TheaterRequests.CreateDirectorNoteRequest;
 import com.spring.aichat.dto.theater.TheaterRequests.SaveSlotRequest;
+import com.spring.aichat.dto.theater.TheaterRequests.TriggerDirectorCommandRequest;
 import com.spring.aichat.dto.theater.TheaterRequests.UpdateDirectorNoteRequest;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
 import com.spring.aichat.service.theater.TheaterDirectorNoteService;
@@ -134,5 +135,30 @@ public class TheaterFinalityController {
     ) {
         directorNoteService.deleteNote(roomId, authentication.getName(), noteId);
         return ResponseEntity.noContent().build();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R3] 감독 명령어 발동
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 감독 명령어 발동 — 다음 1배치에 환경 이벤트 주입.
+     * 검증 통과 시 200, 거부 시 200(accepted=false 페이로드).
+     * 검증 외 오류(권한/길이 초과 등)는 4xx.
+     *
+     * 거부와 통과를 모두 200으로 반환하는 이유: 클라이언트가 항상
+     * accepted/userMessage를 받아 일관된 UI 처리하도록.
+     * (4xx로 던지면 try-catch로 분기해야 해서 UX 일관성 ↓)
+     */
+    @PostMapping("/director-commands")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ResponseEntity<DirectorCommandResult> triggerDirectorCommand(
+        @PathVariable Long roomId,
+        @RequestBody @Valid TriggerDirectorCommandRequest request,
+        Authentication authentication
+    ) {
+        DirectorCommandResult result = directorNoteService.triggerCommand(
+            roomId, authentication.getName(), request.content());
+        return ResponseEntity.ok(result);
     }
 }

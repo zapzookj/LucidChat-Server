@@ -44,6 +44,11 @@ public class TheaterBatchCacheService {
     private static final Duration BATCH_TTL = Duration.ofHours(6);
     private static final Duration ROLLING_TTL = Duration.ofHours(6);
     private static final Duration BRANCH_CTX_TTL = Duration.ofMinutes(30);
+    /**
+     * [Phase 5.5 UX Polish · R3] 활성 감독 명령어 TTL.
+     * 1배치 일회성이지만 안전망으로 30분 만료 (그 동안 다음 배치가 안 오면 자동 폐기).
+     */
+    private static final Duration DIRECTOR_COMMAND_TTL = Duration.ofMinutes(30);
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Key 빌더
@@ -63,6 +68,11 @@ public class TheaterBatchCacheService {
 
     private String branchCtxKey(Long roomId, String token) {
         return "theater:branch:ctx:" + roomId + ":" + token;
+    }
+
+    /** [R3] 활성 감독 명령어 키 — text와 noteId를 ":"로 구분해 저장 */
+    private String directorCommandKey(Long roomId) {
+        return "theater:director:command:" + roomId;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -162,12 +172,77 @@ public class TheaterBatchCacheService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R3] 활성 감독 명령어
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 활성 명령어 페이로드.
+     * @param text   명령어 텍스트 (검증 통과한 sanitized 값)
+     * @param noteId DB의 DirectorNote ID — consume 시 wasUsed 마킹용
+     */
+    public record ActiveDirectorCommand(String text, Long noteId) {}
+
+    /** 직렬화 구분자 — 텍스트 안에 거의 등장하지 않는 토큰 */
+    private static final String CMD_SEPARATOR = "\u0001";
+
+    /**
+     * 활성 명령어 등록 (max=1 — 기존 큐 덮어쓰기).
+     * 새 명령어를 발동하면 직전에 발동했지만 아직 소비되지 않은 명령어는 폐기됨.
+     */
+    public void setActiveDirectorCommand(Long roomId, String text, Long noteId) {
+        String payload = (noteId != null ? noteId : 0L) + CMD_SEPARATOR + (text != null ? text : "");
+        redisTemplate.opsForValue().set(directorCommandKey(roomId), payload, DIRECTOR_COMMAND_TTL);
+    }
+
+    /**
+     * 활성 명령어 조회 — 소비하지 않음 (peek).
+     * BranchService가 옵션 생성 시너지 컨텍스트로 가볍게 참조하는 용도.
+     */
+    public Optional<ActiveDirectorCommand> peekActiveDirectorCommand(Long roomId) {
+        String payload = redisTemplate.opsForValue().get(directorCommandKey(roomId));
+        return parseCommandPayload(payload);
+    }
+
+    /**
+     * 활성 명령어 소비 (consume) — 조회 + 즉시 삭제.
+     * BatchGenerator가 배치 생성 직전 1회 호출 → 프롬프트에 흡수 후 큐 비움.
+     */
+    public Optional<ActiveDirectorCommand> consumeActiveDirectorCommand(Long roomId) {
+        String key = directorCommandKey(roomId);
+        String payload = redisTemplate.opsForValue().get(key);
+        if (payload != null) redisTemplate.delete(key);
+        return parseCommandPayload(payload);
+    }
+
+    /** 활성 명령어 강제 삭제 (배치 invalidation 등) */
+    public void clearActiveDirectorCommand(Long roomId) {
+        redisTemplate.delete(directorCommandKey(roomId));
+    }
+
+    private Optional<ActiveDirectorCommand> parseCommandPayload(String payload) {
+        if (payload == null || payload.isBlank()) return Optional.empty();
+        int idx = payload.indexOf(CMD_SEPARATOR);
+        if (idx < 0) {
+            // 구버전 — text만 저장된 경우
+            return Optional.of(new ActiveDirectorCommand(payload, null));
+        }
+        Long noteId = null;
+        try {
+            long parsed = Long.parseLong(payload.substring(0, idx));
+            if (parsed > 0) noteId = parsed;
+        } catch (NumberFormatException ignored) {}
+        String text = payload.substring(idx + 1);
+        return Optional.of(new ActiveDirectorCommand(text, noteId));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  전체 정리 (방 삭제 시)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public void purgeRoom(Long roomId) {
         invalidateBatchesFrom(roomId, 0);
         clearRollingSummary(roomId);
+        clearActiveDirectorCommand(roomId);
         log.info("🎭 [CACHE] Purged all caches | roomId={}", roomId);
     }
 }

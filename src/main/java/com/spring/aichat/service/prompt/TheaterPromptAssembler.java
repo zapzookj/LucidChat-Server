@@ -49,6 +49,16 @@ public class TheaterPromptAssembler {
     //  Assembly Context
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * Theater 배치 프롬프트 조립을 위한 컨텍스트 번들.
+     *
+     * [Phase 5.5 UX Polish · R2 / R3]
+     *  - injectedBranchLevel: 배치 끝에 강제 발생시킬 분기 레벨 (결정론적).
+     *                         null이면 분기 없음. 기존 LLM 자율 판단을 폐기하고
+     *                         백엔드가 결정.
+     *  - activeDirectorCommand: 유저가 발동한 감독 명령어 텍스트 (검증 통과한 것).
+     *                          null이면 명령어 없음. 1배치 일회성.
+     */
     public record AssemblyContext(
         ChatRoom room,
         TheaterState state,
@@ -59,8 +69,25 @@ public class TheaterPromptAssembler {
         String chapterPlanHint,                          // Chapter 목표/주제 힌트 (디렉터가 결정)
         String branchContext,                            // 직전 분기 선택 컨텍스트 (있다면)
         Integer targetSceneCount,                        // 이 배치의 목표 씬 수 (5~8)
-        boolean effectiveSecretMode
-    ) {}
+        boolean effectiveSecretMode,
+        String injectedBranchLevel,                      // [R2] MINOR/MAJOR/CLIMAX or null
+        String activeDirectorCommand                     // [R3] 감독 명령어 텍스트 or null
+    ) {
+        /**
+         * 하위 호환 컴팩트 생성자 — 기존 11-인자 호출부 보호.
+         * R2/R3 인자가 없으면 null로 채움.
+         */
+        public AssemblyContext(
+            ChatRoom room, TheaterState state, World world, Character speakerHeroine,
+            List<TheaterHeroineAffection> allAffections, String rollingSummary,
+            String chapterPlanHint, String branchContext, Integer targetSceneCount,
+            boolean effectiveSecretMode
+        ) {
+            this(room, state, world, speakerHeroine, allAffections, rollingSummary,
+                chapterPlanHint, branchContext, targetSceneCount, effectiveSecretMode,
+                null, null);
+        }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  엔트리포인트
@@ -218,6 +245,96 @@ public class TheaterPromptAssembler {
         sb.append("⚠️ ONLY this heroine speaks in this batch. Other heroines may be mentioned but do not utter dialogue.\n");
         sb.append("⚠️ Keep this heroine's distinctive voice throughout — check every line against Personality and Tone above.\n\n");
 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 5.5 UX Polish · R1] Inner Narration 화자 고착
+        //  (가장 빈번히 표류하던 부분 — 명시적 강제로 차단)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        sb.append("# 🧠 Inner Narration — Strict Speaker Anchoring\n");
+        sb.append("Each scene now has TWO inner narration fields. Their speakers are FIXED.\n\n");
+        sb.append("**`protagonist_inner`** — the PROTAGONIST (avatar)'s 1st-person inner voice.\n");
+        sb.append("  • The avatar's name in this session: ")
+            .append(safeString(ctx.state().getAvatarName() != null ? ctx.state().getAvatarName() : "the protagonist"))
+            .append("\n");
+        sb.append("  • Use ONLY the protagonist's perspective: feelings, doubts, observations, intentions.\n");
+        sb.append("  • Use 1st-person voice (\"...\", \"나는...\", \"그녀의 시선이...\").\n");
+        sb.append("  • ⚠️ NEVER write a heroine's inner thought here — that goes in `heroine_inner`.\n\n");
+        sb.append("**`heroine_inner`** — the SPEAKING HEROINE's inner voice.\n");
+        sb.append("  • This heroine: ").append(heroine.getName()).append("\n");
+        sb.append("  • Use ONLY when the scene is heroine_speaks or dialogue_exchange.\n");
+        sb.append("  • Match her Personality and Tone exactly — she sounds like herself even in thought.\n");
+        sb.append("  • This field is NOT shown to the user, but is preserved for narrative continuity.\n\n");
+        sb.append("⚠️ Within a single scene, only ONE of these two fields should be filled (rarely both).\n");
+        sb.append("⚠️ The legacy field `inner_narration` is DEPRECATED — do NOT use it. Use the two new fields above.\n\n");
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 5.5 UX Polish · R1] Scene Type & Composition
+        //  (배치 구성 균형 — 히로인 원맨쇼 방지, 티키타카 강제)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        sb.append("# 🎬 Scene Composition Rules\n");
+        sb.append("Each scene has a `scene_type` field — pick the most accurate one:\n");
+        sb.append("  • `narration`         — narration only, no dialogue.\n");
+        sb.append("  • `heroine_speaks`    — only the heroine speaks (no avatar reply).\n");
+        sb.append("  • `avatar_speaks`     — only the avatar speaks (heroine quiet).\n");
+        sb.append("  • `dialogue_exchange` — real back-and-forth: BOTH heroine and avatar speak across this scene's narration/dialogue lines.\n\n");
+        sb.append("## Per-batch composition guideline (").append(ctx.targetSceneCount() != null ? ctx.targetSceneCount() : 6).append(" scenes)\n");
+        sb.append("  • At LEAST 1 scene MUST be `dialogue_exchange` (real back-and-forth).\n");
+        sb.append("  • Avatar should speak (`avatar_speaks` or `dialogue_exchange`) in 1~2 scenes.\n");
+        sb.append("  • Pure `narration` scenes: 0~1 only.\n");
+        sb.append("  • `heroine_speaks` should NOT exceed 60% of the batch.\n");
+        sb.append("  • If the avatar speaks via `dialogue` field, set `speaker` to \"AVATAR\".\n");
+        sb.append("⚠️ Without these constraints the batch feels like a heroine monologue — break that pattern.\n\n");
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 5.5 UX Polish · R2] Branch Injection
+        //  (LLM의 자율 빈도 결정 폐기 — 백엔드가 결정해서 강제 주입)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (ctx.injectedBranchLevel() != null && !ctx.injectedBranchLevel().isBlank()) {
+            String level = ctx.injectedBranchLevel();
+            sb.append("# 🌿 Branch Point — REQUIRED at end of this batch\n");
+            sb.append("This batch MUST end with a **").append(level).append("** branch.\n");
+            sb.append("The final scene must lead the protagonist to a decision moment **without resolving it**.\n");
+            sb.append("Do NOT have the protagonist make the choice in this batch — that comes after the user picks.\n\n");
+            sb.append("Set `branch_signal`:\n");
+            sb.append("```\n");
+            sb.append("\"branch_signal\": {\n");
+            sb.append("  \"level\": \"").append(level).append("\",\n");
+            sb.append("  \"context\": \"<1~2 sentence summary of what choice the protagonist faces>\"\n");
+            sb.append("}\n");
+            sb.append("```\n\n");
+            // Level별 톤 가이드
+            switch (level) {
+                case "MINOR" -> sb.append("MINOR branches are LIGHT moments — small reactions, tones, micro-decisions. Keep options low-stakes.\n\n");
+                case "MAJOR" -> sb.append("MAJOR branches shape the chapter's direction — meaningful, but not life-changing.\n\n");
+                case "CLIMAX" -> sb.append("CLIMAX branches decide the Act's fate — high-stakes, emotionally charged.\n\n");
+                default -> {}
+            }
+        } else {
+            sb.append("# 🌿 Branch Point\n");
+            sb.append("This batch does NOT end at a branch. Set `branch_signal` to null.\n\n");
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 5.5 UX Polish · R3] Director's Command (one-time, this batch only)
+        //  (유저가 발동한 환경 명령어 — LLM이 부드럽게 흡수)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (ctx.activeDirectorCommand() != null && !ctx.activeDirectorCommand().isBlank()) {
+            sb.append("# 🎬 Director's Command (active for this batch only)\n");
+            sb.append("The director has placed this stage direction:\n\n");
+            sb.append("    \"").append(ctx.activeDirectorCommand().replace("\"", "'")).append("\"\n\n");
+            sb.append("## How to weave this command\n");
+            sb.append("- This is an ENVIRONMENTAL stage direction (weather/sound/prop/passing NPC).\n");
+            sb.append("- Reflect it WITHIN THE FIRST 1~2 SCENES of this batch.\n");
+            sb.append("- After it triggers, the story flow continues naturally — do not over-extend.\n");
+            sb.append("- ⚠️ DO NOT use this command to:\n");
+            sb.append("  • Override a heroine's personality or established behavior\n");
+            sb.append("  • Skip the gradual buildup of affection\n");
+            sb.append("  • Force a heroine into actions that contradict her character\n");
+            sb.append("  • Resolve an ongoing tension that wasn't earned\n");
+            sb.append("- If the command appears to conflict with the established setting, distill its EMOTIONAL ESSENCE\n");
+            sb.append("  (mood, atmosphere, tension) and reflect that instead.\n");
+            sb.append("- Treat it as a creative seed, not a literal instruction.\n\n");
+        }
+
         // ─── 5. 히로인 관계도 (요약) ───
         if (ctx.allAffections() != null && ctx.allAffections().size() > 1) {
             sb.append("# 💕 All Heroines in This Session\n");
@@ -326,9 +443,11 @@ public class TheaterPromptAssembler {
               "scenes": [
                 {
                   "narration": "3인칭 서술. 장면과 행동의 묘사.",
-                  "inner_narration": "주인공(아바타)의 속마음 (optional, 1~2문장)",
-                  "dialogue": "히로인의 대사 (optional, 이 씬의 speaker가 말할 경우)",
+                  "protagonist_inner": "주인공(아바타)의 1인칭 속내 (optional). ⚠️ ONLY the protagonist's voice — never a heroine's thoughts.",
+                  "heroine_inner": "이번 씬의 화자 히로인의 속내 (optional, only when scene_type is heroine_speaks or dialogue_exchange).",
+                  "dialogue": "이 씬에서 발생하는 대사 (heroine_speaks/avatar_speaks/dialogue_exchange일 때).",
                   "speaker": "%s" | "AVATAR" | "",
+                  "scene_type": "narration" | "heroine_speaks" | "avatar_speaks" | "dialogue_exchange",
                   "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | RELAX | DISGUST | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
                   "location": "⚠️ MUST be one enum value listed in 'Allowed Location enum values' above. Do NOT invent location names or write in Korean.",
                   "time": "DAY | NIGHT | DAWN | SUNSET | MORNING | AFTERNOON | EVENING",
@@ -336,14 +455,15 @@ public class TheaterPromptAssembler {
                   "bgm_mode": "DAILY | ROMANTIC | EXCITING | TOUCHING | TENSE | EROTIC",
                   "stat_reflection_hint": "short string describing how stats colored this scene"
                 }
-                ... (total %d scenes)
+                ... (total %d scenes — see Scene Composition Rules above for type distribution)
               ],
               "heroine_affection_deltas": {
                 "%s": +2,
                 ...other heroines: 0 or small delta
               },
               "rolling_summary": "이 배치의 핵심 전개를 1~2문장으로 요약 (다음 배치에 사용)",
-              "branch_signal": null | { "level": "MINOR" | "MAJOR" | "CLIMAX", "context": "..." }
+              "branch_signal": null | { "level": "MINOR" | "MAJOR" | "CLIMAX", "context": "..." },
+              "used_director_commands": []
             }
 
             ## Rules
@@ -353,8 +473,14 @@ public class TheaterPromptAssembler {
             - `heroine_affection_deltas` keys use heroine SLUG.
               **Values MUST be integers in [-2, +2]. Most values should be 0 or ±1.**
               +2 is reserved for emotionally meaningful beats. Non-speaker heroines are usually 0.
-            - Set `branch_signal` only if this batch naturally ends at a pivotal choice.
+            - **`branch_signal` is now CONTROLLED by the directive in the "Branch Point" section above.**
+              If a level was injected, you MUST set branch_signal accordingly. Otherwise null.
             - `chapter_end_after` = true when this batch concludes the current chapter.
+            - **`scene_type` MUST be filled for every scene — composition rules above are mandatory.**
+            - **`protagonist_inner` and `heroine_inner` are MUTUALLY EXCLUSIVE within a single scene** (rare exceptions).
+              The legacy `inner_narration` field is DEPRECATED — do not use it.
+            - `used_director_commands`: if the Director's Command section was active and you reflected it,
+              you may optionally list the command IDs here. Otherwise leave as empty array.
             """.formatted(
             batchSize,
             ctx.speakerHeroine().getSlug(),

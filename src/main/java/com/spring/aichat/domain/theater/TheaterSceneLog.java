@@ -85,9 +85,24 @@ public class TheaterSceneLog {
     @Field("narration")
     private String narration;
 
-    /** 아바타의 속마음 (Theater 고유, optional) */
+    /**
+     * 주인공(아바타)의 1인칭 속내. UI 표시.
+     *
+     * [Phase 5.5 UX Polish · R1] 의미 명확화
+     *  - 기존: inner_narration (화자 모호) → 신규: protagonist_inner (주인공 한정)
+     *  - MongoDB 필드명은 하위 호환을 위해 그대로 유지 (인덱스/기존 데이터 보존)
+     *  - Java 변수명만 의미를 정확히 반영하도록 별도 alias property 제공
+     */
     @Field("innerNarration")
     private String innerNarration;
+
+    /**
+     * [Phase 5.5 UX Polish · R1] 화자 히로인의 속내.
+     *  - UI 미노출 — 백엔드 자산 (AUTO_MOMENT, 시너지, 디렉터스 컷 등)
+     *  - heroine_speaks / dialogue_exchange 씬에서만 채워진다
+     */
+    @Field("heroineInner")
+    private String heroineInner;
 
     /** 대사 (히로인 또는 아바타 또는 없음) */
     @Field("dialogue")
@@ -109,6 +124,16 @@ public class TheaterSceneLog {
     /** 히로인 ID (speakerType=HEROINE일 때만) */
     @Field("heroineId")
     private Long heroineId;
+
+    /**
+     * [Phase 5.5 UX Polish · R1] 씬 타입 — 배치 구성 균형 검증·통계용.
+     *  - "narration":         나레이션만
+     *  - "heroine_speaks":    히로인 단독 발화
+     *  - "avatar_speaks":     아바타 단독 발화
+     *  - "dialogue_exchange": 양방향 티키타카
+     */
+    @Field("sceneType")
+    private String sceneType;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  시각/음향 맥락

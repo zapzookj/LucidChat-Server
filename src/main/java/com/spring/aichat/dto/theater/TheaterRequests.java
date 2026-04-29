@@ -47,7 +47,16 @@ public final class TheaterRequests {
          * null이면 전부 0으로 시작.
          * 합계 제한은 서버에서 구독 티어에 따라 검증.
          */
-        InitialStatDistribution initialStats
+        InitialStatDistribution initialStats,
+
+        /**
+         * [Phase 5.5 UX Polish · R4] 활성 극이 있을 때 덮어쓰기 동의.
+         *  - true:  진행 중인 극을 ARCHIVED로 보관하고 새 극 시작
+         *  - false/null: 활성극이 있으면 409 Conflict 응답 (UI에서 confirm 받고 재호출)
+         *
+         *  활성극이 없으면 이 값은 무관 — 정상적으로 새 극 시작.
+         */
+        Boolean overwriteActive
     ) {}
 
     public record InitialStatDistribution(
@@ -158,6 +167,22 @@ public final class TheaterRequests {
         @NotBlank
         @Size(max = 1000)
         String content
+    ) {}
+
+    /**
+     * [Phase 5.5 UX Polish · R3] 감독 명령어 발동 요청.
+     * 다음 1배치에 환경 변화를 주입한다 (검증 통과 시).
+     * 캐릭터 직접 조작은 분류기에서 차단됨.
+     */
+    public record TriggerDirectorCommandRequest(
+        @NotBlank
+        @Size(max = 300)
+        String content,
+        /**
+         * 기존 활성 명령어 덮어쓰기를 명시적으로 허용 — UI에서 confirm 받은 후 true.
+         * false인데 활성 명령어가 이미 있으면 서비스가 409 응답으로 confirm 요청.
+         */
+        Boolean overwriteActive
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

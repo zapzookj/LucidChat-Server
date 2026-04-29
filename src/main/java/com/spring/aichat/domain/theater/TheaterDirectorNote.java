@@ -74,6 +74,53 @@ public class TheaterDirectorNote {
     @Column(name = "related_illustration_url", length = 500)
     private String relatedIllustrationUrl;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R3] 감독 명령어 메타
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  noteType="MANUAL"인 노트 중 일부는 "감독 명령어"로 발동되었음.
+    //  명령어 발동 = 다음 1배치에 환경적 영향. 일회성. 활성 큐는 Redis에서 관리.
+    //  여기 필드들은 영구 기록(이전 명령어 기록 UI / 통계 / 안전 감사)을 위한 것.
+
+    /**
+     * 명령어 분류 (LLM 또는 룰 기반 분류기가 결정).
+     *  - "ENVIRONMENT" : 비/햇빛/바람 등 환경 변화
+     *  - "NPC"         : 지나가는 행인, 우연한 등장
+     *  - "SOUND"       : 음악, 전화벨, 발소리
+     *  - "PROP"        : 사물, 풍경 변화
+     *  - "OTHER"       : 기타 환경적 변화 (분류기가 ALLOWED로 판단)
+     *  - null          : MANUAL 노트지만 명령어로 발동되지 않은 일반 메모
+     */
+    @Column(name = "command_type", length = 30)
+    private String commandType;
+
+    /**
+     * 검증 결과 — 명령어로 시도되었지만 거부됐을 수 있음.
+     * 거부된 명령어도 기록 보관 → 유저 학습 자료.
+     *  - "ALLOWED"          : 검증 통과 → 활성화됨
+     *  - "REJECTED_HEROINE_DIRECT" : 캐릭터 직접 조작 시도
+     *  - "REJECTED_AFFECTION"      : 호감도 조작 시도
+     *  - "REJECTED_PERSONA"        : 페르소나 변경 시도
+     *  - "REJECTED_AVATAR"         : 아바타 직접 조작 시도
+     *  - "REJECTED_INJECTION"      : 프롬프트 인젝션 시도
+     *  - "REJECTED_CONTENT"        : 콘텐츠 정책 위반 (시크릿 모드 OFF에서)
+     *  - "REJECTED_UNCLEAR"        : 의도 불분명
+     *  - null                      : MANUAL 일반 메모 (명령어 시도 없음)
+     */
+    @Column(name = "validation_verdict", length = 40)
+    private String validationVerdict;
+
+    /** 다음 배치에서 실제 사용되었는지 (ALLOWED 명령어가 LLM 응답에 반영되면 true) */
+    @Column(name = "was_used")
+    private Boolean wasUsed;
+
+    /** 사용된 시각 */
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
+    /** 사용된 배치 ID (디버그/추적용) */
+    @Column(name = "used_in_batch_id")
+    private Integer usedInBatchId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -91,6 +138,58 @@ public class TheaterDirectorNote {
         n.actNumber = actNumber;
         n.chapterNumber = chapterNumber;
         return n;
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R3] 감독 명령어 — 검증 통과한 환경 명령어로 생성.
+     */
+    public static TheaterDirectorNote command(ChatRoom room, String content,
+                                              Integer actNumber, Integer chapterNumber,
+                                              String commandType, String verdict) {
+        TheaterDirectorNote n = new TheaterDirectorNote();
+        n.room = room;
+        n.noteType = "MANUAL";
+        n.content = content;
+        n.actNumber = actNumber;
+        n.chapterNumber = chapterNumber;
+        n.commandType = commandType;
+        n.validationVerdict = verdict;
+        n.wasUsed = Boolean.FALSE;
+        return n;
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R3] 거부된 명령어 — 기록만 보관. 활성화 안 됨.
+     */
+    public static TheaterDirectorNote rejectedCommand(ChatRoom room, String content,
+                                                      Integer actNumber, Integer chapterNumber,
+                                                      String verdict) {
+        TheaterDirectorNote n = new TheaterDirectorNote();
+        n.room = room;
+        n.noteType = "MANUAL";
+        n.content = content;
+        n.actNumber = actNumber;
+        n.chapterNumber = chapterNumber;
+        n.validationVerdict = verdict;
+        n.wasUsed = Boolean.FALSE;
+        return n;
+    }
+
+    /**
+     * [R3] 명령어 사용 마킹 — LLM이 다음 배치에서 반영했음을 기록.
+     */
+    public void markUsed(Integer batchId) {
+        this.wasUsed = Boolean.TRUE;
+        this.usedAt = LocalDateTime.now();
+        this.usedInBatchId = batchId;
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R6] 자동 일러스트 생성 완료 시 URL 첨부.
+     * AUTO_MOMENT/BRANCH_TAKEN/CHAPTER_END 등의 노트가 폴링 완료 시 호출됨.
+     */
+    public void attachIllustration(String url) {
+        this.relatedIllustrationUrl = url;
     }
 
     public static TheaterDirectorNote autoMoment(ChatRoom room, String content,

@@ -49,6 +49,10 @@ public class TheaterBranchService {
     private final UserRepository userRepository;
     // [Phase III · 작업 3] CLIMAX 분기는 proModel
     private final TheaterModelResolver modelResolver;
+    /** [Phase 5.5 UX Polish · R6] 분기 선택 직후 BRANCH_TAKEN 노트 + 일러스트 트리거 */
+    private final TheaterAutoNoteService autoNoteService;
+    /** [R6] 화자 히로인 조회용 (LOCATION은 chosen.heroineId, 그 외는 state.currentHeroineId) */
+    private final com.spring.aichat.domain.character.CharacterRepository characterRepository;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 장소 선택 분기 (LOCATION)
@@ -154,6 +158,33 @@ public class TheaterBranchService {
             default -> "선택";
         };
 
+        // [Phase 5.5 UX Polish · R2] MINOR 빈도가 높아지므로 (Chapter당 3~4회)
+        // 톤 다양화 강제로 단조로움 회피.
+        String minorToneGuidance = level == BranchLevel.MINOR
+            ? """
+              # MINOR Tone Diversification (CRITICAL — Chapter당 빈발)
+              The 2 options MUST use DIFFERENT tones from this set:
+                AFFECTION    — emotional warmth, soft connection
+                BOLD         — taking a step forward, daring
+                WITTY        — humor, light deflection
+                INTROSPECTIVE — turning inward, hesitating
+              Pick 2 distinct tones. Never both AFFECTION or both BOLD.
+              Each option's `detail` should be SHORT (under 30자) and lyrical, not heavy.
+              Avoid stat_gates on MINOR branches — keep them tonal, not stat-locked.
+              """
+            : "";
+
+        // [Phase 5.5 UX Polish · R3] 활성 감독 명령어가 있으면 옵션 생성 컨텍스트에 주입.
+        // 이게 메모-신호와 분기 시스템의 시너지 (정책 E).
+        // peek: 큐를 비우지 않음 — 분기 옵션 생성 후 다음 배치 생성 시 BatchGenerator가 consume.
+        String activeCommand = batchCache.peekActiveDirectorCommand(state.getRoom().getId())
+            .map(TheaterBatchCacheService.ActiveDirectorCommand::text)
+            .orElse(null);
+        String commandContext = (activeCommand != null && !activeCommand.isBlank())
+            ? "\n# Active Director Command (current scene atmosphere)\n  \"" + activeCommand
+            + "\"\n  Consider this when crafting option tones — they should feel coherent with this atmosphere.\n"
+            : "";
+
         return """
             # Branch Generator — Theater Mode
             You generate %d narrative branch options for the current story moment.
@@ -165,7 +196,8 @@ public class TheaterBranchService {
 
             # Context Summary
             %s
-
+            %s
+            %s
             # Output Format
             Return a single JSON object:
             {
@@ -173,7 +205,7 @@ public class TheaterBranchService {
               "options": [
                 {
                   "label": "선택지 제목 (10~20자)",
-                  "detail": "선택지의 뉘앙스/결과 암시 (20~40자)",
+                  "detail": "선택지의 뉘앙스/결과 암시 (MINOR=under 30자 / MAJOR/CLIMAX=20~40자)",
                   "tone": "normal | affection | bold | witty | introspective",
                   "stat_gate": { "stat": "CHARM | WIT | BOLDNESS | INTELLECT | EMPATHY", "min_value": 30 } | null,
                   "is_secret": false
@@ -182,7 +214,7 @@ public class TheaterBranchService {
             }
 
             # Rules
-            - 최소 %d개 중 1개는 stat_gate 조건이 있어도 좋다
+            - %d개 옵션 중 1개는 stat_gate 조건이 있어도 좋다 (MINOR 제외)
             - stat_gate의 min_value는 30~70 사이
             - tone은 해당 선택의 감정 기류를 나타낸다
             - 각 옵션은 서로 명확히 다른 방향성을 가져야 한다
@@ -194,6 +226,8 @@ public class TheaterBranchService {
             state.getStatIntellect(), state.getStatEmpathy(),
             level.name(), levelDesc,
             contextSummary != null ? contextSummary : "(no summary)",
+            commandContext,
+            minorToneGuidance,
             optionCount
         );
     }
@@ -324,6 +358,26 @@ public class TheaterBranchService {
 
         log.info("🎭 [BRANCH] Applied | roomId={} | level={} | chosen={} | cost={}",
             roomId, level, chosen.label(), chosen.energyCost());
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 5.5 UX Polish · R6] BRANCH_TAKEN 자동 캡처
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  분기 종류에 따라 일러스트 화자 히로인 결정:
+        //   - LOCATION: chosen.heroineId() (선택된 장소에 묶인 히로인)
+        //   - 그 외:    state.currentHeroineId (현재 화자)
+        //  MINOR는 빈도가 높으므로 노트만 생성하고 일러스트는 X (autoNoteService에서 처리).
+        try {
+            Long speakerHeroineId = (level == BranchLevel.LOCATION && chosen.heroineId() != null)
+                ? chosen.heroineId()
+                : state.getCurrentHeroineId();
+            Character speakerHeroine = speakerHeroineId != null
+                ? characterRepository.findById(speakerHeroineId).orElse(null)
+                : null;
+            autoNoteService.captureBranchTaken(
+                room, state, level.name(), chosen.label(), speakerHeroine);
+        } catch (Exception e) {
+            log.warn("🎭 [BRANCH] BRANCH_TAKEN auto-note failed (non-fatal): {}", e.getMessage());
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
