@@ -15,6 +15,7 @@ import com.spring.aichat.dto.theater.LlmSceneBatchOutput;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
 import com.spring.aichat.exception.ExternalApiException;
 import com.spring.aichat.external.OpenRouterClient;
+import com.spring.aichat.service.illustration.BackgroundGenerationService;
 import com.spring.aichat.service.prompt.TheaterPromptAssembler;
 import com.spring.aichat.service.prompt.TheaterPromptAssembler.AssemblyContext;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +50,7 @@ public class TheaterBatchGenerator {
     /** [Phase 5.5 UX Polish · R6] AUTO_MOMENT / CHAPTER_END 노트 + 일러스트 통합 */
     private final TheaterAutoNoteService autoNoteService;
     /** [Phase 5.5 UX Polish · R6] 배치 도착 시 location prefetch */
-    private final com.spring.aichat.service.BackgroundGenerationService backgroundGenerationService;
+    private final BackgroundGenerationService backgroundGenerationService;
     private final OpenAiProperties openAiProperties;
     private final ObjectMapper objectMapper;
     // [Phase III · 작업 3] 2단 모델 라우팅

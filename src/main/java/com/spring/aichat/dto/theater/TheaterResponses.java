@@ -151,7 +151,11 @@ public final class TheaterResponses {
         boolean nextBatchPrefetched,
         /** 이 배치에서 발생한 호감도 변화 (요약) */
         Map<Long, Integer> heroineAffectionDeltas
-    ) {}
+    ) {
+        public boolean locationChoiceAfter() {
+            return branchSignal != null && "LOCATION".equals(branchSignal.level());
+        }
+    }
 
     /**
      * Theater용 Scene
@@ -174,8 +178,6 @@ public final class TheaterResponses {
         String protagonistInner,
         /** [R1] 히로인 속내 — UI 미노출 (옵션) */
         String heroineInner,
-        /** @deprecated protagonistInner와 동일 값. 구버전 클라이언트 호환용. */
-        @Deprecated String innerNarration,
         String dialogue,
         /** [R1] 씬 타입 — 배치 구성 통계용 */
         String sceneType,
@@ -187,13 +189,17 @@ public final class TheaterResponses {
         /** 이 씬에서 자동 생성된 일러스트 (프롬프트 큐 → 비동기 로드) */
         String illustrationUrl,
         /** 스탯 효과 키워드 ("매력이 낮은 주인공의 어색함이 드러난다" 등) */
-        String statReflectionHint
-    ) {}
+        String statReflectionHint,
+        String s) {}
 
     public record BranchSignal(
         String level,              // MINOR / MAJOR / CLIMAX / LOCATION
         String contextSummary      // 유저에게 보여주지 않고, 다음 분기 API 호출 시 재사용
-    ) {}
+    ) {
+        public String context() {
+            return contextSummary != null ? contextSummary : "";
+        }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  분기 응답
@@ -449,8 +455,6 @@ public final class TheaterResponses {
         String protagonistInner,
         /** [R1] 히로인 속내 — 미노출 (옵션) */
         String heroineInner,
-        /** @deprecated protagonistInner와 동일. 구버전 클라이언트 호환용. */
-        @Deprecated String innerNarration,
         String dialogue,
         String speakerType,         // HEROINE / AVATAR / null
         String speakerName,

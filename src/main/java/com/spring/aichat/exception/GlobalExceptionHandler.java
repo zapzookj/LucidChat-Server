@@ -23,7 +23,9 @@ public class GlobalExceptionHandler {
             case NOT_FOUND -> 404;
             case BAD_REQUEST -> 400;
             case INSUFFICIENT_ENERGY -> 402;
+            case FORBIDDEN -> 403;
             case CONTENT_BLOCKED -> 400;
+            case CONFLICT -> 409;       // [Phase 5.5 UX Polish · R4] 활성극 충돌
             case EXTERNAL_API_ERROR -> 502;
             default -> 500;
         };

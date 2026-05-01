@@ -45,6 +45,12 @@ public class IllustrationService {
     private final CharacterRepository characterRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final RedisCacheService cacheService;
+    /**
+     * [Phase 5.5 UX Polish · R6] AUTO 일러스트가 특정 DirectorNote와 연결됐을 때
+     * 폴링 완료 시 노트의 relatedIllustrationUrl을 업데이트하기 위한 의존성.
+     * (optional — 연결 노트가 없으면 사용되지 않음)
+     */
+    private final com.spring.aichat.domain.theater.TheaterDirectorNoteRepository directorNoteRepository;
 
     private static final int ILLUSTRATION_ENERGY_COST = 10;
 
@@ -88,6 +94,21 @@ public class IllustrationService {
 
     @Async
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId, String triggerType) {
+        generateAutoIllustration(userId, characterId, roomId, triggerType, null);
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R6] noteId-aware 자동 일러스트 생성.
+     *
+     * AUTO_MOMENT 등 자동 트리거에서 DirectorNote와 연결된 일러스트를 생성한다.
+     * 폴링 완료 시 IllustrationService 내부에서 노트의 relatedIllustrationUrl을
+     * 업데이트하므로, 호출 측은 fire-and-forget으로 사용 가능.
+     *
+     * @param noteId 연결할 DirectorNote ID (null 가능)
+     */
+    @Async
+    public void generateAutoIllustration(Long userId, Long characterId, Long roomId,
+                                         String triggerType, Long noteId) {
         try {
             User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
@@ -106,11 +127,27 @@ public class IllustrationService {
             }
 
             IllustrationRequestResult result = submitGeneration(user, character, emotion, location, outfit, triggerType);
+
+            // [R6] 노트 연결 — 폴링 완료 시 handleCompletion이 노트 URL을 업데이트
+            if (noteId != null && result != null && result.illustrationId() != null) {
+                try {
+                    illustrationRepository.findById(result.illustrationId()).ifPresent(illust -> {
+                        illust.linkToNote(noteId);
+                        illustrationRepository.save(illust);
+                    });
+                } catch (Exception linkErr) {
+                    log.warn("[ILLUST] linkToNote failed (non-fatal): noteId={}, err={}",
+                        noteId, linkErr.getMessage());
+                }
+            }
+
             processPollingInBackground(result.requestId());
 
-            log.info("[ILLUST] Auto generation submitted: trigger={}, userId={}, charId={}", triggerType, userId, characterId);
+            log.info("[ILLUST] Auto generation submitted: trigger={}, userId={}, charId={}, noteId={}",
+                triggerType, userId, characterId, noteId);
         } catch (Exception e) {
-            log.error("[ILLUST] Auto generation failed: trigger={}, userId={}, charId={}", triggerType, userId, characterId, e);
+            log.error("[ILLUST] Auto generation failed: trigger={}, userId={}, charId={}",
+                triggerType, userId, characterId, e);
         }
     }
 
@@ -256,6 +293,24 @@ public class IllustrationService {
 
             illust.markCompleted(s3Url, "runpod:base64"); // falTempUrl 대신 출처 마커
             illustrationRepository.save(illust);
+
+            // [Phase 5.5 UX Polish · R6] 연결된 DirectorNote에 일러스트 URL 채워주기
+            //   - linkedNoteId가 있으면 해당 노트의 relatedIllustrationUrl을 업데이트
+            //   - 다이어리 패널이 새로고침되면 사진과 함께 표시됨
+            //   - 실패해도 본 흐름엔 영향 없음 (try-catch 격리)
+            Long noteId = illust.getLinkedNoteId();
+            if (noteId != null) {
+                try {
+                    directorNoteRepository.findById(noteId).ifPresent(note -> {
+                        note.attachIllustration(s3Url);
+                        directorNoteRepository.save(note);
+                    });
+                    log.info("[ILLUST] ✅ Linked to DirectorNote: noteId={}, s3Url={}", noteId, s3Url);
+                } catch (Exception linkErr) {
+                    log.warn("[ILLUST] DirectorNote link failed (non-fatal): noteId={}, err={}",
+                        noteId, linkErr.getMessage());
+                }
+            }
 
             log.info("[ILLUST] ✅ Completed: requestId={}, s3Url={}", illust.getFalRequestId(), s3Url);
         } catch (Exception e) {

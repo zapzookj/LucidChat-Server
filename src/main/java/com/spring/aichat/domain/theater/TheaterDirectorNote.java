@@ -208,13 +208,14 @@ public class TheaterDirectorNote {
     }
 
     public static TheaterDirectorNote branchTaken(ChatRoom room, String content,
-                                                  Integer actNumber, Integer chapterNumber) {
+                                                  Integer actNumber, Integer chapterNumber, Long speakerHeroineId) {
         TheaterDirectorNote n = new TheaterDirectorNote();
         n.room = room;
         n.noteType = "BRANCH_TAKEN";
         n.content = content;
         n.actNumber = actNumber;
         n.chapterNumber = chapterNumber;
+        n.relatedHeroineId = speakerHeroineId;
         return n;
     }
 

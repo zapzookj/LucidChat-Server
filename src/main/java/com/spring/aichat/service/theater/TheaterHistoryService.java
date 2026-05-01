@@ -106,7 +106,6 @@ public class TheaterHistoryService {
             log.getNarration(),
             protagonistInner,             // 신규: protagonistInner
             log.getHeroineInner(),        // 신규: heroineInner (UI 미노출이지만 응답엔 포함)
-            protagonistInner,             // alias: innerNarration (구버전 호환)
             log.getDialogue(),
             log.getSpeakerType(),
             log.getSpeakerName(),

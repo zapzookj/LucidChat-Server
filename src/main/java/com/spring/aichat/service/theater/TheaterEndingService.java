@@ -2,6 +2,7 @@ package com.spring.aichat.service.theater;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
@@ -50,9 +51,8 @@ public class TheaterEndingService {
     private final TheaterDirectorNoteRepository directorNoteRepository;
     private final TheaterBatchCacheService batchCache;
     private final OpenRouterClient openRouterClient;
+    private final OpenAiProperties openAiProperties;
     private final ObjectMapper objectMapper;
-    // [Phase III · 작업 3] 엔딩 씬은 항상 proModel
-    private final TheaterModelResolver modelResolver;
 
     private static final int DOMINANT_STAT_THRESHOLD = 80;
     private static final int HAPPY_THRESHOLD = 70;
@@ -114,6 +114,10 @@ public class TheaterEndingService {
 
         // ─── 5. 상태 저장 ───
         state.markEndingReached(endingType, endingType.getTitleKo(), mainHeroine.getId());
+        // [Phase 5.5 UX Polish · R4] 엔딩 도달 시 세션을 ENDED로 영구 전환.
+        //   - 활성 슬롯에서 빠짐 → 다음 새 극 시작 시 confirm 불필요
+        //   - 아카이브에서 영구 감상 가능 (resume은 불가)
+        state.markEnded();
 
         // ─── 6. 통계 수집 ───
         EndingStats stats = buildEndingStats(state, allAffections, roomId);
@@ -213,14 +217,8 @@ public class TheaterEndingService {
             toneDescription
         );
 
-        // [Phase III · 작업 3] 엔딩 씬은 누적 가치의 클라이맥스 — 항상 proModel
-        String model = modelResolver.resolveEndingModel(room.getUser());
-
-        log.info("🎭 [ENDING] generate scenes | roomId={} | type={} | model={}",
-            room.getId(), type.name(), model);
-
         String responseText = openRouterClient.completeJson(
-            model, systemPrompt,
+            openAiProperties.model(), systemPrompt,
             "Generate ending now.", 1800, 0.85
         );
 

@@ -157,10 +157,43 @@ public class TheaterLobbyService {
                 state.isEndingReached(),
                 state.getEndingTitle(),
                 state.getTotalSceneCount(),
-                room.getLastActiveAt()
+                room.getLastActiveAt(),
+                // [Phase 5.5 UX Polish · R4] 세션 상태 노출
+                state.getSessionStatus() != null ? state.getSessionStatus() : "ACTIVE",
+                state.getSessionStatusChangedAt()
             ));
         }
         return cards;
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 활성(ACTIVE) Theater 세션 1개만 조회 — 로비 메인 노출용.
+     * 활성극이 없으면 빈 리스트.
+     */
+    public List<TheaterSessionCard> getActiveTheaterSessions(String username) {
+        return getMyTheaterSessions(username).stream()
+            .filter(c -> c.sessionStatus() == null || "ACTIVE".equals(c.sessionStatus()))
+            .toList();
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 아카이브 세션 — ARCHIVED + ENDED.
+     * 최근 변경순 (sessionStatusChangedAt 내림차순 → lastActiveAt 내림차순).
+     */
+    public List<TheaterSessionCard> getArchivedTheaterSessions(String username) {
+        return getMyTheaterSessions(username).stream()
+            .filter(c -> "ARCHIVED".equals(c.sessionStatus()) || "ENDED".equals(c.sessionStatus()))
+            .sorted((a, b) -> {
+                java.time.LocalDateTime ta = a.sessionStatusChangedAt() != null
+                    ? a.sessionStatusChangedAt() : a.lastActiveAt();
+                java.time.LocalDateTime tb = b.sessionStatusChangedAt() != null
+                    ? b.sessionStatusChangedAt() : b.lastActiveAt();
+                if (ta == null && tb == null) return 0;
+                if (ta == null) return 1;
+                if (tb == null) return -1;
+                return tb.compareTo(ta);
+            })
+            .toList();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -235,13 +268,51 @@ public class TheaterLobbyService {
             TheaterState existingState = theaterStateRepository.findByRoom_Id(existing.get().getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "TheaterState 일관성 오류: room=" + existing.get().getId()));
+
             if (existingState.getWorldId() == worldId) {
+                // [Phase 5.5 UX Polish · R4] 같은 세계관 + 같은 lead heroine 이라도
+                // 아카이브된 세션이면 resume이 정확한 의미. 활성으로 전환.
+                if (existingState.isArchived()) {
+                    // 다른 활성 세션이 있다면 그것을 ARCHIVED로 (모델 C-2)
+                    archiveCurrentActiveIfAny(user, existingState.getRoom().getId());
+                    existingState.resumeFromArchive();
+                    theaterStateRepository.save(existingState);
+                    log.info("🎭 [THEATER] Resumed archived session | roomId={} | user={}",
+                        existing.get().getId(), username);
+                }
+                // ENDED 세션은 새로 시작해야 하지만, 같은 lead heroine은 충돌
+                // → 다른 lead heroine으로 가도록 안내 (단, 이건 매우 드물어 BadRequest)
+                else if (existingState.isEnded()) {
+                    throw new BadRequestException(
+                        "이 히로인의 극은 이미 엔딩에 도달했습니다. 다른 히로인을 선택하거나 아카이브에서 다시 감상하세요.");
+                }
+
                 log.info("🎭 [THEATER] Existing session returned | roomId={} | world={} | user={}",
                     existing.get().getId(), worldId, username);
                 return buildRoomInfo(existing.get(), existingState);
             }
-            throw new BadRequestException(
-                "이미 다른 세계관의 Theater 방이 존재합니다. 새 세션을 만들려면 기존 방을 삭제해주세요.");
+            // 다른 세계관의 방 — 존재할 수 있음 (모델 C-2: 활성 1개 + 아카이브 N).
+            // 정책: 다른 세계관도 별도 활성/아카이브로 가질 수 있음.
+            //       (이전 BadRequest는 해제) 단 활성 정책은 유저 단위 전체.
+        }
+
+        // [Phase 5.5 UX Polish · R4] 활성극 충돌 처리.
+        // 신규 세션을 만들기 전, 다른 활성극이 있다면:
+        //  - request.overwriteActive=true 면 archive 후 진행
+        //  - 그 외엔 409 Conflict (UI에서 confirm 받고 재호출 유도)
+        Optional<TheaterState> currentActive = theaterStateRepository.findActiveByUserId(user.getId());
+        if (currentActive.isPresent()) {
+            boolean overwrite = Boolean.TRUE.equals(request.overwriteActive());
+            if (!overwrite) {
+                throw new BusinessException(
+                    ErrorCode.CONFLICT,
+                    "이미 진행 중인 극이 있습니다. 이 극을 시작하면 기존 극은 아카이브로 보관됩니다."
+                );
+            }
+            currentActive.get().archiveAsInterrupted();
+            theaterStateRepository.save(currentActive.get());
+            log.info("🎭 [THEATER] Active session archived for new start | archivedRoomId={} | user={}",
+                currentActive.get().getRoom().getId(), username);
         }
 
         // ─── 6. ChatRoom 생성 ───
@@ -342,6 +413,78 @@ public class TheaterLobbyService {
         state.applyStatChange(AvatarStat.EMPATHY, newDistribution.empathy() - state.getStatEmpathy());
 
         log.info("🎭 [THEATER] Stats rerolled | roomId={} | new={}", roomId, newDistribution);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 5.5 UX Polish · R4] Resume / Archive 정책
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 아카이브된 극을 다시 활성화 (resume).
+     *
+     * 정책 (모델 C-2):
+     *  - 대상 세션이 ARCHIVED여야 함 (ENDED는 resume 불가 — 영구 완결)
+     *  - 다른 활성 세션이 있다면 그것을 ARCHIVED로 자동 전환 (활성 1개 정책)
+     *  - 본 세션을 ACTIVE로 전환 후 room 정보 반환
+     *
+     * @return resume된 방의 RoomInfo
+     */
+    @Transactional
+    public TheaterRoomInfo resumeArchivedSession(String username, Long roomId) {
+        User user = findUser(username);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+            .orElseThrow(() -> new NotFoundException("방을 찾을 수 없습니다."));
+        if (!room.getUser().getId().equals(user.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "접근 권한이 없습니다.");
+        }
+        TheaterState state = theaterStateRepository.findByRoom_Id(roomId)
+            .orElseThrow(() -> new NotFoundException("Theater 상태를 찾을 수 없습니다."));
+
+        if (state.isEnded()) {
+            throw new BadRequestException("엔딩에 도달한 극은 다시 시작할 수 없습니다. 아카이브에서 감상만 가능합니다.");
+        }
+        if (state.isActive()) {
+            // 이미 활성 — 그대로 진입
+            return buildRoomInfo(room, state);
+        }
+
+        // 다른 활성극 있으면 archive
+        archiveCurrentActiveIfAny(user, roomId);
+
+        state.resumeFromArchive();
+        theaterStateRepository.save(state);
+
+        log.info("🎭 [THEATER] Session resumed | roomId={} | user={}", roomId, username);
+        return buildRoomInfo(room, state);
+    }
+
+    /**
+     * 활성 극을 명시적으로 아카이브 (사용자가 "잠시 멈추기" 또는 임의 중단).
+     */
+    @Transactional
+    public void archiveActiveSession(String username) {
+        User user = findUser(username);
+        Optional<TheaterState> active = theaterStateRepository.findActiveByUserId(user.getId());
+        if (active.isEmpty()) return; // 활성극 없음 → no-op
+        active.get().archiveAsInterrupted();
+        theaterStateRepository.save(active.get());
+        log.info("🎭 [THEATER] Active session archived (manual) | roomId={} | user={}",
+            active.get().getRoom().getId(), username);
+    }
+
+    /**
+     * 활성극이 있고 그것이 excludeRoomId가 아니면 ARCHIVED로 전환.
+     * createSession / resume 흐름에서 사용 — 활성 1개 정책 보장.
+     */
+    private void archiveCurrentActiveIfAny(User user, Long excludeRoomId) {
+        Optional<TheaterState> currentActive = theaterStateRepository.findActiveByUserId(user.getId());
+        if (currentActive.isEmpty()) return;
+        TheaterState s = currentActive.get();
+        if (excludeRoomId != null && excludeRoomId.equals(s.getRoom().getId())) return;
+        s.archiveAsInterrupted();
+        theaterStateRepository.save(s);
+        log.info("🎭 [THEATER] Auto-archived previous active | archivedRoomId={} | user={}",
+            s.getRoom().getId(), user.getUsername());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

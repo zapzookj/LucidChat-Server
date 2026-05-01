@@ -56,6 +56,47 @@ public class TheaterLobbyController {
         return theaterLobbyService.getMyTheaterSessions(authentication.getName());
     }
 
+    /**
+     * [Phase 5.5 UX Polish · R4] 활성 세션 1개만 — 로비 메인 카드 노출용.
+     * 빈 리스트면 "새 극 시작" CTA를 메인에 표시.
+     */
+    @GetMapping("/lobby/sessions/active")
+    public List<TheaterSessionCard> getActiveSessions(Authentication authentication) {
+        return theaterLobbyService.getActiveTheaterSessions(authentication.getName());
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 아카이브 세션 (ARCHIVED + ENDED).
+     * 최근 변경순.
+     */
+    @GetMapping("/lobby/sessions/archive")
+    public List<TheaterSessionCard> getArchivedSessions(Authentication authentication) {
+        return theaterLobbyService.getArchivedTheaterSessions(authentication.getName());
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 아카이브된 극을 다시 활성화 (resume).
+     * ARCHIVED만 가능. ENDED는 BadRequest.
+     * 다른 활성극이 있으면 자동 archive (활성 1개 정책).
+     */
+    @PostMapping("/lobby/sessions/{roomId}/resume")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public TheaterRoomInfo resumeSession(
+        @PathVariable Long roomId, Authentication authentication
+    ) {
+        return theaterLobbyService.resumeArchivedSession(authentication.getName(), roomId);
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R4] 활성 극을 명시적으로 아카이브 (잠시 멈추기).
+     * 유저가 여러 극을 자유롭게 전환할 때 사용. 활성극이 없으면 no-op.
+     */
+    @PostMapping("/lobby/sessions/active/archive")
+    public ResponseEntity<Void> archiveActive(Authentication authentication) {
+        theaterLobbyService.archiveActiveSession(authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Theater 세션 생성
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

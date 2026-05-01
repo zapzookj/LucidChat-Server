@@ -90,6 +90,15 @@ public class UserIllustration {
     @Column(name = "error_message", length = 500)
     private String errorMessage;
 
+    /**
+     * [Phase 5.5 UX Polish · R6] 연결된 DirectorNote ID (옵션).
+     * AUTO_MOMENT 등 자동 트리거로 생성된 일러스트는 특정 노트와 연결됨.
+     * 폴링 완료 시 IllustrationService가 이 노트의 relatedIllustrationUrl을 업데이트.
+     * MANUAL 일러스트나 다른 trigger는 null.
+     */
+    @Column(name = "linked_note_id")
+    private Long linkedNoteId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -125,6 +134,13 @@ public class UserIllustration {
         illust.outfit = outfit;
         illust.status = "PENDING";
         return illust;
+    }
+
+    /**
+     * [Phase 5.5 UX Polish · R6] 연결 노트 설정 — 일러스트 생성 직후, save 직전 호출.
+     */
+    public void linkToNote(Long noteId) {
+        this.linkedNoteId = noteId;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
