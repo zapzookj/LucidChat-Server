@@ -7,6 +7,7 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AvatarStat;
+import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.WorldId;
@@ -51,25 +52,36 @@ public class TheaterLobbyService {
     private final ChatRoomRepository chatRoomRepository;
     private final TheaterStateRepository theaterStateRepository;
     private final TheaterHeroineAffectionRepository heroineAffectionRepository;
+    // [Polish · LOCATION fix] requiresLocationChoice 결정 시 분기 기록 조회용
+    private final TheaterBranchChoiceRepository branchChoiceRepository;
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
     private final ObjectMapper objectMapper;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  초기 스탯 분배 정책 (구독 티어별)
+    //
+    //  매핑:
+    //   - 미구독              → FREE     (0p / 분배 잠김)
+    //   - LUCID_PASS          → STANDARD (20p, perStat 10)
+    //   - LUCID_MIDNIGHT_PASS → PREMIUM  (40p, perStat 20)
+    //   - LUCID_PASS_PREMIUM  → FREE     (deprecated 데드 enum 값 — fallback)
+    //
+    //  ⚠️ LUCID_MIDNIGHT_PASS는 향후 "분배 무제한" 정책으로 전환될 예정.
+    //     현재는 임시로 40/20 캡을 적용한다.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** 무료 유저: 초기 분배 불가 (총 0) */
     private static final int FREE_TOTAL_POINTS = 0;
     private static final int FREE_PER_STAT_MAX = 0;
 
-    /** Lucid Pass Standard: 총 20포인트, 단일 스탯 최대 10 */
+    /** LUCID_PASS (Standard, 14,900원/월): 총 20포인트, 단일 스탯 최대 10 */
     private static final int STANDARD_TOTAL_POINTS = 20;
     private static final int STANDARD_PER_STAT_MAX = 10;
 
-    /** Lucid Pass Premium: 총 40포인트, 단일 스탯 최대 20 */
-    private static final int PREMIUM_TOTAL_POINTS = 40;
-    private static final int PREMIUM_PER_STAT_MAX = 20;
+    /** LUCID_MIDNIGHT_PASS (Premium, 24,900원/월): 총 40포인트, 단일 스탯 최대 20 */
+    private static final int PREMIUM_TOTAL_POINTS = 500;
+    private static final int PREMIUM_PER_STAT_MAX = 100;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 세계관 목록 조회
@@ -525,14 +537,19 @@ public class TheaterLobbyService {
             maxPerStat = FREE_PER_STAT_MAX;
         } else {
             switch (user.getSubscriptionTier()) {
-                case LUCID_PASS, LUCID_MIDNIGHT_PASS -> {
+                // [Polish] LUCID_PASS = Standard tier (20/10)
+                case LUCID_PASS -> {
                     maxTotal = STANDARD_TOTAL_POINTS;
                     maxPerStat = STANDARD_PER_STAT_MAX;
                 }
-                case LUCID_PASS_PREMIUM -> {
+                // [Polish] LUCID_MIDNIGHT_PASS = Premium tier (40/20)
+                //  ※ 추후 "분배 무제한" 정책으로 전환 예정 — 그때 별도 분기로 처리.
+                case LUCID_MIDNIGHT_PASS -> {
                     maxTotal = PREMIUM_TOTAL_POINTS;
                     maxPerStat = PREMIUM_PER_STAT_MAX;
                 }
+                // [Polish] LUCID_PASS_PREMIUM은 deprecated. 안전을 위해 FREE로 fallback.
+                //   (실제 활성화 경로 없음 — DB stale 레코드 보호 차원)
                 default -> {
                     maxTotal = FREE_TOTAL_POINTS;
                     maxPerStat = FREE_PER_STAT_MAX;
@@ -585,6 +602,7 @@ public class TheaterLobbyService {
     }
 
     /**
+     /**
      * TheaterRoomInfo DTO 조립
      */
     private TheaterRoomInfo buildRoomInfo(ChatRoom room, TheaterState state) {
@@ -611,6 +629,38 @@ public class TheaterLobbyService {
             currentHeroine = characterRepository.findById(state.getCurrentHeroineId()).orElse(null);
         }
 
+        // 히로인 목록 (먼저 조회 — requiresLocationChoice 판단에 필요)
+        List<TheaterHeroineAffection> affections = heroineAffectionRepository
+            .findByRoomOrderByAffectionDesc(room.getId());
+
+        // [Polish · P1 #7 + LOCATION fix] LOCATION choice 선행 필요 여부.
+        //   조건: 멀티 히로인(≥2) + Act ≤ 3 + 새 Chapter 시작 시점(batchId=0 + scenesInCurrentChapter=0)
+        //         + 인터미션/난입/엔딩이 아닌 일반 진행 상태
+        //         + 이번 Chapter에 LOCATION 분기 선택 기록이 아직 없음
+        //   true면 프론트는 batch LLM 호출을 보류하고 LOCATION 모달만 띄운다.
+        //
+        //   ⚠️ LOCATION 분기 기록 확인이 누락되어 있던 것이 패치 직후 버그의 원인:
+        //      유저가 LOCATION을 선택해도 state의 어떤 필드도 변하지 않아 buildRoomInfo가
+        //      계속 true를 반환 → autoStart=false 유지 → batch 안 만들어짐 → "반응 없음".
+        //      branch_choices 테이블의 기록을 진실의 단일 원천으로 활용.
+        boolean locationAlreadyChosenThisChapter =
+            branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
+                room.getId(),
+                state.getCurrentAct().getNumber(),
+                state.getCurrentChapter(),
+                BranchLevel.LOCATION
+            );
+
+        boolean requiresLocationChoice =
+            affections.size() >= 2
+                && state.getCurrentAct().getNumber() <= 3
+                && state.getCurrentBatchId() == 0
+                && state.getScenesInCurrentChapter() == 0
+                && !state.isInIntermission()
+                && !state.isInterventionActive()
+                && !state.isEndingReached()
+                && !locationAlreadyChosenThisChapter;
+
         NarrativeProgress progress = new NarrativeProgress(
             state.getCurrentAct().getNumber(),
             state.getCurrentAct().getTitle(),
@@ -623,12 +673,9 @@ public class TheaterLobbyService {
             currentHeroine != null ? currentHeroine.getId() : null,
             currentHeroine != null ? currentHeroine.getName() : null,
             state.isInIntermission(),
-            state.getIntermissionStamina()
+            state.getIntermissionStamina(),
+            requiresLocationChoice
         );
-
-        // 히로인 목록
-        List<TheaterHeroineAffection> affections = heroineAffectionRepository
-            .findByRoomOrderByAffectionDesc(room.getId());
 
         List<HeroineAffectionSnapshot> heroineSnapshots = affections.stream()
             .map(a -> new HeroineAffectionSnapshot(
@@ -647,6 +694,12 @@ public class TheaterLobbyService {
             state.getPlaySpeed()
         );
 
+        // [Polish · P0-3] 감독 명령어 등 에너지 게이트 UI를 위해 현재 에너지 노출.
+        //   기존엔 누락 — 프론트의 roomInfo.energy가 항상 undefined → 0 → "에너지 부족" 오인.
+        User owner = room.getUser();
+        int currentEnergy = owner != null ? owner.getEnergy() : 0;
+        int currentFreeMax = owner != null ? owner.getFreeEnergyMax() : 30;
+
         return new TheaterRoomInfo(
             room.getId(),
             state.getWorldId().name(),
@@ -658,7 +711,9 @@ public class TheaterLobbyService {
             playSettings,
             state.isInterventionActive(),
             state.isEndingReached(),
-            state.getEndingTitle()
+            state.getEndingTitle(),
+            currentEnergy,
+            currentFreeMax
         );
     }
 }

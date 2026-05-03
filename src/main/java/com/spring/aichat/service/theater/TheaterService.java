@@ -2,6 +2,7 @@ package com.spring.aichat.service.theater;
 
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.theater.*;
@@ -62,6 +63,22 @@ public class TheaterService {
         if (state.isInIntermission()) throw new BadRequestException("인터미션 중입니다. 인터미션을 종료해주세요.");
         if (state.isInterventionActive()) throw new BadRequestException("난입 세션이 활성 상태입니다. 먼저 복귀해주세요.");
 
+        // [Polish · P1 #7 + LOCATION fix] LOCATION choice 선행 가드.
+        //   멀티 히로인 + 새 Chapter 진입 시점 + 아직 LOCATION 미선택 → batch LLM 호출 차단.
+        //   기존 버그: 프론트가 자동 진입 시 batch 0과 LOCATION 모달이 병렬로 트리거되어
+        //              batch 0이 한 번 생성되고, 분기 선택 후 invalidate → 또 생성 → LLM 비용 2배.
+        //   ⚠️ 분기 기록 확인이 빠지면 LOCATION 선택 후에도 가드가 풀리지 않아 "반응 없음" 버그.
+        if (state.getCurrentBatchId() == 0
+            && state.getScenesInCurrentChapter() == 0
+            && state.getCurrentAct().getNumber() <= 3
+            && affectionRepository.findByRoom_Id(roomId).size() >= 2
+            && !branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
+            roomId, state.getCurrentAct().getNumber(), state.getCurrentChapter(),
+            BranchLevel.LOCATION)) {
+            log.info("🎭 [THEATER] Batch request blocked — LOCATION choice required | roomId={}", roomId);
+            throw new BadRequestException("LOCATION_CHOICE_REQUIRED");
+        }
+
         int batchId = state.getCurrentBatchId();
 
         // ─── 캐시 체크 ───
@@ -102,6 +119,19 @@ public class TheaterService {
         try {
             TheaterState state = getState(roomId);
             if (state.isEndingReached() || state.isInIntermission() || state.isInterventionActive()) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            // [Polish · P1 #7 + LOCATION fix] LOCATION choice 선행 가드 (prefetch도 동일).
+            //   분기 미선택 상태에선 어떤 batch도 LLM에 던지지 않는다.
+            if (state.getCurrentBatchId() == 0
+                && state.getScenesInCurrentChapter() == 0
+                && state.getCurrentAct().getNumber() <= 3
+                && affectionRepository.findByRoom_Id(roomId).size() >= 2
+                && !branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
+                roomId, state.getCurrentAct().getNumber(), state.getCurrentChapter(),
+                BranchLevel.LOCATION)) {
+                log.debug("🎭 [PREFETCH] Skipped — LOCATION choice required | roomId={}", roomId);
                 return CompletableFuture.completedFuture(null);
             }
 
@@ -188,6 +218,12 @@ public class TheaterService {
         int finishedAct = state.getCurrentAct().getNumber();
         int finishedChapter = state.getCurrentChapter();
 
+        // [Polish · P0 #4] Chapter 동안 감상한 씬 수를 reset 이전에 캡처.
+        //   기존 버그: state.completeChapter()가 scenesInCurrentChapter를 0으로 reset
+        //   하기 때문에, 이후 state.getScenesInCurrentChapter()는 항상 0 →
+        //   ChapterReport.scenesConsumed가 항상 0으로 표시됐다.
+        int scenesConsumedThisChapter = state.getScenesInCurrentChapter();
+
         // 히로인별 리포트 항목 수집
         List<TheaterHeroineAffection> affections = affectionRepository.findByRoom_Id(roomId);
         TheaterHeroineAffection leader = topAffectionBeforeSeal(affections);
@@ -213,7 +249,15 @@ public class TheaterService {
 
         boolean isLastChapterOfAct = directorEngine.isLastChapterOfAct(state);
         boolean transitionToNewAct = isLastChapterOfAct;
-        boolean leadsToIntermission = isLastChapterOfAct;
+
+        // [Polish · 인터미션 정책 변경] Act 사이 → Chapter 사이마다 인터미션.
+        //   기존: Act 사이에만 인터미션 (4 Act → 3회) → 평균 ~22점 상승. 5종 max 500 못 찍음.
+        //   신규: 모든 chapter 후 인터미션 (총 ~25회) → 끝까지 진행 시 종당 60+ 가능.
+        //   예외: 마지막 Act의 마지막 chapter는 엔딩 직진 — 몰입 끊김 방지.
+        //         (엔딩 진입 시점엔 directorEngine이 endingReached를 set할 것이고, 그 직전이라
+        //          한 번 더 stamina를 쥐여줘봤자 엔딩 후엔 의미 없음.)
+        boolean isLastAct = state.getCurrentAct().next() == null;
+        boolean leadsToIntermission = !(isLastAct && isLastChapterOfAct);
 
         if (transitionToNewAct && state.getCurrentAct().next() != null) {
             directorEngine.confirmMainHeroineIfApplicable(room, state);
@@ -223,8 +267,12 @@ public class TheaterService {
         int newTargetScenes = directorEngine.decideChapterTargetScenes(state, isLastChapterOfAct);
         state.assignChapterTargetScenes(newTargetScenes);
 
+        // Act 전환은 마지막 chapter일 때만 (정책 변경 없음)
         if (transitionToNewAct) {
             state.advanceToNextAct();
+        }
+        // 인터미션 시작 — 이제 매 chapter 후 (엔딩 직진 케이스 제외)
+        if (leadsToIntermission) {
             state.startIntermission();
         }
 
@@ -247,7 +295,7 @@ public class TheaterService {
 
         return new ChapterReport(
             finishedAct, finishedChapter, "Chapter " + finishedChapter,
-            state.getScenesInCurrentChapter(),
+            scenesConsumedThisChapter,
             branchChoiceRepository.findByRoom_IdAndActNumberOrderByChosenAtAsc(roomId, finishedAct).size(),
             new java.util.LinkedHashMap<>(), // statDeltas는 인터미션/분기에서 별도 반영
             heroineItems, badges,

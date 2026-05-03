@@ -6,15 +6,19 @@ import com.spring.aichat.domain.theater.TheaterDirectorNote;
 import com.spring.aichat.domain.theater.TheaterDirectorNoteRepository;
 import com.spring.aichat.domain.theater.TheaterState;
 import com.spring.aichat.domain.theater.TheaterStateRepository;
+import com.spring.aichat.domain.user.User;
+import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.theater.TheaterResponses.DirectorCommandResult;
 import com.spring.aichat.dto.theater.TheaterResponses.DirectorNoteView;
 import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
+import com.spring.aichat.exception.InsufficientEnergyException;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.ContentModerationService;
 import com.spring.aichat.service.ContentModerationService.ModerationVerdict;
+import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.theater.TheaterCommandClassifier.ClassificationResult;
 import com.spring.aichat.service.theater.TheaterCommandClassifier.CommandVerdict;
 import jakarta.transaction.Transactional;
@@ -54,6 +58,13 @@ public class TheaterDirectorNoteService {
     private final ContentModerationService contentModerationService;
     private final TheaterCommandClassifier commandClassifier;
     private final TheaterBatchCacheService batchCache;
+
+    // [Polish · P0] 명령어 발동 시 에너지 1 차감 + user profile 캐시 invalidate
+    private final UserRepository userRepository;
+    private final RedisCacheService cacheService;
+
+    /** 감독 명령어 발동 비용 (per accepted command) */
+    private static final int COMMAND_ENERGY_COST = 1;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  명령어 입력 정책
@@ -176,7 +187,24 @@ public class TheaterDirectorNoteService {
                 cls.verdict().userMessage());
         }
 
-        // 5. 통과 — DB 저장 + Redis 활성 큐 등록
+        // 5. 통과 — 에너지 차감 → DB 저장 → Redis 활성 큐 등록
+        //    [Polish · P0] 그동안 차감 로직이 누락되어 있었다.
+        //    UI는 마치 1 에너지를 소모하는 것처럼 보였지만 실제로는 무료였음.
+        //    여기서 차감. 거부된 명령어에는 차감하지 않는다 (UX 일관성).
+        User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다: " + username));
+        try {
+            user.consumeEnergy(COMMAND_ENERGY_COST);
+        } catch (InsufficientEnergyException ex) {
+            // 패널에서 사전 가드(energy < 1) 차단하지만 race condition 보호.
+            log.info("🎬 [CMD] energy insufficient | roomId={} | user={}", roomId, username);
+            return saveAndReturn(room, state, trimmed,
+                CommandVerdict.REJECTED_UNCLEAR,
+                "에너지가 부족하여 명령어를 발동할 수 없습니다.");
+        }
+        userRepository.save(user);
+        cacheService.evictUserProfile(username);
+
         TheaterDirectorNote note = TheaterDirectorNote.command(
             room, sanitized,
             state.getCurrentAct().getNumber(),

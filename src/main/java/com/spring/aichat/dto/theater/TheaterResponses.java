@@ -89,7 +89,11 @@ public final class TheaterResponses {
         PlaySettings playSettings,
         boolean interventionActive,
         boolean endingReached,
-        String endingTitle
+        String endingTitle,
+        // [Polish · P0-3] 감독 명령어 패널 등 에너지 게이팅에 사용.
+        //   roomInfo.energy가 undefined면 프론트가 항상 "에너지 부족"으로 오인했던 버그 fix.
+        int energy,
+        int freeEnergyMax
     ) {}
 
     public record AvatarSnapshot(
@@ -111,7 +115,12 @@ public final class TheaterResponses {
         Long currentHeroineId,
         String currentHeroineName,
         boolean inIntermission,
-        int intermissionStamina
+        int intermissionStamina,
+        // [Polish · P1 #7] 멀티 히로인 세션에서 새 Chapter 진입 시 LOCATION 분기를
+        //   먼저 받아야 하는 상태. true면 프론트는 batch 요청을 보류하고 LOCATION 모달만 띄움.
+        //   기존: LOCATION 분기 모달과 batch 0 LLM 호출이 병렬로 발생 → 분기 후 invalidation
+        //         → batch 0 재생성으로 LLM 비용 2배.
+        boolean requiresLocationChoice
     ) {}
 
     public record HeroineAffectionSnapshot(
@@ -178,6 +187,7 @@ public final class TheaterResponses {
         String protagonistInner,
         /** [R1] 히로인 속내 — UI 미노출 (옵션) */
         String heroineInner,
+        String innerNarration,
         String dialogue,
         /** [R1] 씬 타입 — 배치 구성 통계용 */
         String sceneType,
@@ -189,15 +199,15 @@ public final class TheaterResponses {
         /** 이 씬에서 자동 생성된 일러스트 (프롬프트 큐 → 비동기 로드) */
         String illustrationUrl,
         /** 스탯 효과 키워드 ("매력이 낮은 주인공의 어색함이 드러난다" 등) */
-        String statReflectionHint,
-        String s) {}
+        String statReflectionHint
+    ) {}
 
     public record BranchSignal(
         String level,              // MINOR / MAJOR / CLIMAX / LOCATION
         String contextSummary      // 유저에게 보여주지 않고, 다음 분기 API 호출 시 재사용
     ) {
         public String context() {
-            return contextSummary != null ? contextSummary : "";
+            return contextSummary;
         }
     }
 
@@ -455,6 +465,7 @@ public final class TheaterResponses {
         String protagonistInner,
         /** [R1] 히로인 속내 — 미노출 (옵션) */
         String heroineInner,
+        String innerNarration,
         String dialogue,
         String speakerType,         // HEROINE / AVATAR / null
         String speakerName,

@@ -165,36 +165,58 @@ public final class IntermissionCatalog {
      * 스탯 구간별 성공률 테이블
      *
      * @return [대성공%, 성공%, 실패%]
+     *
+     * [Polish] Chapter 단위 인터미션 도입과 함께 분포 조정:
+     *   기존: 후반부(특히 80+)에서 실패율 70%, 평균 EV 0.7/stamina로 너무 가팔랐음.
+     *   조정: 중후반 구간의 SUCCESS 비중 ↑, 80+ 구간 GREAT/SUCCESS 모두 ↑.
+     *         초반(≤20)은 그대로 유지 — 시작 보상은 이미 충분히 후함.
+     *   효과: 한 종에 집중 투자 시 100 max 도달이 비현실적이지 않게 됨.
      */
     public static Map<String, Integer> getSuccessDistribution(int currentStatValue) {
         if (currentStatValue <= 20) {
             return Map.of("GREAT_SUCCESS", 15, "SUCCESS", 65, "FAIL", 20);
         } else if (currentStatValue <= 50) {
-            return Map.of("GREAT_SUCCESS", 10, "SUCCESS", 55, "FAIL", 35);
+            return Map.of("GREAT_SUCCESS", 12, "SUCCESS", 60, "FAIL", 28);
         } else if (currentStatValue <= 80) {
-            return Map.of("GREAT_SUCCESS", 10, "SUCCESS", 40, "FAIL", 50);
+            return Map.of("GREAT_SUCCESS", 12, "SUCCESS", 50, "FAIL", 38);
         } else {
-            return Map.of("GREAT_SUCCESS", 5, "SUCCESS", 25, "FAIL", 70);
+            return Map.of("GREAT_SUCCESS", 8, "SUCCESS", 40, "FAIL", 52);
         }
     }
 
-    /** 결과에 따른 스탯 증가량 */
+    /**
+     * 결과에 따른 스탯 증가량.
+     *
+     * [Polish] Chapter 단위 인터미션 도입과 함께 일괄 +1 상향:
+     *   GREAT_SUCCESS 4→5, SUCCESS 2→3, FAIL 0→1.
+     *   FAIL도 +1을 부여하는 이유: "완전한 실패는 거의 없다" — 사용자가 시도 자체에
+     *   소소한 보상을 받아 좌절감↓.
+     *
+     *   새 EV/stamina:
+     *     ≤20: 2.90  | ≤50: 2.68  | ≤80: 2.48  | >80: 2.12
+     *   stamina 5 기준 인터미션 1회 EV: ~10~14 (기존 ~3~9)
+     *   25 인터미션 누적 ~300점 → 5종 균등 분배 시 종당 60, 집중 시 max 가능.
+     */
     public static int getStatDelta(String outcome) {
         return switch (outcome) {
-            case "GREAT_SUCCESS" -> 4;
-            case "SUCCESS" -> 2;
-            case "FAIL" -> 0;
+            case "GREAT_SUCCESS" -> 5;
+            case "SUCCESS" -> 3;
+            case "FAIL" -> 1;
             default -> 0;
         };
     }
 
-    /** 결과별 나레이션 */
+    /**
+     * 결과별 나레이션.
+     *
+     * [Polish] FAIL이 더 이상 0이 아니라 +1 상승을 부여하므로 나레이션도 미세한 위로로.
+     */
     public static String getResultNarration(String outcome, AvatarStat stat) {
         String statName = stat != null ? stat.getDisplayName() : "";
         return switch (outcome) {
             case "GREAT_SUCCESS" -> String.format("💥 대성공! %s이(가) 크게 상승했다.", statName);
             case "SUCCESS" -> String.format("✨ 성공. %s이(가) 한 뼘 성장했다.", statName);
-            case "FAIL" -> "😑 별다른 수확 없이 시간이 지나갔다.";
+            case "FAIL" -> String.format("🌫️ 큰 수확은 없었지만, %s이(가) 살짝 다듬어졌다.", statName);
             default -> "";
         };
     }

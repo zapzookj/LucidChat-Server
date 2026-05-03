@@ -83,17 +83,57 @@ public class BackgroundGenerationService {
     //  2. 비동기 배경 생성 (Cache MISS 시)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 비동기 배경 생성.
+     *
+     * [Polish · P1 #6] In-flight 락으로 같은 (location, time)에 대한 중복 생성 차단.
+     *   기존 버그:
+     *     resolveBackground()는 Redis/DB 캐시만 확인 — 진행 중인 generation 작업은
+     *     모름. 따라서 cache MISS인 같은 hash가 짧은 시간에 여러 배치에서 등장하면
+     *     N번의 generateBackgroundAsync가 시작 → 같은 forest 일러스트 10장이 찍히는
+     *     비용 누수가 발생했다.
+     *   Fix:
+     *     1) 첫 진입 시 setIfAbsent(SETNX)로 atomic 락 획득.
+     *     2) 락 획득 실패 → 다른 generation이 이미 진행 중이므로 즉시 skip.
+     *        (해당 generation이 끝나면 영구 캐시에 등록되어 다음 요청은 hit한다.)
+     *     3) 락 획득 성공 → generation 실행. 종료 시 finally에서 release.
+     *        TTL이 있으므로 release를 못 해도 5분 후 자동 만료 (안전망).
+     */
     @Async
     public CompletableFuture<String> generateBackgroundAsync(
         String locationName, String locationDescription,
         String timeOfDay, Long characterId
     ) {
+        String cacheHash = BackgroundCache.computeHash(locationName, timeOfDay);
+
+        // 락 획득 시도. 실패하면 즉시 종료 (다른 워커가 처리 중).
+        if (!cacheService.tryAcquireBgGenerationLock(cacheHash)) {
+            log.info("[BG] In-flight lock busy — skip duplicate generation: {}/{} (hash={})",
+                locationName, timeOfDay, cacheHash);
+            return CompletableFuture.completedFuture(null);
+        }
+
+        // 락 획득 직후 영구 캐시 재확인 — 이전 generation이 막 완료되어 캐시에 진입했을 수 있다.
+        // (락 획득과 영구 캐시 check 사이의 매우 좁은 race condition 차단.)
         try {
+            String redisKey = REDIS_BG_PREFIX + cacheHash;
+            String cached = cacheService.getBackgroundCache(redisKey);
+            if (cached != null) {
+                log.info("[BG] Skipped — became cached during lock acquisition: {}", cached);
+                return CompletableFuture.completedFuture(cached);
+            }
+            if (backgroundCacheRepository.findByCacheHash(cacheHash).isPresent()) {
+                log.info("[BG] Skipped — DB has it: hash={}", cacheHash);
+                return CompletableFuture.completedFuture(null);
+            }
+
             String imageUrl = generateBackgroundSync(locationName, locationDescription, timeOfDay, characterId);
             return CompletableFuture.completedFuture(imageUrl);
         } catch (Exception e) {
             log.error("[BG] Async generation failed: {}", locationName, e);
             return CompletableFuture.completedFuture(null);
+        } finally {
+            cacheService.releaseBgGenerationLock(cacheHash);
         }
     }
 

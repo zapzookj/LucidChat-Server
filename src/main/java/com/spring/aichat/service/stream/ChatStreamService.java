@@ -945,13 +945,29 @@ public class ChatStreamService {
             decision.provider(), decision.ttftDeadlineMs(), llmCircuitBreaker.getState(), room.getId());
 
         // ── SSE 콜백 정의 (Primary/Fallback 재시도 시에도 동일하게 사용) ──
+        // [Polish · P1 #2] dialogue prefix sanitizer를 위해 알려진 화자 이름 모음.
+        //   STORY/SANDBOX 모드는 캐릭터(메인 화자) + 유저 nickname만 안다.
+        //   NPC 화자가 등장할 수 있으므로 안전한 화이트리스트 매칭만 수행.
+        final java.util.Set<String> sanitizerSpeakers = new java.util.LinkedHashSet<>();
+        if (room.getCharacter() != null && room.getCharacter().getName() != null) {
+            sanitizerSpeakers.add(room.getCharacter().getName().trim());
+        }
+        if (room.getUser() != null && room.getUser().getNickname() != null) {
+            sanitizerSpeakers.add(room.getUser().getNickname().trim());
+        }
+
         Consumer<String> onFirstScene = firstSceneJson -> {
             try {
                 AiJsonOutput.Scene scene = objectMapper.readValue(firstSceneJson, AiJsonOutput.Scene.class);
                 EmotionTag emotion = LlmOutputParser.parseEmotion(scene.emotion());
+                // [Polish · P1 #2] dialogue / narration 화자 prefix 제거
+                String sanitizedDialogue = com.spring.aichat.service.util.DialogueSanitizer
+                    .stripSpeakerPrefix(scene.dialogue(), sanitizerSpeakers);
+                String sanitizedNarration = com.spring.aichat.service.util.DialogueSanitizer
+                    .stripSpeakerPrefix(scene.narration(), sanitizerSpeakers);
                 SceneResponse firstScene = new SceneResponse(
                     scene.speaker(),
-                    scene.narration(), scene.dialogue(), emotion,
+                    sanitizedNarration, sanitizedDialogue, emotion,
                     LlmOutputParser.safeUpperCase(scene.location()), LlmOutputParser.safeUpperCase(scene.time()),
                     LlmOutputParser.safeUpperCase(scene.outfit()), LlmOutputParser.safeUpperCase(scene.bgmMode()));
                 emitter.send(SseEmitter.event().name("first_scene")
@@ -1050,7 +1066,13 @@ public class ChatStreamService {
         List<SceneResponse> sceneResponses = aiOutput.scenes().stream()
             .map(s -> new SceneResponse(
                 s.speaker(),                        // [Phase 5.5-NPC] 화자
-                s.narration(), s.dialogue(), LlmOutputParser.parseEmotion(s.emotion()),
+                // [Polish · P1 #2] narration / dialogue 화자 prefix 제거.
+                //   final_result에서도 일관성 유지 — first_scene과 같은 sanitizerSpeakers 사용.
+                com.spring.aichat.service.util.DialogueSanitizer.stripSpeakerPrefix(
+                    s.narration(), sanitizerSpeakers),
+                com.spring.aichat.service.util.DialogueSanitizer.stripSpeakerPrefix(
+                    s.dialogue(), sanitizerSpeakers),
+                LlmOutputParser.parseEmotion(s.emotion()),
                 LlmOutputParser.safeUpperCase(s.location()), LlmOutputParser.safeUpperCase(s.time()),
                 LlmOutputParser.safeUpperCase(s.outfit()), LlmOutputParser.safeUpperCase(s.bgmMode())))
             .collect(Collectors.toList());

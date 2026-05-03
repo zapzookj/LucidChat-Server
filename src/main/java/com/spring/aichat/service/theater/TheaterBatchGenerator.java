@@ -207,7 +207,7 @@ public class TheaterBatchGenerator {
 
         validateBatch(llmOutput, speaker, targetSize);
 
-        SceneBatch batch = convertToSceneBatch(state, speaker, llmOutput);
+        SceneBatch batch = convertToSceneBatch(state, speaker, allAffections, llmOutput);
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  [Phase 5.5 UX Polish · R2] 결정론적 분기 강제
@@ -600,6 +600,7 @@ public class TheaterBatchGenerator {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private SceneBatch convertToSceneBatch(TheaterState state, Character speaker,
+                                           List<TheaterHeroineAffection> allAffections,
                                            LlmSceneBatchOutput out) {
         // [Polish-v2] 히로인의 허용 location/outfit enum 세트 미리 캐싱
         // LLM이 임의 문자열을 반환할 경우 기본값으로 폴백하여 BackgroundDisplay/CharacterDisplay가 정상 동작하도록
@@ -614,6 +615,23 @@ public class TheaterBatchGenerator {
             // 세트 조회 실패 시 sanitize 스킵
         }
 
+        // [Polish · P1 #2] dialogue prefix sanitizer를 위해 알려진 화자 이름 모음.
+        //   아바타 이름 + 모든 히로인 이름 + 화자 캐릭터의 메인 이름. 중복은 Set이 처리.
+        java.util.Set<String> knownSpeakers = new java.util.LinkedHashSet<>();
+        if (state.getAvatarName() != null && !state.getAvatarName().isBlank()) {
+            knownSpeakers.add(state.getAvatarName().trim());
+        }
+        if (speaker != null && speaker.getName() != null) {
+            knownSpeakers.add(speaker.getName().trim());
+        }
+        if (allAffections != null) {
+            for (TheaterHeroineAffection a : allAffections) {
+                if (a.getCharacter() != null && a.getCharacter().getName() != null) {
+                    knownSpeakers.add(a.getCharacter().getName().trim());
+                }
+            }
+        }
+
         List<TheaterScene> scenes = new ArrayList<>();
         int seq = 0;
         for (LlmSceneBatchOutput.LlmScene s : out.scenes()) {
@@ -621,6 +639,15 @@ public class TheaterBatchGenerator {
             String sanitizedOutfit = sanitizeEnumValue(s.outfit(), allowedOutfits, fallbackOutfit);
             String sanitizedTime = sanitizeTime(s.time());
             String sanitizedBgm = sanitizeBgmMode(s.bgmMode());
+
+            // [Polish · P1 #2] dialogue 화자 prefix 결정론적 제거.
+            //   LLM이 종종 dialogue에 "연화: 안녕"처럼 화자명을 prefix로 섞어 출력하던 버그 fix.
+            //   이미 speaker는 별도 필드로 갖고 있으므로 prefix는 항상 redundant.
+            String sanitizedDialogue = com.spring.aichat.service.util.DialogueSanitizer
+                .stripSpeakerPrefix(s.dialogue(), knownSpeakers);
+            // narration에도 동일하게 prefix가 묻어나오는 케이스 흡수 (드물지만 발생).
+            String sanitizedNarration = com.spring.aichat.service.util.DialogueSanitizer
+                .stripSpeakerPrefix(s.narration(), knownSpeakers);
 
             // [Phase 5.5 UX Polish · R1] 속내 필드 진화 처리
             //   - 우선순위: protagonist_inner > inner_narration (legacy fallback)
@@ -632,11 +659,11 @@ public class TheaterBatchGenerator {
             scenes.add(new TheaterScene(
                 seq++,
                 resolveSpeakerName(s.speaker(), speaker, state),
-                s.narration(),
+                sanitizedNarration,
                 resolvedProtagonistInner,        // 신규: protagonistInner
                 s.heroineInner(),                // 신규: heroineInner (백엔드 자산, UI 미노출)
                 resolvedProtagonistInner,        // alias: innerNarration (구버전 클라이언트)
-                s.dialogue(),
+                sanitizedDialogue,
                 resolvedSceneType,               // 신규: sceneType
                 s.emotion(),
                 sanitizedLocation,

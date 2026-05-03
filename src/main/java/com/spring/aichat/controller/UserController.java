@@ -9,6 +9,7 @@ import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.RateLimitException;
 import com.spring.aichat.security.ApiRateLimiter;
+import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.SecretModeService;
 import com.spring.aichat.service.payment.SubscriptionService;
 import com.spring.aichat.service.user.UserService;
@@ -37,6 +38,8 @@ public class UserController {
     private final SubscriptionService subscriptionService;
     private final UserRepository userRepository;
     private final ApiRateLimiter rateLimiter;
+    /** [Polish · P0] beta-activate 후 user profile 캐시 무효화에 사용 */
+    private final RedisCacheService cacheService;
 
     @GetMapping("/me")
     public UserResponse getMyInfo(Authentication authentication) {
@@ -142,10 +145,22 @@ public class UserController {
     /**
      * 로비 로고 5회 클릭 시 호출.
      * - 성인 인증 완료 처리
-     * - 루시드 미드나잇 패스 구독 활성화
+     * - 루시드 미드나잇 패스 구독 활성화 (UserSubscription 레코드 + User.subscriptionTier)
      * - paidEnergy 300 충전
+     * - user profile 캐시 무효화 (다음 /me 호출에서 신선한 값 반환)
      *
      * 이미 적용된 유저에게는 중복 적용하지 않고 안내만 반환.
+     *
+     * [Polish · P0]
+     *  기존 버그 fix:
+     *  1) user.activateSubscription() 직접 호출 → UserSubscription 레코드 미생성.
+     *     SecretModeService.hasMidnightPass()는 UserSubscription을 조회하므로,
+     *     베타 활성화 후에도 시크릿 모드 접근이 거부됐다.
+     *     → SubscriptionService.activateSubscription()으로 위임 (UserSub + User 동기화).
+     *  2) cacheService.evictUserProfile() 누락 → /me 응답이 30분간 stale.
+     *     → save 직후 evict 추가.
+     *  3) 응답에 갱신된 UserResponse 전체를 포함 → 프론트가 별도 GET /me 없이도
+     *     AuthContext를 즉시 동기화 가능.
      */
     @PostMapping("/beta-activate")
     public ResponseEntity<Map<String, Object>> betaActivate(Authentication authentication) {
@@ -156,10 +171,13 @@ public class UserController {
             && Boolean.TRUE.equals(user.getIsAdult());
 
         if (alreadyActivated) {
+            // 캐시는 혹시 모를 stale 상태 대비 evict (저비용 무해 작업)
+            cacheService.evictUserProfile(authentication.getName());
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "이미 베타 테스터 혜택이 적용되어 있습니다!",
-                "alreadyActivated", true
+                "alreadyActivated", true,
+                "user", userService.getMyInfo(authentication.getName())
             ));
         }
 
@@ -168,21 +186,30 @@ public class UserController {
             user.completeAdultVerification("BETA_TESTER_" + user.getId());
         }
 
-        // 2) 루시드 미드나잇 패스 활성화
-        user.activateSubscription(com.spring.aichat.domain.enums.SubscriptionType.LUCID_MIDNIGHT_PASS);
+        // 2) 루시드 미드나잇 패스 활성화 — SubscriptionService 위임으로
+        //    UserSubscription 레코드와 User.subscriptionTier를 함께 동기화.
+        subscriptionService.activateSubscription(
+            user,
+            com.spring.aichat.domain.enums.SubscriptionType.LUCID_MIDNIGHT_PASS,
+            "BETA_TESTER_" + user.getId() + "_" + System.currentTimeMillis()
+        );
 
         // 3) paidEnergy 300 충전
         user.chargePaidEnergy(300);
 
         userRepository.save(user);
 
+        // 4) 캐시 무효화 — 다음 /me에서 신선한 값
+        cacheService.evictUserProfile(authentication.getName());
+
+        // 5) 갱신된 UserResponse를 응답에 포함 (프론트 즉시 동기화)
+        UserResponse refreshed = userService.getMyInfo(authentication.getName());
+
         return ResponseEntity.ok(Map.of(
             "success", true,
             "message", "베타 테스터 혜택이 적용되었습니다!",
             "alreadyActivated", false,
-            "energy", user.getEnergy(),
-            "paidEnergy", user.getPaidEnergy(),
-            "subscriptionTier", user.getSubscriptionTier().name()
+            "user", refreshed
         ));
     }
 }

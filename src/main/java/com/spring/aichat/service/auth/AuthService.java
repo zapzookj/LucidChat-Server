@@ -104,6 +104,17 @@ public class AuthService {
         map.put("username", user.getUsername());
         map.put("nickname", user.getNickname());
         map.put("energy", user.getEnergy());
+        // [Polish · P0] 그동안 누락되어 있어 프론트 useAuth().user에서 모든 구독/인증
+        //   기반 게이팅(예: TheaterCreateFlow의 스탯 분배 한도 결정)이 stale undefined로
+        //   동작했다. 로그인 직후부터 정확한 상태를 갖도록 추가.
+        map.put("freeEnergy", user.getFreeEnergy());
+        map.put("paidEnergy", user.getPaidEnergy());
+        map.put("freeEnergyMax", user.getFreeEnergyMax());
+        map.put("isAdultVerified", Boolean.TRUE.equals(user.getIsAdult()));
+        map.put("subscriptionTier",
+            user.getSubscriptionTier() != null ? user.getSubscriptionTier().name() : null);
+        map.put("boostMode", Boolean.TRUE.equals(user.getBoostMode()));
+        map.put("isSecretMode", Boolean.TRUE.equals(user.getIsSecretMode()));
         return map;
     }
 }

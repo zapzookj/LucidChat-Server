@@ -94,21 +94,62 @@ public class RedisCacheService {
     public void evictRoomInfo(Long roomId) { evict(ROOM_INFO_PREFIX + roomId); }
 
     //   /** [Phase 5.5-Illust] 배경 캐시 조회 */
-   public String getBackgroundCache(String key) {
-       try {
-           return redisTemplate.opsForValue().get(key);
-       } catch (Exception e) {
-           log.warn("Redis bg cache get failed: {}", e.getMessage());
-           return null;
-       }
-   }
+    public String getBackgroundCache(String key) {
+        try {
+            return redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.warn("Redis bg cache get failed: {}", e.getMessage());
+            return null;
+        }
+    }
 
-   /** [Phase 5.5-Illust] 배경 캐시 저장 (영구) */
-   public void setBackgroundCache(String key, String url) {
-       try {
-           redisTemplate.opsForValue().set(key, url);
-       } catch (Exception e) {
-           log.warn("Redis bg cache set failed: {}", e.getMessage());
-       }
-   }
+    /** [Phase 5.5-Illust] 배경 캐시 저장 (영구) */
+    public void setBackgroundCache(String key, String url) {
+        try {
+            redisTemplate.opsForValue().set(key, url);
+        } catch (Exception e) {
+            log.warn("Redis bg cache set failed: {}", e.getMessage());
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Polish · P1 #6] 배경 생성 In-Flight 락
+    //
+    //  같은 (locationName, timeOfDay)에 대해 다수의 배치가 거의 동시에
+    //  cache MISS를 만나 N번 비동기 생성을 시작하던 race condition 차단.
+    //  setIfAbsent로 atomic하게 락을 획득하고, generation 완료 시 release.
+    //
+    //  TTL은 ComfyUI 폴링 최대 시간(~3분)보다 안전하게 길게 (5분).
+    //  generation이 정상 종료/실패하면 release()로 즉시 해제 → 다음 요청은
+    //  caching 결과를 보거나(영구 캐시) 새로 시도(실패 시).
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final String BG_INFLIGHT_LOCK_PREFIX = "bg:inflight:";
+    private static final long BG_INFLIGHT_LOCK_TTL_SECONDS = 5L * 60L; // 5분
+
+    /**
+     * BG generation 락 획득 시도.
+     * @return true면 락 획득 (caller가 generation 진행), false면 다른 generation이 진행 중
+     */
+    public boolean tryAcquireBgGenerationLock(String cacheHash) {
+        try {
+            String key = BG_INFLIGHT_LOCK_PREFIX + cacheHash;
+            Boolean ok = redisTemplate.opsForValue()
+                .setIfAbsent(key, "1", BG_INFLIGHT_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+            return Boolean.TRUE.equals(ok);
+        } catch (Exception e) {
+            log.warn("Redis bg in-flight lock acquire failed: {}", e.getMessage());
+            // 락 시스템 자체 실패 시엔 조심스럽게 false 반환 — 중복 생성 방지가 정확성보다 우선
+            return false;
+        }
+    }
+
+    /** BG generation 완료/실패 시 락 해제 (TTL이 있어도 즉시 해제하는 것이 다음 요청에 유리) */
+    public void releaseBgGenerationLock(String cacheHash) {
+        try {
+            redisTemplate.delete(BG_INFLIGHT_LOCK_PREFIX + cacheHash);
+        } catch (Exception e) {
+            log.warn("Redis bg in-flight lock release failed: {}", e.getMessage());
+        }
+    }
 }
