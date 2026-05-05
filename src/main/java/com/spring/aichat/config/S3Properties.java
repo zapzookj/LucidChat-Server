@@ -18,10 +18,11 @@ public record S3Properties(
     String bucketName,
     String region,
     String accessKey,
-    String secretKey
+    String secretKey,
+    String assetsUrl
 ) {
     /** S3 객체의 공개 URL 빌더 */
     public String buildPublicUrl(String key) {
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, key);
+        return assetsUrl + "/" + key;
     }
 }

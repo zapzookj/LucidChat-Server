@@ -54,7 +54,8 @@ public class SecurityConfig {
                 "/swagger-ui/**", "/v3/api-docs/**", // Swagger
                 "/actuator/**",          // (선택) 헬스 체크 등
                 "/api/v1/payments/webhook",   // Phase 5: PortOne webhook (no JWT)
-                "/api/v1/webhook/**"
+                "/api/v1/webhook/**",
+                "/health"                // 헬스 체크 엔드포인트
             ).permitAll()
             .anyRequest().authenticated()
         );
@@ -91,14 +92,18 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // [중요] 프론트엔드 Origin 허용 (배포 시 변경 필요)
-        // [변경] 배포 시 S3 주소 등을 유연하게 허용하기 위해 패턴 사용
-        configuration.setAllowedOriginPatterns(List.of("*"));
-//        configuration.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000", "https://758c6e824017.ngrok-free.app"));
+
+        // [변경] 와일드카드(*) 대신 실제 운영되는 프론트엔드 도메인만 엄격하게 허용
+        // 필요에 따라 로컬 테스트용(localhost:5173)을 남겨두셔도 됩니다.
+        configuration.setAllowedOrigins(List.of(
+            "https://lucid-chat.com",       // Vercel 프론트엔드 운영 도메인
+            "http://localhost:5173"         // 로컬 프론트엔드 테스트용
+        ));
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true); // 쿠키 주고받기 허용
-        configuration.setMaxAge(3600L); // Preflight 캐싱
+        configuration.setAllowCredentials(true); // 쿠키 및 Authorization 헤더 주고받기 허용
+        configuration.setMaxAge(3600L); // Preflight 요청 캐싱
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
