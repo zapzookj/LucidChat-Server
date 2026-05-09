@@ -49,9 +49,16 @@ public class DirectorService {
     private static final int RECENT_TURNS_FOR_DIRECTOR = 10;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  1. 비동기 디렉터 판단 (매 턴 후처리에서 호출)
+    //  1. 비동기 디렉터 판단 (자동 — Phase 6 도그푸딩 결과 폐기)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * @deprecated [Phase 6 도그푸딩 #1] 자동 인터루드 폐기 (2026-05-09).
+     *             ChatStreamService.triggerPostProcessing 자동 트리거 제거됨.
+     *             수동 호출({@link #requestManualIntervention})만 사용한다.
+     *             향후 더 강한 가드 조건(유저 의지 감지)과 함께 부활 검토.
+     */
+    @Deprecated
     @Async
     public void evaluateAndCache(Long roomId, long currentTurnCount) {
         long start = System.currentTimeMillis();

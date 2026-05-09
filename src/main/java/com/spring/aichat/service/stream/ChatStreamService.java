@@ -1231,10 +1231,10 @@ public class ChatStreamService {
             chatService.generateCharacterThoughtAsync(roomId, userId, (int) userMsgCount, isSecretMode);
         }
 
-        // ── [Director] 비동기 디렉터 판단 (스토리 모드 전용) ──
-        if (ChatModePolicy.supportsDirectorMode(chatMode)) {
-            directorService.evaluateAndCache(roomId, userMsgCount);
-        }
+        // ── [Phase 6 도그푸딩 #1] 자동 디렉터 인터루드 폐기 ──
+        // 도그푸딩 결과: 자동 인터루드가 유저의 깊은 대화 흐름을 끊어 UX 저하.
+        // 폴리시: 유저의 명시적 의지(StoryController#requestDirector "다음 씬" 버튼)만 유지.
+        // 향후 부활 시 이 블록 + DirectorService.evaluateAndCache의 @Deprecated 표식 함께 정리.
     }
 
     /**
