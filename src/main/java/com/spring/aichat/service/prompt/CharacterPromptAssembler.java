@@ -59,6 +59,7 @@ public class CharacterPromptAssembler {
         staticBuilder.append("""
             # Role Definition
             Name: %s
+            Age: %s
             Role: %s
             Personality: %s
             Tone: %s (관계 단계에 따라 자연스럽게 변화)
@@ -89,6 +90,7 @@ public class CharacterPromptAssembler {
             %s
             """.formatted(
             character.getName(),
+            character.getAge(),
             character.getEffectiveRole(),
             character.getEffectivePersonality(effectiveSecretMode),
             character.getEffectiveTone(effectiveSecretMode),

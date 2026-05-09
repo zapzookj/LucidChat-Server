@@ -91,6 +91,9 @@ public class Character {
     @Column(name = "age", length = 100)
     private Integer age;
 
+    @Column(name = "background", columnDefinition = "TEXT")
+    private String background;
+
     @Column(name = "personality", columnDefinition = "TEXT")
     private String personality;
 

@@ -36,6 +36,7 @@ public record CharacterSeedProperties(
         // ── 프롬프트 메타데이터 ──
         String role,
         Integer age,
+        String background,
         String personality,
         String personalitySecret,
         String tone,
