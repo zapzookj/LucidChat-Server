@@ -45,6 +45,11 @@ public class TheaterBatchCacheService {
     private static final Duration ROLLING_TTL = Duration.ofHours(6);
     private static final Duration BRANCH_CTX_TTL = Duration.ofMinutes(30);
     /**
+     * [Phase 6 도그푸딩 #2 결함 B] 분기 선택 시 다음 chapter용 화자 히로인 hint TTL.
+     * 분기 직후 ~ 다음 chapter 첫 batch 진입까지 충분한 30분.
+     */
+    private static final Duration HEROINE_HINT_TTL = Duration.ofMinutes(30);
+    /**
      * [Phase 5.5 UX Polish · R3] 활성 감독 명령어 TTL.
      * 1배치 일회성이지만 안전망으로 30분 만료 (그 동안 다음 배치가 안 오면 자동 폐기).
      */
@@ -73,6 +78,11 @@ public class TheaterBatchCacheService {
     /** [R3] 활성 감독 명령어 키 — text와 noteId를 ":"로 구분해 저장 */
     private String directorCommandKey(Long roomId) {
         return "theater:director:command:" + roomId;
+    }
+
+    /** [Phase 6 결함 B] 분기 직후 다음 chapter 화자 히로인 hint 키 */
+    private String heroineHintKey(Long roomId) {
+        return "theater:heroine:hint:" + roomId;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -236,6 +246,35 @@ public class TheaterBatchCacheService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 6 도그푸딩 #2 결함 B] 화자 히로인 hint
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 분기 직후 다음 batch/chapter에서 같은 히로인을 화자로 유지하기 위한 hint 저장.
+     * MINOR/MAJOR/CLIMAX 분기 시 currentHeroineId를 보존하여 chapter 전환 후에도
+     * 맥락 단절 없이 같은 히로인이 이어서 등장하도록 한다.
+     */
+    public void saveHeroineHint(Long roomId, Long heroineId) {
+        if (heroineId == null) return;
+        redisTemplate.opsForValue().set(heroineHintKey(roomId), String.valueOf(heroineId), HEROINE_HINT_TTL);
+    }
+
+    /**
+     * Hint 소비 — 1회용. requestNextBatch에서 호출되어 GenerateParams의 hintedHeroineId로 주입.
+     */
+    public Optional<Long> consumeHeroineHint(Long roomId) {
+        String key = heroineHintKey(roomId);
+        String v = redisTemplate.opsForValue().get(key);
+        if (v == null) return Optional.empty();
+        redisTemplate.delete(key);
+        try {
+            return Optional.of(Long.parseLong(v));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  전체 정리 (방 삭제 시)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -243,6 +282,7 @@ public class TheaterBatchCacheService {
         invalidateBatchesFrom(roomId, 0);
         clearRollingSummary(roomId);
         clearActiveDirectorCommand(roomId);
+        redisTemplate.delete(heroineHintKey(roomId));
         log.info("🎭 [CACHE] Purged all caches | roomId={}", roomId);
     }
 }

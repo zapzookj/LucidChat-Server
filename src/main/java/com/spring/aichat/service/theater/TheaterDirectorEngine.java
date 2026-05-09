@@ -101,6 +101,16 @@ public class TheaterDirectorEngine {
             if (hinted.isPresent()) return hinted.get().getCharacter();
         }
 
+        // [Phase 6 도그푸딩 #2 결함 B / Patch B-1] Chapter 진행 중 일관성 — 주석 #1 구현
+        //   같은 Chapter 안에서는 화자 히로인 변경 금지. Chapter 첫 batch(scenes=0)에서는
+        //   분기 결정/메인 히로인 확정에 따라 새 화자 결정 가능 → 가드에서 제외.
+        if (state.getCurrentHeroineId() != null && state.getScenesInCurrentChapter() > 0) {
+            Optional<TheaterHeroineAffection> current = affections.stream()
+                .filter(a -> a.getCharacter().getId().equals(state.getCurrentHeroineId()))
+                .findFirst();
+            if (current.isPresent()) return current.get().getCharacter();
+        }
+
         TheaterAct act = state.getCurrentAct();
         return switch (act) {
             case ACT_1_MEETING -> pickForAct1(affections);

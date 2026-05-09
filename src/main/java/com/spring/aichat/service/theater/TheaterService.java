@@ -1,10 +1,12 @@
 package com.spring.aichat.service.theater;
 
+import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.domain.enums.TheaterAct;
 import com.spring.aichat.domain.theater.*;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
@@ -102,8 +104,13 @@ public class TheaterService {
         String branchContext = batchCache.consumeBranchContext(roomId, "active").orElse(null);
         boolean justBranched = branchContext != null;
 
+        // [Phase 6 도그푸딩 #2 결함 B / Patch B-3] 분기 시 저장된 화자 히로인 hint를 consume.
+        //   Chapter 전환 직후 첫 batch에서 같은 히로인이 이어서 등장하도록 한다.
+        //   hint가 없으면 null — 기존 Act 기반 분배 정책으로 fallback.
+        Long hintedHeroineId = batchCache.consumeHeroineHint(roomId).orElse(null);
+
         TheaterBatchGenerator.GenerateParams params = new TheaterBatchGenerator.GenerateParams(
-            room, state, null, branchContext, false, justBranched);
+            room, state, hintedHeroineId, branchContext, false, justBranched);
 
         SceneBatch batch = batchGenerator.generateNextBatch(params);
         room.touch(EmotionTag.NEUTRAL); // lastActiveAt 갱신
@@ -260,7 +267,38 @@ public class TheaterService {
         boolean leadsToIntermission = !(isLastAct && isLastChapterOfAct);
 
         if (transitionToNewAct && state.getCurrentAct().next() != null) {
-            directorEngine.confirmMainHeroineIfApplicable(room, state);
+            Character newMain = directorEngine.confirmMainHeroineIfApplicable(room, state);
+
+            // [Phase 6 도그푸딩 #2 결함 B / Patch B-5 (c)] Act 3 → Act 4 진입 시
+            //   currentHeroineId(직전 chapter 마지막 화자)와 confirmedMain(메인 히로인)이
+            //   다를 때 인터미션 후 Act 4 첫 batch에 *자연 전환 묘사*를 강제 주입한다.
+            //   채널: branchContext "active" — 인터미션 종료 후 첫 requestNextBatch가 consume.
+            //   ⚠️ 콘텐츠 폴리싱 영역(Phase 6 도그푸딩 #2 결함 B Patch B-5).
+            //      한국어 표현/톤은 사용자 검토 후 다듬을 수 있음.
+            boolean enteringAct4 = state.getCurrentAct().next() == TheaterAct.ACT_4_RESOLUTION;
+            Long lastHeroineId = state.getCurrentHeroineId();
+            if (enteringAct4 && newMain != null
+                && lastHeroineId != null
+                && !lastHeroineId.equals(newMain.getId())) {
+                String lastHeroineName = affections.stream()
+                    .filter(a -> a.getCharacter().getId().equals(lastHeroineId))
+                    .map(a -> a.getCharacter().getName())
+                    .findFirst()
+                    .orElse("이전 히로인");
+                String transitionContext = String.format("""
+                    [Act 4 진입 — 메인 히로인 자연 전환]
+                    이전 Act의 마지막 흐름은 %s(이)와 함께였다. 그 시간은 끝맺음이 필요했고, 짧은 인터미션 동안 주인공은 자기 마음을 정리했다.
+                    이제 이야기는 메인 히로인 %s에게로 향한다.
+
+                    이번 batch의 첫 씬은 다음 두 요소를 *자연스럽게* 포함하라:
+                    1) %s과(와) 짧게 마주치거나 마음 속으로 작별하는 짧은 묘사 (한 두 씬, 무겁지 않게)
+                    2) %s에게로 시선/발걸음/마음이 향하는 전환 — 우연한 만남, 메시지, 또는 장소의 자연스러운 이동
+                    이 전환은 *분기*가 아니라 *서사적 흐름*이다. 유저의 선택지를 만들지 말고, 이야기가 자연스럽게 %s에게로 이어지도록 묘사하라.
+                    """, lastHeroineName, newMain.getName(), lastHeroineName, newMain.getName(), newMain.getName());
+                batchCache.putBranchContext(roomId, "active", transitionContext);
+                log.info("🎭 [THEATER] Act 4 자연 전환 컨텍스트 주입 | roomId={} | last={} | main={}",
+                    roomId, lastHeroineName, newMain.getName());
+            }
         }
 
         state.completeChapter();

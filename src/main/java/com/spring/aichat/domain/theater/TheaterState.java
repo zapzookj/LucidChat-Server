@@ -268,6 +268,9 @@ public class TheaterState {
         this.currentChapter += 1;
         // [R2] 새 Chapter 시작 시 MAJOR 분기 가능 상태로 reset
         this.majorBranchDoneInChapter = Boolean.FALSE;
+        // [Phase 6 도그푸딩 #2 결함 B / Patch B-4] currentHeroineId는 의도적으로 보존.
+        //   Chapter 전환 직후 첫 batch는 directorEngine이 hint(BatchCache.consumeHeroineHint)
+        //   또는 currentHeroineId 우선 정책으로 같은 히로인을 이어가도록 결정한다.
     }
 
     public void advanceToNextAct() {
@@ -280,6 +283,10 @@ public class TheaterState {
         this.intermissionStamina = 5;
         // [R2] Act 전환 시도 동일 reset
         this.majorBranchDoneInChapter = Boolean.FALSE;
+        // [Phase 6 도그푸딩 #2 결함 B / Patch B-4] currentHeroineId 보존.
+        //   ACT_4_RESOLUTION 진입 시점에 confirmMainHeroineIfApplicable이 메인 히로인을
+        //   확정하면 decideNextSpeakerHeroine.pickMainHeroine이 그 히로인을 화자로 선택하게 된다.
+        //   currentHeroineId를 reset해 버리면 Patch B-5 (c)의 자연 전환 컨텍스트도 활용 못 함.
     }
 
     /**

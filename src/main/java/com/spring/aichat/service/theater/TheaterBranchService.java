@@ -347,6 +347,14 @@ public class TheaterBranchService {
             state.setCurrentHeroine(chosen.heroineId());
         }
 
+        // [Phase 6 도그푸딩 #2 결함 B / Patch B-2] LOCATION 외 분기에서도 다음 chapter용
+        //   heroine hint를 보존. Act 3 마지막 chapter에서 1번 캐릭터와 깊은 분기를 진행했는데
+        //   다음 Act/Chapter 진입 시 heroine이 갑자기 바뀌어 맥락 단절되던 결함을 차단한다.
+        //   LOCATION은 이미 state.setCurrentHeroine으로 즉시 반영되므로 hint 불필요.
+        if (level != BranchLevel.LOCATION && state.getCurrentHeroineId() != null) {
+            batchCache.saveHeroineHint(roomId, state.getCurrentHeroineId());
+        }
+
         batchCache.invalidateBatchesFrom(roomId, state.getCurrentBatchId());
 
         String newBranchContext = String.format(
