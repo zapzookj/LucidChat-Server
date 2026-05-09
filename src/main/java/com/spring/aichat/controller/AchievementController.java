@@ -37,6 +37,7 @@ public class AchievementController {
      * (INVISIBLE_MAN 등 프론트에서 직접 감지하는 이스터에그)
      */
     @PostMapping("/rooms/{roomId}/unlock")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     public UnlockNotification unlockClientTriggered(@PathVariable Long roomId, @RequestBody UnlockRequest request) {
         Long userId = authGuard.getCurrentUserId(roomId);
         return achievementService.unlockClientTriggered(userId, request.code());

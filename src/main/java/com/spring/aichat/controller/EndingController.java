@@ -4,6 +4,7 @@ import com.spring.aichat.domain.enums.EndingType;
 import com.spring.aichat.dto.chat.EndingResponse;
 import com.spring.aichat.service.EndingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -25,6 +26,7 @@ public class EndingController {
      * LLM으로 엔딩 씬 + 타이틀 + 추억 + 통계를 생성하여 반환.
      */
     @PostMapping("/generate")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
     public EndingResponse generateEnding(
         @PathVariable Long roomId,
         @RequestBody GenerateEndingRequest request
