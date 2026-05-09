@@ -5,13 +5,15 @@ import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -46,6 +49,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final ChatRoomRepository chatRoomRepository;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties props;
+    private final Environment env;
 
     @Value("${auth.oauth2.success-redirect:}")
     private String successRedirect;
@@ -197,12 +201,19 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
     }
 
+    // [Phase6/Tier1A] C-3: Refresh Token 쿠키에 Secure(prod) + SameSite=Strict 적용
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refresh_token", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // 프로덕션에서 true
-        cookie.setPath("/");
-        cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
+            .httpOnly(true)
+            .secure(isProdProfile())
+            .sameSite("Strict")
+            .path("/")
+            .maxAge(props.refreshTokenTtlSeconds())
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private boolean isProdProfile() {
+        return Arrays.asList(env.getActiveProfiles()).contains("prod");
     }
 }

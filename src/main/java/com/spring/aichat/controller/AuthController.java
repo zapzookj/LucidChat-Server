@@ -13,14 +13,17 @@ import com.spring.aichat.exception.RateLimitException;
 import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.auth.AuthService;
 import com.spring.aichat.service.auth.JwtTokenService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,6 +46,7 @@ public class AuthController {
     private final ChatRoomRepository chatRoomRepository;
     private final JwtProperties props;
     private final ApiRateLimiter rateLimiter;
+    private final Environment env;
 
     @PostMapping("/signup")
     public AuthResponse signup(@RequestBody @Valid SignupRequest req,
@@ -127,23 +131,36 @@ public class AuthController {
             jwtTokenService.logout(accessToken, username);
         }
 
-        Cookie cookie = new Cookie("refresh_token", null);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        clearRefreshTokenCookie(response);
 
         return ResponseEntity.ok().build();
     }
 
+    // [Phase6/Tier1A] C-3: Refresh Token 쿠키에 Secure(prod) + SameSite=Strict 적용
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
-        Cookie cookie = new Cookie("refresh_token", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge((int) props.refreshTokenTtlSeconds());
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
+            .httpOnly(true)
+            .secure(isProdProfile())
+            .sameSite("Strict")
+            .path("/")
+            .maxAge(props.refreshTokenTtlSeconds())
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearRefreshTokenCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
+            .httpOnly(true)
+            .secure(isProdProfile())
+            .sameSite("Strict")
+            .path("/")
+            .maxAge(0)
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private boolean isProdProfile() {
+        return Arrays.asList(env.getActiveProfiles()).contains("prod");
     }
 
     private String extractClientIp(HttpServletRequest request) {

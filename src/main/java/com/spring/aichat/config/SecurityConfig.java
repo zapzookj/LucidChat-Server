@@ -101,7 +101,15 @@ public class SecurityConfig {
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("*"));
+        // [Phase6/Tier1A] M-2: 와일드카드 대신 실제 사용하는 헤더만 명시
+        configuration.setAllowedHeaders(List.of(
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "Accept",
+            "Cache-Control",
+            "ngrok-skip-browser-warning"
+        ));
         configuration.setAllowCredentials(true); // 쿠키 및 Authorization 헤더 주고받기 허용
         configuration.setMaxAge(3600L); // Preflight 요청 캐싱
 
