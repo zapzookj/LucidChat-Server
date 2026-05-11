@@ -112,6 +112,34 @@ public class Character {
     @Column(name = "story_behavior_guide", columnDefinition = "TEXT")
     private String storyBehaviorGuide;
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Phase 6 도그푸딩 #3] 캐릭터 영혼 필드 — Tier 1 스키마 확장
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  기존 personality/tone/oocExample/storyBehaviorGuide는 캐릭터를 *부분적으로*만 정의.
+    //  도그푸딩 결과: 시스템 프롬프트의 90~95%가 게임 시스템, 캐릭터 정체성은 5~10%에 불과 →
+    //  LLM의 RLHF 기본 성향(유저 만족 우선)이 빈 공간을 채워 "유저바라기" 현상.
+    //  아래 5개 필드는 *살아있는 영혼*을 위한 콘텐츠 슬롯이며 nullable — 콘텐츠 작성은 별도 진행.
+
+    /** 캐릭터 과거사 (3~5문단). 어떤 사건이 지금의 가치관을 형성했는가. */
+    @Column(name = "backstory", columnDefinition = "TEXT")
+    private String backstory;
+
+    /** 가치관/철학 (구체적 5~7개 bullet). 무엇을 옳다/그르다 여기는가. */
+    @Column(name = "core_values", columnDefinition = "TEXT")
+    private String coreValues;
+
+    /** 약점·두려움·모순 (3~5개 bullet). 살아있는 사람의 결. */
+    @Column(name = "flaws", columnDefinition = "TEXT")
+    private String flaws;
+
+    /** 캐릭터가 *절대 하지 않는 것* (5~10개 bullet) — 영혼의 기둥. 유저바라기 현상 차단. */
+    @Column(name = "behavioral_anchors", columnDefinition = "TEXT")
+    private String behavioralAnchors;
+
+    /** 어휘 습관·말버릇 (구체 예시 포함). tone보다 한 단계 더 구체적. */
+    @Column(name = "speech_quirks", columnDefinition = "TEXT")
+    private String speechQuirks;
+
     @Column(name = "promotion_scenarios", columnDefinition = "TEXT")
     private String promotionScenarios;
 
@@ -233,6 +261,12 @@ public class Character {
         if (seed.toneSecret() != null) this.toneSecret = seed.toneSecret();
         if (seed.oocExample() != null) this.oocExample = seed.oocExample();
         if (seed.storyBehaviorGuide() != null) this.storyBehaviorGuide = seed.storyBehaviorGuide();
+        // [Phase 6 도그푸딩 #3] 영혼 필드
+        if (seed.backstory() != null) this.backstory = seed.backstory();
+        if (seed.coreValues() != null) this.coreValues = seed.coreValues();
+        if (seed.flaws() != null) this.flaws = seed.flaws();
+        if (seed.behavioralAnchors() != null) this.behavioralAnchors = seed.behavioralAnchors();
+        if (seed.speechQuirks() != null) this.speechQuirks = seed.speechQuirks();
         if (seed.promotionScenarios() != null) this.promotionScenarios = seed.promotionScenarios();
         if (seed.easterEggDialogue() != null) this.easterEggDialogue = seed.easterEggDialogue();
         if (seed.defaultOutfit() != null) this.defaultOutfit = seed.defaultOutfit();

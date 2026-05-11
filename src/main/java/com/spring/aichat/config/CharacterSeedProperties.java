@@ -43,6 +43,19 @@ public record CharacterSeedProperties(
         String toneSecret,
         String oocExample,
         String storyBehaviorGuide,
+
+        // ── [Phase 6 도그푸딩 #3] 캐릭터 영혼 필드 ──
+        /** 캐릭터 과거사 — 어떤 사건이 지금의 가치관을 형성했는가 */
+        String backstory,
+        /** 가치관/철학 — 무엇을 옳다/그르다 여기는가 */
+        String coreValues,
+        /** 약점·두려움·모순 */
+        String flaws,
+        /** 절대 하지 않는 것 — 영혼의 기둥 */
+        String behavioralAnchors,
+        /** 어휘 습관·말버릇 */
+        String speechQuirks,
+
         String promotionScenarios,
         String easterEggDialogue,
         String defaultOutfit,
