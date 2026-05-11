@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * [Phase 5.5-Theater] Theater 전용 설정
@@ -31,6 +32,40 @@ public class TheaterConfig {
         executor.setQueueCapacity(32);
         executor.setThreadNamePrefix("theater-prefetch-");
         executor.setKeepAliveSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * [Phase6/Tier4 / H-17] 배경 이미지 생성 @Async 전용 Executor.
+     *   기존엔 executor 미지정 → SimpleAsyncTaskExecutor → 매 호출 새 스레드 → OOM 위험
+     *   (pollUntilComplete 최대 3분 점유 + 스레드당 ~1MB 스택).
+     *   포화 시 CallerRuns로 호출 스레드에서 직접 실행 → 백프레셔.
+     */
+    @Bean(name = "backgroundGenExecutor")
+    public Executor backgroundGenExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("bg-gen-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * [Phase6/Tier4 / H-17] 일러스트 생성 @Async 전용 Executor.
+     *   IllustrationService의 generateAutoIllustration 등에서 사용.
+     */
+    @Bean(name = "illustrationExecutor")
+    public Executor illustrationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("illust-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

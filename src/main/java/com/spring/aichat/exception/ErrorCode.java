@@ -34,5 +34,11 @@ public enum ErrorCode {
      * 활성극이 있는데 새 극 시작 시 overwriteActive=true가 없으면 발생 → 409.
      * UI는 이 응답을 받으면 confirm 모달을 띄우고 overwriteActive=true로 재호출.
      */
-    CONFLICT
+    CONFLICT,
+
+    /**
+     * [Phase6/Tier4 / H-22] 클라이언트가 보낸 batchId 등 세션 상태가 서버 기준과
+     * 어긋남 → 409. 클라이언트는 새로고침 또는 상태 재동기화 필요.
+     */
+    STALE_CLIENT_STATE
 }

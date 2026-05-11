@@ -62,7 +62,9 @@ public class ChatController {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        // [Phase6/Tier4 / H-18] SSE timeout = LLM timeout(120s) + 30s buffer.
+        //   동일 timeout 시 LLM이 119초 응답에도 SSE 만료로 클라이언트 timeout 발생.
+        SseEmitter emitter = new SseEmitter(150_000L);
         emitter.onTimeout(() -> {
             log.warn("⏱️ [SSE] Emitter timeout: roomId={}", roomId);
             emitter.complete();

@@ -36,6 +36,15 @@ public class ChatRoom {
     @Column(name = "room_id")
     private Long id;
 
+    /**
+     * [Phase6/Tier4 / H-20] Optimistic Lock — TX-2의 동시 stat 수정 lost update 차단.
+     *   affectionScore/stat_* 필드가 동시 메시지 처리에서 한쪽 무효화되던 결함 차단.
+     *   OptimisticLockingFailureException 발생 시 호출처에서 retry해야 한다.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;

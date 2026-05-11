@@ -138,6 +138,33 @@ public class PaymentService {
             return buildResult(order, "Already processed");
         }
 
+        // [Phase6/Tier4 / H-23] EXPIRED + paid 자동 환불.
+        //   시나리오: 30분 후 스케줄러가 EXPIRED 마킹 → 31분 후 PortOne webhook(paid) 도착.
+        //   기존 흐름은 PAYMENT_ALREADY_PROCESSED throw로 종료 → PortOne 결제 + DB EXPIRED +
+        //   환불 미실행 → 사용자 돈만 잃고 재화 미지급. 자동 환불로 차단.
+        if (order.getStatus() == OrderStatus.EXPIRED) {
+            try {
+                JsonNode paymentInfo = portOneClient.getPaymentInfo(impUid);
+                if ("paid".equals(paymentInfo.path("status").asText())) {
+                    log.error("[PAYMENT:{}] Late payment on EXPIRED order — auto refund | uid={}",
+                        caller, order.getMerchantUid());
+                    try {
+                        portOneClient.cancelPayment(impUid, paymentInfo.path("amount").asInt(),
+                            "Order expired, auto refund");
+                        log.info("[PAYMENT:{}] EXPIRED auto-refund success: impUid={}", caller, impUid);
+                    } catch (Exception e) {
+                        // alert: 운영자 수동 처리 필요. throw하지 않고 fall-through.
+                        log.error("[PAYMENT:{}] EXPIRED auto-refund FAILED — manual intervention required! impUid={}",
+                            caller, impUid, e);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[PAYMENT:{}] PortOne lookup failed on EXPIRED order: impUid={}", caller, impUid, e);
+            }
+            throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
+                "Order expired");
+        }
+
         if (order.getStatus() != OrderStatus.PENDING) {
             log.warn("[PAYMENT:{}] Non-PENDING state: uid={}, status={}",
                 caller, order.getMerchantUid(), order.getStatus());

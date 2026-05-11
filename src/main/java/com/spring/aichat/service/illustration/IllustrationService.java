@@ -92,7 +92,8 @@ public class IllustrationService {
     //  2. 자동 일러스트 생성 (승급/엔딩)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Async
+    // [Phase6/Tier4 / H-17] executor 명시 — TheaterConfig#illustrationExecutor 사용.
+    @Async("illustrationExecutor")
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId, String triggerType) {
         generateAutoIllustration(userId, characterId, roomId, triggerType, null);
     }
@@ -106,7 +107,7 @@ public class IllustrationService {
      *
      * @param noteId 연결할 DirectorNote ID (null 가능)
      */
-    @Async
+    @Async("illustrationExecutor")
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId,
                                          String triggerType, Long noteId) {
         try {
@@ -252,12 +253,24 @@ public class IllustrationService {
         JsonNode workflow = falAiClient.buildCharacterWorkflow(loraUrl, positivePrompt, negativePrompt);
         QueueResponse queueResp = falAiClient.submitToQueue(workflow);
 
-        UserIllustration illust = UserIllustration.createPending(
-            user, character.getId(), character.getName(),
-            queueResp.requestId(), queueResp.statusUrl(), queueResp.responseUrl(),
-            positivePrompt, triggerType, emotion, location, outfit
-        );
-        illustrationRepository.save(illust);
+        // [Phase6/Tier4 / H-16 경량 패치]
+        //   완전 fix(외부 호출 *전* PENDING 저장)는 fal_request_id NOT NULL/UNIQUE 제약으로
+        //   schema 변경 필요 — Tier 5/v2에서 처리. 여기서는 save 실패 시 orphan 큐 추적용
+        //   alert 로그를 *명시적으로* 분리해 노출한다(운영자 수동 추적 가능).
+        UserIllustration illust;
+        try {
+            illust = UserIllustration.createPending(
+                user, character.getId(), character.getName(),
+                queueResp.requestId(), queueResp.statusUrl(), queueResp.responseUrl(),
+                positivePrompt, triggerType, emotion, location, outfit
+            );
+            illustrationRepository.save(illust);
+        } catch (RuntimeException e) {
+            log.error("[ILLUST] ORPHAN_QUEUE_REQUEST | external queue submitted but DB save failed " +
+                "| requestId={} | statusUrl={} | slug={} | userId={} | trigger={}",
+                queueResp.requestId(), queueResp.statusUrl(), slug, user.getId(), triggerType, e);
+            throw e;
+        }
 
         log.info("[ILLUST] Submitted: requestId={}, slug={}, trigger={}, userId={}",
             queueResp.requestId(), slug, triggerType, user.getId());
@@ -324,7 +337,7 @@ public class IllustrationService {
     //  내부: 백그라운드 폴링 (자동 생성용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Async
+    @Async("illustrationExecutor")
     protected void processPollingInBackground(String requestId) {
         try {
             UserIllustration illust = illustrationRepository.findByFalRequestId(requestId).orElse(null);

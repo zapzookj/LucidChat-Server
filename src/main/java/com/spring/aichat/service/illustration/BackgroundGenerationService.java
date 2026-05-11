@@ -99,7 +99,9 @@ public class BackgroundGenerationService {
      *     3) 락 획득 성공 → generation 실행. 종료 시 finally에서 release.
      *        TTL이 있으므로 release를 못 해도 5분 후 자동 만료 (안전망).
      */
-    @Async
+    // [Phase6/Tier4 / H-17] executor 명시 — TheaterConfig#backgroundGenExecutor 사용.
+    //   기존 SimpleAsyncTaskExecutor(매 호출 새 스레드)에서 풀 기반으로 전환 → OOM 차단.
+    @Async("backgroundGenExecutor")
     public CompletableFuture<String> generateBackgroundAsync(
         String locationName, String locationDescription,
         String timeOfDay, Long characterId

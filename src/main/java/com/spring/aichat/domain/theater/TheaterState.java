@@ -39,6 +39,15 @@ public class TheaterState {
     @Column(name = "id")
     private Long id;
 
+    /**
+     * [Phase6/Tier4 / H-21] Optimistic Lock — Theater 배치/Chapter 동시성 보호.
+     *   같은 roomId에 두 동시 next-batch 호출 시 addScenes/advanceBatch 중복으로
+     *   batchId 중복 생성, scenesInCurrentChapter 이중 증가하던 결함 차단.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
+
     @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "room_id", nullable = false, unique = true)

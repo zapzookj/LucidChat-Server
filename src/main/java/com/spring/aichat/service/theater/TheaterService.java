@@ -179,8 +179,12 @@ public class TheaterService {
         TheaterState state = getState(roomId);
 
         if (consumedBatchId != state.getCurrentBatchId()) {
+            // [Phase6/Tier4 / H-22] 정책 (b): 클라이언트 stale 상태 진행 시 어긋남 누적 위험 →
+            //   즉시 차단하고 새로고침 유도.
             log.warn("🎭 [THEATER] Batch ID mismatch on consume | expected={} | got={}",
                 state.getCurrentBatchId(), consumedBatchId);
+            throw new BusinessException(ErrorCode.STALE_CLIENT_STATE,
+                "클라이언트 상태가 오래되었습니다. 새로고침 후 다시 시도해주세요.");
         }
 
         SceneBatch batch = batchCache.getBatch(roomId, consumedBatchId)
@@ -393,7 +397,15 @@ public class TheaterService {
             .orElseThrow(() -> new NotFoundException("Theater 세션이 없습니다."));
     }
 
-    /** 배치 생성 시 에너지 1 차감 (User 엔티티 직접) */
+    /**
+     * 배치 생성 시 에너지 1 차감 (User 엔티티 직접).
+     *
+     * [Phase6/Tier4 / H-15 정책 (b)] Theater는 *부스트 모드 영향 없이* base 비용 고정.
+     *   다른 모드(STORY/SANDBOX)는 BoostModeResolver.resolveEnergyCost가 부스트 시 비용을
+     *   조정하지만, Theater는 배치당 1 에너지로 평탄하게 유지한다(게임 디자인 의도).
+     *   향후 정책 변경 시 boostModeResolver.resolveEnergyCost(ChatMode.THEATER, user)
+     *   호출로 통일 가능.
+     */
     private void chargeBatchEnergy(String username) {
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다: " + username));

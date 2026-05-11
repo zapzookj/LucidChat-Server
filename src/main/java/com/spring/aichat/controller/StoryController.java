@@ -104,7 +104,8 @@ public class StoryController {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        // [Phase6/Tier4 / H-18] SSE timeout 150s — LLM timeout 120s + 30s buffer
+        SseEmitter emitter = new SseEmitter(150_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
 
@@ -127,7 +128,8 @@ public class StoryController {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        // [Phase6/Tier4 / H-18] SSE timeout 150s — LLM timeout 120s + 30s buffer
+        SseEmitter emitter = new SseEmitter(150_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
         chatStreamService.sendEventSelectStream(roomId, request.detail(), request.energyCost(), emitter);
@@ -144,7 +146,8 @@ public class StoryController {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        // [Phase6/Tier4 / H-18] SSE timeout 150s — LLM timeout 120s + 30s buffer
+        SseEmitter emitter = new SseEmitter(150_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
         chatStreamService.sendDirectorWatchStream(roomId, emitter);
@@ -161,7 +164,8 @@ public class StoryController {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
 
-        SseEmitter emitter = new SseEmitter(120_000L);
+        // [Phase6/Tier4 / H-18] SSE timeout 150s — LLM timeout 120s + 30s buffer
+        SseEmitter emitter = new SseEmitter(150_000L);
         emitter.onTimeout(emitter::complete);
         emitter.onError(ex -> {});
         chatStreamService.sendTimeSkipStream(roomId, emitter);

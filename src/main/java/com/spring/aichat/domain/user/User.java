@@ -105,6 +105,17 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * [Phase6/Tier4 / H-19] Optimistic Lock — Lost Update 차단.
+     *   채팅 -2 + 일러스트 -10 동시 차감, 스케줄러 +1 + 채팅 -2 동시 등에서 한쪽이
+     *   덮어쓰여 음수/이중차감되던 결함 차단. OptimisticLockingFailureException 발생 시
+     *   호출처에서 retry해야 한다(예: AuthGuard 캐시-aside 패턴은 영향 없음, 채팅 흐름은
+     *   ChatStreamService 등에서 재시도 정책 검토 — H-19 회귀 검증 권고 참조).
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
+
     @PrePersist
     void prePersist() {
         this.createdAt = LocalDateTime.now();
