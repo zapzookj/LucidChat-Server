@@ -13,7 +13,7 @@ import com.spring.aichat.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -36,7 +36,8 @@ public class AuthService {
     private final ChatRoomRepository chatRoomRepository;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties props;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    /** [Phase6/Tier3 / H-3] SecurityConfig에 등록된 PasswordEncoder Bean을 DI 받음. */
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * 서비스 결과 반환용 DTO (Controller에서 쿠키 설정을 위해 RefreshToken이 필요함)
@@ -58,7 +59,10 @@ public class AuthService {
         User saved = userRepository.save(user);
 
         // [Phase 4.5] 더 이상 기본 방을 자동 생성하지 않음 — 로비에서 직접 선택
-        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(saved.getUsername(), "ROLE_USER");
+        // [Phase6/Tier3 / H-2] role 하드코딩 제거 → DB(saved.getRoles())에서 추출.
+        //   prePersist에서 ROLE_USER 자동 추가됨. 미래에 ADMIN 가입 시도 등도 대응.
+        String role = jwtTokenService.extractPrimaryRole(saved);
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(saved.getUsername(), role);
 
         AuthResponse response = new AuthResponse(
             tokenPair.accessToken(),
@@ -86,7 +90,9 @@ public class AuthService {
         // [Phase 4.5] 기존 방 존재 여부 확인 (Continue 메뉴 활성화 판단용)
         boolean hasRooms = chatRoomRepository.countByUser_Id(user.getId()) > 0;
 
-        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(user.getUsername(), "ROLE_USER");
+        // [Phase6/Tier3 / H-2] role 하드코딩 제거 → DB의 user.getRoles()에서 추출.
+        String role = jwtTokenService.extractPrimaryRole(user);
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(user.getUsername(), role);
 
         AuthResponse response = new AuthResponse(
             tokenPair.accessToken(),

@@ -79,8 +79,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         if (user == null) return;
 
         // JWT 발급
+        // [Phase6/Tier3 / H-2] role 하드코딩 제거 → DB의 user.getRoles()에서 추출.
+        String role = jwtTokenService.extractPrimaryRole(user);
         JwtTokenService.TokenPair tokenPair = jwtTokenService.issueTokenPair(
-            user.getUsername(), "ROLE_USER");
+            user.getUsername(), role);
 
         setRefreshTokenCookie(response, tokenPair.refreshToken());
 

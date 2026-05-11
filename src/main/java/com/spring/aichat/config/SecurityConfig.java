@@ -1,5 +1,6 @@
 package com.spring.aichat.config;
 
+import com.spring.aichat.security.JwtBlacklistFilter;
 import com.spring.aichat.service.auth.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -9,9 +10,12 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.OAuth2AuthorizationSuccessHandler;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
@@ -32,6 +36,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final JwtBlacklistFilter jwtBlacklistFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -70,12 +75,26 @@ public class SecurityConfig {
             .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
         );
 
+        // [Phase6/Tier3 / C-2] 토큰 블랙리스트 필터 — Bearer 인증 *이전*에 적용.
+        //   로그아웃된 토큰(BL:{jti}) 차단. 인증을 거치기 전이라 무효 토큰 부담 최소화.
+        http.addFilterBefore(jwtBlacklistFilter, BearerTokenAuthenticationFilter.class);
+
         // 예외 처리 (401 에러 시 JSON 응답)
         http.exceptionHandling(ex -> ex
             .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
         );
 
         return http.build();
+    }
+
+    /**
+     * [Phase6/Tier3 / H-3] PasswordEncoder Bean.
+     * AuthService에서 직접 new BCryptPasswordEncoder() 인스턴스화하던 코드를 DI로 전환.
+     * strength 12로 명시 (기본 10보다 강함).
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean

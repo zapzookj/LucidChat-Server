@@ -101,6 +101,8 @@ public class ChatStreamService {
      * 비-Theater 방에는 아무 영향도 주지 않으므로 안전하게 주입.
      */
     private final TheaterInterventionService theaterInterventionService;
+    /** [Phase6/Tier3 / C-9] ASSISTANT log retry + deadletter wrapper */
+    private final ChatLogPersister chatLogPersister;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -320,19 +322,22 @@ public class ChatStreamService {
             }
 
             // ── MongoDB: ASSISTANT 저장 ──
+            // [Phase6/Tier3 / C-9] 단순 try-catch → ChatLogPersister(retry + deadletter)로 위임.
+            //   기존 흐름: save 실패 → 로그만 → SSE 정상 전송 → history 누락 → 정합성 파괴.
+            //   신규 흐름: 3회 재시도 + 데드레터 보존 + null 시 운영 alert.
             String assistantLogId = null;
             boolean hasInnerThought = false;
-            try {
-                // [Phase 5.5-Sep] 속마음: 스토리 모드 전용
-                String innerThoughtToSave = isStory ? parsed.innerThought() : null;
-                ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
-                    roomId, parsed.cleanJson(), parsed.combinedDialogue(),
-                    parsed.mainEmotion(), null, innerThoughtToSave, parsed.scenesJson());
-                ChatLogDocument saved = chatLogRepository.save(assistantLog);
+            String innerThoughtToSave = isStory ? parsed.innerThought() : null;
+            ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
+                roomId, parsed.cleanJson(), parsed.combinedDialogue(),
+                parsed.mainEmotion(), null, innerThoughtToSave, parsed.scenesJson());
+            ChatLogDocument saved = chatLogPersister.saveWithRetry(assistantLog);
+            if (saved != null) {
                 assistantLogId = saved.getId();
                 hasInnerThought = saved.hasInnerThought();
-            } catch (Exception e) {
-                log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
+            } else {
+                log.error("⚠️ [CHAT-LOG] ASSISTANT_LOG_PERSIST_FAILED — deadlettered | roomId={}", roomId);
+                // SSE는 이미 final_result로 전송됨 → 유저 경험은 유지. 운영자가 데드레터 점검 후 수동 복구.
             }
             cacheService.evictRoomInfo(roomId);
 
