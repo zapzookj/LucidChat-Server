@@ -373,12 +373,25 @@ public class TheaterBatchGenerator {
             String key = loc + "|" + (time == null ? "" : time);
             if (!seen.add(key)) continue;
             try {
-                // resolveBackground는 cache hit 시 즉시 반환, miss 시 generating result 반환.
-                // miss인 경우 그 시점에 generateBackgroundAsync로 비동기 생성을 트리거해야 한다.
-                var result = backgroundGenerationService.resolveBackground(loc, null, time, characterId);
-                if (result != null && !result.isCacheHit()) {
-                    // miss → 백그라운드 생성 시작 (async, fire-and-forget)
-                    backgroundGenerationService.generateBackgroundAsync(loc, null, time, characterId);
+                // [Phase 6-Illust] Theater enum location은 canonical_key 없음 (null 전달 — 폴백으로 loc 직해싱).
+                //                  Secret Mode 분기 불필요 (Theater는 currently public BGM/BG track 사용).
+                var result = backgroundGenerationService.resolveBackground(
+                    loc,           // locationName
+                    null,          // canonicalKey — enum 기반이므로 부재 (폴백)
+                    null,          // locationDescription — enum location은 정적 묘사 사용
+                    time,
+                    characterId
+                );
+                if (result != null && !result.cacheHit()) {
+                    backgroundGenerationService.generateBackgroundAsync(
+                        loc,           // locationName
+                        null,          // canonicalKey
+                        null,          // locationDescription
+                        time,
+                        characterId,
+                        null,          // world — 옵션 A: 미사용
+                        false          // secretMode — Theater 모드는 Fal.ai 트랙
+                    );
                 }
             } catch (Exception e) {
                 log.debug("🎭 [BG-PREFETCH] failed for {}/{}: {}", loc, time, e.getMessage());

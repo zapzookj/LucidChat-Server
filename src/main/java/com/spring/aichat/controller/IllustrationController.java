@@ -1,5 +1,6 @@
 package com.spring.aichat.controller;
 
+import com.spring.aichat.service.illustration.BackgroundGenerationService;
 import com.spring.aichat.service.illustration.IllustrationService;
 import com.spring.aichat.service.illustration.IllustrationService.*;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class IllustrationController {
 
     private final IllustrationService illustrationService;
+    private final BackgroundGenerationService backgroundGenerationService;
 
     /**
      * 일러스트 생성 요청
@@ -77,5 +79,32 @@ public class IllustrationController {
         List<IllustrationGalleryItem> gallery = illustrationService.getGallery(
             authentication.getName(), characterId);
         return ResponseEntity.ok(gallery);
+    }
+
+    /**
+     * [Phase 6-Illust hotfix] 동적 배경 생성 완료 폴링.
+     *
+     * <p>장소 전환이 캐시 미스로 떨어지면 SendChatResponse.locationTransition에
+     * backgroundUrl=null, cacheHash=xxx, isGenerating=true가 실려 온다.
+     * 프론트(LocationTransition)는 이 엔드포인트를 cacheHash로 1초 간격 폴링하여
+     * 배경 완성을 감지한다.
+     *
+     * <p>read-only — 생성 트리거 없음. 배경 캐시는 사용자 종속이 아닌 공용 자원이므로
+     * 인증만 통과하면 접근 가능 (별도 소유권 검사 불필요).
+     *
+     * 응답:
+     *   { "ready": true,  "url": "https://..." }   — 완성됨
+     *   { "ready": false, "url": null }            — 아직 생성 중
+     */
+    @GetMapping("/background")
+    public ResponseEntity<Map<String, Object>> getBackgroundStatus(
+        @RequestParam String cacheHash,
+        Authentication authentication
+    ) {
+        String url = backgroundGenerationService.peekByCacheHash(cacheHash);
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("ready", url != null);
+        body.put("url", url);
+        return ResponseEntity.ok(body);
     }
 }

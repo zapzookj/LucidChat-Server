@@ -203,7 +203,8 @@ public class DirectorPromptAssembler {
                 "narration": "어느새 노을이 지기 시작한다. 붉은 햇살이 창문을 물들인다...",
                 "new_time": "SUNSET",
                 "new_location_name": "석양이 비치는 발코니",
-                "location_description": "outdoor, balcony, sunset, warm light, garden view, golden hour, railing",
+                "location_canonical_key": "MODERN__ROOFTOP_SUNSET_PUBLIC",
+                "location_description": "An open balcony at sunset. Golden hour light pours through wrought iron railing. Garden view extends below, warm orange and pink hues bathe everything. Quiet, contemplative mood.",
                 "actor_constraint": "캐릭터는 발코니 난간에 기대어 석양을 바라보고 있다. 유저가 오는 것을 눈치채지 못한 상태.",
                 "new_bgm": "ROMANTIC"
               }
@@ -218,10 +219,16 @@ public class DirectorPromptAssembler {
               "narrative_beat": "world_building",
               "away": {
                 "narration": "한편, 편의점으로 향한 루나는 진열대 앞에서 한참을 고민하고 있었다...",
-                "actor_constraint": "캐릭터는 편의점에서 혼자 간식을 고르고 있다. 우유를 살까 주스를 살까 진지하게 고민하는 모습. 유저는 이 장소에 없다.",
-                "environment": { "location": "CONVENIENCE_STORE", "time": "NIGHT", "bgm": "DAILY" },
+                "actor_constraint": "캐릭터는 편의점에서 혼자 간식을 고르고 있다. ...",
+                "environment": {
+                "location": "CONVENIENCE_STORE",
+                "time": "NIGHT",
+                "bgm": "DAILY",
+                "location_canonical_key": "MODERN__CONVENIENCE_STORE_NIGHT_QUIET",
+                "location_description": "Interior of a 24-hour convenience store at night. Cool fluorescent lights wash over the shelves. Snack aisles in soft pastel packaging. Empty checkout counter glows under a single overhead light."
+                },
                 "npc_hint": "편의점 알바생 — 무뚝뚝하지만 의외로 친절한 20대 남성"
-              }
+               }
             }
             ```
             """.formatted(

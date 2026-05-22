@@ -1,29 +1,42 @@
 package com.spring.aichat.external;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import ai.fal.client.AsyncFalClient;
+import ai.fal.client.ClientConfig;
+import ai.fal.client.CredentialsResolver;
+import ai.fal.client.Output;
+import ai.fal.client.SubscribeOptions;
+import com.google.gson.JsonObject;
 import com.spring.aichat.config.FalAiProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * [Phase 5.5-RunPod] RunPod Serverless (ComfyUI) API 클라이언트
+ * [Phase 6-Illust v3] Fal.ai 클라이언트 — 공식 Java SDK({@code ai.fal.client:fal-client-async}) wrapper.
  *
- * 기존 Fal.ai → RunPod 완전 치환:
- *   1. 인증: Key → Bearer
- *   2. 페이로드: {"input": {"workflow": ...}} 래핑
- *   3. 응답: 이미지가 URL이 아닌 Base64 raw data로 반환
- *   4. RestClient: SimpleClientHttpRequestFactory (JDK HttpClient 헤더 버그 회피)
+ * <p>배경 일러스트 트랙 ({@code fal-ai/flux-2/stream}).
+ *
+ * <p><b>SDK 채택 근거</b>: Fal.ai는 공식 Java/Kotlin SDK(fal-java)를 제공한다.
+ * {@code subscribe()}는 큐 제출 → 폴링 → 결과 조회 → 자동 재시도를 모두 내부 처리하므로,
+ * 수동 REST 호출/폴링 루프/webhook 콜백 인프라가 전부 불필요해진다.
+ *
+ * <p><b>API 매핑</b> (fal-java 0.7.1):
+ * <ul>
+ *   <li>클라이언트: {@code AsyncFalClient.withConfig(ClientConfig.withCredentials(...))}</li>
+ *   <li>호출: {@code subscribe(endpointId, SubscribeOptions)} → {@code CompletableFuture<Output<JsonObject>>}</li>
+ *   <li>결과: {@code output.getData()} → {@code JsonObject { images:[{url}], ... }}</li>
+ * </ul>
+ *
+ * <p><b>입력 스키마</b> (flux-2/stream): prompt / image_size / num_inference_steps /
+ * guidance_scale(기본 2.5) / acceleration(none|regular|high) / enable_safety_checker /
+ * output_format. <b>negative_prompt 없음</b> (Flux 2 positive-only).
+ *
+ * <p>build.gradle: {@code implementation 'ai.fal.client:fal-client-async:0.7.1'}
  */
 @Component
 @Slf4j
@@ -31,329 +44,136 @@ import java.util.concurrent.ThreadLocalRandom;
 public class FalAiClient {
 
     private final FalAiProperties props;
-    private final ObjectMapper objectMapper;
 
-    /** RunPod 전용 RestClient (단일 인스턴스 재사용) */
-    private RestClient runpodRestClient;
+    private AsyncFalClient fal;
 
     @PostConstruct
     void init() {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(10_000);
-        requestFactory.setReadTimeout(60_000);
-
-        this.runpodRestClient = RestClient.builder()
-            .requestFactory(requestFactory)
-            .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.apiKey())
-            .build();
-
-        log.info("[RUNPOD] RestClient initialized (Bearer auth, SimpleClientHttpRequestFactory)");
+        // yml로 주입한 키를 ClientConfig로 명시 (FAL_KEY 환경변수에 의존하지 않음)
+        ClientConfig config = ClientConfig.withCredentials(
+            CredentialsResolver.fromApiKey(props.apiKey())
+        );
+        this.fal = AsyncFalClient.withConfig(config);
+        log.info("[FAL] AsyncFalClient initialized (SDK fal-client-async, model={})",
+            props.effectiveModel());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  큐 제출 / 폴링 / 결과 조회
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public QueueResponse submitToQueue(JsonNode workflow) {
-        String url = props.queueUrl();
-
-        ObjectNode inputNode = objectMapper.createObjectNode();
-        inputNode.set("workflow", workflow);
-        ObjectNode body = objectMapper.createObjectNode();
-        body.set("input", inputNode);
-
-        log.info("[RUNPOD] Submitting to queue: {}", url);
-
-        try {
-            String responseStr = runpodRestClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(String.class);
-
-            JsonNode resp = objectMapper.readTree(responseStr);
-            String requestId = resp.path("id").asText(null);
-            String status = resp.path("status").asText("UNKNOWN");
-
-            if (requestId == null) {
-                throw new RuntimeException("Failed to get request ID from RunPod");
-            }
-
-            String statusUrl = url.replace("/run", "/status/") + requestId;
-            String responseUrl = statusUrl;
-
-            log.info("[RUNPOD] Queue submitted: requestId={}, status={}", requestId, status);
-            return new QueueResponse(requestId, statusUrl, responseUrl);
-
-        } catch (Exception e) {
-            log.error("[RUNPOD] Queue submission failed", e);
-            throw new RuntimeException("RunPod queue submission failed: " + e.getMessage(), e);
-        }
-    }
-
-    public PollResult pollStatus(String statusUrl) {
-        try {
-            String responseStr = runpodRestClient.get()
-                .uri(statusUrl)
-                .retrieve()
-                .body(String.class);
-
-            JsonNode resp = objectMapper.readTree(responseStr);
-            String status = resp.path("status").asText("UNKNOWN");
-
-            log.info("[RUNPOD] Poll: status={}", status);
-
-            if ("COMPLETED".equalsIgnoreCase(status)) {
-                return new PollResult(true, status, resp);
-            } else if ("FAILED".equalsIgnoreCase(status)) {
-                log.error("[RUNPOD] Generation failed: {}", resp);
-                return new PollResult(false, "FAILED", resp);
-            }
-
-            return new PollResult(false, status, resp);
-
-        } catch (Exception e) {
-            log.warn("[RUNPOD] Poll failed: {} — {}", e.getClass().getSimpleName(), e.getMessage());
-            return new PollResult(false, "ERROR", null);
-        }
-    }
-
-    /** RunPod은 폴링 결과에 페이로드가 포함됨 → 별도 fetch 불필요 */
-    public JsonNode fetchResult(String responseUrl) {
-        return pollStatus(responseUrl).payload();
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [핵심] Base64 이미지 데이터 추출
+    //  생성 (subscribe — 큐+폴링+결과 SDK 자동 처리)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * RunPod/ComfyUI 응답에서 첫 번째 이미지의 Base64 데이터 추출
+     * 배경 이미지 생성. SDK subscribe가 완료까지 내부 폴링 후 결과 반환.
      *
-     * RunPod ComfyUI SaveImage 노드 응답 구조 (유연 탐색):
-     *   구조 A: { "output": { "images": [{ "data": "base64..." }] } }
-     *   구조 B: { "output": { "message": "base64..." } }
-     *   구조 C: { "output": { "52": { "images": [{ "data": "base64..." }] } } }
-     *   구조 D: { "output": { "message": { "outputs": { "52": { "images": [{ "data": "..." }] } } } } }
-     *
-     * @return Base64 인코딩된 이미지 데이터 (null이면 추출 실패)
+     * @return 생성된 이미지 URL의 CompletableFuture (실패 시 예외 완성)
      */
-    public String extractImageBase64(JsonNode resultPayload) {
+    public CompletableFuture<GenerationResult> generate(GenerationRequest req) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("prompt", req.prompt());
+        input.put("image_size", req.imageSize() != null ? req.imageSize() : "landscape_16_9");
+        input.put("num_inference_steps", req.numInferenceSteps() != null ? req.numInferenceSteps() : 28);
+        input.put("guidance_scale", req.guidanceScale() != null ? req.guidanceScale() : 2.5);
+        input.put("acceleration", req.acceleration() != null ? req.acceleration() : "regular");
+        input.put("enable_safety_checker", false);
+        input.put("output_format", "png");
+        // negative_prompt 없음 — Flux 2 positive-only (금지사항은 prompt 후미 자연어 통합)
+
+        String endpoint = props.effectiveModel();
+        log.info("[FAL] subscribe: model={}, promptLen={}", endpoint, req.prompt().length());
+
+        CompletableFuture<Output<JsonObject>> future = fal.subscribe(
+            endpoint,
+            SubscribeOptions.<JsonObject>builder()
+                .input(input)
+                .resultType(JsonObject.class)
+                .onQueueUpdate(update -> {
+                    if (update != null && update.getStatus() != null) {
+                        log.debug("[FAL] queue update: {}", update.getStatus());
+                    }
+                })
+                .build()
+        );
+
+        return future.thenApply(output -> {
+            String requestId = output.getRequestId();
+            String imageUrl = extractImageUrl(output.getData());
+            if (imageUrl == null) {
+                log.error("[FAL] No image url in result: requestId={}", requestId);
+                throw new IllegalStateException("Fal.ai returned no image url (requestId=" + requestId + ")");
+            }
+            log.info("[FAL] ✅ Completed: requestId={}, url={}", requestId, imageUrl);
+            return new GenerationResult(requestId, imageUrl);
+        });
+    }
+
+    /**
+     * 동기 편의 메서드 — 호출 스레드에서 완료까지 블로킹.
+     * (BackgroundGenerationService는 @Async 스레드풀 위에서 실행되므로 블로킹 허용.)
+     *
+     * @return 이미지 URL, 실패 시 null
+     */
+    public GenerationResult generateBlocking(GenerationRequest req) {
         try {
-            JsonNode output = resultPayload.path("output");
-            if (output.isMissingNode() || output.isNull()) {
-                log.warn("[RUNPOD] No 'output' field in response");
-                return null;
-            }
-
-            // 전략 1: output.images[0].data
-            String found = tryExtractBase64FromImages(output.path("images"));
-            if (found != null) return found;
-
-            // 전략 2: output.message가 직접 base64 문자열
-            JsonNode message = output.path("message");
-            if (message.isTextual() && message.asText().length() > 1000) {
-                log.info("[RUNPOD] Image extracted from output.message (direct base64, {}chars)",
-                    message.asText().length());
-                return message.asText();
-            }
-
-            // 전략 3: output.message.outputs.{nodeId}.images[0].data
-            if (message.isObject()) {
-                JsonNode outputs = message.path("outputs");
-                if (outputs.isObject()) {
-                    String fromOutputs = searchNodesForBase64(outputs);
-                    if (fromOutputs != null) return fromOutputs;
-                }
-            }
-
-            // 전략 4: output.{nodeId}.images[0].data (노드 직접 나열)
-            String fromNodes = searchNodesForBase64(output);
-            if (fromNodes != null) return fromNodes;
-
-            log.warn("[RUNPOD] No base64 image found. output field names: [{}]",
-                joinFieldNames(output));
-            return null;
-
+            return generate(req).join();
         } catch (Exception e) {
-            log.error("[RUNPOD] Image data extraction failed", e);
+            log.error("[FAL] generateBlocking failed: {}", e.getMessage(), e);
             return null;
         }
     }
 
-    /**
-     * @deprecated Fal.ai 레거시 — RunPod에서는 extractImageBase64() 사용
-     */
-    @Deprecated
-    public String extractImageUrl(JsonNode resultPayload) {
-        try {
-            JsonNode output = resultPayload.path("output");
-            JsonNode outputs = output.path("message").path("outputs");
-            if (outputs.isMissingNode()) outputs = resultPayload.path("outputs");
-            if (outputs.isMissingNode()) outputs = output;
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  결과 파싱
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            for (var entry : (Iterable<Map.Entry<String, JsonNode>>) outputs::fields) {
-                JsonNode images = entry.getValue().path("images");
-                if (images.isArray()) {
-                    for (JsonNode img : images) {
-                        String url = img.path("url").asText(null);
-                        if (url != null && !url.isBlank() && url.startsWith("http")) return url;
+    /**
+     * flux-2/stream 결과 JsonObject에서 첫 이미지 URL 추출.
+     * 구조: {@code { "images": [ { "url": "...", "width":..., "height":... } ], "seed":... }}
+     */
+    public String extractImageUrl(JsonObject data) {
+        if (data == null) return null;
+        try {
+            if (data.has("images") && data.get("images").isJsonArray()) {
+                var images = data.getAsJsonArray("images");
+                if (!images.isEmpty()) {
+                    var first = images.get(0);
+                    if (first.isJsonObject()) {
+                        var obj = first.getAsJsonObject();
+                        if (obj.has("url") && !obj.get("url").isJsonNull()) {
+                            String url = obj.get("url").getAsString();
+                            if (url != null && url.startsWith("http")) return url;
+                        }
+                    } else if (first.isJsonPrimitive()) {
+                        String url = first.getAsString();
+                        if (url.startsWith("http")) return url;
                     }
                 }
             }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    // ── Base64 추출 헬퍼 ──
-
-    private String tryExtractBase64FromImages(JsonNode images) {
-        if (images.isArray() && !images.isEmpty()) {
-            for (JsonNode img : images) {
-                String data = img.path("data").asText(null);
-                if (data != null && !data.isBlank() && data.length() > 1000) {
-                    log.info("[RUNPOD] Image extracted: base64 ({}chars)", data.length());
-                    return data;
-                }
-            }
-        }
-        return null;
-    }
-
-    private String searchNodesForBase64(JsonNode parent) {
-        for (var entry : (Iterable<Map.Entry<String, JsonNode>>) parent::fields) {
-            String found = tryExtractBase64FromImages(entry.getValue().path("images"));
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    private String joinFieldNames(JsonNode node) {
-        StringBuilder sb = new StringBuilder();
-        node.fieldNames().forEachRemaining(s -> {
-            if (!sb.isEmpty()) sb.append(", ");
-            sb.append(s);
-        });
-        return sb.toString();
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  워크플로우 빌더 (RunPod ComfyUI 순정 노드)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public JsonNode buildCharacterWorkflow(String loraUrl, String positivePrompt, String negativePrompt) {
-        try {
-            ObjectNode workflow = objectMapper.createObjectNode();
-
-            workflow.set("1", objectMapper.readTree("""
-                { "inputs": { "ckpt_name": "%s" }, "class_type": "CheckpointLoaderSimple",
-                  "_meta": { "title": "체크포인트 로드" } }
-                """.formatted(props.baseModelUrl())));
-
-            workflow.set("2", objectMapper.readTree("""
-                { "inputs": { "lora_name": "%s", "strength_model": 1, "strength_clip": 1,
-                    "model": ["1", 0], "clip": ["1", 1] },
-                  "class_type": "LoraLoader", "_meta": { "title": "LoRA 로드" } }
-                """.formatted(loraUrl)));
-
-            ObjectNode n48 = objectMapper.createObjectNode();
-            ObjectNode n48i = objectMapper.createObjectNode();
-            n48i.put("text", positivePrompt);
-            n48i.set("clip", objectMapper.readTree("[\"2\", 1]"));
-            n48.set("inputs", n48i); n48.put("class_type", "CLIPTextEncode");
-            workflow.set("48", n48);
-
-            ObjectNode n47 = objectMapper.createObjectNode();
-            ObjectNode n47i = objectMapper.createObjectNode();
-            n47i.put("text", negativePrompt);
-            n47i.set("clip", objectMapper.readTree("[\"2\", 1]"));
-            n47.set("inputs", n47i); n47.put("class_type", "CLIPTextEncode");
-            workflow.set("47", n47);
-
-            workflow.set("49", objectMapper.readTree("""
-                { "inputs": { "width": 1024, "height": 1024, "batch_size": 1 },
-                  "class_type": "EmptyLatentImage" }
-                """));
-
-            long seed = ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE);
-            workflow.set("50", objectMapper.readTree("""
-                { "inputs": { "seed": %d, "steps": 30, "cfg": 4,
-                    "sampler_name": "euler", "scheduler": "normal", "denoise": 1,
-                    "model": ["2", 0], "positive": ["48", 0],
-                    "negative": ["47", 0], "latent_image": ["49", 0] },
-                  "class_type": "KSampler" }
-                """.formatted(seed)));
-
-            workflow.set("51", objectMapper.readTree("""
-                { "inputs": { "samples": ["50", 0], "vae": ["1", 2] }, "class_type": "VAEDecode" }
-                """));
-            workflow.set("52", objectMapper.readTree("""
-                { "inputs": { "filename_prefix": "LucidChar", "images": ["51", 0] }, "class_type": "SaveImage" }
-                """));
-
-            return workflow;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to build character workflow", e);
+            log.warn("[FAL] extractImageUrl parse error: {}", e.getMessage());
         }
-    }
-
-    public JsonNode buildLocationWorkflow(String positivePrompt, String negativePrompt) {
-        try {
-            ObjectNode workflow = objectMapper.createObjectNode();
-
-            workflow.set("1", objectMapper.readTree("""
-                { "inputs": { "ckpt_name": "%s" }, "class_type": "CheckpointLoaderSimple" }
-                """.formatted(props.baseModelUrl())));
-
-            workflow.set("67", objectMapper.readTree("""
-                { "inputs": { "lora_name": "%s", "strength_model": 0.6, "strength_clip": 1,
-                    "model": ["1", 0], "clip": ["1", 1] },
-                  "class_type": "LoraLoader" }
-                """.formatted(props.locationLoraUrl())));
-
-            ObjectNode n48 = objectMapper.createObjectNode();
-            ObjectNode n48i = objectMapper.createObjectNode();
-            n48i.put("text", positivePrompt);
-            n48i.set("clip", objectMapper.readTree("[\"67\", 1]"));
-            n48.set("inputs", n48i); n48.put("class_type", "CLIPTextEncode");
-            workflow.set("48", n48);
-
-            ObjectNode n47 = objectMapper.createObjectNode();
-            ObjectNode n47i = objectMapper.createObjectNode();
-            n47i.put("text", negativePrompt);
-            n47i.set("clip", objectMapper.readTree("[\"67\", 1]"));
-            n47.set("inputs", n47i); n47.put("class_type", "CLIPTextEncode");
-            workflow.set("47", n47);
-
-            workflow.set("49", objectMapper.readTree("""
-                { "inputs": { "width": 1344, "height": 768, "batch_size": 1 },
-                  "class_type": "EmptyLatentImage" }
-                """));
-
-            long seed = ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE);
-            workflow.set("50", objectMapper.readTree("""
-                { "inputs": { "seed": %d, "steps": 30, "cfg": 4,
-                    "sampler_name": "euler", "scheduler": "normal", "denoise": 1,
-                    "model": ["67", 0], "positive": ["48", 0],
-                    "negative": ["47", 0], "latent_image": ["49", 0] },
-                  "class_type": "KSampler" }
-                """.formatted(seed)));
-
-            workflow.set("51", objectMapper.readTree("""
-                { "inputs": { "samples": ["50", 0], "vae": ["1", 2] }, "class_type": "VAEDecode" }
-                """));
-            workflow.set("52", objectMapper.readTree("""
-                { "inputs": { "filename_prefix": "LucidBG", "images": ["51", 0] }, "class_type": "SaveImage" }
-                """));
-
-            return workflow;
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to build location workflow", e);
-        }
+        return null;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    public record QueueResponse(String requestId, String statusUrl, String responseUrl) {}
-    public record PollResult(boolean completed, String status, JsonNode payload) {}
+    //  DTO
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 생성 요청. negative_prompt 없음 (Flux 2 positive-only).
+     * acceleration: none | regular | high (기본 regular).
+     */
+    public record GenerationRequest(
+        String prompt,
+        String imageSize,
+        Integer numInferenceSteps,
+        Double guidanceScale,
+        String acceleration
+    ) {
+        /** 배경용 표준 (16:9, 28 step, guidance 2.5, regular). */
+        public static GenerationRequest background(String prompt) {
+            return new GenerationRequest(prompt, "landscape_16_9", 28, 2.5, "regular");
+        }
+    }
+
+    public record GenerationResult(String requestId, String imageUrl) {}
 }

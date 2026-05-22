@@ -224,6 +224,33 @@ public class ChatRoom {
     @Column(name = "current_dynamic_bg_url", length = 1000)
     private String currentDynamicBgUrl;
 
+    /**
+     * [Phase 6-Illust hotfix] 현재 동적 장소의 canonical_key.
+     *
+     * <p>중복 전환 가드를 한글 표시명 텍스트 유사도가 아니라 canonical_key 동일성으로
+     * 판정하기 위함. 캐시 동일성 판정 기준(canonical_key)과 가드 기준을 일치시킨다.
+     * 표시명이 달라도("어둡고 축축한 뒷골목" vs "가로등 깜빡이는 밤골목") canonical_key가
+     * 같으면("MODERN__ALLEY_NIGHT_*") 같은 장소로 취급 → 불필요한 전환 컴포넌트 억제.
+     *
+     * <p>nullable — 동적 장소 미활성 시 또는 LLM이 canonical_key 미출력 시.
+     */
+    @Column(name = "current_dynamic_canonical_key", length = 100)
+    private String currentDynamicCanonicalKey;
+
+    /**
+     * [Phase 6-Illust] 마지막 LLM 응답이 제안한 일러스트 자세/액션/시츄에이션 hint.
+     *
+     * <p>Danbooru 영문 콤마 키워드 양식 (SDXL/ModelsLab prompt에 직삽입 가능).
+     * 매 LLM 응답마다 갱신되어 {@link com.spring.aichat.service.illustration.IllustrationService}의
+     * Manual/Auto 일러스트 트리거 시 IllustrationPromptAssembler 6단 구조의 마지막 슬롯에 활용된다.
+     *
+     * <p>예: {@code "leaning on cafe counter, holding coffee cup, looking sideways, soft afternoon light"}
+     *
+     * <p>nullable — LLM이 hint를 출력하지 않은 경우 또는 신규 채팅방의 초기 상태.
+     */
+    @Column(name = "last_illustration_hint", columnDefinition = "TEXT")
+    private String lastIllustrationHint;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Bug #3 Fix] 도메인 분리 — 시크릿 모드 & 유저 페르소나
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -411,21 +438,51 @@ public class ChatRoom {
 
     // ── [Phase 5.5-Fix] 동적 배경 영속화 메서드 ──
 
-    /** 동적 배경 URL + 장소명 갱신 (캐시 히트 시 또는 생성 완료 시) */
-    public void updateDynamicBackground(String locationName, String bgUrl) {
+    /** [Phase 6 hotfix] 동적 배경 URL + 장소명 + canonical_key 갱신 (캐시 히트/생성 완료 시) */
+    public void updateDynamicBackground(String locationName, String canonicalKey, String bgUrl) {
         this.currentDynamicLocationName = locationName;
+        this.currentDynamicCanonicalKey = canonicalKey;
         this.currentDynamicBgUrl = bgUrl;
     }
 
-    /** 동적 배경 장소명만 갱신 (캐시 미스, 비동기 생성 시작 시) */
-    public void updateDynamicLocationName(String locationName) {
+    /** [하위호환] canonical_key 없이 호출하는 기존 경로 — key는 보존(덮어쓰지 않음) */
+    public void updateDynamicBackground(String locationName, String bgUrl) {
         this.currentDynamicLocationName = locationName;
+        this.currentDynamicBgUrl = bgUrl;
+        // currentDynamicCanonicalKey는 의도적으로 건드리지 않음 (기존 값 보존)
+    }
+
+    /**
+     * [Phase 6-Illust] LLM 응답마다 일러스트 scene hint 갱신.
+     *
+     * <p>매 응답 직후 ChatStreamService가 호출. null/blank hint는 무시
+     * (기존 값을 덮어쓰지 않음 — 이전 응답의 hint가 manual 트리거에 여전히 유효할 수 있음).
+     *
+     * @param hint Danbooru 영문 콤마 키워드, nullable
+     */
+    public void updateLastIllustrationHint(String hint) {
+        if (hint != null && !hint.isBlank()) {
+            this.lastIllustrationHint = hint.trim();
+        }
+    }
+
+    /** [Phase 6 hotfix] 동적 배경 장소명 + canonical_key 갱신 (캐시 미스, 비동기 생성 시작 시) */
+    public void updateDynamicLocationName(String locationName, String canonicalKey) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicCanonicalKey = canonicalKey;
         this.currentDynamicBgUrl = null; // 아직 URL 미확정
     }
 
-    /** 동적 배경 클리어 (enum 기반 정적 장소로 전환 시) */
+    /** [하위호환] canonical_key 없이 호출하는 기존 경로 */
+    public void updateDynamicLocationName(String locationName) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicBgUrl = null;
+    }
+
+    /** 동적 배경 클리어 (enum 기반 정적 장소로 *명시적* 전환 시에만) */
     public void clearDynamicBackground() {
         this.currentDynamicLocationName = null;
+        this.currentDynamicCanonicalKey = null;
         this.currentDynamicBgUrl = null;
     }
 
@@ -468,9 +525,19 @@ public class ChatRoom {
         if (bgmMode != null) { try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {} }
         if (location != null) {
             try {
-                this.currentLocation = Location.valueOf(location);
-                // [Phase 5.5-Fix] enum 장소로 전환 시 AI 생성 배경 클리어
-                clearDynamicBackground();
+                Location parsedLoc = Location.valueOf(location);
+                this.currentLocation = parsedLoc;
+                // [Phase 6 hotfix] 동적 장소가 활성인 동안에는 scene.location enum으로
+                //   동적 배경을 클리어하지 않는다.
+                //   이유: CharacterPromptAssembler 지시에 따라 LLM은 동적 장소 사용 중에도
+                //   "가장 가까운 static location"을 scene.location 에 fallback 으로 넣는다.
+                //   이 fallback 값을 실제 전환으로 오인해 clearDynamicBackground()를
+                //   호출하면, 동적 장소(예: 가로등 골목)가 default(편의점)로 소실된다.
+                //   동적 → 정적 전환은 ChatStreamService의 new_location_name 명시 경로에서만 처리.
+                if (this.currentDynamicLocationName == null) {
+                    // 애초에 동적 장소가 없을 때만(이미 정적 상태) 정합성 유지용 호출
+                    clearDynamicBackground();
+                }
             } catch (IllegalArgumentException ignored) {
                 // AI 생성 동적 장소 — enum 매핑 불가, 무시 (동적 배경은 별도 경로로 처리)
             }

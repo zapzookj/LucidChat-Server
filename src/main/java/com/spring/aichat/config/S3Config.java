@@ -9,10 +9,15 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
- * [Phase 5.5-Illust] AWS S3 클라이언트 빈 설정
+ * [Phase 5.5-Illust] AWS S3 클라이언트 빈 설정.
+ * [Phase 6-Illust] ModelsLabProperties 추가 — 캐릭터 트랙 신규 플랫폼.
  */
 @Configuration
-@EnableConfigurationProperties({S3Properties.class, FalAiProperties.class})
+@EnableConfigurationProperties({
+    S3Properties.class,
+    FalAiProperties.class,
+    ModelsLabProperties.class
+})
 public class S3Config {
 
     @Bean

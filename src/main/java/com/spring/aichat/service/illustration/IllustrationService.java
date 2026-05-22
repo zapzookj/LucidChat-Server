@@ -11,9 +11,7 @@ import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
-import com.spring.aichat.external.FalAiClient;
-import com.spring.aichat.external.FalAiClient.QueueResponse;
-import com.spring.aichat.external.FalAiClient.PollResult;
+import com.spring.aichat.external.ModelsLabClient;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.prompt.IllustrationPromptAssembler;
 import com.spring.aichat.service.storage.S3StorageService;
@@ -37,7 +35,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class IllustrationService {
 
-    private final FalAiClient falAiClient;
+    private final ModelsLabClient modelsLabClient;
     private final S3StorageService s3StorageService;
     private final IllustrationPromptAssembler promptAssembler;
     private final UserIllustrationRepository illustrationRepository;
@@ -85,28 +83,32 @@ public class IllustrationService {
         String location = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation();
         String outfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : character.getEffectiveDefaultOutfit();
 
-        return submitGeneration(user, character, emotion, location, outfit, "MANUAL");
+        // [Phase 6-Illust] LLM이 매 응답에 갱신한 scene hint + 동적 장소 묘사 활용
+        String sceneHint = room.getLastIllustrationHint();
+        String dynamicLocDesc = room.getCurrentDynamicLocationName() != null
+            ? buildDynamicLocationTagsFromCache(room) : null;
+
+        return submitGeneration(user, character, emotion, location, outfit,
+            "MANUAL", sceneHint, dynamicLocDesc);
     }
 
+    /**
+     * [Phase 6-Illust] 동적 장소의 캐시된 description을 prompt 태그로 변환.
+     * room.currentDynamicLocationName이 있으면 BackgroundCache 또는 ChatRoom에 저장된
+     * 묘사를 가져온다. 현재는 단순히 location name만 반환 — 향후 BackgroundCache에서
+     * canonical_key 기반으로 조회하여 description 활용 확장 가능.
+     */
+    private String buildDynamicLocationTagsFromCache(ChatRoom room) {
+        String name = room.getCurrentDynamicLocationName();
+        if (name == null || name.isBlank()) return null;
+        // 단순 변환: "심야의 무인 카페" → 캐릭터 일러스트 배경 슬롯에 활용 가능한 형태
+        return name + ", anime background, soft lighting";
+    }
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  2. 자동 일러스트 생성 (승급/엔딩)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     // [Phase6/Tier4 / H-17] executor 명시 — TheaterConfig#illustrationExecutor 사용.
-    @Async("illustrationExecutor")
-    public void generateAutoIllustration(Long userId, Long characterId, Long roomId, String triggerType) {
-        generateAutoIllustration(userId, characterId, roomId, triggerType, null);
-    }
-
-    /**
-     * [Phase 5.5 UX Polish · R6] noteId-aware 자동 일러스트 생성.
-     *
-     * AUTO_MOMENT 등 자동 트리거에서 DirectorNote와 연결된 일러스트를 생성한다.
-     * 폴링 완료 시 IllustrationService 내부에서 노트의 relatedIllustrationUrl을
-     * 업데이트하므로, 호출 측은 fire-and-forget으로 사용 가능.
-     *
-     * @param noteId 연결할 DirectorNote ID (null 가능)
-     */
     @Async("illustrationExecutor")
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId,
                                          String triggerType, Long noteId) {
@@ -127,7 +129,15 @@ public class IllustrationService {
                 emotion = "JOY";
             }
 
-            IllustrationRequestResult result = submitGeneration(user, character, emotion, location, outfit, triggerType);
+            // [Phase 6-Illust] hint/dynamicLocation 추출 (room이 null이면 둘 다 null)
+            String sceneHint = room != null ? room.getLastIllustrationHint() : null;
+            String dynamicLocDesc = (room != null && room.getCurrentDynamicLocationName() != null)
+                ? buildDynamicLocationTagsFromCache(room) : null;
+
+            IllustrationRequestResult result = submitGeneration(
+                user, character, emotion, location, outfit, triggerType,
+                sceneHint, dynamicLocDesc
+            );
 
             // [R6] 노트 연결 — 폴링 완료 시 handleCompletion이 노트 URL을 업데이트
             if (noteId != null && result != null && result.illustrationId() != null) {
@@ -142,10 +152,13 @@ public class IllustrationService {
                 }
             }
 
-            processPollingInBackground(result.requestId());
+            // [Phase 6-Illust] 동기 완료된 경우 폴링 불필요 — submitGeneration 내부에서 이미 처리됨
+            if (!"COMPLETED".equals(result.status())) {
+                processPollingInBackground(result.requestId());
+            }
 
-            log.info("[ILLUST] Auto generation submitted: trigger={}, userId={}, charId={}, noteId={}",
-                triggerType, userId, characterId, noteId);
+            log.info("[ILLUST] Auto generation submitted: trigger={}, userId={}, charId={}, noteId={}, status={}",
+                triggerType, userId, characterId, noteId, result.status());
         } catch (Exception e) {
             log.error("[ILLUST] Auto generation failed: trigger={}, userId={}, charId={}",
                 triggerType, userId, characterId, e);
@@ -173,19 +186,19 @@ public class IllustrationService {
         }
 
         // 아직 진행 중 → RunPod에 직접 폴링
-        if (illust.isPending() && illust.getStatusUrl() != null) {
-            try {
-                PollResult poll = falAiClient.pollStatus(illust.getStatusUrl());
-                if (poll.completed()) {
-                    handleCompletion(illust, poll.payload());
-                    return new IllustrationStatusResult("COMPLETED", illust.getImageUrl(), null);
-                }
-                return new IllustrationStatusResult(poll.status(), null, null);
-            } catch (Exception e) {
-                log.warn("[ILLUST] Poll failed for {}: {}", requestId, e.getMessage());
-                return new IllustrationStatusResult("GENERATING", null, null);
-            }
-        }
+//        if (illust.isPending() && illust.getStatusUrl() != null) {
+//            try {
+//                PollResult poll = modelsLabClient.pollStatus(illust.getStatusUrl());
+//                if (poll.completed()) {
+//                    handleCompletion(illust, poll.payload());
+//                    return new IllustrationStatusResult("COMPLETED", illust.getImageUrl(), null);
+//                }
+//                return new IllustrationStatusResult(poll.status(), null, null);
+//            } catch (Exception e) {
+//                log.warn("[ILLUST] Poll failed for {}: {}", requestId, e.getMessage());
+//                return new IllustrationStatusResult("GENERATING", null, null);
+//            }
+//        }
 
         return new IllustrationStatusResult(illust.getStatus(), null, null);
     }
@@ -208,6 +221,26 @@ public class IllustrationService {
             return;
         }
 
+        handleCompletion(illust, payload);
+    }
+
+    /**
+     * [Phase 6-Illust] ModelsLab webhook 콜백 — 비동기 큐 완료 시 호출.
+     *
+     * IllustrationWebhookController가 trackId가 "BG_" prefix가 아닐 때(=캐릭터 일러스트일 때) 이 메서드 호출.
+     * 폴링과 webhook 경쟁 — 이미 COMPLETED면 skip.
+     */
+    @Transactional
+    public void handleModelsLabWebhookCallback(String generationId, JsonNode payload) {
+        UserIllustration illust = illustrationRepository.findByFalRequestId(generationId).orElse(null);
+        if (illust == null) {
+            log.warn("[ILLUST-WEBHOOK] Unknown generationId: {}", generationId);
+            return;
+        }
+        if ("COMPLETED".equals(illust.getStatus())) {
+            log.info("[ILLUST-WEBHOOK] Already completed (polling won race): {}", generationId);
+            return;
+        }
         handleCompletion(illust, payload);
     }
 
@@ -240,42 +273,99 @@ public class IllustrationService {
     //  내부: 생성 제출 공통 로직
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [Phase 6-Illust] 캐릭터 일러스트 생성 제출 — ModelsLab 트랙.
+     *
+     * 6단 prompt 구조: LoRA + 정체성 + 의상 + 장소(enum/동적) + 표정 + sceneHint(동적).
+     * 응답이 동기 완료이면 즉시 S3 업로드까지 마치고 COMPLETED 상태로 반환,
+     * 큐 진입이면 PENDING 상태로 저장 후 호출자가 폴링.
+     */
     private IllustrationRequestResult submitGeneration(
         User user, Character character,
-        String emotion, String location, String outfit, String triggerType
+        String emotion, String location, String outfit, String triggerType,
+        String sceneHint, String dynamicLocDesc
     ) {
         String slug = character.getSlug();
 
-        String positivePrompt = promptAssembler.assemblePositivePrompt(slug, emotion, location, outfit);
+        // [Phase 6-Illust] 신 6단 시그니처
+        String positivePrompt = promptAssembler.assemblePositivePrompt(
+            slug, emotion, location, outfit, sceneHint, dynamicLocDesc);
         String negativePrompt = promptAssembler.getNegativePrompt();
-        String loraUrl = promptAssembler.getLoraUrl(slug);
+        String loraId = promptAssembler.getLoraId(slug);
 
-        JsonNode workflow = falAiClient.buildCharacterWorkflow(loraUrl, positivePrompt, negativePrompt);
-        QueueResponse queueResp = falAiClient.submitToQueue(workflow);
+        // 캐릭터 정체성 LoRA + (옵션) 글로벌 Detail/Style LoRA 슬롯 조합
+        java.util.List<ModelsLabClient.LoraSlot> loras = new java.util.ArrayList<>();
+        loras.add(new ModelsLabClient.LoraSlot(loraId, 1.0));
+        // Detail/Style은 ModelsLabProperties의 효과 활성 시 ModelsLabClient가 자동 추가하지 않으므로,
+        // 여기서 명시적으로 props를 읽어 추가하는 패턴이 명확하다. 단, 현 구현은 client 외부에 둠.
 
-        // [Phase6/Tier4 / H-16 경량 패치]
-        //   완전 fix(외부 호출 *전* PENDING 저장)는 fal_request_id NOT NULL/UNIQUE 제약으로
-        //   schema 변경 필요 — Tier 5/v2에서 처리. 여기서는 save 실패 시 orphan 큐 추적용
-        //   alert 로그를 *명시적으로* 분리해 노출한다(운영자 수동 추적 가능).
+        String trackId = "ILL_" + user.getId() + "_" + System.currentTimeMillis();
+
+        ModelsLabClient.SubmitResult submitResult = modelsLabClient.submit(
+            new ModelsLabClient.GenerationRequest(
+                null,                // modelId — null이면 props.defaultModelId
+                positivePrompt, negativePrompt,
+                loras, trackId
+            )
+        );
+
+        // 호환: UserIllustration 컬럼은 falRequestId/statusUrl/responseUrl을 그대로 사용 (의미는 provider 무관 id)
+        String requestId = submitResult.generationId();
+        String fetchUrl = submitResult.fetchUrl();  // 큐 모드 시 fetch URL, 동기 완료 시 null
+
         UserIllustration illust;
         try {
             illust = UserIllustration.createPending(
                 user, character.getId(), character.getName(),
-                queueResp.requestId(), queueResp.statusUrl(), queueResp.responseUrl(),
+                requestId,
+                fetchUrl,                    // statusUrl 컬럼에 fetchUrl 저장 (의미 재해석)
+                fetchUrl,                    // responseUrl 컬럼에도 동일 저장
                 positivePrompt, triggerType, emotion, location, outfit
             );
             illustrationRepository.save(illust);
         } catch (RuntimeException e) {
             log.error("[ILLUST] ORPHAN_QUEUE_REQUEST | external queue submitted but DB save failed " +
-                "| requestId={} | statusUrl={} | slug={} | userId={} | trigger={}",
-                queueResp.requestId(), queueResp.statusUrl(), slug, user.getId(), triggerType, e);
+                    "| requestId={} | slug={} | userId={} | trigger={}",
+                requestId, slug, user.getId(), triggerType, e);
             throw e;
         }
 
-        log.info("[ILLUST] Submitted: requestId={}, slug={}, trigger={}, userId={}",
-            queueResp.requestId(), slug, triggerType, user.getId());
+        // 동기 완료 케이스: 즉시 다운로드 + S3 업로드 후 COMPLETED로 마무리
+        if (submitResult.syncCompleted() && submitResult.imageUrl() != null) {
+            log.info("[ILLUST] Sync-completed at submit: requestId={}, slug={}, userId={}",
+                requestId, slug, user.getId());
+            try {
+                String s3Url = s3StorageService.downloadAndUpload(
+                    submitResult.imageUrl(),
+                    "illustrations/",
+                    "user_" + user.getId() + "_char_" + character.getId() + "_" + requestId
+                );
+                illust.markCompleted(s3Url, submitResult.imageUrl());
+                illustrationRepository.save(illust);
 
-        return new IllustrationRequestResult(queueResp.requestId(), illust.getId(), "PENDING");
+                attachToDirectorNoteIfLinked(illust, s3Url);
+
+                return new IllustrationRequestResult(requestId, illust.getId(), "COMPLETED");
+            } catch (Exception e) {
+                log.error("[ILLUST] Sync-complete S3 upload failed, fallback to polling: requestId={}", requestId, e);
+                // 폴링으로 폴백
+            }
+        }
+
+        log.info("[ILLUST] Submitted (queue): requestId={}, slug={}, trigger={}, userId={}",
+            requestId, slug, triggerType, user.getId());
+
+        return new IllustrationRequestResult(requestId, illust.getId(), "PENDING");
+    }
+
+    /**
+     * 구버전 호환 — 4-arg(+triggerType) 시그니처. 신규 슬롯은 null로 호출.
+     */
+    private IllustrationRequestResult submitGeneration(
+        User user, Character character,
+        String emotion, String location, String outfit, String triggerType
+    ) {
+        return submitGeneration(user, character, emotion, location, outfit, triggerType, null, null);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -288,48 +378,48 @@ public class IllustrationService {
     @Transactional
     protected void handleCompletion(UserIllustration illust, JsonNode payload) {
         try {
-            // [RunPod] Base64 데이터 추출
-            String base64Data = falAiClient.extractImageBase64(payload);
-            if (base64Data == null) {
-                illust.markFailed("No image data in RunPod response");
+            // [Phase 6-Illust] ModelsLab은 URL 반환
+            String imageUrl = modelsLabClient.extractFirstOutputUrl(payload);
+            if (imageUrl == null) {
+                illust.markFailed("No image URL in ModelsLab response");
                 illustrationRepository.save(illust);
                 return;
             }
 
-            // Base64 → S3 직접 업로드
-            String s3Url = s3StorageService.uploadIllustrationFromBase64(
-                base64Data,
-                illust.getUser().getId(),
-                illust.getCharacterId(),
-                illust.getFalRequestId()
+            String s3Url = s3StorageService.downloadAndUpload(
+                imageUrl,
+                "illustrations/",
+                "user_" + illust.getUser().getId() + "_char_" + illust.getCharacterId() + "_" + illust.getFalRequestId()
             );
 
-            illust.markCompleted(s3Url, "runpod:base64"); // falTempUrl 대신 출처 마커
+            illust.markCompleted(s3Url, imageUrl);
             illustrationRepository.save(illust);
 
-            // [Phase 5.5 UX Polish · R6] 연결된 DirectorNote에 일러스트 URL 채워주기
-            //   - linkedNoteId가 있으면 해당 노트의 relatedIllustrationUrl을 업데이트
-            //   - 다이어리 패널이 새로고침되면 사진과 함께 표시됨
-            //   - 실패해도 본 흐름엔 영향 없음 (try-catch 격리)
-            Long noteId = illust.getLinkedNoteId();
-            if (noteId != null) {
-                try {
-                    directorNoteRepository.findById(noteId).ifPresent(note -> {
-                        note.attachIllustration(s3Url);
-                        directorNoteRepository.save(note);
-                    });
-                    log.info("[ILLUST] ✅ Linked to DirectorNote: noteId={}, s3Url={}", noteId, s3Url);
-                } catch (Exception linkErr) {
-                    log.warn("[ILLUST] DirectorNote link failed (non-fatal): noteId={}, err={}",
-                        noteId, linkErr.getMessage());
-                }
-            }
+            attachToDirectorNoteIfLinked(illust, s3Url);
 
             log.info("[ILLUST] ✅ Completed: requestId={}, s3Url={}", illust.getFalRequestId(), s3Url);
         } catch (Exception e) {
             log.error("[ILLUST] Completion failed: requestId={}", illust.getFalRequestId(), e);
             illust.markFailed(e.getMessage());
             illustrationRepository.save(illust);
+        }
+    }
+
+    /**
+     * DirectorNote 연결 시 일러스트 URL 부착 — handleCompletion 중복 코드 추출.
+     */
+    private void attachToDirectorNoteIfLinked(UserIllustration illust, String s3Url) {
+        Long noteId = illust.getLinkedNoteId();
+        if (noteId == null) return;
+        try {
+            directorNoteRepository.findById(noteId).ifPresent(note -> {
+                note.attachIllustration(s3Url);
+                directorNoteRepository.save(note);
+            });
+            log.info("[ILLUST] ✅ Linked to DirectorNote: noteId={}, s3Url={}", noteId, s3Url);
+        } catch (Exception linkErr) {
+            log.warn("[ILLUST] DirectorNote link failed (non-fatal): noteId={}, err={}",
+                noteId, linkErr.getMessage());
         }
     }
 
@@ -350,20 +440,18 @@ public class IllustrationService {
             for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
                 Thread.sleep(POLL_INTERVAL_MS);
 
-                PollResult poll = falAiClient.pollStatus(illust.getStatusUrl());
+                // [Phase 6-Illust] ModelsLab fetch
+                ModelsLabClient.PollResult poll = modelsLabClient.fetch(illust.getStatusUrl(), requestId);
                 String currentStatus = poll.status();
 
-                // 상태 변화 감지 로깅
                 if (!currentStatus.equals(lastStatus)) {
                     long elapsed = (System.currentTimeMillis() - startTime) / 1000;
                     log.info("[ILLUST] Status changed: {} → {} | elapsed={}s | requestId={}",
-                        lastStatus.isEmpty() ? "(start)" : lastStatus,
-                        currentStatus, elapsed, requestId);
+                        lastStatus.isEmpty() ? "(start)" : lastStatus, currentStatus, elapsed, requestId);
                     lastStatus = currentStatus;
                 }
 
-                // 10초마다 진행률 로깅
-                if (i > 0 && i % 10 == 0) {
+                if (i > 0 && i % 20 == 0) {
                     long elapsed = (System.currentTimeMillis() - startTime) / 1000;
                     log.info("[ILLUST] Still polling: status={} | attempt={}/{} | elapsed={}s | requestId={}",
                         currentStatus, i, MAX_POLL_ATTEMPTS, elapsed, requestId);
@@ -372,18 +460,18 @@ public class IllustrationService {
                 if (poll.completed()) {
                     long elapsed = (System.currentTimeMillis() - startTime) / 1000;
                     log.info("[ILLUST] ✅ Generation completed in {}s | requestId={}", elapsed, requestId);
-                    handleCompletion(illust, poll.payload()); // RunPod은 페이로드에 결과 포함
+                    // ModelsLab 응답 페이로드를 그대로 handleCompletion에 전달
+                    handleCompletion(illust, poll.payload());
                     return;
                 }
 
                 if ("FAILED".equalsIgnoreCase(currentStatus)) {
-                    illust.markFailed("RunPod generation failed");
+                    illust.markFailed("ModelsLab generation failed");
                     illustrationRepository.save(illust);
-                    log.error("[ILLUST] ❌ RunPod generation FAILED: requestId={}", requestId);
+                    log.error("[ILLUST] ❌ ModelsLab generation FAILED: requestId={}", requestId);
                     return;
                 }
 
-                // 연속 에러 감지
                 if ("ERROR".equalsIgnoreCase(currentStatus)) {
                     consecutiveErrors++;
                     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -408,7 +496,7 @@ public class IllustrationService {
             Thread.currentThread().interrupt();
             log.warn("[ILLUST] Polling interrupted: requestId={}", requestId);
         } catch (Exception e) {
-            log.error("[ILLUST] Polling error: requestId={}", requestId, e);
+            log.error("[ILLUST] Polling unexpected error: requestId={}", requestId, e);
         }
     }
 

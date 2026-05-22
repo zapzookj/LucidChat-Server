@@ -28,6 +28,8 @@ public record DirectorDirective(
     @JsonProperty("narrative_beat")
     String narrativeBeat,
 
+    ContinuePayload cont,
+
     /** INTERLUDE 유형 — 원샷 깜짝 나레이션 개입 */
     InterludePayload interlude,
 
@@ -59,15 +61,26 @@ public record DirectorDirective(
     public boolean checkAway() { return DECISION_AWAY.equalsIgnoreCase(decision); }
 
     /** 하위 호환 생성자: away 필드 없는 6-param 버전 */
-    public DirectorDirective(String decision, String reasoning, String narrativeBeat,
+    public DirectorDirective(String decision, String reasoning, String narrativeBeat, ContinuePayload cont,
                              InterludePayload interlude, BranchPayload branch,
                              TransitionPayload transition) {
-        this(decision, reasoning, narrativeBeat, interlude, branch, transition, null);
+        this(decision, reasoning, narrativeBeat, cont, interlude, branch, transition, null);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Payload 레코드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * CONTINUE: 같은 신 유지 (기존 코드 그대로)
+     */
+    public record ContinuePayload(
+        String tone,
+        @JsonProperty("actor_constraint")
+        String actorConstraint,
+        @JsonProperty("scene_hint")
+        String sceneHint
+    ) {}
 
     /**
      * INTERLUDE: 원샷 깜짝 이벤트 (투명 처리)
@@ -122,8 +135,7 @@ public record DirectorDirective(
     /**
      * TRANSITION: 시간/장소 전환 (투명 처리)
      *
-     * narration → 전환 나레이션 (대화창에 인라인 삽입)
-     * actorConstraint → 전환 후 캐릭터 행동 지시
+     * <p>[Phase 6-Illust] locationCanonicalKey 신규 필드.
      */
     public record TransitionPayload(
         String narration,
@@ -133,6 +145,9 @@ public record DirectorDirective(
         String newLocationName,
         @JsonProperty("location_description")
         String locationDescription,
+        // ── [Phase 6-Illust] 신규 ──
+        @JsonProperty("location_canonical_key")
+        String locationCanonicalKey,
         @JsonProperty("actor_constraint")
         String actorConstraint,
         @JsonProperty("new_bgm")
@@ -164,6 +179,9 @@ public record DirectorDirective(
         String time,
         String bgm,
         @JsonProperty("location_description")
-        String locationDescription
+        String locationDescription,
+        // ── [Phase 6-Illust] 신규 ──
+        @JsonProperty("location_canonical_key")
+        String locationCanonicalKey
     ) {}
 }

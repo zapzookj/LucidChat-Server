@@ -3,9 +3,9 @@ package com.spring.aichat.service.illustration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.spring.aichat.domain.illustration.BackgroundCache;
 import com.spring.aichat.domain.illustration.BackgroundCacheRepository;
+import com.spring.aichat.domain.theater.World;
 import com.spring.aichat.external.FalAiClient;
-import com.spring.aichat.external.FalAiClient.QueueResponse;
-import com.spring.aichat.external.FalAiClient.PollResult;
+import com.spring.aichat.external.ModelsLabClient;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.prompt.BackgroundPromptAssembler;
 import com.spring.aichat.service.storage.S3StorageService;
@@ -21,9 +21,16 @@ import java.util.concurrent.CompletableFuture;
 /**
  * [Phase 5.5-Illust] 장소 배경 생성 서비스
  *
- * [Phase 5.5-RunPod] Fal.ai → RunPod 전환에 따른 변경:
- *   - 이미지가 URL이 아닌 Base64 raw data로 반환
- *   - pollUntilComplete() → extractImageBase64() → uploadBackgroundFromBase64()
+ * [Phase 6-Illust] 두 트랙 결선:
+ * <ul>
+ *   <li><b>일반 배경</b> → Fal.ai Flux 2 Dev (검열 무관, 자연어 친화, $0.012/MP)</li>
+ *   <li><b>Secret Mode 분위기 배경</b> → ModelsLab (NSFW 정식 허용, 동일 화풍 유지)</li>
+ * </ul>
+ *
+ * <p>캐시 키는 canonical_key 기반 SHA-256으로 전환. 시그니처가 변경되어 호출처
+ * (ChatStreamService, TheaterBatchGenerator)도 함께 갱신 필요.
+ *
+ * <p>구버전 시그니처(locationName 직해싱)는 deprecated 유지 — 점진 이행.
  */
 @Service
 @Slf4j
@@ -31,35 +38,43 @@ import java.util.concurrent.CompletableFuture;
 public class BackgroundGenerationService {
 
     private final FalAiClient falAiClient;
+    private final ModelsLabClient modelsLabClient;
     private final S3StorageService s3StorageService;
     private final BackgroundPromptAssembler promptAssembler;
     private final BackgroundCacheRepository backgroundCacheRepository;
     private final RedisCacheService cacheService;
 
     private static final String REDIS_BG_PREFIX = "bg:";
-    private static final long REDIS_BG_TTL_SECONDS = -1;
 
-    /** 폴링 최대 시도 횟수 — ComfyUI cold start(모델 DL) 고려하여 3분 */
-    private static final int MAX_POLL_ATTEMPTS = 180;
-    private static final long POLL_INTERVAL_MS = 1000;
-    /** 연속 에러 허용 횟수 — 초과 시 조기 포기 */
+    // [Phase 6-Illust] 폴링 간격 단축 (1000ms × 180회 = 3min → 500ms × 60회 = 30s)
+    private static final int MAX_POLL_ATTEMPTS = 60;
+    private static final long POLL_INTERVAL_MS = 500;
     private static final int MAX_CONSECUTIVE_ERRORS = 10;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  1. 메인 진입점: 배경 URL 조회/생성
+    //  1. 캐시 조회 — Phase 6 신 시그니처 (canonical_key 기반)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 배경 캐시 조회. canonical_key가 hash source.
+     *
+     * @param locationName         표시용 이름 (UI에 노출, 미스 시 신 entry에 저장)
+     * @param canonicalKey         정규화 캐시 키 ({@code <WORLD>__<CATEGORY>_<MOD>}). null이면 폴백으로 locationName 직해싱.
+     * @param locationDescription  Flux/ModelsLab에 전달할 LLM 자연어 묘사
+     * @param timeOfDay            시간대 enum
+     * @param characterId          연관 캐릭터 ID
+     */
     public BackgroundResult resolveBackground(
-        String locationName, String locationDescription,
+        String locationName, String canonicalKey, String locationDescription,
         String timeOfDay, Long characterId
     ) {
-        String cacheHash = BackgroundCache.computeHash(locationName, timeOfDay);
+        String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
         // Layer 1: Redis
         String redisKey = REDIS_BG_PREFIX + cacheHash;
         String cachedUrl = cacheService.getBackgroundCache(redisKey);
         if (cachedUrl != null) {
-            log.info("[BG] Redis cache HIT: {} → {}", locationName, cachedUrl);
+            log.info("[BG] Redis cache HIT: ckey={} → {}", canonicalKey, cachedUrl);
             return BackgroundResult.hit(cachedUrl);
         }
 
@@ -70,54 +85,86 @@ public class BackgroundGenerationService {
             cache.incrementHitCount();
             backgroundCacheRepository.save(cache);
             cacheService.setBackgroundCache(redisKey, cache.getImageUrl());
-            log.info("[BG] DB cache HIT: {} → {}", locationName, cache.getImageUrl());
+            log.info("[BG] DB cache HIT: ckey={} → {}", canonicalKey, cache.getImageUrl());
             return BackgroundResult.hit(cache.getImageUrl());
         }
 
         // Layer 3: Cache MISS
-        log.info("[BG] Cache MISS: {}_{} → generating...", locationName, timeOfDay);
-        return BackgroundResult.generating(cacheHash, locationName, timeOfDay);
+        log.info("[BG] Cache MISS: ckey={}_{} → generating...", canonicalKey, timeOfDay);
+        return BackgroundResult.generating(cacheHash, locationName, canonicalKey, timeOfDay);
+    }
+
+    /** 구버전 호환 시그니처 — 점진 이행 중 호출처 보호용. canonical_key 부재 시 폴백. */
+    @Deprecated
+    public BackgroundResult resolveBackground(
+        String locationName, String locationDescription, String timeOfDay, Long characterId
+    ) {
+        return resolveBackground(locationName, null, locationDescription, timeOfDay, characterId);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  2. 비동기 배경 생성 (Cache MISS 시)
+    //  1-b. 캐시 상태 조회 (프론트 폴링용 — 생성 트리거 없음)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 비동기 배경 생성.
+     * [Phase 6-Illust hotfix] cacheHash로 배경 완성 여부만 조회.
      *
-     * [Polish · P1 #6] In-flight 락으로 같은 (location, time)에 대한 중복 생성 차단.
-     *   기존 버그:
-     *     resolveBackground()는 Redis/DB 캐시만 확인 — 진행 중인 generation 작업은
-     *     모름. 따라서 cache MISS인 같은 hash가 짧은 시간에 여러 배치에서 등장하면
-     *     N번의 generateBackgroundAsync가 시작 → 같은 forest 일러스트 10장이 찍히는
-     *     비용 누수가 발생했다.
-     *   Fix:
-     *     1) 첫 진입 시 setIfAbsent(SETNX)로 atomic 락 획득.
-     *     2) 락 획득 실패 → 다른 generation이 이미 진행 중이므로 즉시 skip.
-     *        (해당 generation이 끝나면 영구 캐시에 등록되어 다음 요청은 hit한다.)
-     *     3) 락 획득 성공 → generation 실행. 종료 시 finally에서 release.
-     *        TTL이 있으므로 release를 못 해도 5분 후 자동 만료 (안전망).
+     * <p>장소 전환이 캐시 미스로 떨어지면 ChatStreamService가 비동기 생성을 트리거하고
+     * 응답에 cacheHash만 실어 보낸다(backgroundUrl=null). 프론트는 이 cacheHash로
+     * 본 메서드를 노출하는 엔드포인트를 폴링하여 완성을 감지한다.
+     *
+     * <p><b>resolveBackground와 달리 생성 트리거/락 획득을 하지 않는다</b> — 순수 read-only.
+     * Redis(L1) → DB(L2) 순으로 조회만.
+     *
+     * @return 완성됐으면 imageUrl, 아직이면 null
      */
-    // [Phase6/Tier4 / H-17] executor 명시 — TheaterConfig#backgroundGenExecutor 사용.
-    //   기존 SimpleAsyncTaskExecutor(매 호출 새 스레드)에서 풀 기반으로 전환 → OOM 차단.
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public String peekByCacheHash(String cacheHash) {
+        if (cacheHash == null || cacheHash.isBlank()) return null;
+
+        // L1: Redis
+        String redisUrl = cacheService.getBackgroundCache(REDIS_BG_PREFIX + cacheHash);
+        if (redisUrl != null && !redisUrl.isBlank()) {
+            return redisUrl;
+        }
+
+        // L2: DB (Redis 누락/만료 대비)
+        return backgroundCacheRepository.findByCacheHash(cacheHash)
+            .map(BackgroundCache::getImageUrl)
+            .filter(u -> u != null && !u.isBlank())
+            .map(u -> {
+                // DB엔 있는데 Redis에 없으면 워밍업 (다음 요청 빠르게)
+                cacheService.setBackgroundCache(REDIS_BG_PREFIX + cacheHash, u);
+                return u;
+            })
+            .orElse(null);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  2. 비동기 배경 생성
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 비동기 배경 생성. In-flight 락으로 중복 차단.
+     *
+     * @param world          세계관 (mood prefix용, nullable)
+     * @param secretMode     true면 ModelsLab 트랙으로 라우팅 (NSFW 분위기 배경)
+     */
     @Async("backgroundGenExecutor")
     public CompletableFuture<String> generateBackgroundAsync(
-        String locationName, String locationDescription,
-        String timeOfDay, Long characterId
+        String locationName, String canonicalKey, String locationDescription,
+        String timeOfDay, Long characterId, World world, boolean secretMode
     ) {
-        String cacheHash = BackgroundCache.computeHash(locationName, timeOfDay);
+        String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
-        // 락 획득 시도. 실패하면 즉시 종료 (다른 워커가 처리 중).
         if (!cacheService.tryAcquireBgGenerationLock(cacheHash)) {
-            log.info("[BG] In-flight lock busy — skip duplicate generation: {}/{} (hash={})",
-                locationName, timeOfDay, cacheHash);
+            log.info("[BG] In-flight lock busy — skip duplicate generation: ckey={}/{} (hash={})",
+                canonicalKey, timeOfDay, cacheHash);
             return CompletableFuture.completedFuture(null);
         }
 
-        // 락 획득 직후 영구 캐시 재확인 — 이전 generation이 막 완료되어 캐시에 진입했을 수 있다.
-        // (락 획득과 영구 캐시 check 사이의 매우 좁은 race condition 차단.)
         try {
+            // race-condition 차단: 락 획득 직후 영구 캐시 재확인
             String redisKey = REDIS_BG_PREFIX + cacheHash;
             String cached = cacheService.getBackgroundCache(redisKey);
             if (cached != null) {
@@ -129,197 +176,206 @@ public class BackgroundGenerationService {
                 return CompletableFuture.completedFuture(null);
             }
 
-            String imageUrl = generateBackgroundSync(locationName, locationDescription, timeOfDay, characterId);
+            String imageUrl = generateBackgroundSync(
+                locationName, canonicalKey, locationDescription, timeOfDay, characterId, world, secretMode
+            );
             return CompletableFuture.completedFuture(imageUrl);
         } catch (Exception e) {
-            log.error("[BG] Async generation failed: {}", locationName, e);
+            log.error("[BG] Async generation failed: ckey={}", canonicalKey, e);
             return CompletableFuture.completedFuture(null);
         } finally {
             cacheService.releaseBgGenerationLock(cacheHash);
         }
     }
 
+    /** 구버전 호환 시그니처 — World/secretMode 모름. */
+    @Deprecated
+    @Async("backgroundGenExecutor")
+    public CompletableFuture<String> generateBackgroundAsync(
+        String locationName, String locationDescription, String timeOfDay, Long characterId
+    ) {
+        return generateBackgroundAsync(locationName, null, locationDescription, timeOfDay, characterId, null, false);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  3. 동기 배경 생성 (실제 호출)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     /**
-     * 동기 배경 생성 (폴링 대기 포함, 최대 ~3분)
+     * 동기 배경 생성 (폴링 포함).
      *
-     * [Phase 5.5-RunPod] Base64 흐름:
-     *   1. ComfyUI 워크플로우 제출
-     *   2. 폴링 → COMPLETED 시 extractImageBase64()로 base64 추출
-     *   3. uploadBackgroundFromBase64()로 S3 직접 업로드
+     * <p>provider 분기:
+     * <ul>
+     *   <li>secretMode=false → Fal.ai Flux 2 Dev</li>
+     *   <li>secretMode=true  → ModelsLab (캐릭터 트랙과 동일 플랫폼으로 화풍 일치)</li>
+     * </ul>
      */
     public String generateBackgroundSync(
-        String locationName, String locationDescription,
-        String timeOfDay, Long characterId
+        String locationName, String canonicalKey, String locationDescription,
+        String timeOfDay, Long characterId, World world, boolean secretMode
     ) {
-        String positivePrompt = promptAssembler.assemblePositivePrompt(locationDescription, timeOfDay);
-        String negativePrompt = promptAssembler.getNegativePrompt();
+        // [Phase 6 v2] Flux 2는 positive-only. 시간대 분위기는 LLM이 locationDescription에 포함.
+        //   negative 금지사항은 promptAssembler가 prompt 후미에 자연어로 통합함.
+        String positivePrompt = promptAssembler.assemblePositivePrompt(locationDescription, world);
+        String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
-        JsonNode workflow = falAiClient.buildLocationWorkflow(positivePrompt, negativePrompt);
+        String s3Url;
+        String providerRequestId;
 
-        QueueResponse queueResp = falAiClient.submitToQueue(workflow);
-        log.info("[BG] Queue submitted: requestId={}, location={}", queueResp.requestId(), locationName);
+        if (secretMode) {
+            // ── ModelsLab 트랙 (Secret Mode 분위기) ──
+            // ModelsLab은 SDXL 기반이라 negative prompt 지원. 배경 표준 negative 사용.
+            String trackId = "BG_" + cacheHash;  // "BG_" prefix → webhook이 캐릭터/배경 분기 가능
+            ModelsLabClient.SubmitResult submit = modelsLabClient.submit(
+                new ModelsLabClient.GenerationRequest(null, positivePrompt,
+                    "people, characters, text, watermark, logo, low quality, blurry",
+                    null, trackId)
+            );
+            providerRequestId = submit.generationId();
+            log.info("[BG] ModelsLab submitted (secret): id={}, ckey={}", providerRequestId, canonicalKey);
 
-        // 폴링 → Base64 데이터 반환
-        String base64ImageData = pollUntilComplete(queueResp);
-        if (base64ImageData == null) {
-            log.error("[BG] Generation failed or timed out: {}", locationName);
-            return null;
+            String imageUrl = submit.syncCompleted() ? submit.imageUrl()
+                : pollModelsLabUntilComplete(submit.fetchUrl(), providerRequestId);
+            if (imageUrl == null) {
+                log.error("[BG] ModelsLab generation failed: ckey={}", canonicalKey);
+                return null;
+            }
+            s3Url = s3StorageService.downloadAndUpload(imageUrl, "backgrounds/", cacheHash);
+
+        } else {
+            // ── Fal.ai 트랙 (일반 배경, fal-ai/flux-2 표준 큐, 공식 SDK) ──
+            // SDK subscribe가 큐 제출+폴링+결과를 자동 처리. negative_prompt 없음 (positive-only).
+            // 현 스레드는 @Async("backgroundGenExecutor") 풀 위 → 블로킹 허용.
+            FalAiClient.GenerationResult falResult = falAiClient.generateBlocking(
+                FalAiClient.GenerationRequest.background(positivePrompt)
+            );
+            if (falResult == null || falResult.imageUrl() == null) {
+                log.error("[BG] Fal.ai generation failed: ckey={}", canonicalKey);
+                return null;
+            }
+            providerRequestId = falResult.requestId();
+            log.info("[BG] Fal.ai completed: requestId={}, ckey={}", providerRequestId, canonicalKey);
+            s3Url = s3StorageService.downloadAndUpload(falResult.imageUrl(), "backgrounds/", cacheHash);
         }
 
-        // Base64 → S3 직접 업로드
-        String cacheHash = BackgroundCache.computeHash(locationName, timeOfDay);
-        String s3Url = s3StorageService.uploadBackgroundFromBase64(base64ImageData, cacheHash);
+        // DB + Redis 캐시 등록
+        persistCache(locationName, canonicalKey, timeOfDay, s3Url, positivePrompt, characterId, providerRequestId);
+        cacheService.setBackgroundCache(REDIS_BG_PREFIX + cacheHash, s3Url);
 
-        // DB 캐시 등록
-        persistCache(locationName, timeOfDay, s3Url, positivePrompt, characterId, queueResp.requestId());
-
-        // Redis 캐시 등록
-        String redisKey = REDIS_BG_PREFIX + cacheHash;
-        cacheService.setBackgroundCache(redisKey, s3Url);
-
-        log.info("[BG] Generated & cached: {} → {}", locationName, s3Url);
+        log.info("[BG] Generated & cached: ckey={} → {}", canonicalKey, s3Url);
         return s3Url;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  3. 웹훅 콜백 처리
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Transactional
-    public void handleWebhookCallback(String requestId, JsonNode payload) {
-        log.info("[BG-WEBHOOK] Received: requestId={}", requestId);
-
-        backgroundCacheRepository.findByFalRequestId(requestId)
-            .ifPresent(cache -> {
-                if (cache.getImageUrl() != null && !cache.getImageUrl().isBlank()) {
-                    log.info("[BG-WEBHOOK] Already processed (idempotent): {}", requestId);
-                    return;
-                }
-
-                // [RunPod] Base64 데이터 추출
-                String base64Data = falAiClient.extractImageBase64(payload);
-                if (base64Data == null) {
-                    log.warn("[BG-WEBHOOK] No image data in payload: {}", requestId);
-                    return;
-                }
-
-                try {
-                    // Base64 → S3 직접 업로드
-                    String s3Url = s3StorageService.uploadBackgroundFromBase64(base64Data, cache.getCacheHash());
-
-                    cache = backgroundCacheRepository.findByFalRequestId(requestId).orElse(null);
-                    if (cache != null) {
-                        String redisKey = REDIS_BG_PREFIX + cache.getCacheHash();
-                        cacheService.setBackgroundCache(redisKey, s3Url);
-                    }
-                    log.info("[BG-WEBHOOK] Processed: requestId={}, s3Url={}", requestId, s3Url);
-                } catch (Exception e) {
-                    log.error("[BG-WEBHOOK] Processing failed: {}", requestId, e);
-                }
-            });
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  내부 헬퍼
+    //  4. Webhook 콜백 — ModelsLab 전용 (Fal은 SDK subscribe가 완료 자동 처리, webhook 불필요)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 폴링 → COMPLETED 시 Base64 이미지 데이터 반환
+     * [Phase 6-Illust] ModelsLab webhook 콜백 (Secret Mode 배경 트랙).
      */
-    private String pollUntilComplete(QueueResponse queueResp) {
+    @Transactional
+    public void handleModelsLabWebhookCallback(String generationId, JsonNode payload) {
+        log.info("[BG-WEBHOOK] (ModelsLab) Received: id={}", generationId);
+
+        backgroundCacheRepository.findByFalRequestId(generationId).ifPresent(cache -> {
+            if (cache.getImageUrl() != null && !cache.getImageUrl().isBlank()) {
+                log.info("[BG-WEBHOOK] (ModelsLab) Already processed (idempotent): {}", generationId);
+                return;
+            }
+            String imageUrl = modelsLabClient.extractFirstOutputUrl(payload);
+            if (imageUrl == null) {
+                log.warn("[BG-WEBHOOK] (ModelsLab) No image url in payload: {}", generationId);
+                return;
+            }
+            uploadAndCache(cache, imageUrl, generationId);
+        });
+    }
+
+    private void uploadAndCache(BackgroundCache cache, String imageUrl, String providerRequestId) {
+        try {
+            String s3Url = s3StorageService.downloadAndUpload(imageUrl, "backgrounds/", cache.getCacheHash());
+            String redisKey = REDIS_BG_PREFIX + cache.getCacheHash();
+            cacheService.setBackgroundCache(redisKey, s3Url);
+            log.info("[BG-WEBHOOK] Processed: requestId={}, s3Url={}", providerRequestId, s3Url);
+        } catch (Exception e) {
+            log.error("[BG-WEBHOOK] Processing failed: {}", providerRequestId, e);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  5. 폴링 — ModelsLab 전용 (Fal은 SDK가 내부 폴링)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private String pollModelsLabUntilComplete(String fetchUrl, String generationId) {
         String lastStatus = "";
         int consecutiveErrors = 0;
-        long startTime = System.currentTimeMillis();
 
         for (int i = 0; i < MAX_POLL_ATTEMPTS; i++) {
-            try {
-                Thread.sleep(POLL_INTERVAL_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return null;
-            }
+            try { Thread.sleep(POLL_INTERVAL_MS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); return null; }
 
-            PollResult poll = falAiClient.pollStatus(queueResp.statusUrl());
+            ModelsLabClient.PollResult poll = modelsLabClient.fetch(fetchUrl, generationId);
             String currentStatus = poll.status();
-
-            // 상태 변화 감지 로깅
             if (!currentStatus.equals(lastStatus)) {
-                long elapsed = (System.currentTimeMillis() - startTime) / 1000;
-                log.info("[BG] Status changed: {} → {} | elapsed={}s | requestId={}",
-                    lastStatus.isEmpty() ? "(start)" : lastStatus,
-                    currentStatus, elapsed, queueResp.requestId());
+                log.info("[BG] (ModelsLab) Status: {} → {} | id={}",
+                    lastStatus.isEmpty() ? "(start)" : lastStatus, currentStatus, generationId);
                 lastStatus = currentStatus;
             }
-
-            // 10초마다 진행률 로깅
-            if (i > 0 && i % 10 == 0) {
-                long elapsed = (System.currentTimeMillis() - startTime) / 1000;
-                log.info("[BG] Still polling: status={} | attempt={}/{} | elapsed={}s | requestId={}",
-                    currentStatus, i, MAX_POLL_ATTEMPTS, elapsed, queueResp.requestId());
-            }
-
-            // 완료 → Base64 추출
             if (poll.completed()) {
-                long elapsed = (System.currentTimeMillis() - startTime) / 1000;
-                log.info("[BG] ✅ Generation completed in {}s | requestId={}", elapsed, queueResp.requestId());
-
-                JsonNode fullResult = poll.payload(); // RunPod은 폴링 결과에 페이로드 포함
-                return falAiClient.extractImageBase64(fullResult);
+                return poll.imageUrl();
             }
-
             if ("FAILED".equalsIgnoreCase(currentStatus)) {
-                log.error("[BG] ❌ RunPod generation FAILED: requestId={}", queueResp.requestId());
+                log.error("[BG] (ModelsLab) FAILED: id={}", generationId);
                 return null;
             }
-
-            // 연속 에러 감지
             if ("ERROR".equalsIgnoreCase(currentStatus)) {
-                consecutiveErrors++;
-                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                    log.error("[BG] ❌ {} consecutive poll errors, aborting | requestId={}",
-                        consecutiveErrors, queueResp.requestId());
+                if (++consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    log.error("[BG] (ModelsLab) {} consecutive errors, abort: id={}",
+                        consecutiveErrors, generationId);
                     return null;
                 }
             } else {
                 consecutiveErrors = 0;
             }
         }
-
-        long elapsed = (System.currentTimeMillis() - startTime) / 1000;
-        log.warn("[BG] ⏱ Polling timed out after {}s | lastStatus={} | requestId={}",
-            elapsed, lastStatus, queueResp.requestId());
+        log.warn("[BG] (ModelsLab) ⏱ Polling timed out: id={}, lastStatus={}", generationId, lastStatus);
         return null;
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  6. 캐시 영속화
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     @Transactional
     protected void persistCache(
-        String locationName, String timeOfDay, String imageUrl,
-        String promptUsed, Long characterId, String falRequestId
+        String locationName, String canonicalKey, String timeOfDay,
+        String s3Url, String promptUsed, Long characterId, String providerRequestId
     ) {
-        String cacheHash = BackgroundCache.computeHash(locationName, timeOfDay);
+        String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
         if (backgroundCacheRepository.findByCacheHash(cacheHash).isPresent()) {
-            log.info("[BG] Cache already exists (race condition handled): {}", cacheHash);
+            log.info("[BG] Cache already persisted (idempotent): {}", cacheHash);
             return;
         }
-
         BackgroundCache cache = BackgroundCache.create(
-            locationName, timeOfDay, imageUrl, promptUsed, characterId, falRequestId);
+            locationName, canonicalKey, timeOfDay, s3Url, promptUsed, characterId, providerRequestId
+        );
         backgroundCacheRepository.save(cache);
+        log.info("[BG] DB cache persisted: ckey={} hash={}", canonicalKey, cacheHash);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  DTO
+    //  결과 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public record BackgroundResult(
-        boolean isCacheHit, String imageUrl,
-        String cacheHash, String locationName, String timeOfDay
+        boolean cacheHit, String imageUrl,
+        String cacheHash, String locationName, String canonicalKey, String timeOfDay
     ) {
         public static BackgroundResult hit(String imageUrl) {
-            return new BackgroundResult(true, imageUrl, null, null, null);
+            return new BackgroundResult(true, imageUrl, null, null, null, null);
         }
-        public static BackgroundResult generating(String cacheHash, String locationName, String timeOfDay) {
-            return new BackgroundResult(false, null, cacheHash, locationName, timeOfDay);
+        public static BackgroundResult generating(String cacheHash, String locationName, String canonicalKey, String timeOfDay) {
+            return new BackgroundResult(false, null, cacheHash, locationName, canonicalKey, timeOfDay);
         }
     }
 }

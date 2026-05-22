@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.*;
+import com.spring.aichat.domain.theater.World;
+import com.spring.aichat.domain.theater.WorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -90,6 +92,8 @@ public class ChatStreamService {
     private final BackgroundGenerationService backgroundGenerationService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final DirectorService directorService;
+    /** [Phase 6-Illust] World 컨텍스트 조회 — 배경 prompt mood prefix 이중 안전망용. */
+    private final WorldRepository worldRepository;
     /**
      * [Phase III · 작업 4] Theater 난입 통합용
      *
@@ -295,7 +299,7 @@ public class ChatStreamService {
                             // ★ [Phase 5.5-Illust] 엔딩 도달 시 자동 일러스트 생성
                             illustrationService.generateAutoIllustration(
                                 freshRoom.getUser().getId(), freshRoom.getCharacter().getId(),
-                                freshRoom.getId(), "ENDING");
+                                freshRoom.getId(), "ENDING", null);
                         }
                     }
 
@@ -362,41 +366,51 @@ public class ChatStreamService {
             }
 
             // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
-            // [Bug Fix] 동일 장소 반복 전환 방지 가드
+            // [Phase 6-Illust hotfix] canonical_key 기반 중복 가드 + 같은 장소면 transition 응답 생략
             LocationTransition locationTransition = null;
             if (isStory && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
-                String currentDynamic = jpa.room().getCurrentDynamicLocationName();
-                if (currentDynamic != null && isSameLocation(currentDynamic, parsed.newLocationName())) {
-                    log.info("🛡️ [BG-GUARD] Duplicate dynamic location skipped: '{}' ≈ '{}' | roomId={}",
-                        currentDynamic, parsed.newLocationName(), roomId);
+                if (jpa.room().getCurrentDynamicLocationName() != null
+                    && isSameDynamicLocation(jpa.room(), parsed)) {
+                    // 같은 canonical_key → 의미상 동일 장소. 표시명만 달라도(예: "어둡고 축축한 뒷골목" /
+                    // "가로등 깜빡이는 밤골목") canonical_key가 같으면 전환 컴포넌트를 띄우지 않는다.
+                    // locationTransition은 null 유지 → 응답에 실리지 않음 → 프론트 전환 미발동.
+                    log.info("🛡️ [BG-GUARD] Same dynamic location (canonical_key) — transition suppressed | curKey={} | roomId={}",
+                        jpa.room().getCurrentDynamicCanonicalKey(), roomId);
                 } else {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    final String canonicalKey = parsedCanonicalKey(parsed);
+                    final World world = resolveWorldOrNull(jpa.room());
+                    final boolean secretMode = jpa.room().isSecretModeActive();
+
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(
-                            parsed.newLocationName(), parsed.locationDescription(),
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
                             timeOfDay, jpa.room().getCharacter().getId());
 
-                    if (bgResult.isCacheHit()) {
+                    if (bgResult.cacheHit()) {
                         locationTransition = LocationTransition.cached(
                             parsed.newLocationName(), bgResult.imageUrl());
                     } else {
                         locationTransition = LocationTransition.generating(
                             parsed.newLocationName(), bgResult.cacheHash());
                         backgroundGenerationService.generateBackgroundAsync(
-                            parsed.newLocationName(), parsed.locationDescription(),
-                            timeOfDay, jpa.room().getCharacter().getId());
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
+                            timeOfDay, jpa.room().getCharacter().getId(), world, secretMode);
                     }
 
-                    final String bgUrlToStore = bgResult.isCacheHit() ? bgResult.imageUrl() : null;
+                    final String bgUrlToStore = bgResult.cacheHit() ? bgResult.imageUrl() : null;
                     final String locationNameToStore = parsed.newLocationName();
+                    final String canonicalKeyToStore = canonicalKey;
                     try {
                         txTemplate.execute(status -> {
                             ChatRoom bgRoom = chatRoomRepository.findById(roomId).orElse(null);
                             if (bgRoom != null) {
                                 if (bgUrlToStore != null) {
-                                    bgRoom.updateDynamicBackground(locationNameToStore, bgUrlToStore);
+                                    bgRoom.updateDynamicBackground(
+                                        locationNameToStore, canonicalKeyToStore, bgUrlToStore);
                                 } else {
-                                    bgRoom.updateDynamicLocationName(locationNameToStore);
+                                    bgRoom.updateDynamicLocationName(
+                                        locationNameToStore, canonicalKeyToStore);
                                 }
                             }
                             return null;
@@ -407,6 +421,8 @@ public class ChatStreamService {
                     cacheService.evictRoomInfo(roomId);
                 }
             }
+            // [Phase 6-Illust] illustration_scene_hint 영속화 (동적 장소 처리와 무관하게 매 응답마다)
+            applyParsedToRoom(roomId, parsed);
 
             // ── SSE: final_result ──
             sendFinalResult(emitter, response, isStory && hasInnerThought, assistantLogId,
@@ -740,41 +756,48 @@ public class ChatStreamService {
             cacheService.evictRoomInfo(roomId);
 
             //   // ★ [Phase 5.5-Illust] 시간 넘기기에서도 장소 전환 가능 ★
-            // [Bug Fix] 동일 장소 반복 전환 방지 가드
+            // [Phase 6-Illust hotfix] canonical_key 기반 중복 가드 + 같은 장소면 transition 생략
             SendChatResponse.LocationTransition timeSkipLocationTransition = null;
             if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
-                String currentDynamic = jpa.room().getCurrentDynamicLocationName();
-                if (currentDynamic != null && isSameLocation(currentDynamic, parsed.newLocationName())) {
-                    log.info("🛡️ [BG-GUARD] TimeSkip duplicate location skipped: '{}' ≈ '{}' | roomId={}",
-                        currentDynamic, parsed.newLocationName(), roomId);
+                if (jpa.room().getCurrentDynamicLocationName() != null
+                    && isSameDynamicLocation(jpa.room(), parsed)) {
+                    log.info("🛡️ [BG-GUARD] TimeSkip same dynamic location (canonical_key) — transition suppressed | curKey={} | roomId={}",
+                        jpa.room().getCurrentDynamicCanonicalKey(), roomId);
                 } else {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    final String canonicalKey = parsedCanonicalKey(parsed);
+                    final World world = resolveWorldOrNull(jpa.room());
+                    final boolean secretMode = jpa.room().isSecretModeActive();
+
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(
-                            parsed.newLocationName(), parsed.locationDescription(),
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
                             timeOfDay, jpa.room().getCharacter().getId());
 
-                    if (bgResult.isCacheHit()) {
+                    if (bgResult.cacheHit()) {
                         timeSkipLocationTransition = SendChatResponse.LocationTransition.cached(
                             parsed.newLocationName(), bgResult.imageUrl());
                     } else {
                         timeSkipLocationTransition = SendChatResponse.LocationTransition.generating(
                             parsed.newLocationName(), bgResult.cacheHash());
                         backgroundGenerationService.generateBackgroundAsync(
-                            parsed.newLocationName(), parsed.locationDescription(),
-                            timeOfDay, jpa.room().getCharacter().getId());
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
+                            timeOfDay, jpa.room().getCharacter().getId(), world, secretMode);
                     }
 
-                    final String bgUrlToStore = bgResult.isCacheHit() ? bgResult.imageUrl() : null;
+                    final String bgUrlToStore = bgResult.cacheHit() ? bgResult.imageUrl() : null;
                     final String locationNameToStore = parsed.newLocationName();
+                    final String canonicalKeyToStore = canonicalKey;
                     try {
                         txTemplate.execute(status -> {
                             ChatRoom bgRoom = chatRoomRepository.findById(roomId).orElse(null);
                             if (bgRoom != null) {
                                 if (bgUrlToStore != null) {
-                                    bgRoom.updateDynamicBackground(locationNameToStore, bgUrlToStore);
+                                    bgRoom.updateDynamicBackground(
+                                        locationNameToStore, canonicalKeyToStore, bgUrlToStore);
                                 } else {
-                                    bgRoom.updateDynamicLocationName(locationNameToStore);
+                                    bgRoom.updateDynamicLocationName(
+                                        locationNameToStore, canonicalKeyToStore);
                                 }
                             }
                             return null;
@@ -785,6 +808,8 @@ public class ChatStreamService {
                     cacheService.evictRoomInfo(roomId);
                 }
             }
+            // [Phase 6-Illust] illustration_scene_hint 영속화 (TimeSkip 응답에서도 매번)
+            applyParsedToRoom(roomId, parsed);
 
             sendFinalResult(emitter, response, false, assistantLogId, false, timeSkipLocationTransition);
             emitter.complete();
@@ -901,7 +926,7 @@ public class ChatStreamService {
             // ★ [Phase 5.5-Illust] 승급 성공 시 자동 일러스트 생성
             illustrationService.generateAutoIllustration(
                 room.getUser().getId(), room.getCharacter().getId(),
-                room.getId(), "PROMOTION");
+                room.getId(), "PROMOTION", null);
             return new PromotionEvent("SUCCESS", target.name(),
                 RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, unlocks);
         } else {
@@ -1551,27 +1576,58 @@ public class ChatStreamService {
                 return;
             }
 
-            // ── 장소 전환 처리 ──
+            // ── [Phase 6-Illust hotfix] 장소 전환 처리 — canonical_key 기반 ──
             LocationTransition locationTransition = null;
             if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
-                String currentDynamic = jpa.room().getCurrentDynamicLocationName();
-                if (currentDynamic == null || !isSameLocation(currentDynamic, parsed.newLocationName())) {
+                if (jpa.room().getCurrentDynamicLocationName() == null
+                    || !isSameDynamicLocation(jpa.room(), parsed)) {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    final String canonicalKey = parsedCanonicalKey(parsed);
+                    final World world = resolveWorldOrNull(jpa.room());
+                    final boolean secretMode = jpa.room().isSecretModeActive();
+
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(
-                            parsed.newLocationName(), parsed.locationDescription(),
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
                             timeOfDay, jpa.room().getCharacter().getId());
 
-                    if (bgResult.isCacheHit()) {
+                    if (bgResult.cacheHit()) {
                         locationTransition = LocationTransition.cached(parsed.newLocationName(), bgResult.imageUrl());
                     } else {
                         locationTransition = LocationTransition.generating(parsed.newLocationName(), bgResult.cacheHash());
                         backgroundGenerationService.generateBackgroundAsync(
-                            parsed.newLocationName(), parsed.locationDescription(),
-                            timeOfDay, jpa.room().getCharacter().getId());
+                            parsed.newLocationName(), canonicalKey, parsed.locationDescription(),
+                            timeOfDay, jpa.room().getCharacter().getId(), world, secretMode);
                     }
+
+                    // 영속화: 다음 턴 가드 정확도를 위해 canonical_key까지 저장
+                    final String bgUrlToStore = bgResult.cacheHit() ? bgResult.imageUrl() : null;
+                    final String locationNameToStore = parsed.newLocationName();
+                    final String canonicalKeyToStore = canonicalKey;
+                    try {
+                        txTemplate.execute(status -> {
+                            ChatRoom bgRoom = chatRoomRepository.findById(roomId).orElse(null);
+                            if (bgRoom != null) {
+                                if (bgUrlToStore != null) {
+                                    bgRoom.updateDynamicBackground(
+                                        locationNameToStore, canonicalKeyToStore, bgUrlToStore);
+                                } else {
+                                    bgRoom.updateDynamicLocationName(
+                                        locationNameToStore, canonicalKeyToStore);
+                                }
+                            }
+                            return null;
+                        });
+                    } catch (Exception e) {
+                        log.warn("⚠️ [BG] Dynamic background persistence failed (non-blocking): {}", e.getMessage());
+                    }
+                } else {
+                    log.info("🛡️ [BG-GUARD] Director-auto same dynamic location (canonical_key) — transition suppressed | curKey={} | roomId={}",
+                        jpa.room().getCurrentDynamicCanonicalKey(), roomId);
                 }
             }
+            // [Phase 6-Illust] illustration_scene_hint 영속화
+            applyParsedToRoom(roomId, parsed);
 
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
@@ -1588,7 +1644,76 @@ public class ChatStreamService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Bug Fix] 동적 장소 반복 전환 방지 — 유사도 가드
+    //  [Phase 6-Illust] 동적 장소 헬퍼 — canonical_key 기반 + World 컨텍스트
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [Phase 6-Illust] character.worldId로 World 조회. null이면 null 반환.
+     * BackgroundGenerationService에 mood prefix용으로 전달.
+     */
+    private World resolveWorldOrNull(ChatRoom room) {
+        if (room == null || room.getCharacter() == null) return null;
+        var worldId = room.getCharacter().getWorldId();
+        if (worldId == null) return null;
+        return worldRepository.findById(worldId).orElse(null);
+    }
+
+    /**
+     * [Phase 6-Illust] parsed에서 canonical_key 추출 (없으면 null).
+     * AiJsonOutput.locationCanonicalKey → BackgroundCache가 폴백으로 newLocationName 직해싱.
+     */
+    private String parsedCanonicalKey(ParsedLlmResult parsed) {
+        if (parsed == null) return null;
+        AiJsonOutput ai = parsed.aiOutput();
+        return (ai != null && ai.hasCanonicalKey()) ? ai.locationCanonicalKey() : null;
+    }
+
+    /**
+     * [Phase 6-Illust hotfix] 동적 장소 동일성 판정.
+     *
+     * <p>canonical_key가 양쪽 다 있으면 그것으로 정확 비교(캐시 동일성 기준과 일치).
+     * 하나라도 없으면 기존 표시명 유사도(isSameLocation)로 폴백.
+     *
+     * <p>도입 이유: 한글 표시명은 "어둡고 축축한 뒷골목" / "가로등 깜빡이는 밤골목"처럼
+     * 같은 장소라도 매번 바뀌어 표시명 유사도가 0.45 미만으로 떨어진다. 그래서
+     * 가드를 통과 → 백엔드는 캐시 히트로 새 일러스트는 안 만들지만 LocationTransition을
+     * 응답에 실어 보냄 → 프론트가 매번 전환 컴포넌트를 띄움. canonical_key 기준으로
+     * 비교하면 의미가 같은 장소를 정확히 인식하여 전환 응답 자체를 생략할 수 있다.
+     */
+    private boolean isSameDynamicLocation(ChatRoom room, ParsedLlmResult parsed) {
+        String curKey = room.getCurrentDynamicCanonicalKey();
+        String inKey  = parsedCanonicalKey(parsed);
+        if (curKey != null && !curKey.isBlank() && inKey != null && !inKey.isBlank()) {
+            return curKey.equals(inKey);
+        }
+        // 폴백: 표시명 유사도
+        String curName = room.getCurrentDynamicLocationName();
+        return curName != null && parsed != null
+            && isSameLocation(curName, parsed.newLocationName());
+    }
+
+    /**
+     * [Phase 6-Illust] 매 LLM 응답 직후 호출. illustration_scene_hint를 ChatRoom에 영속화.
+     * Manual/Auto 일러스트 트리거 모두 이 hint를 단일 source로 사용.
+     */
+    private void applyParsedToRoom(Long roomId, ParsedLlmResult parsed) {
+        if (parsed == null || parsed.aiOutput() == null) return;
+        AiJsonOutput ai = parsed.aiOutput();
+        if (!ai.hasIllustrationSceneHint()) return;
+        try {
+            txTemplate.execute(status -> {
+                chatRoomRepository.findById(roomId).ifPresent(r ->
+                    r.updateLastIllustrationHint(ai.illustrationSceneHint())
+                );
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("[ILLUST-HINT] persistence failed (non-blocking): {}", e.getMessage());
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Bug Fix] 동적 장소 반복 전환 방지 — 유사도 가드 (canonical_key 폴백용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private boolean isSameLocation(String existing, String incoming) {

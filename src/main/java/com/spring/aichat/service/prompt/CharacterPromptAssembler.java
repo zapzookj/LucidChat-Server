@@ -4,6 +4,7 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.enums.*;
+import com.spring.aichat.domain.theater.WorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.security.PromptInjectionGuard;
 import org.springframework.stereotype.Component;
@@ -26,9 +27,11 @@ import java.time.LocalDateTime;
 public class CharacterPromptAssembler {
 
     private final PromptInjectionGuard injectionGuard;
+    private final WorldRepository worldRepository;
 
-    public CharacterPromptAssembler(PromptInjectionGuard injectionGuard) {
+    public CharacterPromptAssembler(PromptInjectionGuard injectionGuard, WorldRepository worldRepository) {
         this.injectionGuard = injectionGuard;
+        this.worldRepository = worldRepository;
     }
 
     public record SystemPromptPayload(String staticRules, String dynamicRules, String outputFormat) {}
@@ -69,6 +72,8 @@ public class CharacterPromptAssembler {
             - Name: %s
             - Age: %s
             - Role: %s
+            - Appearance: %s
+            - Clothing Style: %s
             - Personality: %s
             - Tone: %s (관계 단계에 따라 자연스럽게 변화)
 
@@ -82,9 +87,6 @@ public class CharacterPromptAssembler {
             %s
 
             ## Speech Habits
-            %s
-
-            ## ⚠️ Behavioral Anchors — 절대 어기지 말 것
             %s
 
             # 🚫 Soul Preservation Rules (Priority: Highest)
@@ -120,13 +122,14 @@ public class CharacterPromptAssembler {
             character.getName(),                                              // Identity Name
             character.getAge(),                                               // Identity Age
             character.getEffectiveRole(),                                     // Identity Role
+            character.getAppearance(),                                              // Identity Appearance
+            character.getClothing(),                                              // Identity Clothing Style
             character.getEffectivePersonality(effectiveSecretMode),           // Identity Personality
             character.getEffectiveTone(effectiveSecretMode),                  // Identity Tone
             defaultIfBlank(character.getBackstory(), "(아직 정의되지 않음)"),
             defaultIfBlank(character.getCoreValues(), "(아직 정의되지 않음)"),
             defaultIfBlank(character.getFlaws(), "(아직 정의되지 않음)"),
             defaultIfBlank(character.getSpeechQuirks(), "(아직 정의되지 않음)"),
-            defaultIfBlank(character.getBehavioralAnchors(), "(아직 정의되지 않음)"),
             character.getName(),                                              // Soul rule #1: You are %s
             character.getEffectiveOocExample(),                               // Soul rule #5 example
             buildBehaviorGuide(character),
@@ -134,6 +137,34 @@ public class CharacterPromptAssembler {
             buildStatSystemBlock(room, effectiveSecretMode),
             buildBpmBlock(room)
         ));
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [Phase 6-Illust] 세계관 컨텍스트 — 시대/문화 정합성 안전망
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  LLM이 location_description / illustration_scene_hint를 생성할 때
+        //  세계관 정합성을 자동 반영하도록 시스템 프롬프트에 명시.
+        //  (BackgroundPromptAssembler가 한 번 더 prefix를 추가하는 이중 안전망 구조)
+        if (character.getWorldId() != null) {
+            worldRepository.findById(character.getWorldId()).ifPresent(world -> {
+                staticBuilder.append("""
+            # 🌍 World Setting
+            - World: %s
+            - Description: %s
+            - Mood: %s
+
+            **Constraint:** All location descriptions, scene hints, and environmental details
+            you produce MUST be consistent with this world setting. Do NOT include objects,
+            technology, or cultural elements that contradict the setting (e.g., no modern
+            smartphones in a medieval fantasy world; no magic runes in a contemporary
+            high school world).
+
+            """.formatted(
+                    world.getDisplayName(),
+                    defaultIfBlank(world.getDescription(), "(no extended description)"),
+                    defaultIfBlank(world.getMoodKeywords(), "(no mood keywords)")
+                ));
+            });
+        }
 
         // ── [Phase 5.5-Sep] 시크릿 모드: 수위 해제 블록 ──
         if (effectiveSecretMode) {
@@ -165,6 +196,10 @@ public class CharacterPromptAssembler {
 
         if (ChatModePolicy.supportsEasterEggs(mode)) {
             staticBuilder.append(buildEasterEggBlock(character));
+        }
+
+        if (mode == ChatMode.STORY) {
+            staticBuilder.append(buildIllustrationHintGuide());
         }
 
         // ── [공통] 히스토리 가이드 ──
@@ -641,21 +676,51 @@ public class CharacterPromptAssembler {
         These are pre-defined locations with existing background images: [%s]
         **DEFAULT: Use these whenever possible.** They load instantly with no delay.
  
-        ## 2. Dynamic New Locations (use `new_location_name` + `location_description`):
+        ## 2. Dynamic New Locations (use `new_location_name` + `location_canonical_key` + `location_description`):
         When the story NATURALLY leads to a completely new place that is NOT in the static list above,
-        output these TWO fields at the JSON root level (not inside scenes):
- 
-        - `"new_location_name"`: A short name for the new place (Korean, 2-5 words)
-          Example: "해변", "놀이공원", "영화관", "옥상 정원", "시골 할머니 댁"
- 
-        - `"location_description"`: A list of comma-separated tags describing the background for an anime-style image generation model.\s
+        output **THREE** fields at the JSON root level (not inside scenes):
+
+        - `"new_location_name"`: Display name for the new place (Korean, 2-5 words).
+          Example: "심야의 무인 카페", "벚꽃이 흩날리는 골목", "낡은 폐교 도서관"
+
+        - `"location_canonical_key"`: Normalized cache key (SCREAMING_SNAKE_CASE English).
+          Format: `<WORLD>__<CATEGORY>_<MODIFIER>...`
+          - `<WORLD>`: world setting tag from the "🌍 World Setting" block above. If the world display name is "현대 고등학교" use `MODERN`; "중세 판타지" → `MEDIEVAL_FANTASY`; "사이버펑크 2099" → `CYBERPUNK`. Use a concise SNAKE_CASE token; the same world MUST map to the SAME prefix every time.
+          - `<CATEGORY>`: one of the canonical categories below.
+          - `<MODIFIER>`: 1~3 distinguishing tags (time/mood/feature), each separated by `_`.
+
+          Canonical CATEGORY dictionary (use one EXACTLY — do NOT invent new categories):
+            CAFE, RESTAURANT, BAR, TAVERN, CONVENIENCE_STORE,
+            BEDROOM, LIVING_ROOM, KITCHEN, BATHROOM, STUDY,
+            CLASSROOM, LIBRARY, ART_ROOM, MUSIC_ROOM, GYM, ROOFTOP,
+            PARK, GARDEN, FOREST, BEACH, MOUNTAIN, FIELD, RIVER, LAKE,
+            STREET, ALLEY, STATION, CAR, TRAIN,
+            SHRINE, TEMPLE, CHURCH, CASTLE, DUNGEON, RUIN,
+            OFFICE, SHOP, ARCADE, AMUSEMENT_PARK, CONCERT_HALL,
+            FANTASY_VILLAGE, FANTASY_INN, FANTASY_FOREST, FANTASY_DUNGEON
+
+          Examples:
+            "MODERN__CAFE_NIGHT_UNMANNED"
+            "MEDIEVAL_FANTASY__TAVERN_DUSK_QUIET"
+            "MODERN__ROOFTOP_SUNSET_PUBLIC"
+            "CYBERPUNK__ALLEY_RAIN_NEON"
+
+          **Cache hit matters**: when describing a place similar to one already created
+          (e.g., "심야의 카페" and "24시 무인 카페" are the same kind of place), REUSE the
+          same `location_canonical_key` so the background is cached and loads instantly.
+
+        - `"location_description"`: Natural language description of the background,
+          written for an anime visual novel scene. **English sentences, NOT Danbooru tags.**
             ⚠️ RULES:
-            1. MUST start with either "indoor" or "outdoor".
-            2. MUST include the time of day if relevant (e.g., night, sunset, daytime).
-            3. DO NOT use full sentences. Use comma-separated keywords (Danbooru tag style).
-            4. Focus heavily on the immediate surroundings, NOT the view outside the window.
-            5. DO NOT include characters, people, or signs with text.
-            Example: "indoor, cozy movie theater, interior, red velvet seats, dim ambient lighting, glowing movie screen, popcorn, warm atmosphere"
+            1. Describe the **immediate surroundings** in 1-3 sentences.
+            2. Include **time of day, lighting, color palette, key objects**.
+            3. **MUST be consistent with the World Setting above.** No modern objects in fantasy worlds, no magical elements in modern worlds, etc.
+            4. DO NOT include characters, people, or readable text/signs.
+            5. Focus on atmosphere and place identity, not characters.
+          Example (modern):
+            "A cozy unmanned cafe at midnight. Warm pendant lights cast amber pools on dark wood tables. Plants in glass jars sit on each table. A coffee machine glows softly in the background. Empty seats, peaceful late-night mood."
+          Example (medieval fantasy):
+            "The interior of a quiet tavern at dusk. Heavy oak beams cross the ceiling, a stone fireplace crackles in the corner. Pewter mugs hang on iron hooks. Warm orange light from oil lamps casts long shadows."
         %s
         ### Rules:
         - **PREFER static locations.** Only use dynamic locations when the narrative genuinely requires a new setting.
@@ -663,7 +728,7 @@ public class CharacterPromptAssembler {
         - **If the user suggests going somewhere new**, that's a valid trigger.
         - **If you used a dynamic location recently**, return to a static location before creating another new one.
         - When using a dynamic location, still set the `location` field in scenes to the CLOSEST static location as a fallback.
-        - `new_location_name` and `location_description` are ROOT-level fields, NOT inside individual scenes.
+        - `new_location_name`, `location_canonical_key`, and `location_description` are ROOT-level fields, NOT inside individual scenes.
         """.formatted(staticLocations, dynamicLocationWarning);
     }
 
@@ -799,7 +864,9 @@ public class CharacterPromptAssembler {
               "easter_egg_trigger": null,
               "generate_illustration": false,
               "new_location_name": null,
-              "location_description": null
+              "location_canonical_key": null,
+              "location_description": null,
+              "illustration_scene_hint": "standing in living room, hands clasped in front, leaning forward slightly, soft window light"
             }
             """.formatted(
             reasoningGuide, eventStatusGuide, speakerGuide,
@@ -899,6 +966,38 @@ public class CharacterPromptAssembler {
 
             %s
             """.formatted(longTermMemory);
+    }
+
+    /**
+     * [Phase 6-Illust] 캐릭터 일러스트의 자세/액션/시츄에이션 hint 출력 지시.
+     *
+     * 매 LLM 응답에 nullable 필드로 출력 시도 → ChatRoom.lastIllustrationHint 영속화 →
+     * IllustrationPromptAssembler 6단 구조의 마지막 슬롯에서 활용.
+     * 양식: Danbooru 영문 콤마 키워드 (SDXL prompt 직삽입 가능).
+     */
+    private String buildIllustrationHintGuide() {
+        return """
+
+        # 🎨 Illustration Scene Hint
+        Every turn, output `"illustration_scene_hint"` as a brief Danbooru-style tag string
+        describing the heroine's CURRENT pose, action, and immediate situation.
+        This hint feeds into character illustration generation (both manual button-click and
+        automatic dramatic moments).
+
+        - **Format**: English comma-separated tags (Danbooru style)
+        - **Length**: 5-12 tags
+        - **Focus**: BODY POSE + ACTION + immediate SITUATION
+        - **Exclude**: facial expression (controlled by `emotion`), character identity (handled by backend)
+
+        Examples:
+          "leaning on cafe counter, holding coffee cup, looking sideways, soft afternoon light, hands on table"
+          "sitting on grass, knees drawn up, looking up at sky, gentle breeze, hair flowing"
+          "standing by window, arms crossed, back turned slightly, moonlight from behind, contemplative"
+          "lying on bed, propped on elbows, reading book, warm lamp light, relaxed shoulders"
+
+        - Output as ROOT-level field. Update every turn — the most recent hint is used.
+        - If you cannot describe a meaningful scene this turn, output `null`.
+        """;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
