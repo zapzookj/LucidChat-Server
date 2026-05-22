@@ -1,5 +1,6 @@
 package com.spring.aichat.service.user;
 
+import com.spring.aichat.domain.enums.SubscriptionType;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.user.UpdateUserRequest;
@@ -9,6 +10,7 @@ import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.cache.RedisCacheService;
 import com.spring.aichat.service.payment.SecretModeService;
+import com.spring.aichat.service.payment.SubscriptionService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
     private final SecretModeService secretModeService;
+    /** [Polish · Beta Fix] 베타 활성화 시 UserSubscription 레코드 생성을 위해 위임 */
+    private final SubscriptionService subscriptionService;
     private final PromptInjectionGuard injectionGuard;
 
     public UserResponse getMyInfo(String username) {
@@ -138,6 +142,62 @@ public class UserService {
         userRepository.save(user);
         cacheService.evictUserProfile(username);
         log.info("[BOOST] user={}, boostMode={}", username, enabled);
+    }
+
+    /**
+     * [Polish · Beta Fix] 베타 테스터 혜택 단일 트랜잭션 활성화.
+     *
+     * <h3>이전 버그</h3>
+     * UserController.betaActivate가 트랜잭션 없이 다음 흐름으로 동작했음:
+     * <pre>
+     *   User user = findUser(...);            // detached
+     *   user.completeAdultVerification(...);  // detached.isAdult = true (메모리만)
+     *   subscriptionService.activateSubscription(user, ...);  // @Transactional 진입
+     *     ├─ UserSubscription.create(user, ...)
+     *     ├─ subscriptionRepository.save(subscription)
+     *     │     └─ ⚠️ JPA가 subscription.user(detached)를 발견 → 영속 컨텍스트로 끌어들이며
+     *     │        DB에서 user를 fresh fetch → 우리가 메모리에서 set한 isAdult=true 손실
+     *     ├─ user.activateSubscription(type)  ← 이 시점 user는 이미 fresh persistent
+     *     └─ userRepository.save(user)        ← isAdult 누락 상태로 commit
+     * </pre>
+     * 결과: DB에 subscriptionTier만 저장되고 isAdult는 false로 남음. 다른 구독 기능은
+     * 동작하지만 시크릿 모드(isAdult 검증)만 거부됐다.
+     *
+     * <h3>Fix</h3>
+     * 메서드 전체를 {@code @Transactional}로 감싸 단일 영속 컨텍스트에서 처리:
+     * <ul>
+     *   <li>{@code findUser()}로 영속 객체 획득 (detached가 아님)</li>
+     *   <li>{@code completeAdultVerification()} → dirty checking으로 자동 반영</li>
+     *   <li>{@code subscriptionService.activateSubscription()} 내부의 fresh fetch가
+     *       발생하더라도 같은 영속 객체를 받음 (PERSISTENCE_CONTEXT 동일)</li>
+     *   <li>{@code chargePaidEnergy(300)} → dirty checking</li>
+     *   <li>트랜잭션 commit 시점에 모든 변경 한 번에 flush</li>
+     * </ul>
+     */
+    @Transactional
+    public void activateBetaTester(String username) {
+        User user = findUser(username);
+
+        // 1) 성인 인증 처리 (이미 인증된 경우 skip)
+        if (!Boolean.TRUE.equals(user.getIsAdult())) {
+            user.completeAdultVerification("BETA_TESTER_" + user.getId());
+        }
+
+        // 2) 루시드 미드나잇 패스 활성화 — 같은 영속 컨텍스트 안에서 호출되므로
+        //    내부 fresh fetch가 발생해도 우리의 isAdult 변경 사항이 동일 객체에 반영되어 있음.
+        //    SubscriptionService.activateSubscription은 REQUIRED로 같은 트랜잭션을 사용한다.
+        subscriptionService.activateSubscription(
+            user,
+            SubscriptionType.LUCID_MIDNIGHT_PASS,
+            "BETA_TESTER_" + user.getId() + "_" + System.currentTimeMillis()
+        );
+
+        // 3) paidEnergy 300 충전 — dirty checking
+        user.chargePaidEnergy(300);
+
+        // 트랜잭션 commit은 메서드 종료 시 자동 수행. 명시적 save 불필요.
+        // SubscriptionService가 내부적으로 evictUserProfile을 호출하지만 안전을 위해 한 번 더.
+        cacheService.evictUserProfile(username);
     }
 
     private User findUser(String username) {

@@ -8,9 +8,16 @@ import org.springframework.web.client.RestClient;
 
 /**
  * OpenRouter API 통신용 RestClient 설정
+ *
+ * [Polish · World Seed] WorldSeedProperties도 함께 활성화.
+ *   기존엔 캐릭터 시드만 yml로 받았으나 이제 세계관 시드도 yml로 받음.
  */
 @Configuration
-@EnableConfigurationProperties({OpenAiProperties.class, CharacterSeedProperties.class})
+@EnableConfigurationProperties({
+    OpenAiProperties.class,
+    CharacterSeedProperties.class,
+    WorldSeedProperties.class
+})
 public class RestClientConfig {
 
     @Bean

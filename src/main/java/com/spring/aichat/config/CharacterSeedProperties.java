@@ -43,6 +43,8 @@ public record CharacterSeedProperties(
         String toneSecret,
         String oocExample,
         String storyBehaviorGuide,
+        String appearance,
+        String clothing,
 
         // ── [Phase 6 도그푸딩 #3] 캐릭터 영혼 필드 ──
         /** 캐릭터 과거사 — 어떤 사건이 지금의 가치관을 형성했는가 */

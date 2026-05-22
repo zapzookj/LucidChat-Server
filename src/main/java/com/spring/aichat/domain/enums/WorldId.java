@@ -21,7 +21,8 @@ public enum WorldId {
 
     MEDIEVAL_FANTASY("중세 판타지", "고딕 저택에서 피어나는 로맨스"),
     ORIENTAL_FANTASY("동양 판타지", "달빛 아래 구미호의 유혹"),
-    MODERN_KOREA("현대 한국", "도시의 낮과 밤, 엇갈리는 일상");
+    MODERN_KOREA("현대 한국", "도시의 낮과 밤, 엇갈리는 일상"),
+    FANTASY_ACADEMY("판타지 아카데미", "마법과 모험이 공존하는 학교");
 
     private final String displayName;
     private final String defaultTagline;

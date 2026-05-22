@@ -91,9 +91,6 @@ public class Character {
     @Column(name = "age", length = 100)
     private Integer age;
 
-    @Column(name = "background", columnDefinition = "TEXT")
-    private String background;
-
     @Column(name = "personality", columnDefinition = "TEXT")
     private String personality;
 
@@ -120,6 +117,14 @@ public class Character {
     //  LLM의 RLHF 기본 성향(유저 만족 우선)이 빈 공간을 채워 "유저바라기" 현상.
     //  아래 5개 필드는 *살아있는 영혼*을 위한 콘텐츠 슬롯이며 nullable — 콘텐츠 작성은 별도 진행.
 
+    /** 캐릭터 외모 설명. */
+    @Column(name = "appearance", columnDefinition = "TEXT")
+    private String appearance;
+
+    /** 캐릭터 복장 설명. */
+    @Column(name = "clothing", columnDefinition = "TEXT")
+    private String clothing;
+
     /** 캐릭터 과거사 (3~5문단). 어떤 사건이 지금의 가치관을 형성했는가. */
     @Column(name = "backstory", columnDefinition = "TEXT")
     private String backstory;
@@ -131,10 +136,6 @@ public class Character {
     /** 약점·두려움·모순 (3~5개 bullet). 살아있는 사람의 결. */
     @Column(name = "flaws", columnDefinition = "TEXT")
     private String flaws;
-
-    /** 캐릭터가 *절대 하지 않는 것* (5~10개 bullet) — 영혼의 기둥. 유저바라기 현상 차단. */
-    @Column(name = "behavioral_anchors", columnDefinition = "TEXT")
-    private String behavioralAnchors;
 
     /** 어휘 습관·말버릇 (구체 예시 포함). tone보다 한 단계 더 구체적. */
     @Column(name = "speech_quirks", columnDefinition = "TEXT")
@@ -265,7 +266,6 @@ public class Character {
         if (seed.backstory() != null) this.backstory = seed.backstory();
         if (seed.coreValues() != null) this.coreValues = seed.coreValues();
         if (seed.flaws() != null) this.flaws = seed.flaws();
-        if (seed.behavioralAnchors() != null) this.behavioralAnchors = seed.behavioralAnchors();
         if (seed.speechQuirks() != null) this.speechQuirks = seed.speechQuirks();
         if (seed.promotionScenarios() != null) this.promotionScenarios = seed.promotionScenarios();
         if (seed.easterEggDialogue() != null) this.easterEggDialogue = seed.easterEggDialogue();
