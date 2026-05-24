@@ -3,32 +3,70 @@ package com.spring.aichat.domain.chat;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.user.User;
+import com.spring.aichat.domain.world.World;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 채팅방 — 관계/상태/세션 영속의 핵심 엔티티
+ *
+ * <p>[V2 Story 듀얼 모드 아키텍처]
+ * 같은 ChatRoom 테이블이 두 가지 정체성을 갖는다:
+ *
+ * <pre>
+ *   chatMode=SANDBOX → character FK 사용. V1 자유 채팅 (1:1)
+ *                      currentLocation/Outfit/TimeOfDay enum, 8축 스탯, affectionScore 등 V1 필드 활성
+ *
+ *   chatMode=STORY   → world FK 사용. V2 디렉터 시점 World 탐험
+ *                      currentUserLocationKey(String), DayPart enum, currentDay 등 V2 필드 활성
+ *                      8축 스탯은 {@link com.spring.aichat.domain.heroine.ChatRoomHeroine}로 분리
+ * </pre>
+ *
+ * <p>[조건부 FK XOR 제약]
+ * 모드별로 정확히 한 FK만 NOT NULL:
+ *   - SANDBOX: {@code character_id NOT NULL, world_id NULL}
+ *   - STORY:   {@code character_id NULL, world_id NOT NULL}
+ * MariaDB partial unique 미지원이라 *애플리케이션 레벨 가드*({@code LobbyService} 진입 시
+ * 사전 확인 + 본 엔티티 생성자에서 모드별 분기)로 강제.
+ *
+ * <p>[Unique Constraint 두 개 공존]
+ * - {@code uk_user_character_mode}: Sandbox 유저당 character당 1방
+ * - {@code uk_user_world_mode}: Story 유저당 world당 1방
+ * MariaDB는 NULL을 unique 비교에서 중복 허용 → 모드별로 한쪽만 채워져도 충돌 없음.
+ *
+ * <p>[V2에서 폐기된 V1 필드 — 본 엔티티에서 완전 제거]
+ * - {@code promotion_*} 5필드: V1 시스템 강제 임무 패턴 폐기. V2는 LLM 자율 발동 →
+ *   {@link RelationPromotionEligibility} 테이블 사용.
+ * - {@code event_active, event_status, last_director_turn, active_director_*} 5필드:
+ *   V1 자동 디렉터 인터루드 시스템 폐기 (도그푸딩 #1).
+ *
+ * <p>[V2 Story에서 캐릭터별로 이전된 V1 필드]
+ * - 8축 스탯, statusLevel, dynamicRelationTag, characterThought, currentBpm, lastEmotion,
+ *   lastIllustrationHint → {@link com.spring.aichat.domain.heroine.ChatRoomHeroine}
+ * - Sandbox 모드는 ChatRoom에 그대로 유지 (V1 호환).
+ *
+ * <p>[버전 관리]
+ * - {@code @Version}: TX-2 동시 stat 갱신 lost update 차단.
+ *   {@code OptimisticLockingFailureException} 발생 시 호출처 retry.
+ */
 @Getter
 @NoArgsConstructor
 @Entity
 @Table(name = "chat_rooms",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_user_character_mode", columnNames = {"user_id", "character_id", "chat_mode"})
+        @UniqueConstraint(name = "uk_user_character_mode",
+            columnNames = {"user_id", "character_id", "chat_mode"}),
+        @UniqueConstraint(name = "uk_user_world_mode",
+            columnNames = {"user_id", "world_id", "chat_mode"})
     },
     indexes = {
-        @Index(name = "idx_room_member", columnList = "user_id"),
-        @Index(name = "idx_room_character", columnList = "character_id")
+        @Index(name = "idx_room_user_active", columnList = "user_id, last_active_at"),
+        @Index(name = "idx_room_character", columnList = "character_id"),
+        @Index(name = "idx_room_world", columnList = "world_id")
     })
-/**
- * 채팅방 — 관계/상태 저장의 핵심 엔티티
- *
- * [Phase 5.5-P]  입체적 상태창 시스템 / 스탯 통합
- * [Phase 5.5-EV] 이벤트 시스템 강화:
- *   - topicConcluded: LLM이 판단한 주제 종료 플래그
- *   - eventActive / eventStatus: 디렉터 모드 이벤트 진행 상태
- *   - promotionWaitingForTopic: 임계값 도달 후 topic_concluded 대기
- */
 public class ChatRoom {
 
     @Id
@@ -36,11 +74,6 @@ public class ChatRoom {
     @Column(name = "room_id")
     private Long id;
 
-    /**
-     * [Phase6/Tier4 / H-20] Optimistic Lock — TX-2의 동시 stat 수정 lost update 차단.
-     *   affectionScore/stat_* 필드가 동시 메시지 처리에서 한쪽 무효화되던 결함 차단.
-     *   OptimisticLockingFailureException 발생 시 호출처에서 retry해야 한다.
-     */
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
@@ -49,35 +82,91 @@ public class ChatRoom {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "character_id", nullable = false)
-    private Character character;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "chat_mode", nullable = false, length = 20)
-    private ChatMode chatMode = ChatMode.STORY;
+    private ChatMode chatMode;
 
-    @Column(name = "affection_score", nullable = false)
-    private int affectionScore = 0;
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [조건부 FK] 모드별로 정확히 한쪽만 NOT NULL
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status_level", nullable = false, length = 30)
-    private RelationStatus statusLevel = RelationStatus.STRANGER;
+    /** SANDBOX 모드에서 NOT NULL. STORY 모드에서 NULL. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "character_id", nullable = true)
+    private Character character;
+
+    /** STORY 모드에서 NOT NULL. SANDBOX 모드에서 NULL. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "world_id", nullable = true, referencedColumnName = "id")
+    private World world;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  공통 필드 — 두 모드 모두 사용
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "last_emotion", length = 30)
-    private EmotionTag lastEmotion;
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  씬 상태 영속화
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "current_bgm_mode", length = 20)
     private BgmMode currentBgmMode;
+
+    /** LLM이 마지막으로 보고한 topic_concluded 상태 */
+    @Column(name = "topic_concluded", nullable = false)
+    private boolean topicConcluded = false;
+
+    /**
+     * 이 채팅방에서의 시크릿 모드 활성 여부.
+     * 두 모드 공통. STORY 모드에서는 추가로 {@code World.secretAllowed} 게이팅 적용.
+     */
+    @Column(name = "secret_mode_active", nullable = false)
+    private boolean secretModeActive = false;
+
+    /**
+     * 이 채팅방 전용 유저 페르소나.
+     * SANDBOX: 캐릭터별 페르소나. STORY: World별 페르소나 (V2).
+     * null이면 {@code User.profileDescription}으로 폴백.
+     */
+    @Column(name = "user_persona", columnDefinition = "TEXT")
+    private String userPersona;
+
+    // ── 엔딩 (공통) ──
+
+    @Column(name = "ending_reached", nullable = false)
+    private boolean endingReached = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ending_type", length = 10)
+    private EndingType endingType;
+
+    @Column(name = "ending_title", length = 100)
+    private String endingTitle;
+
+    // ── Phase 6 동적 배경 (공통) ──
+
+    @Column(name = "current_dynamic_location_name", length = 100)
+    private String currentDynamicLocationName;
+
+    @Column(name = "current_dynamic_canonical_key", length = 100)
+    private String currentDynamicCanonicalKey;
+
+    @Column(name = "current_dynamic_bg_url", length = 1000)
+    private String currentDynamicBgUrl;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [SANDBOX 전용] V1 1:1 채팅 필드 — STORY에서는 NULL
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    @Column(name = "affection_score")
+    private Integer affectionScore;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_level", length = 30)
+    private RelationStatus statusLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "last_emotion", length = 30)
+    private EmotionTag lastEmotion;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "current_location", length = 20)
@@ -91,78 +180,19 @@ public class ChatRoom {
     @Column(name = "current_time_of_day", length = 20)
     private TimeOfDay currentTimeOfDay;
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  관계 승급 이벤트
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ── 5축 normal 스탯 (Sandbox 전용) ──
 
-    @Column(name = "promotion_pending", nullable = false)
-    private boolean promotionPending = false;
+    @Column(name = "stat_intimacy")    private Integer statIntimacy;
+    @Column(name = "stat_affection")   private Integer statAffection;
+    @Column(name = "stat_dependency")  private Integer statDependency;
+    @Column(name = "stat_playfulness") private Integer statPlayfulness;
+    @Column(name = "stat_trust")       private Integer statTrust;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "pending_target_status", length = 30)
-    private RelationStatus pendingTargetStatus;
+    // ── 3축 secret 스탯 (Sandbox 전용) ──
 
-    @Column(name = "promotion_mood_score", nullable = false)
-    private int promotionMoodScore = 0;
-
-    @Column(name = "promotion_turn_count", nullable = false)
-    private int promotionTurnCount = 0;
-
-    /**
-     * [Phase 5.5-EV] 임계값 도달 후 topic_concluded 대기 상태
-     * true: 스탯이 승급 임계값에 도달했지만 아직 topic이 끝나지 않아 대기 중
-     * topic_concluded=true가 오면 실제 promotionPending으로 전환
-     */
-    @Column(name = "promotion_waiting_for_topic", nullable = false)
-    private boolean promotionWaitingForTopic = false;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "promotion_waiting_target", length = 30)
-    private RelationStatus promotionWaitingTarget;
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  엔딩 이벤트
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Column(name = "ending_reached", nullable = false)
-    private boolean endingReached = false;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "ending_type", length = 10)
-    private EndingType endingType;
-
-    @Column(name = "ending_title", length = 100)
-    private String endingTitle;
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5] 입체적 스탯 시스템
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Column(name = "stat_intimacy", nullable = false)
-    private int statIntimacy = 0;
-
-    @Column(name = "stat_affection", nullable = false)
-    private int statAffection = 0;
-
-    @Column(name = "stat_dependency", nullable = false)
-    private int statDependency = 0;
-
-    @Column(name = "stat_playfulness", nullable = false)
-    private int statPlayfulness = 0;
-
-    @Column(name = "stat_trust", nullable = false)
-    private int statTrust = 0;
-
-    @Column(name = "stat_lust", nullable = false)
-    private int statLust = 0;
-
-    @Column(name = "stat_corruption", nullable = false)
-    private int statCorruption = 0;
-
-    @Column(name = "stat_obsession", nullable = false)
-    private int statObsession = 0;
-
-    // ── 동적 관계 / 생각 / BPM ──
+    @Column(name = "stat_lust")        private Integer statLust;
+    @Column(name = "stat_corruption")  private Integer statCorruption;
+    @Column(name = "stat_obsession")   private Integer statObsession;
 
     @Column(name = "dynamic_relation_tag", length = 50)
     private String dynamicRelationTag;
@@ -170,421 +200,164 @@ public class ChatRoom {
     @Column(name = "character_thought", columnDefinition = "TEXT")
     private String characterThought;
 
-    @Column(name = "thought_updated_at_turn", nullable = false)
-    private int thoughtUpdatedAtTurn = 0;
+    @Column(name = "thought_updated_at_turn")
+    private Integer thoughtUpdatedAtTurn;
 
-    @Column(name = "current_bpm", nullable = false)
-    private int currentBpm = 65;
+    @Column(name = "current_bpm")
+    private Integer currentBpm;
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-EV] 이벤트 시스템 강화
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /** LLM이 마지막으로 보고한 topic_concluded 상태 */
-    @Column(name = "topic_concluded", nullable = false)
-    private boolean topicConcluded = false;
-
-    /** 디렉터 모드 이벤트 진행 중 여부 */
-    @Column(name = "event_active", nullable = false)
-    private boolean eventActive = false;
-
-    /** 디렉터 모드 이벤트 상태 ("ONGOING" | "RESOLVED" | null) */
-    @Column(name = "event_status", length = 20)
-    private String eventStatus;
-
-    /** [Phase 5.5-Director] 마지막 디렉터 개입 턴 (서버 메모리/Redis와 별개로 DB 영속화) */
-    @Column(name = "last_director_turn", nullable = false)
-    private long lastDirectorTurn = 0;
-
-    /**
-     * [Phase 5.5-Director] 현재 활성화된 디렉터 인터루드의 actor_constraint
-     * 인터루드 나레이션을 유저에게 보여준 뒤, 다음 액터 호출 시 이 값을 주입.
-     * 소비 후 null로 클리어.
-     */
-    @Column(name = "active_director_constraint", columnDefinition = "TEXT")
-    private String activeDirectorConstraint;
-
-    /**
-     * [Phase 5.5-Director] 현재 활성화된 디렉터 인터루드의 나레이션 원문
-     * 액터 컨텍스트에 [DIRECTOR_NARRATION]으로 주입하여 맥락 공유.
-     * 소비 후 null로 클리어.
-     */
-    @Column(name = "active_director_narration", columnDefinition = "TEXT")
-    private String activeDirectorNarration;
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-Fix] 동적 배경 영속화
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /** AI 생성 배경의 장소명 (LLM이 제공한 자유텍스트, 예: "해변", "놀이공원") */
-    @Column(name = "current_dynamic_location_name", length = 100)
-    private String currentDynamicLocationName;
-
-    /** AI 생성 배경의 S3 URL (캐시 히트 시 즉시 저장, 미스 시 생성 완료 후 저장) */
-    @Column(name = "current_dynamic_bg_url", length = 1000)
-    private String currentDynamicBgUrl;
-
-    /**
-     * [Phase 6-Illust hotfix] 현재 동적 장소의 canonical_key.
-     *
-     * <p>중복 전환 가드를 한글 표시명 텍스트 유사도가 아니라 canonical_key 동일성으로
-     * 판정하기 위함. 캐시 동일성 판정 기준(canonical_key)과 가드 기준을 일치시킨다.
-     * 표시명이 달라도("어둡고 축축한 뒷골목" vs "가로등 깜빡이는 밤골목") canonical_key가
-     * 같으면("MODERN__ALLEY_NIGHT_*") 같은 장소로 취급 → 불필요한 전환 컴포넌트 억제.
-     *
-     * <p>nullable — 동적 장소 미활성 시 또는 LLM이 canonical_key 미출력 시.
-     */
-    @Column(name = "current_dynamic_canonical_key", length = 100)
-    private String currentDynamicCanonicalKey;
-
-    /**
-     * [Phase 6-Illust] 마지막 LLM 응답이 제안한 일러스트 자세/액션/시츄에이션 hint.
-     *
-     * <p>Danbooru 영문 콤마 키워드 양식 (SDXL/ModelsLab prompt에 직삽입 가능).
-     * 매 LLM 응답마다 갱신되어 {@link com.spring.aichat.service.illustration.IllustrationService}의
-     * Manual/Auto 일러스트 트리거 시 IllustrationPromptAssembler 6단 구조의 마지막 슬롯에 활용된다.
-     *
-     * <p>예: {@code "leaning on cafe counter, holding coffee cup, looking sideways, soft afternoon light"}
-     *
-     * <p>nullable — LLM이 hint를 출력하지 않은 경우 또는 신규 채팅방의 초기 상태.
-     */
     @Column(name = "last_illustration_hint", columnDefinition = "TEXT")
     private String lastIllustrationHint;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Bug #3 Fix] 도메인 분리 — 시크릿 모드 & 유저 페르소나
+    //  [STORY V2 전용] 디렉터 시점 World 탐험 필드 — SANDBOX에서는 NULL
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 유저 현재 위치 — {@code WorldLocation.locationKey} 참조 (String key) */
+    @Column(name = "current_user_location_key", length = 50)
+    private String currentUserLocationKey;
+
+    /** World 안의 경과 일수 (1부터 시작). */
+    @Column(name = "current_day")
+    private Integer currentDay;
+
+    /** World 안의 현재 시간대 — V2의 5단계 DayPart enum. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_day_part", length = 20)
+    private DayPart currentDayPart;
+
+    /**
+     * V2 엔딩 이중 게이트 — 호감도 임계값 도달 시 백엔드가 자동 활성.
+     * true일 때만 LLM이 {@code ending_triggered=true} 발동 가능.
+     */
+    @Column(name = "ending_eligible", nullable = false)
+    private boolean endingEligible = false;
+
+    /** 엔딩 자격 활성 시점 (페일세이프 카운터용). */
+    @Column(name = "ending_eligible_since")
+    private LocalDateTime endingEligibleSince;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  생성자 — 모드별 분리
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 이 채팅방에서의 시크릿 모드 활성 여부.
-     * 기존 User.isSecretMode(전역 토글)에서 ChatRoom 단위로 이관.
-     * 활성화 시 SecretModeService.canAccessSecretMode() 검증 필수.
+     * SANDBOX 생성자 — V1 캐릭터 1:1 채팅.
+     * V1 호환을 위해 디폴트 location/outfit/time/8축 스탯 초기화.
      */
-    @Column(name = "secret_mode_active", nullable = false)
-    private boolean secretModeActive = false;
+    public static ChatRoom createSandbox(User user, Character character) {
+        ChatRoom r = new ChatRoom();
+        r.user = user;
+        r.character = character;
+        r.chatMode = ChatMode.SANDBOX;
+        r.lastActiveAt = LocalDateTime.now();
+        r.currentBgmMode = BgmMode.DAILY;
+
+        // Sandbox V1 필드 초기화
+        r.affectionScore = 0;
+        r.statusLevel = RelationStatus.STRANGER;
+        r.lastEmotion = EmotionTag.NEUTRAL;
+        r.currentTimeOfDay = TimeOfDay.NIGHT;
+        r.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
+        r.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
+        r.statIntimacy = 0;  r.statAffection = 0;  r.statDependency = 0;
+        r.statPlayfulness = 0;  r.statTrust = 0;
+        r.statLust = 0;  r.statCorruption = 0;  r.statObsession = 0;
+        r.dynamicRelationTag = "낯선 사람";
+        r.currentBpm = 65;
+        r.thoughtUpdatedAtTurn = 0;
+
+        return r;
+    }
 
     /**
-     * 이 채팅방 전용 유저 페르소나 (LLM 시스템 프롬프트에 주입).
-     * null이면 User.profileDescription으로 폴백.
-     * 캐릭터별로 다른 페르소나를 설정할 수 있도록 분리.
+     * STORY V2 생성자 — World 탐험.
+     * 캐릭터별 스탯/감정은 {@link com.spring.aichat.domain.heroine.ChatRoomHeroine}에 분리.
+     *
+     * @param startLocationKey 유저 시작 장소 ({@code WorldLocation.locationKey})
+     * @param userPersona      유저 페르소나 (CreateFlow 입력 결과)
      */
-    @Column(name = "user_persona", columnDefinition = "TEXT")
-    private String userPersona;
+    public static ChatRoom createStoryV2(User user, World world,
+                                         String startLocationKey, String userPersona) {
+        ChatRoom r = new ChatRoom();
+        r.user = user;
+        r.world = world;
+        r.chatMode = ChatMode.STORY;
+        r.lastActiveAt = LocalDateTime.now();
+        r.userPersona = userPersona;
+        r.currentBgmMode = parseBgmModeOrDefault(world.getDefaultBgm());
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  생성자
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // V2 Story 필드 초기화
+        r.currentUserLocationKey = startLocationKey;
+        r.currentDay = 1;
+        r.currentDayPart = DayPart.defaultStart();
+        r.endingEligible = false;
 
-    public ChatRoom(User user, Character character, ChatMode chatMode) {
-        this.user = user;
-        this.character = character;
-        this.chatMode = chatMode;
-        this.affectionScore = 0;
-        this.statusLevel = RelationStatus.STRANGER;
-        this.lastActiveAt = LocalDateTime.now();
-        this.lastEmotion = EmotionTag.NEUTRAL;
-        this.currentBgmMode = BgmMode.DAILY;
-        this.currentTimeOfDay = TimeOfDay.NIGHT;
-        this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
-        this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
-        this.dynamicRelationTag = "낯선 사람";
-        this.currentBpm = 65;
-    }
-
-    public ChatRoom(User user, Character character) {
-        this(user, character, ChatMode.STORY);
+        return r;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-P] 통합 호감도 접근자
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public int getAffectionScore() {
-        return this.statAffection;
-    }
-
+    //  헬퍼 — 모드 판정 및 안전한 접근
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public boolean isStoryMode() { return this.chatMode == ChatMode.STORY; }
     public boolean isSandboxMode() { return this.chatMode == ChatMode.SANDBOX; }
 
-    public void touch(EmotionTag lastEmotion) {
+    /** SANDBOX 검증 — Story 모드에서 V1 필드 접근 시 명시적 에러. */
+    private void requireSandbox() {
+        if (chatMode != ChatMode.SANDBOX) {
+            throw new IllegalStateException("V1 field access on non-SANDBOX room: id=" + id + ", mode=" + chatMode);
+        }
+    }
+
+    /** STORY 검증 — Sandbox 모드에서 V2 필드 접근 시 명시적 에러. */
+    private void requireStory() {
+        if (chatMode != ChatMode.STORY) {
+            throw new IllegalStateException("V2 field access on non-STORY room: id=" + id + ", mode=" + chatMode);
+        }
+    }
+
+    /**
+     * 유효 페르소나 반환 — 방 전용 페르소나 우선, 없으면 유저 기본값 폴백.
+     * 두 모드 공통.
+     */
+    public String getEffectivePersona(User user) {
+        if (this.userPersona != null && !this.userPersona.isBlank()) {
+            return this.userPersona;
+        }
+        return user.getProfileDescription();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  공통 메서드 — 두 모드 모두 사용
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public void touch() {
         this.lastActiveAt = LocalDateTime.now();
-        this.lastEmotion = lastEmotion;
     }
 
-    public void updateAffection(int newScore) {
-        this.statAffection = clamp(-100, 100, newScore);
-        this.affectionScore = this.statAffection;
-    }
-
-    public void updateStatusLevel(RelationStatus relationStatus) {
-        this.statusLevel = relationStatus;
-    }
-
-    public void updateLastActive(EmotionTag emotion) {
+    public void touch(EmotionTag emotion) {
         this.lastActiveAt = LocalDateTime.now();
-        this.lastEmotion = emotion;
+        if (isSandboxMode()) {
+            this.lastEmotion = emotion;
+        }
+        // STORY 모드의 lastEmotion은 ChatRoomHeroine에 저장
     }
 
-    public void resetAffection() {
-        this.affectionScore = 0;
-        this.statAffection = 0;
-        this.statusLevel = RelationStatus.STRANGER;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5] 스탯 시스템 메서드
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public void applyNormalStatChanges(int dIntimacy, int dAffection,
-                                       int dDependency, int dPlayfulness, int dTrust) {
-        this.statIntimacy    = clamp(-100, 100, this.statIntimacy    + dIntimacy);
-        this.statAffection   = clamp(-100, 100, this.statAffection   + dAffection);
-        this.statDependency  = clamp(-100, 100, this.statDependency  + dDependency);
-        this.statPlayfulness = clamp(-100, 100, this.statPlayfulness + dPlayfulness);
-        this.statTrust       = clamp(-100, 100, this.statTrust       + dTrust);
-        this.affectionScore = this.statAffection;
-    }
-
-    public void applySecretStatChanges(int dLust, int dCorruption, int dObsession) {
-        this.statLust       = clamp(-100, 100, this.statLust       + dLust);
-        this.statCorruption = clamp(-100, 100, this.statCorruption + dCorruption);
-        this.statObsession  = clamp(-100, 100, this.statObsession  + dObsession);
-    }
-
-    public void applyLegacyAffectionChange(int delta) {
-        if (delta == 0) return;
-        this.statAffection = clamp(-100, 100, this.statAffection + delta);
-        this.affectionScore = this.statAffection;
-    }
-
-    public int getMaxNormalStatValue() {
-        return Math.max(statIntimacy, Math.max(statAffection,
-            Math.max(statDependency, Math.max(statPlayfulness, statTrust))));
-    }
-
-    public int getMinNormalStatValue() {
-        return Math.min(statIntimacy, Math.min(statAffection,
-            Math.min(statDependency, Math.min(statPlayfulness, statTrust))));
-    }
-
-    public String getDominantStatName() {
-        return RelationStatusPolicy.getDominantStat(
-            statIntimacy, statAffection, statDependency, statPlayfulness, statTrust);
-    }
-
-    public boolean refreshRelationFromStats() {
-        RelationStatus oldStatus = this.statusLevel;
-        RelationStatus newStatus = RelationStatusPolicy.fromStats(
-            this.statAffection,
-            this.statIntimacy, this.statAffection,
-            this.statDependency, this.statPlayfulness, this.statTrust
-        );
-        this.statusLevel = newStatus;
-        String dominant = getDominantStatName();
-        this.dynamicRelationTag = RelationStatusPolicy.buildDynamicRelationTag(newStatus, dominant);
-        return oldStatus != newStatus;
-    }
-
-    public String checkEndingTrigger() {
-        if (this.endingReached) return null;
-        if (getMaxNormalStatValue() >= 100) return "HAPPY";
-        if (getMinNormalStatValue() <= -100) return "BAD";
-        return null;
-    }
-
-    public void updateBpm(int bpm) {
-        this.currentBpm = clamp(60, 180, bpm);
-    }
-
-    public void updateCharacterThought(String thought, int currentTurnCount) {
-        this.characterThought = thought;
-        this.thoughtUpdatedAtTurn = currentTurnCount;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-EV] 이벤트 시스템 강화 메서드
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /** LLM 응답의 topic_concluded 반영 */
     public void updateTopicConcluded(boolean concluded) {
         this.topicConcluded = concluded;
     }
 
-    /** 디렉터 모드 이벤트 시작 */
-    public void startDirectorEvent() {
-        this.eventActive = true;
-        this.eventStatus = "ONGOING";
-        // 이벤트 시작 시 topic은 아직 진행 중
-        this.topicConcluded = false;
+    public void activateSecretMode() {
+        this.secretModeActive = true;
     }
 
-    /** 디렉터 모드 이벤트 상태 업데이트 (LLM 응답 기반) */
-    public void updateEventStatus(String status) {
-        if ("RESOLVED".equalsIgnoreCase(status)) {
-            this.eventActive = false;
-            this.eventStatus = "RESOLVED";
-        } else if ("ONGOING".equalsIgnoreCase(status)) {
-            this.eventStatus = "ONGOING";
-        }
+    public void deactivateSecretMode() {
+        this.secretModeActive = false;
     }
 
-    /** 이벤트 강제 종료 (초기화 등) */
-    public void clearDirectorEvent() {
-        this.eventActive = false;
-        this.eventStatus = null;
-    }
-
-    // ── [Phase 5.5-Fix] 동적 배경 영속화 메서드 ──
-
-    /** [Phase 6 hotfix] 동적 배경 URL + 장소명 + canonical_key 갱신 (캐시 히트/생성 완료 시) */
-    public void updateDynamicBackground(String locationName, String canonicalKey, String bgUrl) {
-        this.currentDynamicLocationName = locationName;
-        this.currentDynamicCanonicalKey = canonicalKey;
-        this.currentDynamicBgUrl = bgUrl;
-    }
-
-    /** [하위호환] canonical_key 없이 호출하는 기존 경로 — key는 보존(덮어쓰지 않음) */
-    public void updateDynamicBackground(String locationName, String bgUrl) {
-        this.currentDynamicLocationName = locationName;
-        this.currentDynamicBgUrl = bgUrl;
-        // currentDynamicCanonicalKey는 의도적으로 건드리지 않음 (기존 값 보존)
-    }
-
-    /**
-     * [Phase 6-Illust] LLM 응답마다 일러스트 scene hint 갱신.
-     *
-     * <p>매 응답 직후 ChatStreamService가 호출. null/blank hint는 무시
-     * (기존 값을 덮어쓰지 않음 — 이전 응답의 hint가 manual 트리거에 여전히 유효할 수 있음).
-     *
-     * @param hint Danbooru 영문 콤마 키워드, nullable
-     */
-    public void updateLastIllustrationHint(String hint) {
-        if (hint != null && !hint.isBlank()) {
-            this.lastIllustrationHint = hint.trim();
-        }
-    }
-
-    /** [Phase 6 hotfix] 동적 배경 장소명 + canonical_key 갱신 (캐시 미스, 비동기 생성 시작 시) */
-    public void updateDynamicLocationName(String locationName, String canonicalKey) {
-        this.currentDynamicLocationName = locationName;
-        this.currentDynamicCanonicalKey = canonicalKey;
-        this.currentDynamicBgUrl = null; // 아직 URL 미확정
-    }
-
-    /** [하위호환] canonical_key 없이 호출하는 기존 경로 */
-    public void updateDynamicLocationName(String locationName) {
-        this.currentDynamicLocationName = locationName;
-        this.currentDynamicBgUrl = null;
-    }
-
-    /** 동적 배경 클리어 (enum 기반 정적 장소로 *명시적* 전환 시에만) */
-    public void clearDynamicBackground() {
-        this.currentDynamicLocationName = null;
-        this.currentDynamicCanonicalKey = null;
-        this.currentDynamicBgUrl = null;
-    }
-
-    // ── 승급 대기 (topic_concluded 게이팅) ──
-
-    /**
-     * [Phase 5.5-EV] 승급 임계값 도달 시 호출 — topic_concluded 대기 상태 진입
-     */
-    public void markPromotionWaiting(RelationStatus target) {
-        this.promotionWaitingForTopic = true;
-        this.promotionWaitingTarget = target;
-    }
-
-    /**
-     * [Phase 5.5-EV] topic_concluded=true일 때 실제 승급 이벤트 개시
-     * @return 승급이 시작되었으면 true
-     */
-    public boolean tryStartPromotionFromWaiting() {
-        if (!this.promotionWaitingForTopic || this.promotionWaitingTarget == null) {
-            return false;
-        }
-        // 대기 해제 → 실제 승급 이벤트 시작 (디렉터 모드)
-        RelationStatus target = this.promotionWaitingTarget;
-        clearPromotionWaiting();
-        startPromotion(target);
-        startDirectorEvent(); // 승급도 디렉터 모드로 진행
-        return true;
-    }
-
-    private void clearPromotionWaiting() {
-        this.promotionWaitingForTopic = false;
-        this.promotionWaitingTarget = null;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  씬 / 승급 / 엔딩 (기존 유지)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public void updateSceneState(String bgmMode, String location, String outfit, String timeOfDay) {
-        if (bgmMode != null) { try { this.currentBgmMode = BgmMode.valueOf(bgmMode); } catch (IllegalArgumentException ignored) {} }
-        if (location != null) {
-            try {
-                Location parsedLoc = Location.valueOf(location);
-                this.currentLocation = parsedLoc;
-                // [Phase 6 hotfix] 동적 장소가 활성인 동안에는 scene.location enum으로
-                //   동적 배경을 클리어하지 않는다.
-                //   이유: CharacterPromptAssembler 지시에 따라 LLM은 동적 장소 사용 중에도
-                //   "가장 가까운 static location"을 scene.location 에 fallback 으로 넣는다.
-                //   이 fallback 값을 실제 전환으로 오인해 clearDynamicBackground()를
-                //   호출하면, 동적 장소(예: 가로등 골목)가 default(편의점)로 소실된다.
-                //   동적 → 정적 전환은 ChatStreamService의 new_location_name 명시 경로에서만 처리.
-                if (this.currentDynamicLocationName == null) {
-                    // 애초에 동적 장소가 없을 때만(이미 정적 상태) 정합성 유지용 호출
-                    clearDynamicBackground();
-                }
-            } catch (IllegalArgumentException ignored) {
-                // AI 생성 동적 장소 — enum 매핑 불가, 무시 (동적 배경은 별도 경로로 처리)
-            }
-        }
-        if (outfit != null) { try { this.currentOutfit = Outfit.valueOf(outfit); } catch (IllegalArgumentException ignored) {} }
-        if (timeOfDay != null) { try { this.currentTimeOfDay = TimeOfDay.valueOf(timeOfDay); } catch (IllegalArgumentException ignored) {} }
-    }
-
-    public void resetSceneState() {
-        this.currentBgmMode = BgmMode.DAILY;
-        this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
-        this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
-        this.currentTimeOfDay = TimeOfDay.NIGHT;
-    }
-
-    public void startPromotion(RelationStatus targetStatus) {
-        this.promotionPending = true;
-        this.pendingTargetStatus = targetStatus;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
-    }
-
-    /**
-     * [Phase 5.5-EV] 승급 턴 진행 — mood_score를 5종 스탯 변화량 합산으로 대체
-     * @param statDeltaSum 해당 턴의 5종 노말 스탯 변화량 절대값 합산
-     */
-    public void advancePromotionTurn(int statDeltaSum) {
-        this.promotionTurnCount++;
-        this.promotionMoodScore += statDeltaSum;
-    }
-
-    public void completePromotionSuccess() {
-        this.statusLevel = this.pendingTargetStatus;
-        clearPromotion();
-        clearDirectorEvent(); // 승급 완료 → 디렉터 모드 종료
-    }
-
-    public void completePromotionFailure() {
-        clearPromotion();
-        clearDirectorEvent();
-    }
-
-    private void clearPromotion() {
-        this.promotionPending = false;
-        this.pendingTargetStatus = null;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
+    public void updateUserPersona(String persona) {
+        this.userPersona = persona;
     }
 
     public void markEndingReached(EndingType endingType) {
@@ -592,112 +365,253 @@ public class ChatRoom {
         this.endingType = endingType;
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-Director] 디렉터 인터루드 메서드
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 디렉터 인터루드가 유저에게 표시된 후 호출.
-     * 다음 액터 호출에서 constraint + narration을 컨텍스트로 주입.
-     */
-    public void setDirectorInterlude(String narration, String actorConstraint) {
-        this.activeDirectorNarration = narration;
-        this.activeDirectorConstraint = actorConstraint;
+    public void saveEndingTitle(String title) {
+        this.endingTitle = title;
     }
 
-    /**
-     * 디렉터 인터루드의 관찰자 모드로 이벤트 시작.
-     * INTERLUDE + user_agency=OBSERVER인 경우 호출.
-     */
-    public void startDirectorInterlude(String narration, String actorConstraint) {
-        setDirectorInterlude(narration, actorConstraint);
-        this.eventActive = true;
-        this.eventStatus = "ONGOING";
-        this.topicConcluded = false;
+    // ── 동적 배경 (Phase 6, 공통) ──
+
+    public void updateDynamicBackground(String locationName, String canonicalKey, String bgUrl) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicCanonicalKey = canonicalKey;
+        this.currentDynamicBgUrl = bgUrl;
     }
 
-    /**
-     * 디렉터 constraint가 액터에 주입된 후 클리어.
-     * 일회성 소비.
-     */
-    public void clearDirectorInterlude() {
-        this.activeDirectorConstraint = null;
-        this.activeDirectorNarration = null;
+    public void updateDynamicLocationName(String locationName, String canonicalKey) {
+        this.currentDynamicLocationName = locationName;
+        this.currentDynamicCanonicalKey = canonicalKey;
+        this.currentDynamicBgUrl = null;  // 아직 URL 미확정
     }
 
-    /** 디렉터 constraint가 활성화되어 있는지 */
-    public boolean hasActiveDirectorConstraint() {
-        return this.activeDirectorConstraint != null && !this.activeDirectorConstraint.isBlank();
+    public void clearDynamicBackground() {
+        this.currentDynamicLocationName = null;
+        this.currentDynamicCanonicalKey = null;
+        this.currentDynamicBgUrl = null;
     }
 
-    /** 마지막 디렉터 개입 턴 업데이트 */
-    public void updateLastDirectorTurn(long turn) {
-        this.lastDirectorTurn = turn;
+    public void updateBgmMode(BgmMode mode) {
+        if (mode != null) this.currentBgmMode = mode;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Bug #3 Fix] 시크릿 모드 & 유저 페르소나 메서드
+    //  SANDBOX 전용 메서드 — V1 호환 (호출 전 isSandboxMode() 체크 권장)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 시크릿 모드 활성화 (SecretModeService 검증 후 호출할 것) */
-    public void activateSecretMode() {
-        this.secretModeActive = true;
+    public void updateSandboxAffection(int newScore) {
+        requireSandbox();
+        this.statAffection = clamp(-100, 100, newScore);
+        this.affectionScore = this.statAffection;
     }
 
-    /** 시크릿 모드 비활성화 */
-    public void deactivateSecretMode() {
-        this.secretModeActive = false;
+    public void applySandboxNormalStatChanges(int dIntimacy, int dAffection,
+                                              int dDependency, int dPlayfulness, int dTrust) {
+        requireSandbox();
+        this.statIntimacy    = clamp(-100, 100, this.statIntimacy    + dIntimacy);
+        this.statAffection   = clamp(-100, 100, this.statAffection   + dAffection);
+        this.statDependency  = clamp(-100, 100, this.statDependency  + dDependency);
+        this.statPlayfulness = clamp(-100, 100, this.statPlayfulness + dPlayfulness);
+        this.statTrust       = clamp(-100, 100, this.statTrust       + dTrust);
+        this.affectionScore  = this.statAffection;
     }
 
-    /** 채팅방 전용 유저 페르소나 설정 (null이면 User.profileDescription 폴백) */
-    public void updateUserPersona(String persona) {
-        this.userPersona = persona;
+    public void applySandboxSecretStatChanges(int dLust, int dCorruption, int dObsession) {
+        requireSandbox();
+        this.statLust       = clamp(-100, 100, this.statLust       + dLust);
+        this.statCorruption = clamp(-100, 100, this.statCorruption + dCorruption);
+        this.statObsession  = clamp(-100, 100, this.statObsession  + dObsession);
     }
 
-    /**
-     * 유효 페르소나 반환 — 방 전용 페르소나 우선, 없으면 유저 기본값 폴백.
-     * CharacterPromptAssembler/SandboxPromptAssembler에서 사용.
-     */
-    public String getEffectivePersona(com.spring.aichat.domain.user.User user) {
-        if (this.userPersona != null && !this.userPersona.isBlank()) {
-            return this.userPersona;
+    public void updateSandboxStatusLevel(RelationStatus status) {
+        requireSandbox();
+        this.statusLevel = status;
+    }
+
+    public void updateSandboxDynamicRelationTag(String tag) {
+        requireSandbox();
+        this.dynamicRelationTag = tag;
+    }
+
+    public void updateSandboxCharacterThought(String thought, int currentTurnCount) {
+        requireSandbox();
+        this.characterThought = thought;
+        this.thoughtUpdatedAtTurn = currentTurnCount;
+    }
+
+    public void updateSandboxBpm(int bpm) {
+        requireSandbox();
+        this.currentBpm = clamp(60, 180, bpm);
+    }
+
+    public void updateSandboxSceneState(BgmMode bgm, Location location, Outfit outfit, TimeOfDay time) {
+        requireSandbox();
+        if (bgm != null) this.currentBgmMode = bgm;
+        if (location != null) {
+            this.currentLocation = location;
+            // Phase 6 hotfix: 동적 장소 활성 중에는 enum location으로 동적 배경 클리어 안 함
+            if (this.currentDynamicLocationName == null) {
+                clearDynamicBackground();
+            }
         }
-        return user.getProfileDescription();
+        if (outfit != null) this.currentOutfit = outfit;
+        if (time != null) this.currentTimeOfDay = time;
     }
 
-    public void saveEndingTitle(String title) { this.endingTitle = title; }
+    public void updateSandboxLastIllustrationHint(String hint) {
+        requireSandbox();
+        if (hint != null && !hint.isBlank()) {
+            this.lastIllustrationHint = hint.trim();
+        }
+    }
 
-    public void resetAll() {
-        resetAffection();
-        resetSceneState();
-        clearPromotion();
-        clearPromotionWaiting();
-        clearDirectorEvent();
-        clearDynamicBackground();
+    public int getMaxNormalStatValueSandbox() {
+        requireSandbox();
+        return Math.max(statIntimacy, Math.max(statAffection,
+            Math.max(statDependency, Math.max(statPlayfulness, statTrust))));
+    }
+
+    public int getMinNormalStatValueSandbox() {
+        requireSandbox();
+        return Math.min(statIntimacy, Math.min(statAffection,
+            Math.min(statDependency, Math.min(statPlayfulness, statTrust))));
+    }
+
+    /**
+     * Sandbox 엔딩 트리거 — 기존 V1 즉시 발동 패턴 유지 (Sandbox는 자유 채팅이라 LLM 이중 게이트 불필요).
+     * STORY 모드에서는 {@link #activateEndingEligibility()} 사용.
+     */
+    public String checkSandboxEndingTrigger() {
+        requireSandbox();
+        if (this.endingReached) return null;
+        if (getMaxNormalStatValueSandbox() >= 100) return "HAPPY";
+        if (getMinNormalStatValueSandbox() <= -100) return "BAD";
+        return null;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  STORY V2 전용 메서드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    public void updateUserLocation(String locationKey) {
+        requireStory();
+        this.currentUserLocationKey = locationKey;
+    }
+
+    public void advanceTime(int days, DayPart newDayPart) {
+        requireStory();
+        if (days > 0) this.currentDay = (this.currentDay == null ? 1 : this.currentDay) + days;
+        if (newDayPart != null) this.currentDayPart = newDayPart;
+    }
+
+    /**
+     * V2 엔딩 이중 게이트 1단계 — 자격 활성. ChatRoomHeroine의 호감도 임계 도달 시
+     * EndingService가 호출. 디렉터 prompt에 *자격 활성 신호*가 다음 턴부터 인젝션.
+     */
+    public void activateEndingEligibility() {
+        requireStory();
+        if (this.endingEligible) return;
+        this.endingEligible = true;
+        this.endingEligibleSince = LocalDateTime.now();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [스토리 초기화] 페르소나 옵션 reset
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 진행 데이터 초기화. 모드별로 reset 범위가 다르며, 페르소나 포함 여부는 유저 선택.
+     *
+     * <p>[STORY 모드 reset 범위]
+     * - 본 엔티티: 위치/시간/엔딩/topic/동적배경. 페르소나는 옵션.
+     * - 별도 처리 필요: ChatRoomHeroine 8축 스탯, CharacterPresence, RelationPromotionEligibility,
+     *   HeroineMemorySummary, OffscreenNotification, ChatLogDocument — 서비스 레이어가 별도 정리.
+     *
+     * <p>[SANDBOX 모드 reset 범위]
+     * - V1 호환: 8축 스탯/관계/씬상태/엔딩/동적배경 초기화.
+     * - 별도 처리: MemorySummary, ChatLogDocument — 서비스 레이어가 별도 정리.
+     *
+     * @param includePersona true면 페르소나도 초기화 (완전히 새 세션). false면 페르소나 유지.
+     */
+    public void resetProgress(boolean includePersona) {
+        // 공통 초기화
+        this.topicConcluded = false;
+        this.secretModeActive = false;
         this.endingReached = false;
         this.endingType = null;
         this.endingTitle = null;
-        this.statIntimacy = 0;
-        this.statAffection = 0;
-        this.statDependency = 0;
-        this.statPlayfulness = 0;
-        this.statTrust = 0;
-        this.statLust = 0;
-        this.statCorruption = 0;
-        this.statObsession = 0;
+        this.currentDynamicLocationName = null;
+        this.currentDynamicCanonicalKey = null;
+        this.currentDynamicBgUrl = null;
+        if (includePersona) {
+            this.userPersona = null;
+        }
+
+        if (isSandboxMode()) {
+            resetSandboxFields();
+        } else if (isStoryMode()) {
+            resetStoryFields();
+        }
+    }
+
+    private void resetSandboxFields() {
+        this.affectionScore = 0;
+        this.statusLevel = RelationStatus.STRANGER;
+        this.statIntimacy = 0;  this.statAffection = 0;  this.statDependency = 0;
+        this.statPlayfulness = 0;  this.statTrust = 0;
+        this.statLust = 0;  this.statCorruption = 0;  this.statObsession = 0;
         this.dynamicRelationTag = "낯선 사람";
         this.characterThought = null;
         this.thoughtUpdatedAtTurn = 0;
         this.currentBpm = 65;
-        this.topicConcluded = false;
-        this.lastDirectorTurn = 0;
-        this.activeDirectorConstraint = null;
-        this.activeDirectorNarration = null;
-        this.secretModeActive = false;  // [Bug #3 Fix]
-        // userPersona는 의도적으로 리셋하지 않음 — 유저가 설정한 페르소나는 유지
+        this.lastEmotion = EmotionTag.NEUTRAL;
+        this.lastIllustrationHint = null;
+        // 캐릭터 기본값으로 씬 상태 복원
+        if (character != null) {
+            this.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
+            this.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
+        }
+        this.currentTimeOfDay = TimeOfDay.NIGHT;
+        this.currentBgmMode = BgmMode.DAILY;
     }
 
-    private int clamp(int min, int max, int v) { return Math.max(min, Math.min(max, v)); }
-    private static Location parseLocationOrDefault(String v) { try { return Location.valueOf(v); } catch (Exception e) { return Location.ENTRANCE; } }
-    private static Outfit parseOutfitOrDefault(String v) { try { return Outfit.valueOf(v); } catch (Exception e) { return Outfit.MAID; } }
+    private void resetStoryFields() {
+        // 위치는 시작 장소로 복원해야 하나, 시작 장소 정보는 ChatRoom에 없으므로
+        // 서비스 레이어({@code StoryService.resetRoom})가 currentUserLocationKey를 별도 갱신.
+        this.currentDay = 1;
+        this.currentDayPart = DayPart.defaultStart();
+        this.endingEligible = false;
+        this.endingEligibleSince = null;
+        if (world != null) {
+            this.currentBgmMode = parseBgmModeOrDefault(world.getDefaultBgm());
+        }
+        // currentUserLocationKey는 서비스 레이어에서 시작 장소로 재설정
+    }
+
+    /**
+     * V2 Story reset 후 서비스 레이어가 시작 장소를 재설정할 때 사용.
+     * {@code resetProgress(...)} 호출 직후 호출 권장.
+     */
+    public void restoreStartLocation(String startLocationKey) {
+        requireStory();
+        this.currentUserLocationKey = startLocationKey;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  내부 유틸
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static int clamp(int min, int max, int v) {
+        return Math.max(min, Math.min(max, v));
+    }
+
+    private static Location parseLocationOrDefault(String v) {
+        try { return Location.valueOf(v); } catch (Exception e) { return Location.ENTRANCE; }
+    }
+
+    private static Outfit parseOutfitOrDefault(String v) {
+        try { return Outfit.valueOf(v); } catch (Exception e) { return Outfit.MAID; }
+    }
+
+    private static BgmMode parseBgmModeOrDefault(String v) {
+        try { return BgmMode.valueOf(v); } catch (Exception e) { return BgmMode.DAILY; }
+    }
 }
