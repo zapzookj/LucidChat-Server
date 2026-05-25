@@ -1,6 +1,6 @@
 package com.spring.aichat.service.prompt;
 
-import com.spring.aichat.domain.theater.World;
+import com.spring.aichat.domain.world.World;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

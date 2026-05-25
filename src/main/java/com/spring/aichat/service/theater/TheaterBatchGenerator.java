@@ -11,6 +11,8 @@ import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.*;
+import com.spring.aichat.domain.world.World;
+import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.dto.theater.LlmSceneBatchOutput;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
 import com.spring.aichat.exception.ExternalApiException;

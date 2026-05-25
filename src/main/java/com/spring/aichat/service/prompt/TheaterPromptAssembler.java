@@ -9,7 +9,7 @@ import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.TheaterHeroineAffection;
 import com.spring.aichat.domain.theater.TheaterState;
-import com.spring.aichat.domain.theater.World;
+import com.spring.aichat.domain.world.World;
 import com.spring.aichat.dto.theater.AvatarProfile;
 import com.spring.aichat.security.PromptInjectionGuard;
 import lombok.RequiredArgsConstructor;

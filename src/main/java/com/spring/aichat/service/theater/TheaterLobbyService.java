@@ -14,6 +14,8 @@ import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.theater.*;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.domain.world.World;
+import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.dto.theater.AvatarProfile;
 import com.spring.aichat.dto.theater.TheaterRequests.CreateTheaterSessionRequest;
 import com.spring.aichat.dto.theater.TheaterRequests.InitialStatDistribution;

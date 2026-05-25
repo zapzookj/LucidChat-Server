@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.*;
-import com.spring.aichat.domain.theater.World;
-import com.spring.aichat.domain.theater.WorldRepository;
+import com.spring.aichat.domain.world.World;
+import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -168,6 +168,15 @@ public class ChatStreamService {
         log.info("⏱ [STREAM-PERF] ====== sendMessageStream START ====== roomId={}", roomId);
 
         try {
+            // ── [V2 분리] STORY 모드는 ChatStreamServiceV2가 담당 — 방어적 가드 ──
+            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (modeCheck.isStoryMode()) {
+                log.warn("⚠️ [V1-STREAM] STORY V2 room routed to V1 service. roomId={}", roomId);
+                sendSseError(emitter, "INVALID_ROUTE", "STORY 모드는 V2 엔드포인트를 사용해야 합니다.");
+                return;
+            }
+
             // ── Content Moderation ──
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
@@ -452,7 +461,7 @@ public class ChatStreamService {
             ChatRoom modeCheck = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
             if (!ChatModePolicy.supportsEvents(modeCheck.getChatMode())) {
-                sendSseError(emitter, "MODE_RESTRICTED", "이벤트는 스토리 모드에서만 사용할 수 있습니다.");
+                sendSseError(emitter, "MODE_RESTRICTED", "이벤트는 자유(샌드박스) 모드에서만 사용할 수 있습니다.");
                 return;
             }
             // ── TX-1: 에너지 차감 + 디렉터 모드 시작 ──
@@ -682,7 +691,7 @@ public class ChatStreamService {
             ChatRoom modeCheck = chatRoomRepository.findById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
             if (!ChatModePolicy.supportsDirectorMode(modeCheck.getChatMode())) {
-                sendSseError(emitter, "MODE_RESTRICTED", "시간 넘기기는 스토리 모드에서만 사용할 수 있습니다.");
+                sendSseError(emitter, "MODE_RESTRICTED", "시간 넘기기는 자유(샌드박스) 모드에서만 사용할 수 있습니다.");
                 return;
             }
             // ── TX-1: 에너지 1 차감 ──

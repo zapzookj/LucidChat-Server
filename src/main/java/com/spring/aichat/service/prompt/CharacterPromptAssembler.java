@@ -4,7 +4,7 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.enums.*;
-import com.spring.aichat.domain.theater.WorldRepository;
+import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.security.PromptInjectionGuard;
 import org.springframework.stereotype.Component;
@@ -72,8 +72,6 @@ public class CharacterPromptAssembler {
             - Name: %s
             - Age: %s
             - Role: %s
-            - Appearance: %s
-            - Clothing Style: %s
             - Personality: %s
             - Tone: %s (관계 단계에 따라 자연스럽게 변화)
 
@@ -122,8 +120,6 @@ public class CharacterPromptAssembler {
             character.getName(),                                              // Identity Name
             character.getAge(),                                               // Identity Age
             character.getEffectiveRole(),                                     // Identity Role
-            character.getAppearance(),                                              // Identity Appearance
-            character.getClothing(),                                              // Identity Clothing Style
             character.getEffectivePersonality(effectiveSecretMode),           // Identity Personality
             character.getEffectiveTone(effectiveSecretMode),                  // Identity Tone
             defaultIfBlank(character.getBackstory(), "(아직 정의되지 않음)"),

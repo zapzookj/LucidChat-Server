@@ -3,7 +3,7 @@ package com.spring.aichat.service.illustration;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.spring.aichat.domain.illustration.BackgroundCache;
 import com.spring.aichat.domain.illustration.BackgroundCacheRepository;
-import com.spring.aichat.domain.theater.World;
+import com.spring.aichat.domain.world.World;
 import com.spring.aichat.external.FalAiClient;
 import com.spring.aichat.external.ModelsLabClient;
 import com.spring.aichat.service.cache.RedisCacheService;
@@ -216,7 +216,7 @@ public class BackgroundGenerationService {
     ) {
         // [Phase 6 v2] Flux 2는 positive-only. 시간대 분위기는 LLM이 locationDescription에 포함.
         //   negative 금지사항은 promptAssembler가 prompt 후미에 자연어로 통합함.
-        String positivePrompt = promptAssembler.assemblePositivePrompt(locationDescription, world);
+        String positivePrompt = promptAssembler.assemblePositivePrompt(locationDescription, String.valueOf(world));
         String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
         String s3Url;

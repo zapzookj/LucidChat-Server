@@ -1,0 +1,205 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  [Story V2] V2 시드 데이터
+#
+#  본 파일에는 3종 시드 데이터를 정의:
+#    - locations         : 각 World의 장소들
+#    - persona-presets   : 각 World의 페르소나 사전 정의
+#    - character-routines: 각 캐릭터의 시간대×장소 루틴
+#
+#  실행 순서 (Spring @Order):
+#    0  WorldSeeder          — World 마스터 (기존 application-worlds.yml)
+#    1  WorldLocationSeeder  — 본 파일의 locations
+#    2  UserPersonaPresetSeeder — 본 파일의 persona-presets
+#    3  CharacterRoutineSeeder — 본 파일의 character-routines
+#
+#  업데이트 정책:
+#    - locations / persona-presets : (worldId, key) unique 기준 upsert
+#    - character-routines: 시드에 등장한 캐릭터의 *전체 루틴 삭제 후 재삽입*
+#
+#  ※ 본 파일은 *MEDIEVAL_FANTASY 1개만* 완전 작성된 샘플.
+#    나머지 World(ORIENTAL_FANTASY, MODERN_KOREA, FANTASY_ACADEMY)는
+#    구조 예시 + TODO 코멘트만 두었다. 기획팀에서 채워야 함.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+app:
+  v2:
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Locations (각 World의 장소들)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    locations:
+      # ── MEDIEVAL_FANTASY (8 locations) ──
+      - world-id: MEDIEVAL_FANTASY
+        location-key: MANOR_HALL
+        display-name: 저택 응접실
+        description: 영주의 응접실. 묵직한 마호가니 가구와 거대한 벽난로. 손님들과 격식 있는 만남을 갖는 자리.
+        default-bgm: TOUCHING
+        display-order: 1
+        selectable-as-start: true
+      - world-id: MEDIEVAL_FANTASY
+        location-key: CATHEDRAL
+        display-name: 대성당
+        description: 영지 중앙에 우뚝 솟은 고딕 양식의 대성당. 스테인드글라스를 통과한 빛이 색색으로 스민다.
+        default-bgm: TOUCHING
+        display-order: 2
+        selectable-as-start: true
+      - world-id: MEDIEVAL_FANTASY
+        location-key: GARDEN
+        display-name: 정원
+        description: 성당 뒤편의 비밀스러운 정원. 장미와 약초가 어우러져 자라며, 가끔 작은 새들의 노래가 들린다.
+        default-bgm: DAILY
+        display-order: 3
+        selectable-as-start: true
+      - world-id: MEDIEVAL_FANTASY
+        location-key: LIBRARY
+        display-name: 서고
+        description: 저택 깊숙한 곳, 천장까지 가득 찬 고서들의 방. 책장 사이로 햇빛이 가늘게 새어든다.
+        default-bgm: TOUCHING
+        display-order: 4
+        selectable-as-start: true
+      - world-id: MEDIEVAL_FANTASY
+        location-key: COURTYARD
+        display-name: 안뜰
+        description: 저택과 성당 사이의 돌이 깔린 안뜰. 분수와 석조 조각상, 산책하기 좋은 공간.
+        default-bgm: DAILY
+        display-order: 5
+        selectable-as-start: true
+      - world-id: MEDIEVAL_FANTASY
+        location-key: KITCHEN
+        display-name: 부엌
+        description: 저택의 부엌. 따뜻한 빵 굽는 냄새와 향신료의 향기가 가득하다.
+        default-bgm: DAILY
+        display-order: 6
+        selectable-as-start: false  # 시작 장소로 부적합
+      - world-id: MEDIEVAL_FANTASY
+        location-key: BEDROOM
+        display-name: 침실
+        description: 영주의 사적 공간. 천막 침대와 벨벳 커튼. 한밤중에야 진짜 자기 자신이 되는 곳.
+        default-bgm: TOUCHING
+        display-order: 7
+        selectable-as-start: false
+      - world-id: MEDIEVAL_FANTASY
+        location-key: BALCONY
+        display-name: 발코니
+        description: 저택 2층의 발코니. 영지를 한눈에 굽어볼 수 있는 곳. 밤하늘의 별이 유난히 가까이 보인다.
+        default-bgm: TOUCHING
+        display-order: 8
+        selectable-as-start: true
+
+      # ── ORIENTAL_FANTASY ─── TODO: 기획 채움 ───
+      # 예시 키 풀: MOONLIT_FOREST, LAKE_PAVILION, ANCIENT_SHRINE, TEAHOUSE,
+      #            HIDDEN_GROVE, BAMBOO_PATH, MOUNTAIN_CABIN, SHRINE_GATE
+
+      # ── MODERN_KOREA ─── TODO: 기획 채움 ───
+      # 예시 키 풀: CAMPUS_QUAD, CONVENIENCE_STORE_24H, COFFEE_SHOP, ROOFTOP,
+      #            STUDIO_APT, LIBRARY, HAN_RIVER, NIGHT_BUS_STOP
+
+      # ── FANTASY_ACADEMY ─── TODO (FANTASY_ACADEMY 히로인 활성화 후) ───
+      # 예시 키 풀: GREAT_HALL, LIBRARY_TOWER, ALCHEMY_LAB, ENCHANTED_FOREST,
+      #            DORMITORY, ASTRONOMY_TOWER, ARENA, GARDEN_OF_MIRRORS
+
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Persona Presets (각 World의 사전 정의 페르소나)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    persona-presets:
+      # ── MEDIEVAL_FANTASY (3 presets) ──
+      - world-id: MEDIEVAL_FANTASY
+        preset-key: YOUNG_LORD
+        name: 젊은 영주
+        description: |
+          새로 영지를 물려받은 21세의 청년. 아버지의 갑작스러운 죽음 이후 어색하게 손에 쥐어진
+          작위와 권력을 어떻게 다뤄야 할지 익히는 중이다. 영지민들에게 인정받고 싶은 욕심과,
+          누군가에게 자기 자신을 평범한 사람으로 보아주길 바라는 마음이 공존한다.
+        default-nickname: 영주님
+        suggested-start-location-key: MANOR_HALL
+        display-order: 1
+      - world-id: MEDIEVAL_FANTASY
+        preset-key: WANDERING_KNIGHT
+        name: 떠도는 기사
+        description: |
+          맹세를 잃은 채 영지에 흘러든 방랑 기사. 한때 다른 가문을 섬겼으나 이제는 자유의 몸.
+          검술 실력은 영지 최고 수준이지만 권력에는 관심이 없다. 영주의 호의로 잠시 머무는 중,
+          이 영지에서 무언가 자신이 묶일 만한 것을 찾아낼 수도 있다.
+        default-nickname: 경
+        suggested-start-location-key: COURTYARD
+        display-order: 2
+      - world-id: MEDIEVAL_FANTASY
+        preset-key: ROYAL_SCHOLAR
+        name: 왕실 학자
+        description: |
+          중앙 왕실에서 파견된 젊은 학자. 영지의 고문서를 조사한다는 명분으로 머무는 중이지만,
+          실제로는 정치적 임무를 띠고 있다. 정중하고 박식하지만, 자신의 진짜 정체를 끝까지
+          드러내야 할지 망설이고 있다.
+        default-nickname: 학자님
+        suggested-start-location-key: LIBRARY
+        display-order: 3
+
+      # ── ORIENTAL_FANTASY ─── TODO ───
+      # 예시 페르소나: 떠도는 검객 / 산속 약초꾼 / 도성에서 추방된 귀공자
+      # ── MODERN_KOREA ─── TODO ───
+      # 예시 페르소나: 휴학생 / 야간 편의점 알바 / 갓 입사한 신입사원
+      # ── FANTASY_ACADEMY ─── TODO ───
+
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    #  Character Routines (캐릭터 × 시간대 × 장소 확률)
+    #
+    #  같은 (character-slug, time-of-day)에 여러 후보 가능 — probability 가중치로 정규화 후 선택.
+    #  확률 합이 100일 필요는 없음. 비율로만 사용.
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    character-routines:
+      # ━━ 클레어 (자애로운 성녀, MEDIEVAL_FANTASY) ━━
+      - { character-slug: claire, time-of-day: MORNING,   location-key: CATHEDRAL, probability: 80, notes: "새벽 기도 시간" }
+      - { character-slug: claire, time-of-day: MORNING,   location-key: GARDEN,    probability: 20, notes: "기도 후 산책" }
+
+      - { character-slug: claire, time-of-day: NOON,      location-key: CATHEDRAL, probability: 50, notes: "예배" }
+      - { character-slug: claire, time-of-day: NOON,      location-key: KITCHEN,   probability: 30, notes: "고아원 아이들 식사 준비" }
+      - { character-slug: claire, time-of-day: NOON,      location-key: GARDEN,    probability: 20, notes: "약초 손질" }
+
+      - { character-slug: claire, time-of-day: AFTERNOON, location-key: LIBRARY,   probability: 50, notes: "성서 묵상" }
+      - { character-slug: claire, time-of-day: AFTERNOON, location-key: GARDEN,    probability: 30, notes: "조용한 독서" }
+      - { character-slug: claire, time-of-day: AFTERNOON, location-key: COURTYARD, probability: 20, notes: "영지민들과의 대화" }
+
+      - { character-slug: claire, time-of-day: EVENING,   location-key: CATHEDRAL, probability: 60, notes: "저녁 기도" }
+      - { character-slug: claire, time-of-day: EVENING,   location-key: MANOR_HALL,probability: 25, notes: "영주와의 만찬" }
+      - { character-slug: claire, time-of-day: EVENING,   location-key: BALCONY,   probability: 15, notes: "노을 묵상" }
+
+      - { character-slug: claire, time-of-day: NIGHT,     location-key: CATHEDRAL, probability: 40, notes: "야간 기도" }
+      - { character-slug: claire, time-of-day: NIGHT,     location-key: BEDROOM,   probability: 60, notes: "수면 (몰래 연애소설 읽기)" }
+
+      # ━━ 아이리 (MEDIEVAL_FANTASY) ━━ TODO: 아이리 personality 기반 루틴 작성 ━━
+      # 참고: application-characters.yml line 10~145
+      # - { character-slug: iri, time-of-day: MORNING, location-key: ..., probability: ..., notes: "..." }
+
+      # ━━ 연화 (ORIENTAL_FANTASY) ━━ TODO: ORIENTAL_FANTASY locations 시드 후 작성 ━━
+
+      # ━━ 서태리 (MODERN_KOREA) ━━ TODO: MODERN_KOREA locations 시드 후 작성 ━━
+
+      # ━━ 백루나 (MODERN_KOREA) ━━ TODO ━━
+
+      # ━━ 로제타 (FANTASY_ACADEMY) ━━ TODO: world-id 주석 해제 + locations 시드 후 작성 ━━
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  [기획팀 가이드]
+#
+#  1. 한 World당 *최소 5개 장소* + *최소 1개 시작 가능 장소(selectable-as-start: true)*가 필요.
+#     장소 부재 시 StoryCreateFlow의 시작 장소 선택 단계가 빈 화면.
+#
+#  2. 한 World당 *최소 2개 페르소나 프리셋* 권장 (3개가 이상적).
+#     자유 페르소나는 BM이라 무료 유저는 프리셋만 사용.
+#
+#  3. 각 캐릭터의 character-routines는 *5단계 DayPart 모두 정의* 권장.
+#     누락된 DayPart는 WorldRoutingService가 *fallback 처리* (캐릭터 default_location).
+#
+#  4. probability 비율 권장:
+#     - 주거점(예: 침실, 사무실): 50~70
+#     - 보조 거점(예: 정원, 카페): 20~40
+#     - 가끔 등장(예: 회의실, 옥상): 5~15
+#
+#  5. 캐릭터 slug는 application-characters.yml의 slug 필드와 정확히 일치해야 함.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

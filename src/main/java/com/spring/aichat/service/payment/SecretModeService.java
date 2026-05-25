@@ -74,6 +74,47 @@ public class SecretModeService {
         return has24hPass(user.getId(), characterId);
     }
 
+    /**
+     * [V2 Story · Q-10 통합] User-global 시크릿 모드 접근 게이트.
+     *
+     * <p>V1의 {@link #canAccessSecretMode(User, Long)}는 *캐릭터별* 권한 — Sandbox 모드 전용으로 유지.
+     * V2 Story는 1방=World 단위라 *user-global* 게이트.
+     *
+     * <p>판정 순서 (V1과 동일하되 characterId 무관):
+     * <ol>
+     *   <li>성인 인증 (user.isAdult)</li>
+     *   <li>자정 패스 (hasMidnightPass) — 캐릭터 무관 user 단위</li>
+     *   <li>*어떤 캐릭터에라도* 영구 해금 있음 (Q-10 통합 — 1캐릭터 해금 = user 전체 해금)</li>
+     *   <li>*어떤 캐릭터에라도* 활성 24h 패스 있음 (Q-10 통합)</li>
+     * </ol>
+     *
+     * <p>[V1 호환]
+     * V1 호출처 ({@code ChatStreamService}, {@code ChatService} 등)는 기존 2-arg 시그니처
+     * 그대로 사용. Sandbox 모드는 character별 게이팅 유지.
+     */
+    public boolean canAccessSecretMode(User user) {
+        if (!Boolean.TRUE.equals(user.getIsAdult())) {
+            return false;
+        }
+        if (hasMidnightPass(user.getId())) {
+            return true;
+        }
+        if (hasAnyPermanentUnlock(user.getId())) {
+            return true;
+        }
+        return hasAnyActive24hPass(user.getId());
+    }
+
+    /** [V2 · Q-10] 유저가 *어떤 캐릭터에라도* 영구 해금을 보유하면 true. */
+    public boolean hasAnyPermanentUnlock(Long userId) {
+        return !secretUnlockRepository.findByUser_Id(userId).isEmpty();
+    }
+
+    /** [V2 · Q-10] 유저가 *어떤 캐릭터에라도* 활성 24h 패스를 보유하면 true. */
+    public boolean hasAnyActive24hPass(Long userId) {
+        return secretPassRepository.existsAnyActivePassByUserId(userId, LocalDateTime.now());
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  24시간 패스 (RDB 영속화 + Redis 캐싱)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
