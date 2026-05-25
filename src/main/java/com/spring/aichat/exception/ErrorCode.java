@@ -40,5 +40,29 @@ public enum ErrorCode {
      * [Phase6/Tier4 / H-22] 클라이언트가 보낸 batchId 등 세션 상태가 서버 기준과
      * 어긋남 → 409. 클라이언트는 새로고침 또는 상태 재동기화 필요.
      */
-    STALE_CLIENT_STATE
+    STALE_CLIENT_STATE,
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [Story V2] 신규 에러 코드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** World 마스터 조회 실패 → 404. */
+    WORLD_NOT_FOUND,
+
+    /**
+     * 유저가 이미 같은 World에 V2 STORY 방을 가지고 있는데 overwriteExisting=false로
+     * 신규 생성 요청 → 409. UI는 confirm 모달 후 overwriteExisting=true로 재호출.
+     */
+    STORY_V2_ROOM_EXISTS,
+
+    /**
+     * World에 시작 가능 장소가 시드되지 않음 → 500 (서버 결함).
+     * StoryCreateFlow에서 시작 장소 폴백이 실패한 경우.
+     */
+    WORLD_LOCATION_MISSING,
+
+    /**
+     * 프리미엄 기능 (예: 자유 페르소나 BM) 미보유 → 402.
+     */
+    PREMIUM_REQUIRED
 }

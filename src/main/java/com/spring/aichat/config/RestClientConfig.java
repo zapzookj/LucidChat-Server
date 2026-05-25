@@ -16,7 +16,10 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties({
     OpenAiProperties.class,
     CharacterSeedProperties.class,
-    WorldSeedProperties.class
+    WorldSeedProperties.class,
+    WorldLocationSeedProperties.class,
+    CharacterRoutineSeedProperties.class,
+    UserPersonaPresetSeedProperties.class
 })
 public class RestClientConfig {
 

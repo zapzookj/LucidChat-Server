@@ -46,4 +46,15 @@ public interface UserSecretPassRepository extends JpaRepository<UserSecretPass, 
     @Modifying
     @Query("DELETE FROM UserSecretPass p WHERE p.expiresAt < :cutoff")
     int deleteExpiredBefore(@Param("cutoff") LocalDateTime cutoff);
+
+    /**
+     * [V2 Story · Q-10 통합] 유저가 *어떤 캐릭터에라도* 활성 24h 패스를 보유하는가.
+     * V2 Story의 user-global 시크릿 게이트에서 사용.
+     */
+    @Query("SELECT COUNT(p) > 0 FROM UserSecretPass p " +
+        "WHERE p.user.id = :userId AND p.expiresAt > :now")
+    boolean existsAnyActivePassByUserId(
+        @Param("userId") Long userId,
+        @Param("now") LocalDateTime now
+    );
 }

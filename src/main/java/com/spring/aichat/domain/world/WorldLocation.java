@@ -111,4 +111,8 @@ public class WorldLocation {
     public void setActive(boolean active) {
         this.active = active;
     }
+
+    public boolean getSelectableAsStart() {
+        return selectableAsStart;
+    }
 }

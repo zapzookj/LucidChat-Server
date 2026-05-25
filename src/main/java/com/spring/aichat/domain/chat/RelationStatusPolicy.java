@@ -17,26 +17,37 @@ public final class RelationStatusPolicy {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  승급 이벤트 상수
+    //
+    //  [Story V2 메모] V2 패치 시 STORY 모드는 RelationPromotionEligibility 시스템으로
+    //  관계 승급을 처리 — 백엔드 자격 활성 + LLM 자율 발동 이중 게이트. 본 상수들은
+    //  V1 STORY 자산이 *SANDBOX로 이관됨에 따라* Sandbox 전용으로 남음.
+    //  Sandbox 운영 PoC 후 폐기 또는 다듬기 결정 (RoadMap 참조).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 승급 이벤트 지속 턴 수 (유저 개입 턴만 카운트) */
+    /**
+     * 승급 이벤트 지속 턴 수 (유저 개입 턴만 카운트).
+     * @deprecated [Story V2] SANDBOX 전용. V2 STORY는 RelationPromotionEligibility 사용.
+     *             Sandbox 폐기 시점에 함께 제거 예정.
+     */
+    @Deprecated
     public static final int PROMOTION_MAX_TURNS = 5;
 
     /**
-     * [Phase 5.5-EV] 승급 성공에 필요한 최소 누적 스탯 변화량
+     * [Phase 5.5-EV] 승급 성공에 필요한 최소 누적 스탯 변화량.
      *
      * 기존: mood_score 5점 (1~3점/턴)
      * 변경: 5종 스탯 변화량 |합산| 누적 10 이상
-     *       (매 턴 평균 2의 스탯 변화 → 적극적 교감 필요)
      *
-     * 예시: 유저가 로맨틱한 대화를 하면 affection +2, intimacy +1 = 3/턴
-     *       5턴 × 3 = 15 → 성공
-     *       유저가 무성의하면 affection +1 정도 = 1/턴
-     *       5턴 × 1 = 5 → 실패
+     * @deprecated [Story V2] SANDBOX 전용. Sandbox 폐기 시점에 함께 제거 예정.
      */
+    @Deprecated
     public static final int PROMOTION_SUCCESS_THRESHOLD = 10;
 
-    /** 승급 실패 시 호감도 감소량 */
+    /**
+     * 승급 실패 시 호감도 감소량.
+     * @deprecated [Story V2] SANDBOX 전용. Sandbox 폐기 시점에 함께 제거 예정.
+     */
+    @Deprecated
     public static final int PROMOTION_FAILURE_PENALTY = 5;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

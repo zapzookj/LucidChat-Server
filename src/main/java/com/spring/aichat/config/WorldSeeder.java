@@ -1,8 +1,8 @@
 package com.spring.aichat.config;
 
 import com.spring.aichat.domain.enums.WorldId;
-import com.spring.aichat.domain.theater.World;
-import com.spring.aichat.domain.theater.WorldRepository;
+import com.spring.aichat.domain.world.World;
+import com.spring.aichat.domain.world.WorldRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +36,7 @@ import java.util.List;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@Order(0)
 public class WorldSeeder {
 
     private final WorldRepository worldRepository;

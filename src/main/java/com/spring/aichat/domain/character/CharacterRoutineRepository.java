@@ -33,4 +33,11 @@ public interface CharacterRoutineRepository extends JpaRepository<CharacterRouti
      * 매 턴 모든 히로인의 위치 재추정 시 단일 쿼리로 최적화.
      */
     List<CharacterRoutine> findByCharacterIdInAndTimeOfDay(List<Long> characterIds, DayPart timeOfDay);
+
+    /**
+     * 특정 캐릭터의 모든 루틴 삭제. 시드 재실행 시 stale 데이터 정리용.
+     * CharacterRoutine은 (character, timeOfDay, locationKey) 조합으로 unique가 *불가능*하므로
+     * (한 시간대에 여러 후보 장소 가능), 시드 갱신 시 *해당 캐릭터 전체 deletion + 재삽입* 패턴.
+     */
+    void deleteByCharacterId(Long characterId);
 }

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import java.util.List;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@Order(3)
 public class CharacterSeeder {
 
     private final CharacterRepository characterRepository;
