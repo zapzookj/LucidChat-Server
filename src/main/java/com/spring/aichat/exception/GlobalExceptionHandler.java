@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
             case CONTENT_BLOCKED -> 400;
             case CONFLICT -> 409;       // [Phase 5.5 UX Polish · R4] 활성극 충돌
             case EXTERNAL_API_ERROR -> 502;
+            // [Story V2] 신규 ErrorCode 매핑
+            case WORLD_NOT_FOUND -> 404;
+            case STORY_V2_ROOM_EXISTS -> 409;   // ★ confirm 모달 트리거 — 누락 시 500이 되어 UI 흐름 깨짐
+            case WORLD_LOCATION_MISSING -> 500; // 서버 결함 (시드 누락)
+            case PREMIUM_REQUIRED -> 402;
             default -> 500;
         };
 
