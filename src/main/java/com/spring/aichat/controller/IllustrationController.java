@@ -13,11 +13,13 @@ import java.util.Map;
 
 /**
  * [Phase 5.5-Illust] 캐릭터 일러스트 API
+ * [Phase 7-V2 Story] V2 멀티 히로인 지원 — generate body에 characterId 수용
  *
  * Endpoints:
- *   POST /api/v1/illustrations/generate       - 일러스트 생성 요청
+ *   POST /api/v1/illustrations/generate       - 일러스트 생성 요청 (V1: roomId only / V2: roomId + characterId)
  *   GET  /api/v1/illustrations/status/{id}     - 생성 상태 폴링
  *   GET  /api/v1/illustrations/gallery         - 갤러리 조회
+ *   GET  /api/v1/illustrations/background      - 동적 배경 캐시 폴링
  */
 @RestController
 @RequestMapping("/api/v1/illustrations")
@@ -28,11 +30,13 @@ public class IllustrationController {
     private final BackgroundGenerationService backgroundGenerationService;
 
     /**
-     * 일러스트 생성 요청
+     * 일러스트 생성 요청.
      *
-     * Body: { "roomId": 1 }
-     * 에너지 10 소모 → Fal.ai 큐 제출 → requestId 반환
-     * 프론트에서 requestId로 폴링하여 완료 확인
+     * <p>V1 (Sandbox) body: {@code { "roomId": 1 }} — ChatRoom의 단일 character 사용.
+     * <p>V2 (Story)   body: {@code { "roomId": 1, "characterId": 5 }} — 명시한 히로인 사용.
+     *
+     * <p>V2 STORY 방에서 characterId가 누락되면 400 Bad Request. 에너지 차감은 검증 통과 후에만.
+     * 에너지 10 소모 → 생성 큐 제출 → requestId 반환. 프론트는 requestId로 폴링하여 완료 확인.
      */
     @PostMapping("/generate")
     public ResponseEntity<IllustrationRequestResult> generateIllustration(
@@ -43,18 +47,18 @@ public class IllustrationController {
         if (roomId == null) {
             return ResponseEntity.badRequest().build();
         }
+        Long characterId = body.get("characterId");  // V2에서만 사용. V1 호출은 null.
 
         IllustrationRequestResult result = illustrationService.requestIllustration(
-            authentication.getName(), roomId);
+            authentication.getName(), roomId, characterId);
 
         return ResponseEntity.ok(result);
     }
 
     /**
-     * 생성 상태 폴링
+     * 생성 상태 폴링.
      *
-     * 프론트에서 1~2초 간격으로 호출.
-     * 완료 시 imageUrl 포함하여 반환.
+     * 프론트에서 1~2초 간격으로 호출. 완료 시 imageUrl 포함하여 반환.
      */
     @GetMapping("/status/{requestId}")
     public ResponseEntity<IllustrationStatusResult> checkStatus(
@@ -67,7 +71,7 @@ public class IllustrationController {
     }
 
     /**
-     * 일러스트 갤러리 조회
+     * 일러스트 갤러리 조회.
      *
      * @param characterId  특정 캐릭터 필터 (optional)
      */

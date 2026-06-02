@@ -22,7 +22,7 @@ import java.util.List;
  *         active: true
  * </pre>
  */
-@ConfigurationProperties(prefix = "app.v2.persona-presets")
+@ConfigurationProperties(prefix = "app.v2")
 public record UserPersonaPresetSeedProperties(
     List<PersonaPresetSeed> personaPresets
 ) {

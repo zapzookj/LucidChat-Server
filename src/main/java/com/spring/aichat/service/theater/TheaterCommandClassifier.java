@@ -322,7 +322,7 @@ public class TheaterCommandClassifier {
         } catch (IllegalArgumentException ex) {
             verdict = CommandVerdict.REJECTED_UNCLEAR;
         }
-        return new ClassificationResult(verdict, reason);
+        return new ClassificationResult(CommandVerdict.ALLOWED_OTHER, reason);
     }
 
     private String extractJson(String text) {

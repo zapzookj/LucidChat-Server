@@ -5,6 +5,8 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.heroine.ChatRoomHeroine;
+import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
 import com.spring.aichat.domain.illustration.UserIllustration;
 import com.spring.aichat.domain.illustration.UserIllustrationRepository;
 import com.spring.aichat.domain.user.User;
@@ -29,6 +31,14 @@ import java.util.List;
  * [Phase 5.5-RunPod] Fal.ai → RunPod 전환에 따른 변경:
  *   - 이미지가 URL이 아닌 Base64 raw data로 반환
  *   - handleCompletion() → extractImageBase64() → uploadIllustrationFromBase64()
+ *
+ * [Phase 6-Illust] RunPod → ModelsLab 회귀 — Base64 path 폐기, URL 직접 사용.
+ *
+ * [Phase 7-V2 Story] V2 멀티 히로인 지원:
+ *   - requestIllustration(username, roomId, characterId) 3-arg 시그니처 추가
+ *   - V1 (Sandbox): room.character 사용 (기존 path 유지)
+ *   - V2 (Story):   ChatRoomHeroine 조회 후 heroine.character + heroine 상태에서 prompt 컨텍스트 추출
+ *   - 검증 → 에너지 차감 순서 정정 (V2 BAD_REQUEST 시 에너지 누수 차단)
  */
 @Service
 @Slf4j
@@ -42,6 +52,8 @@ public class IllustrationService {
     private final UserRepository userRepository;
     private final CharacterRepository characterRepository;
     private final ChatRoomRepository chatRoomRepository;
+    /** [V2 Story] V2 STORY 방의 히로인 조회 — characterId 기반. V1 path는 사용 안 함. */
+    private final ChatRoomHeroineRepository heroineRepository;
     private final RedisCacheService cacheService;
     /**
      * [Phase 5.5 UX Polish · R6] AUTO 일러스트가 특정 DirectorNote와 연결됐을 때
@@ -62,8 +74,34 @@ public class IllustrationService {
     //  1. 유저 수동 일러스트 생성 요청
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [V1 호환] characterId를 지정하지 않는 호출 — V1 Sandbox 방에서만 작동.
+     * V2 STORY 방에서 이 시그니처로 호출되면 V2 분기에서 BAD_REQUEST(400) 응답.
+     */
     @Transactional
     public IllustrationRequestResult requestIllustration(String username, Long roomId) {
+        return requestIllustration(username, roomId, null);
+    }
+
+    /**
+     * [V2 호환 신규] 일러스트 생성 요청 — V1/V2 통합 시그니처.
+     *
+     * <p>처리 순서:
+     * <ol>
+     *   <li>도메인 검증 (user, room, ownership)</li>
+     *   <li>타겟 컨텍스트 해소 (V1: room.character / V2: ChatRoomHeroine) — *에너지 차감 전*</li>
+     *   <li>에너지 차감 (10) + cache evict</li>
+     *   <li>외부 큐 제출 (submitGeneration)</li>
+     * </ol>
+     *
+     * <p>검증을 차감보다 앞에 두는 이유: V2 STORY 방에서 characterId 누락 시 BAD_REQUEST(400)
+     * 응답을 받으면서 *에너지는 차감되지 않아야* 한다. 기존 V1 코드의 차감-우선 순서를 정정.
+     *
+     * @param characterId V1 호출 시 null. V2 STORY 방에서는 필수 (멀티 히로인 중 어느 캐릭터)
+     */
+    @Transactional
+    public IllustrationRequestResult requestIllustration(String username, Long roomId, Long characterId) {
+        // 1) 검증
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
 
@@ -74,22 +112,17 @@ public class IllustrationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Not your chat room");
         }
 
+        // 2) 타겟 해소 (V1 / V2 분기) — 에너지 차감 전. V2에서 characterId 누락 시 여기서 throw.
+        IllustrationTargetContext target = resolveTarget(room, characterId);
+
+        // 3) 에너지 차감
         user.consumeEnergy(ILLUSTRATION_ENERGY_COST);
         userRepository.save(user);
         cacheService.evictUserProfile(username);
 
-        Character character = room.getCharacter();
-        String emotion = room.getLastEmotion() != null ? room.getLastEmotion().name() : "NEUTRAL";
-        String location = room.getCurrentLocation() != null ? room.getCurrentLocation().name() : character.getEffectiveDefaultLocation();
-        String outfit = room.getCurrentOutfit() != null ? room.getCurrentOutfit().name() : character.getEffectiveDefaultOutfit();
-
-        // [Phase 6-Illust] LLM이 매 응답에 갱신한 scene hint + 동적 장소 묘사 활용
-        String sceneHint = room.getLastIllustrationHint();
-        String dynamicLocDesc = room.getCurrentDynamicLocationName() != null
-            ? buildDynamicLocationTagsFromCache(room) : null;
-
-        return submitGeneration(user, character, emotion, location, outfit,
-            "MANUAL", sceneHint, dynamicLocDesc);
+        // 4) 생성 제출
+        return submitGeneration(user, target.character(), target.emotion(), target.location(),
+            target.outfit(), "MANUAL", target.sceneHint(), target.dynamicLocDesc());
     }
 
     /**
@@ -104,6 +137,68 @@ public class IllustrationService {
         // 단순 변환: "심야의 무인 카페" → 캐릭터 일러스트 배경 슬롯에 활용 가능한 형태
         return name + ", anime background, soft lighting";
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  1-a. 타겟 컨텍스트 해소 (V1 / V2 분기)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * V1 (Sandbox) / V2 (Story) 통합 — submitGeneration 호출에 필요한 6개 슬롯을 한 record에 묶음.
+     * 분기 후 공통 호출 경로를 유지하여 부작용(에너지 차감 / 외부 큐 제출) 순서를 안정화.
+     */
+    private record IllustrationTargetContext(
+        Character character,
+        String emotion,
+        String location,
+        String outfit,
+        String sceneHint,
+        String dynamicLocDesc
+    ) {}
+
+    /**
+     * V1: room.character가 NOT NULL → 기존 ChatRoom 필드들 사용.
+     * V2: room.character가 NULL → characterId로 ChatRoomHeroine 조회, heroine 상태에서 추출.
+     *
+     * @throws BusinessException BAD_REQUEST — V2 방에서 characterId 누락
+     * @throws BusinessException NOT_FOUND   — V2 방에서 characterId에 해당하는 히로인 없음
+     */
+    private IllustrationTargetContext resolveTarget(ChatRoom room, Long characterId) {
+        // ── V1 (Sandbox) ──
+        if (room.getCharacter() != null) {
+            Character c = room.getCharacter();
+            String emotion = room.getLastEmotion() != null ? room.getLastEmotion().name() : "NEUTRAL";
+            String location = room.getCurrentLocation() != null
+                ? room.getCurrentLocation().name() : c.getEffectiveDefaultLocation();
+            String outfit = room.getCurrentOutfit() != null
+                ? room.getCurrentOutfit().name() : c.getEffectiveDefaultOutfit();
+            String sceneHint = room.getLastIllustrationHint();
+            String dynamicLocDesc = room.getCurrentDynamicLocationName() != null
+                ? buildDynamicLocationTagsFromCache(room) : null;
+            return new IllustrationTargetContext(c, emotion, location, outfit, sceneHint, dynamicLocDesc);
+        }
+
+        // ── V2 (Story) ──
+        if (characterId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                "characterId is required for V2 STORY rooms");
+        }
+        ChatRoomHeroine heroine = heroineRepository
+            .findByChatRoom_IdAndCharacter_Id(room.getId(), characterId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
+                "Heroine not found in this room"));
+
+        Character c = heroine.getCharacter();
+        String emotion = heroine.getLastEmotion() != null ? heroine.getLastEmotion().name() : "NEUTRAL";
+        // V2는 V1 Location enum 미사용 — 캐릭터별 기본 location으로 LoRA 학습 데이터와 정합 유지.
+        // 장소 분위기는 dynamicLocDesc로 별도 주입되므로 location 슬롯은 LoRA 컨텍스트 역할.
+        String location = c.getEffectiveDefaultLocation();
+        String outfit = c.getEffectiveDefaultOutfit();
+        String sceneHint = heroine.getLastIllustrationHint();
+        String dynamicLocDesc = room.getCurrentDynamicLocationName() != null
+            ? buildDynamicLocationTagsFromCache(room) : null;
+        return new IllustrationTargetContext(c, emotion, location, outfit, sceneHint, dynamicLocDesc);
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  2. 자동 일러스트 생성 (승급/엔딩)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

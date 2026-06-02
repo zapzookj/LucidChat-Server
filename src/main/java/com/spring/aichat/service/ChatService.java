@@ -185,10 +185,17 @@ public class ChatService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 채팅방 시크릿 모드 토글
+     * 채팅방 시크릿 모드 토글 (V1/V2 통합)
      *
-     * enabled=true: SecretModeService로 패스/해금/구독 검증 후 활성화
-     * enabled=false: 즉시 비활성화
+     * <p>[Phase 7-V2 BM 피벗] 시크릿 모드 BM이 user-global로 전환됨에 따라:
+     * <ul>
+     *   <li>{@code canAccessSecretMode(user)} 1-arg user-global 메서드 사용</li>
+     *   <li>{@code room.getCharacter()} 의존 제거 — V2 STORY 방(character=null)도 안전</li>
+     *   <li>에러 메시지에서 "이 캐릭터의" 표현 제거 — user-global 의미와 일치</li>
+     * </ul>
+     *
+     * <p>enabled=true: 성인 인증 + 시크릿 접근 권한 검증 후 활성화
+     * <p>enabled=false: 즉시 비활성화 (검증 무관)
      */
     @Transactional
     public void toggleRoomSecretMode(Long roomId, boolean enabled, String username) {
@@ -197,22 +204,24 @@ public class ChatService {
 
         if (enabled) {
             User user = room.getUser();
-            Long characterId = room.getCharacter().getId();
 
-            if (!secretModeService.canAccessSecretMode(user, characterId)) {
+            // [BM 피벗] 1-arg user-global 검증 — V1/V2 공통
+            if (!secretModeService.canAccessSecretMode(user)) {
                 if (!Boolean.TRUE.equals(user.getIsAdult())) {
                     throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
                         "성인 인증이 필요합니다.");
                 }
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "이 캐릭터의 시크릿 모드 접근 권한이 없습니다.");
+                    "시크릿 모드 접근 권한이 없습니다.");
             }
 
             room.activateSecretMode();
-            log.info("[SECRET_TOGGLE] Room-level enabled: roomId={}, user={}", roomId, username);
+            log.info("[SECRET_TOGGLE] Room-level enabled: roomId={}, user={}, mode={}",
+                roomId, username, room.getChatMode());
         } else {
             room.deactivateSecretMode();
-            log.info("[SECRET_TOGGLE] Room-level disabled: roomId={}, user={}", roomId, username);
+            log.info("[SECRET_TOGGLE] Room-level disabled: roomId={}, user={}, mode={}",
+                roomId, username, room.getChatMode());
         }
 
         chatRoomRepository.save(room);

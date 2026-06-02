@@ -27,6 +27,11 @@ import java.util.Map;
  * 기존: PATCH /users/update에서 isSecretMode 직접 변경 가능 (취약점)
  * 수정: PATCH /users/secret-mode 전용 엔드포인트로 분리
  *       → SecretModeService.canAccessSecretMode() 검증 필수
+ *
+ * [Phase 7-V2 Story / BM 피벗] 시크릿 모드 user-global 전환:
+ *   - GET /secret-status?characterId=X → characterId required=false 완화 + user-global 응답
+ *   - 시크릿 해금/패스/구독은 *유저 단위*로 작동 (캐릭터별 X)
+ *   - V1 frontend의 기존 호출 (`?characterId=N`)도 그대로 작동, 단 응답은 user-global
  */
 @RestController
 @RequiredArgsConstructor
@@ -61,13 +66,17 @@ public class UserController {
      * Body: { "enabled": true, "characterId": 1 }
      *
      * enabled=true:
-     *   - characterId 필수
-     *   - SecretModeService로 패스/해금/구독 검증
+     *   - characterId 필수 (V1 호환 — V2에서도 방의 임의 히로인 id로 충분)
+     *   - SecretModeService로 패스/해금/구독 검증 (user-global)
      *   - 검증 실패 시 400 에러
      *
      * enabled=false:
      *   - characterId 불필요
      *   - 즉시 비활성화
+     *
+     * <p>[Phase 7-V2 BM 피벗] characterId 파라미터는 V1 시그니처 호환을 위해 유지하나
+     * SecretModeService 내부에서 무시됨 (user-global 검증). 향후 cleanup 작업에서
+     * characterId 폐기 가능.
      */
     @PatchMapping("/secret-mode")
     public ResponseEntity<Map<String, Object>> toggleSecretMode(
@@ -98,15 +107,22 @@ public class UserController {
     }
 
     /**
-     * 특정 캐릭터에 대한 시크릿 모드 접근 상태 조회
+     * 시크릿 모드 접근 상태 조회.
+     *
+     * <p>[Phase 7-V2 BM 피벗] characterId 파라미터는 V1 호환을 위해 유지하나 *무시됨*.
+     * 시크릿 BM이 user-global로 전환되어 *모든* 캐릭터에 대해 동일 상태 반환.
+     *
+     * <p>V1 호출 (`?characterId=5`) — 그대로 작동, user-global 응답
+     * <p>V2 호출 (파라미터 없음) — characterId required=false 덕에 정상 작동
      */
     @GetMapping("/secret-status")
     public ResponseEntity<SecretModeService.SecretModeStatus> getSecretStatus(
-        @RequestParam Long characterId,
+        @RequestParam(required = false) Long characterId,
         Authentication authentication
     ) {
         User user = findUser(authentication.getName());
-        SecretModeService.SecretModeStatus status = secretModeService.getStatus(user, characterId);
+        // [BM 피벗] 1-arg user-global 메서드 호출. characterId는 무시.
+        SecretModeService.SecretModeStatus status = secretModeService.getStatus(user);
         return ResponseEntity.ok(status);
     }
 

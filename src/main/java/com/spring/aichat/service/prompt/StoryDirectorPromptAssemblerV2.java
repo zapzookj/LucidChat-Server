@@ -612,7 +612,30 @@ public class StoryDirectorPromptAssemblerV2 {
             - `inner_thought`는 *그 씬의 화자 속마음*만. 다른 화자는 다른 씬에서 별도 출력.
             - `incoming_messages` / `dialogue_options`는 *비어있어도 OK* — 빈 배열로 출력하거나 키 자체 생략.
             - `relation_transition`은 [신호 인젝션] 섹션에 RELATION PROMOTION ELIGIBILITY가 있을 때만 발동 가능.
-            - `ending_triggered`는 [신호 인젝션] 섹션에 ENDING ELIGIBILITY가 있을 때만 true 가능.""";
+            - `ending_triggered`는 [신호 인젝션] 섹션에 ENDING ELIGIBILITY가 있을 때만 true 가능.
+
+            **⚠️ stat_changes 필수 규칙 (중요)**:
+            - `stat_changes`의 키는 **반드시 숫자 character_id를 String으로** (예: `"47"`). *캐릭터 이름이 아님*. [4] HEROINES에 명시된 숫자 ID를 그대로 사용.
+            - 이번 응답에서 *대사하거나 등장한 모든 히로인*에 대해 stat_changes 항목을 출력.
+            - 각 히로인의 normal stat 5종 — `intimacy`, `affection`, `dependency`, `playfulness`, `trust` — 은 **반드시 5개 모두 명시**. 변화가 없는 스탯은 `0`으로. (일부만 출력하지 말 것.)
+            - `lust` / `corruption` / `obsession` (secret stat 3종)은 *시크릿 모드일 때만* 추가 출력. 평상시엔 생략.
+            - 스탯 변화는 상호작용의 *실제 감정 흐름*을 반영 — 매 턴 기계적 +1 금지. 의미 있는 순간에 변동, 무의미한 잡담엔 0.
+
+            **⚠️ topic_concluded 판단 기준 (중요 — UI 흐름 제어용)**:
+            매 턴 `topic_concluded` (Boolean)를 반드시 출력. 의미: *현재 대화 주제/상황이 자연스러운 정지점에 도달*했는가.
+            - **true로 출력하는 경우**:
+              - 작별 인사가 오간 뒤 ("그럼 또 봐" → true)
+              - 유저의 질문에 충분히 답하고 그 주제가 마무리됨
+              - 감정적 비트(고백 → 반응 → 여운)가 완결됨
+              - 대화가 어색한 침묵이나 막다른 곳에 다다름
+              - 잡담이 충분히 진행되어 소진됨
+            - **false로 출력하는 경우 (기본값)**:
+              - 대화 도중 — 무언가를 활발히 논의 중
+              - 감정적 순간이 고조 중이나 아직 정점에 안 닿음
+              - 유저가 방금 던진 질문에 아직 답 안 함
+              - 이야기/일화가 진행 중이고 안 끝남
+            - **DEFAULT: false.** 대부분의 턴은 진행 중이다. 진짜로 "이 주제는 완결됐다"고 느껴질 때만 true.
+            - 이 플래그가 true가 되면 유저에게 *다음 씬 / 시간 진전 / 장소 이동* 액션 UI가 노출된다. 즉 *서사를 다음 국면으로 넘길 준비가 됐을 때* true.""";
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -693,7 +693,11 @@ public class ChatStreamServiceV2 {
             null,  // characterThought는 hasInnerThought 플래그로 분리 전달
             false, null,
             room.isTopicConcluded(),
-            null);  // eventStatus — V2 폐기
+            null,  // eventStatus — V2 폐기
+            false,  // generateIllustration — V2는 별도 트리거
+            null,   // locationTransition은 별도 sendFinalResult에서 설정
+            // [Phase 7-V2 Pivot] dialogue_options — LLM 응답 그대로 전달, V2 프론트의 chip UI 입력
+            parsed.aiOutput().dialogueOptions());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -734,7 +738,7 @@ public class ChatStreamServiceV2 {
      * 같은 응답에서 여러 씬이 location을 바꾸는 경우는 드물지만, 최종 위치가 가장 늦은 씬에 있다고 본다.
      */
     private LocationTransition processDynamicBackground(ChatRoom room,
-                                                                                   ParsedV2Result parsed) {
+                                                        ParsedV2Result parsed) {
         AiJsonOutputV2.SceneV2 lastWithLoc = null;
         if (parsed.aiOutput().scenes() != null) {
             for (int i = parsed.aiOutput().scenes().size() - 1; i >= 0; i--) {
@@ -873,7 +877,9 @@ public class ChatStreamServiceV2 {
                 response.dynamicRelationTag(), response.characterThought(),
                 hasInnerThought, assistantLogId,
                 response.topicConcluded(), response.eventStatus(),
-                false, locationTransition);
+                false, locationTransition,
+                // [Phase 7-V2 Pivot] dialogueOptions 보존 — buildSendChatResponseV2에서 채워진 값
+                response.dialogueOptions());
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));
         } catch (Exception e) {
