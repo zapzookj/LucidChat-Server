@@ -78,6 +78,7 @@ public final class StoryV2Responses {
         String worldId,
         String worldDisplayName,
         String userPersona,
+        String userNickname,    // [Phase 7-V2 Pivot] storyUserNickname (null이면 User.nickname 폴백 처리됨)
         String currentUserLocationKey,
         String currentUserLocationDisplayName,
         Integer currentDay,
@@ -99,6 +100,8 @@ public final class StoryV2Responses {
     public record HeroineStateResponse(
         Long characterId,
         String name,
+        String slug,                    // [Phase 7-V2 Pivot Fix] 스프라이트 에셋 키 (CharacterDisplay용)
+        String defaultOutfit,           // [Bug-Sprite] 기본 복장 — 캐릭터별 상이(airi=MAID, yeonhwa=HANBOK). CharacterDisplay outfit
         String profileImageUrl,
         int statIntimacy, int statAffection, int statDependency, int statPlayfulness, int statTrust,
         Integer statLust, Integer statCorruption, Integer statObsession,  // 시크릿 모드일 때만 노출

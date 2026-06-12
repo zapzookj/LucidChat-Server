@@ -1,6 +1,11 @@
 package com.spring.aichat.dto.chat;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.core.JsonParser;
+import java.io.IOException;
 
 import java.util.List;
 import java.util.Map;
@@ -30,7 +35,8 @@ public record AiJsonOutputV2(
     @JsonProperty("system_updates") SystemUpdates systemUpdates,
     @JsonProperty("memory_delta") MemoryDelta memoryDelta,
     @JsonProperty("incoming_messages") List<IncomingMessage> incomingMessages,
-    @JsonProperty("dialogue_options") List<String> dialogueOptions
+    @JsonProperty("dialogue_options") List<String> dialogueOptions,
+    @JsonProperty("narrative_threads") List<NarrativeThread> narrativeThreads
 ) {
 
     /** V2는 4~5 씬 배열. 첫 씬은 SSE first_scene 발사용. */
@@ -135,7 +141,7 @@ public record AiJsonOutputV2(
     }
 
     public record CharacterMovement(
-        @JsonProperty("character_id") Long characterId,
+        @JsonProperty("character_id") @JsonDeserialize(using = LenientLongDeserializer.class) Long characterId,
         @JsonProperty("location_key") String locationKey
     ) {}
 
@@ -145,7 +151,7 @@ public record AiJsonOutputV2(
     ) {}
 
     public record RelationTransition(
-        @JsonProperty("character_id") Long characterId,
+        @JsonProperty("character_id") @JsonDeserialize(using = LenientLongDeserializer.class) Long characterId,
         String from,
         String to
     ) {}
@@ -172,7 +178,37 @@ public record AiJsonOutputV2(
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public record IncomingMessage(
-        @JsonProperty("from_character_id") Long fromCharacterId,
+        @JsonProperty("from_character_id") @JsonDeserialize(using = LenientLongDeserializer.class) Long fromCharacterId,
         String content
     ) {}
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [D-5] Narrative Threads (서사 나침반)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 디렉터가 보고하는 서사 떡밥(thread) 델타. id로 upsert.
+     * status: OPEN(새로 열림/열림 유지) | ADVANCED(진행됨) | RESOLVED(해소).
+     * label은 한 줄 설명, note는 선택적 디렉터 메모.
+     */
+    public record NarrativeThread(
+        String id,
+        String label,
+        String status,
+        String note
+    ) {}
+
+    /**
+     * [Bug-Fix] LLM이 character_id 필드에 숫자 대신 이름("로제타")을 넣어도
+     * 응답 전체 파싱이 깨지지 않도록 — 숫자면 Long, 그 외(이름 등)는 null(해당 항목 스킵).
+     */
+    static class LenientLongDeserializer extends JsonDeserializer<Long> {
+        @Override
+        public Long deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
+            String v = parser.getValueAsString();
+            if (v == null || v.isBlank()) return null;
+            try { return Long.parseLong(v.trim()); }
+            catch (NumberFormatException e) { return null; }
+        }
+    }
 }

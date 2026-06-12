@@ -1,23 +1,27 @@
 package com.spring.aichat.service.story;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.domain.chat.ChatLogDocument;
 import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.chat.StoryV2State;
+import com.spring.aichat.domain.chat.StoryV2StateRepository;
 import com.spring.aichat.domain.enums.BgmMode;
 import com.spring.aichat.domain.enums.DayPart;
 import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.heroine.ChatRoomHeroine;
 import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.AiJsonOutputV2;
-import com.spring.aichat.dto.chat.SendChatResponse;
 import com.spring.aichat.dto.chat.SendChatResponse.SceneResponse;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.dto.story.StoryV2Requests.SendStoryV2MessageRequest;
+import com.spring.aichat.dto.story.StoryV2SendResponse;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.LlmCircuitBreaker;
 import com.spring.aichat.external.OpenRouterStreamClient;
@@ -99,6 +103,7 @@ public class ChatStreamServiceV2 {
     // ── V2 신규 의존성 ──
     private final ChatRoomHeroineRepository heroineRepository;
     private final StoryDirectorPromptAssemblerV2 promptAssembler;
+    private final StoryV2StateRepository storyV2StateRepository;
     private final WorldRoutingService routingService;
     private final HeroineMemoryService heroineMemoryService;
     private final OffscreenNotificationService notificationService;
@@ -215,11 +220,11 @@ public class ChatStreamServiceV2 {
             ParsedV2Result parsed = streamLlmAndParseV2(
                 jpa.room(), routing.currentSpeakerId(), userMessage,
                 systemActionInjection, jpa.logCount() + 1,
-                effectiveSecretMode, emitter, rollbackCtx);
+                effectiveSecretMode, false, emitter, rollbackCtx);
             if (parsed == null) return;
 
             // ── 8. TX-2 ──
-            SendChatResponse response;
+            StoryV2SendResponse response;
             try {
                 response = txTemplate.execute(status -> processV2Updates(
                     roomId, parsed, effectiveSecretMode));
@@ -255,6 +260,97 @@ public class ChatStreamServiceV2 {
 
         } catch (Exception e) {
             log.error("❌ [V2-STREAM] Unexpected error | roomId={}", roomId, e);
+            sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [E-3 C-1] 오프닝 스트림 — 첫 진입 도입 자동 생성
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 방 첫 진입 시 디렉터가 도입 장면을 자동 생성해 스트리밍한다. 일반 메시지 흐름과 분리된 전용 경로.
+     *
+     * <p>오프닝 고유 시맨틱:
+     * <ul>
+     *   <li><b>에너지 미소모</b> — 유저가 행동하기 전 자동 생성이므로 (cost 0)</li>
+     *   <li><b>유저 메시지 영속/검열/인젝션 없음</b> — 유저 입력이 없음</li>
+     *   <li><b>멱등</b> — 이미 로그가 있으면(오프닝/대화 존재) 재생성하지 않고 조용히 종료 (새로고침/중복 발사 방어)</li>
+     *   <li>오프닝 트리거는 system 메시지로 주입, {@code openingMode=true}로 어셈블러의 도입 지시 활성</li>
+     * </ul>
+     * 생성·파싱·영속·스트리밍 코어는 일반 흐름과 동일 컴포넌트(streamLlmAndParseV2 / processV2Updates /
+     * persistAssistantLog / sendFinalResult)를 재사용한다 — E-1 A-2의 scenesJson isSystem baking 포함.
+     */
+    public void generateOpeningStream(Long roomId, SseEmitter emitter) {
+        long totalStart = System.currentTimeMillis();
+        log.info("⏱ [V2-OPENING] ====== START ====== roomId={}", roomId);
+
+        try {
+            ChatRoom room = chatRoomRepository.findWithMemberAndWorldById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (!room.isStoryMode()) {
+                sendSseError(emitter, "INVALID_MODE", "V2 STORY 전용 엔드포인트입니다.");
+                return;
+            }
+
+            // 멱등 가드 — 이미 로그가 있으면 오프닝/대화가 존재 → 재생성 금지, 빈 완료
+            long existingLogs = chatLogRepository.countByRoomId(roomId);
+            if (existingLogs > 0) {
+                log.info("↩️ [V2-OPENING] skip — room already has {} logs", existingLogs);
+                try { emitter.complete(); } catch (Exception ignore) {}
+                return;
+            }
+
+            Long userId = room.getUser().getId();
+            String username = room.getUser().getUsername();
+            // 에너지 미소모 / 유저 로그 미영속 → 롤백은 사실상 no-op (energy=0, userLog=null)
+            RollbackContext rollbackCtx = new RollbackContext(userId, username, 0, null);
+
+            // 오프닝 화자 — 시작 장소에 있는 히로인을 자연스럽게 등장(없으면 AMBIENT). route("")는 빈 입력에 안전.
+            WorldRoutingService.RoutingResult routing = routingService.route(room, "");
+            log.info("🎬 [V2-OPENING] roomId={}, openingSpeakerId={}, ambient={}",
+                roomId, routing.currentSpeakerId(), routing.isAmbient());
+
+            boolean effectiveSecretMode = resolveSecretMode(room);
+            // 유저 턴이 없으므로 도입 생성 신호를 system 메시지(systemActionInjection)로 주입.
+            String openingCue = "[OPENING] 이야기의 도입 장면을 지금 생성하라. 유저는 아직 행동하지 않았다.";
+
+            ParsedV2Result parsed = streamLlmAndParseV2(
+                room, routing.currentSpeakerId(), "",
+                openingCue, /* logCountForRag */ 1L,
+                effectiveSecretMode, /* openingMode */ true, emitter, rollbackCtx);
+            if (parsed == null) return;
+
+            // ── TX-2 상태 반영 (오프닝은 stat/time/ending/promotion 미변경 — 프롬프트로 제약, BGM 등만 반영) ──
+            StoryV2SendResponse response;
+            try {
+                response = txTemplate.execute(status -> processV2Updates(roomId, parsed, effectiveSecretMode));
+            } catch (Exception e) {
+                log.error("❌ [V2-OPENING-TX2] failed | roomId={}", roomId, e);
+                compensateFullRollback(rollbackCtx);
+                sendSseError(emitter, "TX_ERROR", "오프닝 처리 중 오류가 발생했습니다.");
+                return;
+            }
+
+            // ── ASSISTANT(오프닝) 영속 + 스트리밍 ──
+            String assistantLogId = persistAssistantLog(roomId, parsed);
+            cacheService.evictRoomInfo(roomId);
+
+            processOffscreenNotifications(room, parsed);
+            LocationTransition locationTransition = processDynamicBackground(room, parsed);
+
+            AiJsonOutputV2.SceneV2 lastSceneAi = parsed.aiOutput().lastScene();
+            boolean hasInnerThought = lastSceneAi != null && lastSceneAi.hasInnerThought();
+            sendFinalResult(emitter, response, hasInnerThought, assistantLogId, locationTransition);
+            emitter.complete();
+
+            log.info("⏱ [V2-OPENING] DONE: {}ms | sceneCount={}",
+                System.currentTimeMillis() - totalStart, parsed.aiOutput().sceneCount());
+
+            triggerPostProcessing(roomId, userId, 1L, parsed.aiOutput());
+
+        } catch (Exception e) {
+            log.error("❌ [V2-OPENING] Unexpected error | roomId={}", roomId, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
         }
     }
@@ -305,7 +401,7 @@ public class ChatStreamServiceV2 {
 
     private ParsedV2Result streamLlmAndParseV2(ChatRoom room, Long routedSpeakerId, String userMessage,
                                                String systemActionInjection, long logCountForRag,
-                                               boolean effectiveSecretMode,
+                                               boolean effectiveSecretMode, boolean openingMode,
                                                SseEmitter emitter, RollbackContext rollbackCtx) {
         // RAG: World-level memory (기존 MemoryService 재활용)
         String worldMemory = "";
@@ -318,8 +414,10 @@ public class ChatStreamServiceV2 {
         }
 
         // 시스템 프롬프트 빌딩
+        // [D-5b] 서사 나침반 — 열린 thread 로드(없으면 빈 리스트)
+        java.util.List<String> openThreads = loadOpenThreads(room.getId());
         SystemPromptPayload systemPrompt = promptAssembler.assemble(
-            room, room.getUser(), routedSpeakerId, worldMemory, effectiveSecretMode);
+            room, room.getUser(), routedSpeakerId, worldMemory, effectiveSecretMode, openingMode, openThreads);
 
         List<OpenAiMessage> messages = buildMessageHistoryV2(
             room.getId(), systemPrompt, systemActionInjection);
@@ -330,6 +428,7 @@ public class ChatStreamServiceV2 {
             decision.provider(), decision.ttftDeadlineMs(), room.getId());
 
         Set<String> sanitizerSpeakers = collectSanitizerSpeakers(room);
+        Set<String> heroineNames = collectHeroineNames(room);  // [E-1 A-2] scenesJson isSystem 판정용
 
         // first_scene 콜백 — V1 패턴 (배열의 첫 객체)
         Consumer<String> onFirstScene = firstSceneJson -> {
@@ -441,7 +540,7 @@ public class ChatStreamServiceV2 {
             .filter(s -> !s.isBlank())
             .collect(Collectors.joining("\n\n"));
 
-        String scenesJson = buildScenesJson(sceneResponses);
+        String scenesJson = buildScenesJson(sceneResponses, heroineNames);
 
         log.info("🎬 [V2-PARSE] sceneCount={}, lastSpeaker={}",
             sceneResponses.size(),
@@ -455,6 +554,8 @@ public class ChatStreamServiceV2 {
         Set<String> speakers = new LinkedHashSet<>();
         List<ChatRoomHeroine> heroines = heroineRepository.findByChatRoom_Id(room.getId());
         for (ChatRoomHeroine h : heroines) {
+            // [Phase 7-V2 Pivot Fix] character/name null 방어 — 깨진 heroine이 응답 전체를 죽이지 않도록
+            if (h.getCharacter() == null) continue;
             String name = h.getCharacter().getName();
             if (name != null && !name.isBlank()) speakers.add(name.trim());
         }
@@ -462,6 +563,20 @@ public class ChatStreamServiceV2 {
             speakers.add(room.getUser().getNickname().trim());
         }
         return speakers;
+    }
+
+    /**
+     * [E-1 A-2] 히로인 이름 집합 — scenesJson의 isSystem 판정용.
+     * collectSanitizerSpeakers와 달리 *유저 닉네임을 포함하지 않는다* (화자 후보 = 히로인만).
+     */
+    private Set<String> collectHeroineNames(ChatRoom room) {
+        Set<String> names = new LinkedHashSet<>();
+        for (ChatRoomHeroine h : heroineRepository.findByChatRoom_Id(room.getId())) {
+            if (h.getCharacter() == null) continue;
+            String name = h.getCharacter().getName();
+            if (name != null && !name.isBlank()) names.add(name.trim());
+        }
+        return names;
     }
 
     private List<OpenAiMessage> buildMessageHistoryV2(Long roomId, SystemPromptPayload sysPrompt,
@@ -501,8 +616,8 @@ public class ChatStreamServiceV2 {
     //  TX-2 처리 — 멀티 씬 화자별 갱신
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private SendChatResponse processV2Updates(Long roomId, ParsedV2Result parsed,
-                                              boolean effectiveSecretMode) {
+    private StoryV2SendResponse processV2Updates(Long roomId, ParsedV2Result parsed,
+                                                 boolean effectiveSecretMode) {
         ChatRoom freshRoom = chatRoomRepository.findWithMemberAndWorldById(roomId)
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
         AiJsonOutputV2.SystemUpdates sysUpdates = parsed.aiOutput().systemUpdates();
@@ -562,9 +677,77 @@ public class ChatStreamServiceV2 {
         // (k) lastActiveAt
         freshRoom.touch();
 
+        // (l) [D-5b] 서사 thread 델타 병합 — 디렉터가 보고한 narrative_threads를 StoryV2State에 upsert.
+        mergeNarrativeThreads(roomId, parsed.aiOutput().narrativeThreads());
+
         // 응답 빌딩 — *마지막 씬의 speaker*를 currentSpeaker로
         Long lastSpeakerId = resolveSpeakerIdByName(freshRoom, lastScene);
         return buildSendChatResponseV2(freshRoom, parsed, lastSpeakerId, effectiveSecretMode);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [D-5b] 서사 나침반 — thread 로드 / 델타 병합
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 열린(미해소) thread를 프롬프트 주입용 문자열 리스트로. 없으면 빈 리스트. RESOLVED 제외, 상한 6개. */
+    private java.util.List<String> loadOpenThreads(Long roomId) {
+        try {
+            String json = storyV2StateRepository.findByRoomId(roomId)
+                .map(StoryV2State::getThreadsJson).orElse(null);
+            if (json == null || json.isBlank()) return java.util.List.of();
+            List<Map<String, Object>> all = objectMapper.readValue(json,
+                new TypeReference<List<Map<String, Object>>>() {});
+            List<String> open = new ArrayList<>();
+            for (Map<String, Object> t : all) {
+                Object status = t.get("status");
+                if (status != null && "RESOLVED".equalsIgnoreCase(status.toString())) continue;
+                Object label = t.get("label");
+                if (label == null || label.toString().isBlank()) continue;
+                String line = label.toString().trim();
+                if (status != null && "ADVANCED".equalsIgnoreCase(status.toString())) line += " (진행 중)";
+                open.add(line);
+            }
+            int cap = 6;
+            if (open.size() > cap) open = new ArrayList<>(open.subList(open.size() - cap, open.size()));
+            return open;
+        } catch (Exception e) {
+            log.warn("[D-5b] open thread load 실패 (non-blocking): {}", e.getMessage());
+            return java.util.List.of();
+        }
+    }
+
+    /** 디렉터가 보고한 narrative_threads 델타를 StoryV2State에 id 기준 upsert. */
+    private void mergeNarrativeThreads(Long roomId, List<AiJsonOutputV2.NarrativeThread> delta) {
+        if (delta == null || delta.isEmpty()) return;
+        try {
+            StoryV2State state = storyV2StateRepository.findByRoomId(roomId)
+                .orElseGet(() -> StoryV2State.create(roomId));
+            List<Map<String, Object>> current = new ArrayList<>();
+            if (state.getThreadsJson() != null && !state.getThreadsJson().isBlank()) {
+                current = objectMapper.readValue(state.getThreadsJson(),
+                    new TypeReference<List<Map<String, Object>>>() {});
+            }
+            Map<String, Integer> idx = new HashMap<>();
+            for (int i = 0; i < current.size(); i++) {
+                Object id = current.get(i).get("id");
+                if (id != null) idx.put(id.toString(), i);
+            }
+            for (AiJsonOutputV2.NarrativeThread d : delta) {
+                if (d == null || d.id() == null || d.id().isBlank()) continue;
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", d.id().trim());
+                m.put("label", d.label());
+                m.put("status", d.status() != null ? d.status() : "OPEN");
+                if (d.note() != null) m.put("note", d.note());
+                Integer at = idx.get(d.id().trim());
+                if (at != null) current.set(at, m);
+                else current.add(m);
+            }
+            state.updateThreads(objectMapper.writeValueAsString(current));
+            storyV2StateRepository.save(state);
+        } catch (Exception e) {
+            log.warn("[D-5b] narrative thread 병합 실패 (non-blocking): {}", e.getMessage());
+        }
     }
 
     /**
@@ -615,7 +798,9 @@ public class ChatStreamServiceV2 {
         if (ai.scenes() == null || ai.scenes().isEmpty()) return;
 
         // 응답 전체에서 등장한 화자 캐싱 (이름 → ChatRoomHeroine)
+        // [Phase 7-V2 Pivot Fix] character/name null 방어 — toMap NPE로 매 응답 죽는 문제 차단
         Map<String, ChatRoomHeroine> heroineByName = heroineRepository.findByChatRoom_Id(room.getId()).stream()
+            .filter(h -> h.getCharacter() != null && h.getCharacter().getName() != null)
             .collect(Collectors.toMap(h -> h.getCharacter().getName(), h -> h, (a, b) -> a));
 
         // 1. 씬별 화자에게 last_emotion / last_illustration_hint 적용 + markSpoken
@@ -653,51 +838,30 @@ public class ChatStreamServiceV2 {
             return null;
         }
         return heroineRepository.findByChatRoom_Id(room.getId()).stream()
+            .filter(h -> h.getCharacter() != null && h.getCharacter().getName() != null)  // [Phase 7-V2 Pivot Fix] null 방어
             .filter(h -> h.getCharacter().getName().equals(lastScene.speaker()))
             .map(h -> h.getCharacter().getId())
             .findFirst()
             .orElse(null);
     }
 
-    private SendChatResponse buildSendChatResponseV2(ChatRoom room, ParsedV2Result parsed,
-                                                     Long lastSpeakerId, boolean effectiveSecretMode) {
-        // V1 SendChatResponse 구조 최대한 재활용. V2 캐릭터별 스탯은 *마지막 화자*의 것을 담음.
-        Integer affection = null;
-        String relationStatus = null;
-        Integer bpm = null;
-        String dynamicRelationTag = null;
-        SendChatResponse.StatsSnapshot statsSnapshot = null;
-
-        if (lastSpeakerId != null) {
-            ChatRoomHeroine speaker = heroineRepository
-                .findByChatRoom_IdAndCharacter_Id(room.getId(), lastSpeakerId).orElse(null);
-            if (speaker != null) {
-                affection = speaker.getStatAffection();
-                relationStatus = speaker.getStatusLevel().name();
-                bpm = speaker.getCurrentBpm();
-                dynamicRelationTag = speaker.getDynamicRelationTag();
-                statsSnapshot = new SendChatResponse.StatsSnapshot(
-                    speaker.getStatIntimacy(), speaker.getStatAffection(),
-                    speaker.getStatDependency(), speaker.getStatPlayfulness(), speaker.getStatTrust(),
-                    effectiveSecretMode ? speaker.getStatLust() : null,
-                    effectiveSecretMode ? speaker.getStatCorruption() : null,
-                    effectiveSecretMode ? speaker.getStatObsession() : null);
-            }
-        }
-
-        return new SendChatResponse(
-            room.getId(), parsed.sceneResponses(),  // 모든 씬 (4~5개)
-            affection, relationStatus,
-            null, null, null,  // promotionEvent/endingTrigger/easterEgg — V2는 별도 채널
-            statsSnapshot, bpm, dynamicRelationTag,
-            null,  // characterThought는 hasInnerThought 플래그로 분리 전달
-            false, null,
+    private StoryV2SendResponse buildSendChatResponseV2(ChatRoom room, ParsedV2Result parsed,
+                                                        Long lastSpeakerId, boolean effectiveSecretMode) {
+        // [E-2] V2 전용 응답 DTO로 전환 — V1 SendChatResponse 재사용 중단.
+        //   구 A-1(언박싱 NPE)의 근본 원인이던 primitive int(currentAffection/bpm)가 DTO에서 사라졌으므로
+        //   coalesce 방어가 불필요해졌고, 같은 클래스의 버그가 구조적으로 재발 불가능하다.
+        //   V2 프론트는 final_result에서 scenes/dialogueOptions/topicConcluded/locationTransition만 읽고
+        //   화자 스탯·관계·bpm은 방 재조회로 갱신하므로, 스탯 스냅샷을 SSE에 실을 필요가 없다.
+        //   (lastSpeakerId/effectiveSecretMode 파라미터는 호출부 시그니처 호환을 위해 유지 — 본문 미사용)
+        return new StoryV2SendResponse(
+            room.getId(),
+            parsed.sceneResponses(),         // 모든 씬 (4~5개)
             room.isTopicConcluded(),
-            null,  // eventStatus — V2 폐기
-            false,  // generateIllustration — V2는 별도 트리거
-            null,   // locationTransition은 별도 sendFinalResult에서 설정
-            // [Phase 7-V2 Pivot] dialogue_options — LLM 응답 그대로 전달, V2 프론트의 chip UI 입력
-            parsed.aiOutput().dialogueOptions());
+            null,                            // locationTransition — sendFinalResult에서 주입
+            parsed.aiOutput().dialogueOptions(),  // V2 디렉터 선택지 (chip UI)
+            false,                           // hasInnerThought — sendFinalResult에서 주입
+            null                             // assistantLogId — sendFinalResult에서 주입
+        );
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -722,7 +886,9 @@ public class ChatStreamServiceV2 {
     /** 응답의 모든 씬에서 대사한 캐릭터 ID 수집 (중복 제거). */
     private Set<Long> collectSpokeSpeakerIds(ChatRoom room, AiJsonOutputV2 ai) {
         if (ai.scenes() == null) return Set.of();
+        // [Phase 7-V2 Pivot Fix] character/name null 방어
         Map<String, Long> idByName = heroineRepository.findByChatRoom_Id(room.getId()).stream()
+            .filter(h -> h.getCharacter() != null && h.getCharacter().getName() != null)
             .collect(Collectors.toMap(h -> h.getCharacter().getName(), h -> h.getCharacter().getId(), (a, b) -> a));
         Set<Long> ids = new LinkedHashSet<>();
         for (AiJsonOutputV2.SceneV2 s : ai.scenes()) {
@@ -865,21 +1031,20 @@ public class ChatStreamServiceV2 {
         return null;
     }
 
-    private void sendFinalResult(SseEmitter emitter, SendChatResponse response,
+    private void sendFinalResult(SseEmitter emitter, StoryV2SendResponse response,
                                  boolean hasInnerThought, String assistantLogId,
                                  LocationTransition locationTransition) {
         try {
-            SendChatResponse finalResponse = new SendChatResponse(
-                response.roomId(), response.scenes(),
-                response.currentAffection(), response.relationStatus(),
-                response.promotionEvent(), response.endingTrigger(), response.easterEgg(),
-                response.stats(), response.bpm(),
-                response.dynamicRelationTag(), response.characterThought(),
-                hasInnerThought, assistantLogId,
-                response.topicConcluded(), response.eventStatus(),
-                false, locationTransition,
-                // [Phase 7-V2 Pivot] dialogueOptions 보존 — buildSendChatResponseV2에서 채워진 값
-                response.dialogueOptions());
+            // [E-2] V2 전용 DTO 재구성 — locationTransition/hasInnerThought/assistantLogId만 이 시점에 주입.
+            //   JSON 키(scenes/dialogueOptions/topicConcluded/locationTransition)는 그대로라 프론트 무수정.
+            StoryV2SendResponse finalResponse = new StoryV2SendResponse(
+                response.roomId(),
+                response.scenes(),
+                response.topicConcluded(),
+                locationTransition,
+                response.dialogueOptions(),
+                hasInnerThought,
+                assistantLogId);
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));
         } catch (Exception e) {
@@ -919,9 +1084,34 @@ public class ChatStreamServiceV2 {
         }
     }
 
-    private String buildScenesJson(List<SceneResponse> scenes) {
+    /**
+     * [E-1 A-2] 영속 scenesJson에 *권위적 isSystem* 플래그를 baking.
+     *
+     * <p>시스템 씬(speaker가 null/blank이거나 히로인 명단에 없는 화자)을 백엔드에서 확정해 저장하므로,
+     * 새로고침 시 프론트가 "이름 매칭 휴리스틱"(단일 characterName 비교)에 의존하지 않고도
+     * 결정적으로 시스템/히로인을 구분한다. (heroines state 로드 타이밍과 무관)
+     *
+     * <p>스키마(프론트 {@code expandLogWithScenes}가 소비): speaker / narration / dialogue / emotion / isSystem.
+     * 시스템 씬은 speaker=null로 명시 저장 → 가짜 이름("캐릭터"/"null") 노출 불가능.
+     * 기존 로그(isSystem 없음)는 프론트가 speaker 유무로 폴백 — 하위 호환.
+     */
+    private String buildScenesJson(List<SceneResponse> scenes, Set<String> heroineNames) {
         try {
-            return objectMapper.writeValueAsString(scenes);
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (SceneResponse s : scenes) {
+                // [D-4] 화자 3축 — system은 *화자 null/blank일 때만*. NPC·히로인은 speaker 보존(대사·이름 유지).
+                boolean blank = s.speaker() == null || s.speaker().isBlank();
+                boolean isNpc = !blank && !heroineNames.contains(s.speaker().trim());
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("speaker", blank ? null : s.speaker());
+                m.put("narration", s.narration());
+                m.put("dialogue", s.dialogue());
+                m.put("emotion", s.emotion() != null ? s.emotion().name() : null);
+                m.put("isSystem", blank);
+                m.put("isNpc", isNpc);
+                out.add(m);
+            }
+            return objectMapper.writeValueAsString(out);
         } catch (Exception e) {
             return "[]";
         }

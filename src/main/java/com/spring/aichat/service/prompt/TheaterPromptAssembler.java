@@ -203,8 +203,15 @@ public class TheaterPromptAssembler {
         sb.append("Speaker Name: ").append(heroine.getName())
             .append(" (slug: ").append(heroine.getSlug()).append(")\n");
         sb.append("Role: ").append(safeString(heroine.getEffectiveRole())).append("\n");
+        sb.append("Age: ").append(heroine.getAge()).append("\n");
+        sb.append("Appearance: ").append(heroine.getAppearance()).append("\n");
+        sb.append("Clothing: ").append(heroine.getClothing()).append("\n");
+        sb.append("Backstory: ").append(heroine.getBackstory()).append("\n");
         sb.append("Personality: ").append(heroine.getEffectivePersonality(secret)).append("\n");
-        sb.append("Tone / Speech Pattern: ").append(heroine.getEffectiveTone(secret)).append("\n");
+        sb.append("Tone: ").append(heroine.getEffectiveTone(secret)).append("\n");
+        sb.append("Core Values: ").append(heroine.getCoreValues()).append("\n");
+        sb.append("Flaws: ").append(heroine.getFlaws()).append("\n");
+        sb.append("Speech quirks: ").append(heroine.getSpeechQuirks()).append("\n");
 
         // [Polish-v2] OOC 예시 (메타 회피 발화 패턴)
         String ooc = heroine.getEffectiveOocExample();

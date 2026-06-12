@@ -14,6 +14,7 @@ import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
+import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.security.PromptInjectionGuard;
 import com.spring.aichat.service.cache.RedisCacheService;
@@ -185,17 +186,10 @@ public class ChatService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 채팅방 시크릿 모드 토글 (V1/V2 통합)
+     * 채팅방 시크릿 모드 토글
      *
-     * <p>[Phase 7-V2 BM 피벗] 시크릿 모드 BM이 user-global로 전환됨에 따라:
-     * <ul>
-     *   <li>{@code canAccessSecretMode(user)} 1-arg user-global 메서드 사용</li>
-     *   <li>{@code room.getCharacter()} 의존 제거 — V2 STORY 방(character=null)도 안전</li>
-     *   <li>에러 메시지에서 "이 캐릭터의" 표현 제거 — user-global 의미와 일치</li>
-     * </ul>
-     *
-     * <p>enabled=true: 성인 인증 + 시크릿 접근 권한 검증 후 활성화
-     * <p>enabled=false: 즉시 비활성화 (검증 무관)
+     * enabled=true: SecretModeService로 패스/해금/구독 검증 후 활성화
+     * enabled=false: 즉시 비활성화
      */
     @Transactional
     public void toggleRoomSecretMode(Long roomId, boolean enabled, String username) {
@@ -204,24 +198,22 @@ public class ChatService {
 
         if (enabled) {
             User user = room.getUser();
+            Long characterId = room.getCharacter().getId();
 
-            // [BM 피벗] 1-arg user-global 검증 — V1/V2 공통
-            if (!secretModeService.canAccessSecretMode(user)) {
+            if (!secretModeService.canAccessSecretMode(user, characterId)) {
                 if (!Boolean.TRUE.equals(user.getIsAdult())) {
                     throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
                         "성인 인증이 필요합니다.");
                 }
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "시크릿 모드 접근 권한이 없습니다.");
+                    "이 캐릭터의 시크릿 모드 접근 권한이 없습니다.");
             }
 
             room.activateSecretMode();
-            log.info("[SECRET_TOGGLE] Room-level enabled: roomId={}, user={}, mode={}",
-                roomId, username, room.getChatMode());
+            log.info("[SECRET_TOGGLE] Room-level enabled: roomId={}, user={}", roomId, username);
         } else {
             room.deactivateSecretMode();
-            log.info("[SECRET_TOGGLE] Room-level disabled: roomId={}, user={}, mode={}",
-                roomId, username, room.getChatMode());
+            log.info("[SECRET_TOGGLE] Room-level disabled: roomId={}, user={}", roomId, username);
         }
 
         chatRoomRepository.save(room);
@@ -258,6 +250,15 @@ public class ChatService {
             .orElseGet(() -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
+
+                // [Phase 7-V2 Pivot Fix] V2 STORY 방은 단일 character가 null (N:1 — 히로인은 ChatRoomHeroine).
+                //   이 V1 엔드포인트(GET /chat/rooms/{id})로는 유효한 응답을 만들 수 없으므로,
+                //   NPE(getCharacter()/getStatIntimacy() null) 대신 명확한 400을 반환.
+                //   정상 경로에서는 V2 방이 /api/v1/story/v2/... 로 라우팅되어 여기 도달하지 않음.
+                if (room.getCharacter() == null) {
+                    throw new BadRequestException(
+                        "V2 스토리 방은 이 엔드포인트로 조회할 수 없습니다. /api/v1/story/v2 를 사용하세요. roomId=" + roomId);
+                }
 
                 var character = room.getCharacter();
                 // [Bug #3 Fix] Room-level 시크릿 모드

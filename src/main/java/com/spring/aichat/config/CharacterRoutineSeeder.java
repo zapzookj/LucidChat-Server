@@ -40,10 +40,12 @@ public class CharacterRoutineSeeder {
     private final CharacterRepository characterRepository;
     private final CharacterRoutineSeedProperties seedProperties;
 
-    @Bean
-    @Order(3)
+    private final org.springframework.transaction.PlatformTransactionManager txManager;
+
+    @Bean @Order(3)
     public ApplicationRunner seedCharacterRoutinesRunner() {
-        return args -> seedAllRoutines();
+        return args -> new org.springframework.transaction.support.TransactionTemplate(txManager)
+            .executeWithoutResult(status -> seedAllRoutines());
     }
 
     @Transactional

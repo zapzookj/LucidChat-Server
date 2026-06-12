@@ -34,7 +34,7 @@ import java.util.List;
  * <p>업데이트 정책: 시드 재실행 시 *전체 캐릭터의 모든 루틴 삭제 + 재삽입*.
  * 한 캐릭터의 (timeOfDay, locationKey) 조합이 1:N이라 *부분 update*가 불가능.
  */
-@ConfigurationProperties(prefix = "app.v2.character-routines")
+@ConfigurationProperties(prefix = "app.v2")
 public record CharacterRoutineSeedProperties(
     List<RoutineSeed> characterRoutines
 ) {

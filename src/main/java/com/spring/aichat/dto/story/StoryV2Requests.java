@@ -35,6 +35,13 @@ public final class StoryV2Requests {
         String startLocationKey,
 
         /**
+         * [Phase 7-V2 Pivot] 이 스토리에서 사용할 유저 닉네임.
+         * CreateFlow에서 입력. null/blank면 User.nickname 폴백.
+         */
+        @Size(max = 20)
+        String nickname,
+
+        /**
          * 페르소나 본문 — 자유 텍스트 또는 preset 선택 후 description 그대로 전달.
          * null 허용 (유저 기본 페르소나 폴백)
          */

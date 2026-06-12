@@ -5,8 +5,6 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatMode;
-import com.spring.aichat.domain.enums.WorldId;
-import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.lobby.CharacterResponse;
@@ -21,9 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * [Phase 4.5] 로비 서비스
@@ -41,8 +36,6 @@ public class LobbyService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
-    /** [Chunk D] V2 방의 heroineCount 일괄 조회용 (N+1 방지). */
-    private final ChatRoomHeroineRepository heroineRepository;
 
     /**
      * 전체 캐릭터 목록 조회
@@ -54,34 +47,36 @@ public class LobbyService {
     }
 
     /**
+     * [Phase 7-V2 Pivot] 세계관별 캐릭터 목록 — 통합 로비의 캐릭터 선택 단계용.
+     * worldId가 null/blank면 전체 반환 (getAllCharacters와 동일).
+     * 그 외엔 해당 World 소속 캐릭터만 필터 (Character.worldId 매칭).
+     */
+    public List<CharacterResponse> getCharactersByWorld(String worldId) {
+        if (worldId == null || worldId.isBlank()) {
+            return getAllCharacters();
+        }
+        return characterRepository.findAll().stream()
+            .filter(c -> c.getWorldId() != null && c.getWorldId().name().equals(worldId))
+            .map(this::toCharacterResponse)
+            .toList();
+    }
+
+    /**
      * 유저의 모든 채팅방 목록 조회 (최근 활동 순).
      *
      * <p>[V2 호환] {@code @Transactional(readOnly = true)} — character/world LAZY FK 접근 시
      * 세션 닫힘 방지. V2 STORY 방은 character가 null이고 world FK가 존재 → toRoomSummary에서 분기.
-     *
-     * <p>[Chunk D] V2 방 heroineCount 일괄 조회 (N+1 방지) — V2 방이 없으면 빈 Map.
      */
     @Transactional(readOnly = true)
     public List<RoomSummaryResponse> getMyRooms(String username) {
         User user = findUserByUsername(username);
         List<ChatRoom> rooms = chatRoomRepository.findAllByUser_IdOrderByLastActiveAtDesc(user.getId());
-
-        // [Chunk D] V2 방 ID 집합 추출 → 일괄 heroine count 조회
-        Set<Long> v2RoomIds = rooms.stream()
-            .filter(r -> r.getCharacter() == null)  // V2 방 식별
-            .map(ChatRoom::getId)
-            .collect(Collectors.toSet());
-
-        Map<Long, Long> heroineCounts = v2RoomIds.isEmpty()
-            ? Map.of()
-            : heroineRepository.findHeroineCountsByRoomIds(v2RoomIds).stream()
-            .collect(Collectors.toMap(
-                ChatRoomHeroineRepository.RoomHeroineCountProjection::getRoomId,
-                ChatRoomHeroineRepository.RoomHeroineCountProjection::getHeroineCount
-            ));
-
         return rooms.stream()
-            .map(r -> toRoomSummary(r, heroineCounts.getOrDefault(r.getId(), 0L).intValue()))
+            // [E-1 A-3] THEATER 방 제외 — TheaterLobbyService가 별도 세션 목록을 제공하므로
+            //   (1) 로비 "기억의 끈"에서 중복 표시 방지, (2) V1 스탯 경로(getDominantStatName 등)로
+            //   새어 발생하던 requireSandbox 계열 충돌을 원천 차단.
+            .filter(r -> r.getChatMode() != ChatMode.THEATER)
+            .map(this::toRoomSummary)
             .toList();
     }
 
@@ -140,23 +135,25 @@ public class LobbyService {
             c.getDescription(),
             c.getThumbnailUrl(),
             c.getDefaultImageUrl(),
-            c.isStoryAvailable()
+            c.isStoryAvailable(),
+            c.getWorldId() != null ? c.getWorldId().name() : null,  // [Phase 7-V2 Pivot]
+            c.isTheaterAvailable()                                   // [Phase 7-V2 Pivot]
         );
     }
 
     private RoomSummaryResponse toRoomSummary(ChatRoom room) {
-        // V1 호환 — heroineCount 미지정 시 0
-        return toRoomSummary(room, 0);
-    }
-
-    /**
-     * [Chunk D] V2 RoomSummaryResponse 확장 필드 (worldId / currentDay / heroineCount) 포함.
-     */
-    private RoomSummaryResponse toRoomSummary(ChatRoom room, int heroineCount) {
+        // [E-1 A-3] 분기 기준을 'character == null' 휴리스틱 → 'chatMode'로 교정.
+        //   기존 휴리스틱은 V2 STORY(character 없음)만 걸렀고, character를 *가진* 비-SANDBOX 방
+        //   (THEATER, 레거시 V1 STORY)이 V1 스탯 경로로 새어 getDominantStatName/getMaxNormalStatValue
+        //   → requireSandbox 계열에서 터졌다(로비 500 → 기억의 끈 로드 실패).
+        //   이제 SANDBOX만 V1 스탯 요약을 쓰고, 그 외 모드는 World 기반 V2 요약으로 안전 처리.
+        if (room.getChatMode() != ChatMode.SANDBOX) {
+            return toV2StoryRoomSummary(room);
+        }
         Character c = room.getCharacter();
         if (c == null) {
-            // [V2 STORY 분기] character FK 없음 → World 정보로 RoomSummary 빌드.
-            return toV2StoryRoomSummary(room, heroineCount);
+            // SANDBOX인데 character FK가 없는 손상 row — 방어적으로 V2 요약으로 폴백.
+            return toV2StoryRoomSummary(room);
         }
         return new RoomSummaryResponse(
             room.getId(),
@@ -173,11 +170,7 @@ public class LobbyService {
             room.getEndingTitle(),
             room.getDominantStatName(),
             room.getMaxNormalStatValue(),
-            room.getDynamicRelationTag(),
-            // [Chunk D] V2 필드 — V1 Sandbox/Story는 null/0
-            null,                                              // worldId
-            room.getCurrentDay() != null ? room.getCurrentDay() : 0,  // V1도 currentDay 보유 가능 (있으면 노출)
-            0                                                  // heroineCount (V1은 단일 캐릭터)
+            room.getDynamicRelationTag()
         );
     }
 
@@ -185,28 +178,21 @@ public class LobbyService {
      * [V2 STORY] character FK가 null인 V2 방의 RoomSummary 생성.
      * character* 필드를 *World 정보로 대체* — RoomSummaryResponse record 시그니처는 그대로 유지.
      *
-     * <p>프론트는 {@code chatMode === "STORY"} + {@code characterId === null} 또는
-     * {@code worldId !== null}로 분기하여 StoryV2RoomCard로 표시.
-     *
-     * <p>V2 방의 스탯은 ChatRoomHeroine에 분산 — RoomSummary는 *대표값 0* 또는 *집계*가 적절하나,
-     * 단순화를 위해 0/STRANGER로 표시 (UI에서 World 정보 + 일차 + 히로인 수만 노출).
-     *
-     * <p>[Chunk D] V2 신규 필드 채움 — worldId / currentDay / heroineCount.
+     * <p>프론트는 {@code chatMode === "STORY"}로 분기하여 World 카드 형태로 표시 가능.
+     * V2 방의 스탯은 ChatRoomHeroine에 분산 — RoomSummary는 *대표값 0* 또는 *집계*가 적절하나,
+     * 단순화를 위해 0/STRANGER로 표시 (UI에서 World 정보만 노출).
      */
-    private RoomSummaryResponse toV2StoryRoomSummary(ChatRoom room, int heroineCount) {
+    private RoomSummaryResponse toV2StoryRoomSummary(ChatRoom room) {
         com.spring.aichat.domain.world.World w = room.getWorld();
         // V2 방인데 world도 null이면 손상된 row — 기본값으로 fallback
         String worldName = w != null ? w.getDisplayName() : "(unknown world)";
         String worldThumb = w != null ? w.getThumbnailUrl() : null;
-        WorldId worldId = w != null ? w.getId() : null;
-        int currentDay = room.getCurrentDay() != null ? room.getCurrentDay() : 0;
-
         return new RoomSummaryResponse(
             room.getId(),
             null,                 // characterId — V2 방은 character 없음
             worldName,            // characterName 자리에 World 이름
             worldThumb,           // thumbnail 자리에 World 썸네일
-            0,                    // affectionScore — V2는 히로인별 분산
+            0,                    // affectionScore — V2는 히로인별 분산 (대표값 0)
             "STRANGER",           // statusLevel — V2는 히로인별 분산
             room.getChatMode().name(),
             room.getLastEmotion() != null ? room.getLastEmotion().name() : null,
@@ -216,11 +202,7 @@ public class LobbyService {
             room.getEndingTitle(),
             null,                 // dominantStatName — V2 무관
             0,                    // dominantStatValue
-            "이야기 진행 중",       // dynamicRelationTag — V2 방 식별용 텍스트
-            // [Chunk D] V2 신규 필드
-            worldId,              // V2 World FK
-            currentDay,           // V2 진행 일차
-            heroineCount          // V2 히로인 수 (batch 조회 결과)
+            "이야기 진행 중"        // dynamicRelationTag — V2 방 식별용 텍스트
         );
     }
 }

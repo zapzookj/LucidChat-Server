@@ -740,7 +740,7 @@ public class CharacterPromptAssembler {
      */
     private String buildOutputFormat(ChatRoom room, boolean isSecretMode, ChatMode mode) {
         if (mode == ChatMode.SANDBOX) {
-            return buildSandboxOutputFormat(isSecretMode);
+            return buildStoryOutputFormat(room, isSecretMode);
         }
         return buildStoryOutputFormat(room, isSecretMode);
     }

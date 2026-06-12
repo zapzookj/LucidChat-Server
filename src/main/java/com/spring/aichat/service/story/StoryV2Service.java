@@ -5,6 +5,8 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.chat.StoryV2State;
+import com.spring.aichat.domain.chat.StoryV2StateRepository;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.DayPart;
 import com.spring.aichat.domain.enums.WorldId;
@@ -66,6 +68,7 @@ public class StoryV2Service {
     private final CharacterRepository characterRepository;
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
+    private final StoryV2StateRepository storyV2StateRepository;
     private final ChatRoomHeroineRepository heroineRepository;
     private final CharacterPresenceRepository presenceRepository;
     private final ChatLogMongoRepository chatLogMongoRepository;
@@ -231,6 +234,11 @@ public class StoryV2Service {
         // 페르소나 검증
         String userPersona = resolvePersona(user, worldId, request.personaText(), request.selectedPersonaPresetKey());
 
+        // [Phase 7-V2 Pivot] 닉네임 resolve — 입력값 우선, blank면 User.nickname 폴백
+        String storyNickname = (request.nickname() != null && !request.nickname().isBlank())
+            ? request.nickname().trim()
+            : user.getNickname();
+
         // 기존 방 체크
         Optional<ChatRoom> existing = chatRoomRepository
             .findByUser_IdAndWorld_IdAndChatMode(user.getId(), worldId, ChatMode.STORY);
@@ -246,6 +254,7 @@ public class StoryV2Service {
             log.info("🔄 [STORY-V2] Overwriting existing room: roomId={}", room.getId());
             cascadeResetRoom(room, true);
             room.updateUserPersona(userPersona);
+            room.updateStoryUserNickname(storyNickname);
             room.restoreStartLocation(startLocationKey);
 
             // 히로인/위치 재구성
@@ -255,8 +264,11 @@ public class StoryV2Service {
         }
 
         // 신규 생성
-        ChatRoom room = ChatRoom.createStoryV2(user, world, startLocationKey, userPersona);
+        ChatRoom room = ChatRoom.createStoryV2(user, world, startLocationKey, userPersona, storyNickname);
         room = chatRoomRepository.save(room);
+
+        // [D-5/E-2b] 서사 나침반 상태 초기화 — 빈 thread로 시작(백본 미리 심지 않음).
+        storyV2StateRepository.save(StoryV2State.create(room.getId()));
 
         reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
 
@@ -336,22 +348,33 @@ public class StoryV2Service {
             throw new BadRequestException("Not a V2 STORY room");
         }
 
+        // [Phase 7-V2 Pivot Fix] 버그: cascadeResetRoom이 ChatRoomHeroine을 삭제하므로
+        //   *삭제 전*에 히로인 목록을 캡처해야 한다. (기존 코드는 삭제 후 조회 → 빈 리스트 →
+        //   히로인/프레즌스 재생성 실패 → 방에 히로인 0개 → 이후 모든 접근에서 NPE)
+        List<ChatRoomHeroine> existingRows = heroineRepository.findByChatRoom_Id(room.getId());
+        List<Character> heroines = existingRows.stream()
+            .map(ChatRoomHeroine::getCharacter)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        // LAZY 프록시를 삭제 전에 강제 초기화 (삭제 후 안전 접근 보장)
+        heroines.forEach(c -> { c.getId(); c.getName(); });
+
         cascadeResetRoom(room, request.includePersona());
 
         // 시작 장소 갱신
         String startLocationKey = resolveStartLocation(room.getWorld().getId(), request.startLocationKey());
         room.restoreStartLocation(startLocationKey);
 
-        // 같은 히로인들로 다시 초기화
-        List<ChatRoomHeroine> heroineRows = heroineRepository.findByChatRoom_Id(room.getId());
-        List<Character> heroines = heroineRows.stream().map(ChatRoomHeroine::getCharacter).toList();
+        // [Phase 7-V2 Pivot Fix] 캡처한 히로인으로 ChatRoomHeroine + CharacterPresence 재생성
+        //   (overwrite 경로와 동일하게 reconfigureHeroinesAndPresences 사용)
         if (!heroines.isEmpty()) {
-            List<Long> charIds = heroines.stream().map(Character::getId).toList();
-            routingService.initializePresences(room, charIds, DayPart.defaultStart());
+            reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+        } else {
+            log.warn("⚠️ [STORY-V2] Reset: roomId={}에 캡처된 히로인이 없음 — 재생성 스킵", roomId);
         }
 
-        log.info("🔄 [STORY-V2] Reset done: roomId={}, includePersona={}",
-            roomId, request.includePersona());
+        log.info("🔄 [STORY-V2] Reset done: roomId={}, includePersona={}, heroines={}",
+            roomId, request.includePersona(), heroines.size());
     }
 
     /**
@@ -390,6 +413,12 @@ public class StoryV2Service {
 
         // 8. ChatLogDocument (대화 로그)
         chatLogMongoRepository.deleteByRoomId(roomId);
+
+        // 9. [D-5/E-2b] StoryV2State 서사 thread 리셋 — 방은 유지하므로 row 보존 + 빈 배열로.
+        storyV2StateRepository.findByRoomId(roomId).ifPresent(st -> {
+            st.updateThreads("[]");
+            storyV2StateRepository.save(st);
+        });
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -416,6 +445,7 @@ public class StoryV2Service {
             && secretModeService.canAccessSecretMode(user);
 
         List<HeroineStateResponse> heroineStates = heroineRows.stream()
+            .filter(h -> h.getCharacter() != null)   // [Phase 7-V2 Pivot Fix] 깨진 heroine(character null) 방어 — 새로고침 500 방지
             .map(h -> toHeroineState(h, effectiveSecretMode))
             .toList();
 
@@ -444,6 +474,7 @@ public class StoryV2Service {
             worldId.name(),
             world.getDisplayName(),
             room.getEffectivePersona(user),
+            room.getEffectiveNickname(user),   // [Phase 7-V2 Pivot] 실효 닉네임
             room.getCurrentUserLocationKey(),
             userLocationDisplay,
             room.getCurrentDay(),
@@ -469,6 +500,8 @@ public class StoryV2Service {
         return new HeroineStateResponse(
             c.getId(),
             c.getName(),
+            c.getSlug(),              // [Phase 7-V2 Pivot Fix] 스프라이트 에셋 키
+            c.getDefaultOutfit(),     // [Bug-Sprite] 기본 복장
             c.getThumbnailUrl(),
             h.getStatIntimacy(), h.getStatAffection(), h.getStatDependency(),
             h.getStatPlayfulness(), h.getStatTrust(),

@@ -163,6 +163,28 @@ public class StoryV2Controller {
         return emitter;
     }
 
+    /**
+     * [E-3 C-1] 오프닝 스트림 — 방 첫 진입 시 프론트가 자동 1회 호출.
+     * 디렉터가 도입 장면을 생성해 스트리밍한다. 서비스가 멱등(이미 로그 존재 시 빈 완료)하므로
+     * 새로고침/중복 발사에도 안전 → 별도 rate limit 없이 둔다(생성 직후 첫 메시지와의 마찰 방지).
+     */
+    @PostMapping(value = "/rooms/{roomId}/opening/stream",
+        produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public SseEmitter openingStream(@PathVariable Long roomId) {
+        SseEmitter emitter = new SseEmitter(150_000L);
+        emitter.onTimeout(() -> {
+            log.warn("⏱️ [V2-OPENING] Emitter timeout: roomId={}", roomId);
+            emitter.complete();
+        });
+        emitter.onError(ex ->
+            log.warn("⚠️ [V2-OPENING] Emitter error: roomId={} | {}", roomId, ex.getMessage())
+        );
+
+        chatStreamServiceV2.generateOpeningStream(roomId, emitter);
+        return emitter;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  오프스크린 알림
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

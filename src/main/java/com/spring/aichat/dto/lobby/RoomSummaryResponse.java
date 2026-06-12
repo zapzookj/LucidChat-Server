@@ -42,9 +42,9 @@ public record RoomSummaryResponse(
     // [Phase 5.5-Fix] 지배 스탯 정보
     String dominantStatName,   // intimacy, affection, dependency, playfulness, trust
     int dominantStatValue,
-    String dynamicRelationTag, // 동적 관계 태그
+    String dynamicRelationTag // 동적 관계 태그
     // [Phase 7-V2 / Chunk D] V2 STORY 식별·표시 필드 (additive)
-    WorldId worldId,              // V2 World FK (V1은 null)
-    int currentDay,            // V2 진행 일차 (V1 Sandbox는 0)
-    int heroineCount           // V2 ChatRoomHeroine 수 (V1 Sandbox는 0)
+//    WorldId worldId,              // V2 World FK (V1은 null)
+//    int currentDay,            // V2 진행 일차 (V1 Sandbox는 0)
+//    int heroineCount           // V2 ChatRoomHeroine 수 (V1 Sandbox는 0)
 ) {}

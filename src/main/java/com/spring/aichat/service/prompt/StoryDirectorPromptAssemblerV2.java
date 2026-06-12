@@ -68,7 +68,8 @@ public class StoryDirectorPromptAssemblerV2 {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public SystemPromptPayload assemble(ChatRoom room, User user, Long currentSpeakerId,
-                                        String worldMemory, boolean effectiveSecretMode) {
+                                        String worldMemory, boolean effectiveSecretMode,
+                                        boolean openingMode, java.util.List<String> openThreads) {
         if (!room.isStoryMode()) {
             throw new IllegalStateException("V2 assembler invoked on non-STORY room: id=" + room.getId());
         }
@@ -123,7 +124,75 @@ public class StoryDirectorPromptAssemblerV2 {
         String notificationSignal = buildPendingNotificationsSignal(pendingNotifications, charNameById);
         if (notificationSignal != null) dynamicSections.add(notificationSignal);
 
+        // [D-5b] 서사 나침반 — 열린(미해소) thread를 *권유*로만 주입(강제 아크 아님).
+        String compass = buildNarrativeCompass(openThreads);
+        if (compass != null) dynamicSections.add(compass);
+
+        // [E-3 C-1] 오프닝 턴 — dynamic part 최후미(recency attention 최대)에 도입 지시를 둔다.
+        //   유저 행동 전에 디렉터가 첫 장면을 직접 연다(기획 3.7: "유저가 먼저 행동하는 구조 ❌").
+        if (openingMode) dynamicSections.add(buildOpeningDirective());
+
         return new SystemPromptPayload(staticPart, String.join("\n\n", dynamicSections));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [OPENING] 첫 진입 도입 — dynamic, openingMode 전용
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [E-3 C-1] 오프닝 지시. 유저 행동 이전에 디렉터가 첫 장면을 직접 여는 도입 나레이션을 생성하게 한다.
+     * 위 [3] PRESENT SCENE / [4-marker] CURRENT SPEAKER 컨텍스트를 그대로 활용하므로 장소·시간·등장 인물은
+     * 별도 주입 없이 일관된다. Story v2의 정체성(자유·유저반응형)에 맞춰, 오프닝은 유저를 *초대*할 뿐
+     * 유저의 행동을 *대신 쓰지 않는다*. 상태(스탯/시간/엔딩/승급)는 일절 변경하지 않는다.
+     */
+    private String buildOpeningDirective() {
+        return """
+            # [OPENING] 이 턴은 *오프닝*이다 — 유저는 아직 아무 행동도 하지 않았다
+
+            당신은 지금 이야기의 첫 장면을 연다. 위 [3] PRESENT SCENE의 장소·시간·분위기를 살려,
+            유저(이 세계의 배우)를 이야기 속으로 끌어들이는 도입 장면을 *직접* 만들어라.
+
+            - 세계와 현재 장소·시간·공기를 감각적으로 establish하라. 장황하지 않게, 몰입감 있게.
+            - 이 장소에 캐릭터가 있다면([3] 참고) 그 인물을 자연스럽게 등장시켜라. 화자가 지정되어 있으면
+              ([4-marker]) 그 인물의 결대로 *첫 마디*까지 담아도 좋다. 아무도 없다면(AMBIENT)
+              풍경·소리·유저 페르소나의 내적 독백만으로 무대를 깔아라.
+            - 유저가 개입할 *자연스러운 여백*에서 멈춰라. 유저의 행동·대사·선택을 *절대* 가정하거나
+              대신 쓰지 마라. 질문을 강요하지 말고, 다음 한 걸음이 유저의 몫이 되도록 열어 두어라.
+
+            ### 오프닝 제약 (반드시 준수)
+            - 씬은 1~2개로 충분하다 (도입 나레이션 + 필요 시 등장 인물의 첫 마디).
+            - system_updates의 stat_changes / time_advance / ending / promotion 은 *모두 비워라*.
+              오프닝은 어떤 상태도 바꾸지 않는다.
+            - 출력은 반드시 [10] OUTPUT 스키마를 그대로 따른다.""";
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [D-5b] 서사 나침반 — 열린 thread 권유 (강제 아님)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 열린(미해소) 서사 thread를 *방향 참고용*으로 주입한다. Story 모드의 자유를 해치지 않도록
+     * 어디까지나 권유 — 디렉터가 따를 의무는 없고, 유저가 다른 길로 가면 그 길을 따라간다.
+     * 열린 thread가 없으면 null(섹션 생략).
+     */
+    private String buildNarrativeCompass(java.util.List<String> openThreads) {
+        if (openThreads == null || openThreads.isEmpty()) return null;
+        String list = openThreads.stream()
+            .filter(t -> t != null && !t.isBlank())
+            .map(t -> "- " + t.trim())
+            .collect(Collectors.joining("\n"));
+        if (list.isBlank()) return null;
+        return """
+            # [나침반] 지금 이 이야기에 열려 있는 실(threads)
+
+            아래는 *이 이야기가 지금까지 스스로 연 떡밥*이다. 강제 줄거리가 아니라 방향 참고용이다.
+            - 자연스러울 때 엮어라. 억지로 모두 해결하려 하지 마라.
+            - 유저가 다른 길로 가면 그 길을 따라가라. 떡밥은 *씨앗*이지 체크리스트가 아니다.
+            - 이미 충분히 다룬 실을 반복하지 마라. 새 떡밥이 생기면 자연히 열어도 좋다.
+
+            %s
+
+            (이 실들의 상태가 바뀌었거나 새 실이 열렸다면 OUTPUT의 narrative_threads로만 보고하라.)""".formatted(list);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -142,7 +211,9 @@ public class StoryDirectorPromptAssemblerV2 {
 
             The user is the protagonist. They speak and act. You respond as the world: what they see, what others say, what happens next.
 
-            When a character speaks, you channel that character — not by becoming them, but by giving voice to who they are. Each character has their own soul, their own past, their own values. You serve those souls faithfully, as a novelist serves their characters — never bending them to please the reader.%s""".formatted(secretSuffix);
+            When a character speaks, you channel that character — not by becoming them, but by giving voice to who they are. Each character has their own soul, their own past, their own values. You serve those souls faithfully, as a novelist serves their characters — never bending them to please the reader.
+
+            But not every moment belongs to a character. Sometimes the world itself carries the scene — the hush of an empty room, the light shifting as hours pass, a sound from somewhere else, an event quietly unfolding, the protagonist's own thoughts. These beats are not filler; they are the breath between heartbeats. When no one is present, let the world speak. When someone is present, presence is not obligation — let them be silent, act, or simply *be* when the moment calls for it. And never conjure a character who is not here.%s""".formatted(secretSuffix);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -288,8 +359,12 @@ public class StoryDirectorPromptAssemblerV2 {
             return """
                 # [4-marker] CURRENT TURN SPEAKER
 
-                이번 턴 화자: **(시스템)** — 환경 묘사 + 시간 흐름만. 캐릭터 대사 없음.
-                같은 공간에 캐릭터가 없으니, World 자체의 풍경·소리·분위기·유저 페르소나의 내적 독백으로만 응답.""";
+                이번 턴 화자: **(시스템 — 세계 그 자체)** — 같은 공간에 캐릭터가 없다. 캐릭터 대사 없이 *세계가 이끄는 장면*으로 응답하라.
+                이는 빈 시간을 메우는 채움이 아니라 그 자체로 의미 있는 비트다:
+                - 공간의 풍경·소리·온도·빛, 시간이 흐르며 변하는 공기
+                - 다른 곳에서 들려오는 기척, 조용히 벌어지는 사건이나 변화 (시스템 비트)
+                - 유저 페르소나의 내적 독백·감각·기억의 결
+                억지로 캐릭터를 등장시키지 마라. 지금 이 장면의 주인은 *세계와 유저의 내면*이다.""";
         }
 
         ChatRoomHeroine speaker = heroines.stream()
@@ -351,7 +426,7 @@ public class StoryDirectorPromptAssemblerV2 {
                     h.getStatAffection()))
                 .collect(Collectors.joining("\n"));
             body = """
-                아래 캐릭터들도 같은 공간에 있다. *대사 출력 금지* — 환경 묘사나 간접 언급으로만 등장 가능.
+                아래 캐릭터들도 같은 공간에 있다. 이들도 *자기 씬에서 발화할 수 있다* — 단 **한 씬엔 한 명만** 말한다(씬을 나눠 번갈아). 한 씬 안에서 둘이 동시에 대사하지 마라.
 
                 %s""".formatted(list);
         }
@@ -473,9 +548,9 @@ public class StoryDirectorPromptAssemblerV2 {
 
             1. **자유도 우선**: Act/Chapter 같은 강제 진행 구조 없음. 유저의 의지대로 흐름이 진행된다.
             2. **시간은 자연스러운 페이스로**: 한 행동 = 보통 30분~몇 시간 정도의 시간 흐름. 깊은 대화 중에는 시간 자율 진전 자제.
-            3. **NPC 캐릭터는 자기 삶이 있음**: 유저가 자리를 비운 동안에도 그들은 자기 일을 한다. 직접 묘사는 유저가 그 자리에 가거나 호명할 때만.
-            4. **멀티 캐릭터 등장은 자연스러울 때만**: 우연한 만남은 환영하지만 강제하지 않는다.
-            5. **씬의 화자는 한 명**: 한 응답의 한 씬에 둘 이상의 캐릭터가 *대사*하지 않는다. 다른 캐릭터는 환경 묘사·간접 언급으로만.
+            3. **NPC·조연도 살아있다**: 유저가 자리를 비운 동안에도 그들은 자기 일을 한다(오프스크린 직접 묘사는 유저가 그 자리에 가거나 호명할 때만). 또한 장면에 필요하면 *조연/단역(상인·점원·행인·친구 등)을 자연스럽게 등장시켜 대사를 줘도 좋다* — 이들은 히로인이 아니므로 전용 초상은 없지만, 이름과 목소리로 세계를 풍부하게 한다.
+            4. **등장과 발화는 강요하지 않는다**: 우연한 만남은 환영하되 강제하지 않는다. 같은 공간에 캐릭터가 있어도 *매 턴 말할 의무는 없다* — 침묵·행동·여백이 한 비트를 이끌 수 있다. 같은 공간에 *아무도 없으면* 억지로 등장시키지 말고, [4-marker]의 안내대로 *세계가 이끄는 장면*(풍경·시간·사건·내면)으로 응답하라. 이는 채움이 아니라 그 자체로 의미 있는 비트다.
+            5. **한 씬엔 한 화자 (불변)**: 한 *씬*에서 둘 이상이 동시에 대사하지 않는다. 단 한 *응답*(4~5 씬) 안에서는 여러 히로인이 *각자의 씬*에서 번갈아 발화할 수 있다 — 같은 공간의 자연스러운 합석이면 환영. 동시 발화만 금지다.
             6. **영혼 보존이 최우선**: 어떤 캐릭터를 묘사할 때, 그 캐릭터의 가치관과 결을 *유저의 호감*보다 우선한다.
             7. **유저 액션 메시지 (`[USER_ACTION]`) 처리**:
                - `MOVE`: 유저가 새 장소로 이동. 도착 묘사 + 그곳의 캐릭터(있다면) 반응.
@@ -552,7 +627,7 @@ public class StoryDirectorPromptAssemblerV2 {
             {
               "scenes": [
                 {
-                  "speaker": "캐릭터명 또는 null(시스템)",
+                  "speaker": "히로인이면 [4]의 *정확한 이름* / 조연·NPC면 그 단역 이름 / 순수 환경·시스템 묘사면 null (이름에 수식어 금지)",
                   "narration": "3인칭 디렉터 시점 묘사 (한국어, 3~4문장)",
                   "dialogue": "화자의 대사 (한국어). 화자가 null이면 빈 문자열",
                   "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | DISGUST | RELAX | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
@@ -599,6 +674,9 @@ public class StoryDirectorPromptAssemblerV2 {
               ],
               "dialogue_options": [
                 "옵션1", "옵션2"
+              ],
+              "narrative_threads": [
+                { "id": "t1", "label": "열리거나 진행된 떡밥 한 줄", "status": "OPEN|ADVANCED|RESOLVED", "note": "선택" }
               ]
             }
             ```
@@ -606,6 +684,7 @@ public class StoryDirectorPromptAssemblerV2 {
             **Critical Rules**:
             - `scenes` 배열은 **4~5개 원소** (최소 3, 최대 5). [9] SCENE SPLITTING 가이드 참고.
             - `scenes` 배열이 *맨 처음에* 출력. system_updates / memory_delta / incoming_messages / dialogue_options는 *뒤에*.
+            - `narrative_threads`는 *선택·델타* — 이번 응답에서 새로 열렸거나 상태가 바뀐 떡밥만 보고. 없으면 생략. [나침반]과 연동.
             - `stat_changes` / `memory_delta`는 *응답 전체*의 결과 — 씬별로 분리 안 함.
             - 캐릭터 ID는 [4] HEROINES에 명시된 그대로 String 키로 사용.
             - `new_dynamic_location` / `location_change`는 *해당 씬에서 변경된 경우*만. 다른 씬에서는 null.

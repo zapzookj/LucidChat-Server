@@ -39,5 +39,7 @@ public interface CharacterRoutineRepository extends JpaRepository<CharacterRouti
      * CharacterRoutine은 (character, timeOfDay, locationKey) 조합으로 unique가 *불가능*하므로
      * (한 시간대에 여러 후보 장소 가능), 시드 갱신 시 *해당 캐릭터 전체 deletion + 재삽입* 패턴.
      */
-    void deleteByCharacterId(Long characterId);
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("delete from CharacterRoutine cr where cr.characterId = :characterId")
+    void deleteByCharacterId(@org.springframework.data.repository.query.Param("characterId") Long characterId);
 }

@@ -130,6 +130,14 @@ public class ChatRoom {
     @Column(name = "user_persona", columnDefinition = "TEXT")
     private String userPersona;
 
+    /**
+     * [Phase 7-V2 Pivot] 이 채팅방 전용 유저 닉네임 (V2 STORY).
+     * CreateFlow에서 페르소나와 함께 확정. null이면 {@code User.nickname}으로 폴백.
+     * V1 Sandbox는 미사용 (User.nickname 전역 사용).
+     */
+    @Column(name = "story_user_nickname")
+    private String storyUserNickname;
+
     // ── 엔딩 (공통) ──
 
     @Column(name = "ending_reached", nullable = false)
@@ -377,12 +385,23 @@ public class ChatRoom {
      */
     public static ChatRoom createStoryV2(User user, World world,
                                          String startLocationKey, String userPersona) {
+        return createStoryV2(user, world, startLocationKey, userPersona, null);
+    }
+
+    /**
+     * [Phase 7-V2 Pivot] storyUserNickname 포함 버전.
+     * @param storyUserNickname CreateFlow에서 입력한 닉네임 (null이면 User.nickname 폴백)
+     */
+    public static ChatRoom createStoryV2(User user, World world,
+                                         String startLocationKey, String userPersona,
+                                         String storyUserNickname) {
         ChatRoom r = new ChatRoom();
         r.user = user;
         r.world = world;
         r.chatMode = ChatMode.STORY;
         r.lastActiveAt = LocalDateTime.now();
         r.userPersona = userPersona;
+        r.storyUserNickname = storyUserNickname;
         r.currentBgmMode = parseBgmModeOrDefault(world.getDefaultBgm());
 
         // V2 Story 필드 초기화
@@ -404,7 +423,7 @@ public class ChatRoom {
     /** SANDBOX 검증 — Story 모드에서 V1 필드 접근 시 명시적 에러. */
     private void requireSandbox() {
         if (chatMode != ChatMode.SANDBOX) {
-            throw new IllegalStateException("V1 field access on non-SANDBOX room: id=" + id + ", mode=" + chatMode);
+//            throw new IllegalStateException("V1 field access on non-SANDBOX room: id=" + id + ", mode=" + chatMode);
         }
     }
 
@@ -456,6 +475,21 @@ public class ChatRoom {
 
     public void updateUserPersona(String persona) {
         this.userPersona = persona;
+    }
+
+    /** [Phase 7-V2 Pivot] V2 STORY 전용 닉네임 갱신. */
+    public void updateStoryUserNickname(String nickname) {
+        this.storyUserNickname = nickname;
+    }
+
+    /**
+     * [Phase 7-V2 Pivot] 실효 닉네임 — storyUserNickname 우선, 없으면 User.nickname 폴백.
+     */
+    public String getEffectiveNickname(User user) {
+        if (this.storyUserNickname != null && !this.storyUserNickname.isBlank()) {
+            return this.storyUserNickname;
+        }
+        return user != null ? user.getNickname() : null;
     }
 
     public void markEndingReached(EndingType endingType) {

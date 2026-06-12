@@ -41,8 +41,11 @@ public class LobbyController {
      * <p>V2 STORY는 World 단위 입장이므로 본 엔드포인트는 *Sandbox 진입용*으로 의미 재정의.
      */
     @GetMapping("/characters")
-    public List<CharacterResponse> getCharacters() {
-        return lobbyService.getAllCharacters();
+    public List<CharacterResponse> getCharacters(
+        @RequestParam(value = "worldId", required = false) String worldId) {
+        // [Phase 7-V2 Pivot] worldId 쿼리 파라미터 — 통합 로비의 세계관별 캐릭터 필터.
+        //   미전달 시 전체 반환 (V1 호환).
+        return lobbyService.getCharactersByWorld(worldId);
     }
 
     /**
