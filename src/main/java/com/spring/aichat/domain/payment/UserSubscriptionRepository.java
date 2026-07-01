@@ -15,6 +15,9 @@ public interface UserSubscriptionRepository extends JpaRepository<UserSubscripti
     /** 유저의 활성 구독 조회 (최대 1개) */
     Optional<UserSubscription> findByUser_IdAndActiveTrue(Long userId);
 
+    /** [Phase 6] 환불 회수용 — 주문번호로 구독 조회 */
+    Optional<UserSubscription> findByMerchantUid(String merchantUid);
+
     /** 유저의 활성 구독 존재 여부 */
     boolean existsByUser_IdAndActiveTrue(Long userId);
 

@@ -62,6 +62,9 @@ public class SecurityConfig {
                 "/api/v1/webhook/**",
                 "/health"                // 헬스 체크 엔드포인트
             ).permitAll()
+            // [Phase 6] 백오피스 — 별도 admin SPA에서 호출. ROLE_ADMIN 만 접근.
+            //   authorityPrefix="" + role 클레임이 "ROLE_ADMIN" 문자열이라 hasRole("ADMIN")이 정확히 매칭됨.
+            .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
             .anyRequest().authenticated()
         );
 
@@ -115,8 +118,10 @@ public class SecurityConfig {
         // [변경] 와일드카드(*) 대신 실제 운영되는 프론트엔드 도메인만 엄격하게 허용
         // 필요에 따라 로컬 테스트용(localhost:5173)을 남겨두셔도 됩니다.
         configuration.setAllowedOrigins(List.of(
-            "https://lucid-chat.com",       // Vercel 프론트엔드 운영 도메인
-            "http://localhost:5173"         // 로컬 프론트엔드 테스트용
+            "https://lucid-chat.com",         // Vercel 프론트엔드 운영 도메인
+            "https://admin.lucid-chat.com",   // [Phase 6] 백오피스 admin SPA (운영)
+            "http://localhost:5173",          // 로컬 유저 프론트엔드 테스트용
+            "http://localhost:5174"           // [Phase 6] 로컬 admin SPA 테스트용
         ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));

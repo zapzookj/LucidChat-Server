@@ -80,6 +80,43 @@ public class SubscriptionService {
     }
 
     /**
+     * [Phase 6] 관리자 수동 구독 해제 — 활성 UserSubscription 비활성화 + User.subscriptionTier 초기화.
+     */
+    @Transactional
+    public void deactivateForUser(User user) {
+        subscriptionRepository.findByUser_IdAndActiveTrue(user.getId())
+            .ifPresent(sub -> {
+                sub.deactivate();
+                subscriptionRepository.save(sub);
+            });
+        user.clearSubscription();
+        userRepository.save(user);
+        cacheService.evictUserProfile(user.getUsername());
+    }
+
+    /**
+     * [Phase 6] 환불 회수 — 주문번호로 특정 구독을 비활성화한다.
+     * 그 구독이 유저의 현재 활성 구독이었고 다른 활성 구독이 없으면 User.subscriptionTier 도 초기화한다.
+     */
+    @Transactional
+    public void deactivateByMerchantUid(String merchantUid) {
+        subscriptionRepository.findByMerchantUid(merchantUid).ifPresent(sub -> {
+            boolean wasActive = sub.isActive();
+            sub.deactivate();
+            subscriptionRepository.save(sub);
+            if (wasActive) {
+                User user = sub.getUser();
+                boolean hasOtherActive = subscriptionRepository.findByUser_IdAndActiveTrue(user.getId()).isPresent();
+                if (!hasOtherActive) {
+                    user.clearSubscription();
+                    userRepository.save(user);
+                }
+                cacheService.evictUserProfile(user.getUsername());
+            }
+        });
+    }
+
+    /**
      * 구독 만료 처리 (스케줄러에서 호출)
      */
     @Transactional

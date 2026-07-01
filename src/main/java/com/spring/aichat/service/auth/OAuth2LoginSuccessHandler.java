@@ -78,6 +78,21 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         if (user == null) return;
 
+        // [Phase 6] 정지/차단 계정은 소셜 로그인으로도 토큰 발급 차단.
+        if (user.isAccessBlocked()) {
+            log.warn("[OAUTH] Blocked account login attempt: username={}, status={}",
+                user.getUsername(), user.getStatus());
+            if (successRedirect != null && !successRedirect.isBlank()) {
+                String url = UriComponentsBuilder.fromUriString(successRedirect)
+                    .replacePath("/login").replaceQuery("error=account_suspended")
+                    .build(true).toUriString();
+                response.sendRedirect(url);
+            } else {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Account suspended");
+            }
+            return;
+        }
+
         // JWT 발급
         // [Phase6/Tier3 / H-2] role 하드코딩 제거 → DB의 user.getRoles()에서 추출.
         String role = jwtTokenService.extractPrimaryRole(user);

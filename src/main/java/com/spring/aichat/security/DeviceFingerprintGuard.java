@@ -139,6 +139,31 @@ public class DeviceFingerprintGuard {
         return redisTemplate.opsForValue().get(FP_USER_PREFIX + userId);
     }
 
+    /** [Phase 6] 관리자 — 유저의 소프트밴 여부. */
+    public boolean isUserSoftBanned(Long userId) {
+        String fp = getFingerprint(userId);
+        return fp != null && isSoftBanned(fp);
+    }
+
+    /** [Phase 6] 관리자 — 유저의 소프트밴 해제. 실제 해제되면 true. */
+    public boolean clearSoftBanByUser(Long userId) {
+        String fp = getFingerprint(userId);
+        if (fp == null || fp.isBlank()) return false;
+        return Boolean.TRUE.equals(redisTemplate.delete(FP_BAN_PREFIX + fp));
+    }
+
+    /** [Phase 6] 관리자 — 유저 기기에서 생성된 계정 수(없으면 null). */
+    public Long getDeviceAccountCount(Long userId) {
+        String fp = getFingerprint(userId);
+        if (fp == null || fp.isBlank()) return null;
+        String v = redisTemplate.opsForValue().get(FP_ACCOUNTS_PREFIX + fp);
+        try {
+            return v != null ? Long.parseLong(v) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public enum DeviceCheckResult {

@@ -39,8 +39,8 @@ public class JwtBlacklistFilter extends OncePerRequestFilter {
         String authHeader = request.getHeader(AUTH_HEADER);
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(BEARER_PREFIX.length()).trim();
-            if (!token.isEmpty() && jwtTokenService.isBlacklisted(token)) {
-                log.info("[JWT] Blocked blacklisted token | uri={}", request.getRequestURI());
+            if (!token.isEmpty() && jwtTokenService.isTokenRevoked(token)) {
+                log.info("[JWT] Blocked revoked/suspended token | uri={}", request.getRequestURI());
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token revoked");
                 return;
             }

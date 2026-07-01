@@ -13,6 +13,9 @@ import java.util.Optional;
  */
 public interface UserSecretPassRepository extends JpaRepository<UserSecretPass, Long> {
 
+    /** [Phase 6] 환불 회수용 — 주문번호로 패스 조회 */
+    Optional<UserSecretPass> findByMerchantUid(String merchantUid);
+
     /**
      * 유저-캐릭터 조합에 대해 현재 활성(미만료) 패스 조회
      * expires_at이 가장 먼 것을 반환 (복수 구매 시 가장 늦게 만료되는 것)

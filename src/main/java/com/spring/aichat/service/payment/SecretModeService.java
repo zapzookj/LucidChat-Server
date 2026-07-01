@@ -16,6 +16,7 @@ import com.spring.aichat.service.cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -209,6 +210,32 @@ public class SecretModeService {
      */
     public boolean hasPermanentUnlock(Long userId, Long characterId) {
         return secretUnlockRepository.existsByUser_IdAndCharacter_Id(userId, characterId);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  환불 회수 (Phase 6) — 주문번호(merchantUid)로 지급 레코드 역처리
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 24h 패스 회수 — RDB 레코드 삭제 + Redis 캐시 무효화. */
+    @Transactional
+    public void revoke24hPassByMerchantUid(String merchantUid) {
+        secretPassRepository.findByMerchantUid(merchantUid).ifPresent(pass -> {
+            Long userId = pass.getUser().getId();
+            Long charId = pass.getCharacter().getId();
+            secretPassRepository.delete(pass);
+            cacheService.evict(buildPassCacheKey(userId, charId));
+            log.info("[SECRET] 24h pass revoked (refund): merchantUid={}, userId={}, charId={}",
+                merchantUid, userId, charId);
+        });
+    }
+
+    /** 영구 해금 회수 — RDB 레코드 삭제. */
+    @Transactional
+    public void revokePermanentUnlockByMerchantUid(String merchantUid) {
+        secretUnlockRepository.findByMerchantUid(merchantUid).ifPresent(unlock -> {
+            secretUnlockRepository.delete(unlock);
+            log.info("[SECRET] Permanent unlock revoked (refund): merchantUid={}", merchantUid);
+        });
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

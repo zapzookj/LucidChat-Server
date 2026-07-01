@@ -30,6 +30,8 @@ public class JwtTokenService {
     private static final String REFRESH_PREFIX = "RT:";
     /** [Phase6/Tier3 / M-4] 블랙리스트 키: BL:{jti}. 토큰 전체를 키로 쓰던 비효율 제거. */
     private static final String BLACKLIST_PREFIX = "BL:";
+    /** [Phase 6] 계정 정지 마커: SUSP:USER:{username}. 활성 access 토큰 즉시 차단용. */
+    private static final String SUSPENDED_PREFIX = "SUSP:USER:";
     private static final String DEFAULT_ROLE = "ROLE_USER";
 
     /**
@@ -107,10 +109,14 @@ public class JwtTokenService {
             throw new IllegalArgumentException("유효하지 않거나 만료된 Refresh Token입니다.");
         }
 
-        // 3. [H-1] DB에서 최신 role 조회. ADMIN→USER 강등 방지.
-        String role = userRepository.findByUsername(username)
-            .map(this::extractPrimaryRole)
-            .orElse(DEFAULT_ROLE);
+        // 3. [H-1] DB에서 최신 role 조회 + [Phase 6] 정지 계정 재발급 차단.
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user != null && user.isAccessBlocked()) {
+            redisTemplate.delete(REFRESH_PREFIX + username);
+            log.warn("[JWT] Reissue blocked — account not active: user={}, status={}", username, user.getStatus());
+            throw new IllegalArgumentException("정지되었거나 이용이 제한된 계정입니다.");
+        }
+        String role = (user != null) ? extractPrimaryRole(user) : DEFAULT_ROLE;
 
         return issueTokenPair(username, role);
     }
@@ -188,6 +194,45 @@ public class JwtTokenService {
             return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + accessToken));
         } catch (JwtException e) {
             // 유효성 검증 실패는 Resource Server에 위임. 여기서는 통과.
+            return false;
+        }
+    }
+
+    /**
+     * [Phase 6] 계정 정지 — 활성 access 토큰 즉시 차단 + refresh 토큰 삭제(재발급 불가).
+     * 마커 TTL 은 access TTL 과 동일 — 그 시간이 지나면 기존 access 토큰은 어차피 만료되고,
+     * 신규 발급은 로그인/OAuth/reissue 의 status 체크로 막힌다.
+     */
+    public void revokeUserSessions(String username) {
+        redisTemplate.opsForValue().set(
+            SUSPENDED_PREFIX + username, "1",
+            props.accessTokenTtlSeconds(), TimeUnit.SECONDS);
+        redisTemplate.delete(REFRESH_PREFIX + username);
+    }
+
+    /** [Phase 6] 정지 해제 — access 차단 마커 제거. */
+    public void clearUserSessionRevocation(String username) {
+        redisTemplate.delete(SUSPENDED_PREFIX + username);
+    }
+
+    /**
+     * [Phase 6] 필터용 통합 판정 — 토큰이 블랙리스트(jti)이거나 계정 정지(subject) 상태인지.
+     * 토큰을 1회만 디코드한다.
+     */
+    public boolean isTokenRevoked(String accessToken) {
+        try {
+            Jwt jwt = jwtDecoder.decode(accessToken);
+            String jti = jwt.getId();
+            if (jti != null && !jti.isBlank()
+                && Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + jti))) {
+                return true;
+            }
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + accessToken))) {
+                return true; // 레거시(jti 없는 토큰)
+            }
+            String sub = jwt.getSubject();
+            return sub != null && Boolean.TRUE.equals(redisTemplate.hasKey(SUSPENDED_PREFIX + sub));
+        } catch (JwtException e) {
             return false;
         }
     }
