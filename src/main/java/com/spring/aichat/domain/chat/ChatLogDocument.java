@@ -132,6 +132,9 @@ public class ChatLogDocument {
     @Field("scenesJson")
     private String scenesJson;
 
+    /** [Bug-Restore] 디렉터 자율 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용. List<String> 직렬화. */
+    private String dialogueOptionsJson;
+
     @CreatedDate
     @Field("createdAt")
     private LocalDateTime createdAt;
@@ -263,7 +266,16 @@ public class ChatLogDocument {
     public static ChatLogDocument assistantWithThought(Long roomId, String raw, String clean,
                                                        EmotionTag emotion, String audioUrl,
                                                        String innerThought, String scenesJson) {
+        return assistantWithThought(roomId, raw, clean, emotion, audioUrl, innerThought, scenesJson, null);
+    }
+
+    /** [Bug-Restore] dialogueOptionsJson 포함 버전 — V2 디렉터 선택지 복원용. */
+    public static ChatLogDocument assistantWithThought(Long roomId, String raw, String clean,
+                                                       EmotionTag emotion, String audioUrl,
+                                                       String innerThought, String scenesJson,
+                                                       String dialogueOptionsJson) {
         return ChatLogDocument.builder()
+            .dialogueOptionsJson(dialogueOptionsJson)
             .roomId(roomId)
             .role(ChatRole.ASSISTANT)
             .rawContent(raw)

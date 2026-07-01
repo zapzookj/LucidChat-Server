@@ -114,7 +114,8 @@ public class OpenRouterStreamClient {
 
         OpenAiChatRequest streamRequest = new OpenAiChatRequest(
             request.model(), request.messages(), request.temperature(),
-            true, request.frequencyPenalty(), request.presencePenalty(), request.provider(), Map.of("type", "json_object")
+            true, request.frequencyPenalty(), request.presencePenalty(), request.provider(), Map.of("type", "json_object"),
+            request.maxTokens()   // [Q2-Fix] 호출부 지정 max_tokens 통과 — 출력 잘림(JSON 파스 에러) 방지
         );
 
         String jsonBody;

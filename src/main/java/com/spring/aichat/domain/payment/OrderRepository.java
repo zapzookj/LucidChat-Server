@@ -41,4 +41,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     int expireOldPendingOrders(@Param("cutoff") LocalDateTime cutoff);
 
     long countByUser_IdAndStatus(Long userId, OrderStatus status);
+
+    // [Phase 6] 매출 집계 (paidAt 기준). status 문자열 리터럴은 기존 JPQL 관례를 따름.
+    @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status = 'PAID' AND o.paidAt >= :from AND o.paidAt < :to")
+    long sumPaidBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status = 'REFUNDED' AND o.paidAt >= :from AND o.paidAt < :to")
+    long sumRefundedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT o.productType, COUNT(o), COALESCE(SUM(o.amount), 0) FROM Order o " +
+        "WHERE o.status = 'PAID' AND o.paidAt >= :from AND o.paidAt < :to GROUP BY o.productType")
+    List<Object[]> revenueByProductBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

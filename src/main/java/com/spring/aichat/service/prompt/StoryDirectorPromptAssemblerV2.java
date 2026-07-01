@@ -241,6 +241,11 @@ public class StoryDirectorPromptAssemblerV2 {
             ## Key Locations
             %s
 
+            **Key Locations 운용 규칙**:
+            - 스토리 *시작 직후(첫 응답)*: 현재 시작 장소가 유저 페르소나·히로인 구성과 어울리지 않으면, 첫 씬에서 `location_change`로 위 Key Locations 중 가장 자연스러운 곳을 확정하고 그곳에서 오프닝을 전개하라.
+            - 위 Key Locations *사이의 이동*은 반드시 `location_change`만 사용 (이미 존재하는 장소 — `new_dynamic_location` 사용 금지).
+            - `new_dynamic_location`은 위 목록에 *없는 완전히 새로운 장소*가 서사상 필요할 때만.
+
             **World Constraint**: 위 세계관의 시대·문화·정서적 결을 절대 깨지 말 것. 시대 부적합 요소(예: 중세 세계관의 스마트폰) 금지.""".formatted(
             world.getDisplayName(),
             world.getDisplayName(),
@@ -487,8 +492,14 @@ public class StoryDirectorPromptAssemblerV2 {
     private String buildSection7Persona(ChatRoom room, User user) {
         String persona = room.getEffectivePersona(user);
         String safePersona = persona != null ? injectionGuard.sanitizePersona(persona) : "(미정의)";
+        // [닉네임] 방별 스토리 닉네임 우선, 없으면 계정 닉네임 — 캐릭터 호칭의 단일 기준
+        String rawNickname = room.getStoryUserNickname() != null && !room.getStoryUserNickname().isBlank()
+            ? room.getStoryUserNickname() : user.getNickname();
+        String safeNickname = rawNickname != null ? injectionGuard.sanitizePersona(rawNickname) : "주인공";
         return """
             # [7] USER ACTOR PERSONA
+
+            **유저(주인공)의 이름: %s** — 모든 캐릭터는 유저를 이 이름으로 부른다. 다른 호칭(예: "당신", 임의 작명)으로 대체하지 않는다.
 
             유저는 이 세계의 주인공(actor)이다. 아래는 유저가 입력한 페르소나:
 
@@ -496,7 +507,7 @@ public class StoryDirectorPromptAssemblerV2 {
 
             - 유저의 대사 = 그들이 입에서 낸 실제 말.
             - 유저의 행동 = 그들이 의지로 한 행동.
-            - 디렉터는 유저의 *내적 독백*을 임의로 생성하지 않는다. 단 유저 페르소나의 *외적 반응*은 묘사 가능.""".formatted(safePersona);
+            - 디렉터는 유저의 *내적 독백*을 임의로 생성하지 않는다. 단 유저 페르소나의 *외적 반응*은 묘사 가능.""".formatted(safeNickname, safePersona);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -631,7 +642,7 @@ public class StoryDirectorPromptAssemblerV2 {
                   "narration": "3인칭 디렉터 시점 묘사 (한국어, 3~4문장)",
                   "dialogue": "화자의 대사 (한국어). 화자가 null이면 빈 문자열",
                   "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | DISGUST | RELAX | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
-                  "inner_thought": "화자의 속마음 (겉과 속이 다를 때만, 그 외 null)",
+                  "inner_thought": "화자의 *그 순간* 숨은 속마음 — 대사와 상반될 때만, 그 외 null (유저에 대한 누적 인상은 아님 → user_impressions)",
                   "location_change": "새 location_key 또는 null (유저 위치가 변경된 경우에만)",
                   "new_dynamic_location": {
                     "name": "표시명",
@@ -658,10 +669,13 @@ public class StoryDirectorPromptAssemblerV2 {
                   "days": 0,
                   "day_part": "MORNING | NOON | AFTERNOON | EVENING | NIGHT | null"
                 },
-                "bgm_mode": "DAILY | ROMANTIC | EXCITING | TOUCHING | TENSE | null",
+                "bgm_mode": "DAILY_CALM | DAILY_BRIGHT | ROMANTIC | EXCITING | TOUCHING | TENSE | null (CALM=잔잔한 일상·차분한 대화, BRIGHT=활기찬 외출·즐거운 분위기)",
                 "ending_triggered": false,
                 "ending_type": "HAPPY | BAD | null",
-                "relation_transition": null
+                "relation_transition": null,
+                "user_impressions": [
+                  { "character_id": 47, "impression": "유저에 대한 그 캐릭터의 *누적 인상* 1~2문장 (한국어)" }
+                ]
               },
               "memory_delta": {
                 "world": "이 응답의 World-level 1줄 요약 (선택)",
@@ -686,7 +700,8 @@ public class StoryDirectorPromptAssemblerV2 {
             - `scenes` 배열이 *맨 처음에* 출력. system_updates / memory_delta / incoming_messages / dialogue_options는 *뒤에*.
             - `narrative_threads`는 *선택·델타* — 이번 응답에서 새로 열렸거나 상태가 바뀐 떡밥만 보고. 없으면 생략. [나침반]과 연동.
             - `stat_changes` / `memory_delta`는 *응답 전체*의 결과 — 씬별로 분리 안 함.
-            - 캐릭터 ID는 [4] HEROINES에 명시된 그대로 String 키로 사용.
+            - 캐릭터 ID는 [4] HEROINES에 명시된 그대로 String 키로 사용. **반드시 숫자 ID** — `stat_changes`의 키, 모든 `character_id`/`from_character_id`에 캐릭터 *이름* 사용 절대 금지 (이름은 무시되어 해당 갱신이 소실된다).
+            - `user_impressions`: *매 턴 금지*. 대략 5~10턴마다, 또는 유저를 보는 시각이 *유의미하게 변한* 턴에만 해당 캐릭터 항목을 출력 (그 외 필드 자체를 생략). `inner_thought`(순간)와 혼동 금지 — 이것은 누적된 인상이다.
             - `new_dynamic_location` / `location_change`는 *해당 씬에서 변경된 경우*만. 다른 씬에서는 null.
             - `inner_thought`는 *그 씬의 화자 속마음*만. 다른 화자는 다른 씬에서 별도 출력.
             - `incoming_messages` / `dialogue_options`는 *비어있어도 OK* — 빈 배열로 출력하거나 키 자체 생략.

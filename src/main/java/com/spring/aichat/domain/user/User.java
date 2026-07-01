@@ -2,6 +2,7 @@ package com.spring.aichat.domain.user;
 
 import com.spring.aichat.domain.enums.AuthProvider;
 import com.spring.aichat.domain.enums.SubscriptionType;
+import com.spring.aichat.domain.enums.UserStatus;
 import com.spring.aichat.exception.InsufficientEnergyException;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -101,6 +102,18 @@ public class User {
 
     @Column(name = "is_secret_mode", nullable = false)
     private Boolean isSecretMode = false;
+
+    // ── 계정 상태 (Phase 6: 관리자 수동 정지/차단) ──
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private UserStatus status = UserStatus.ACTIVE;
+
+    @Column(name = "status_reason", length = 300)
+    private String statusReason;
+
+    @Column(name = "status_changed_at")
+    private LocalDateTime statusChangedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -247,4 +260,46 @@ public class User {
     public void updateNickName(String nickname) { this.nickname = nickname; }
     public void updateProfileDescription(String s) { this.profileDescription = s; }
     public void updateIsSecretMode(boolean b) { this.isSecretMode = b; }
+
+    // ── 계정 상태 (Phase 6) ──
+
+    public boolean isActive() { return this.status == UserStatus.ACTIVE; }
+
+    /** 접근이 차단되어야 하는 상태(정지/차단)인지. */
+    public boolean isAccessBlocked() { return this.status != null && this.status.blocksAccess(); }
+
+    public void suspend(String reason) {
+        this.status = UserStatus.SUSPENDED;
+        this.statusReason = reason;
+        this.statusChangedAt = LocalDateTime.now();
+    }
+
+    public void ban(String reason) {
+        this.status = UserStatus.BANNED;
+        this.statusReason = reason;
+        this.statusChangedAt = LocalDateTime.now();
+    }
+
+    public void reactivate() {
+        this.status = UserStatus.ACTIVE;
+        this.statusReason = null;
+        this.statusChangedAt = LocalDateTime.now();
+    }
+
+    // ── 유료 에너지 차감 (Phase 6: 관리자 조정 / 환불 회수) ──
+
+    /** 유료 에너지 차감(0 미만으로 내려가지 않도록 클램핑). 관리자 조정·환불 회수에서 사용. */
+    public void deductPaidEnergy(int amount) {
+        if (amount <= 0) return;
+        this.paidEnergy = Math.max(0, this.paidEnergy - amount);
+    }
+
+    // ── 성인 인증 해제 (Phase 6: 관리자 CI 재바인딩) ──
+
+    /** 성인 인증 강제 해제 — CI 해시 반납(재인증/타 계정 재바인딩이 가능해짐). */
+    public void releaseAdultVerification() {
+        this.isAdult = false;
+        this.ciHash = null;
+        this.adultVerifiedAt = null;
+    }
 }

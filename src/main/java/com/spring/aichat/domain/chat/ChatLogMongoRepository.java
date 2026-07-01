@@ -101,4 +101,11 @@ public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument,
     default Page<ChatLogDocument> findByRoomIdAndHiddenFalse(Long roomId, Pageable pageable) {
         return findByRoomIdAndHiddenNot(roomId, true, pageable);
     }
+
+    // [Phase 6] 품질 대시보드 — 평가/사유 집계 (idx_rating_created 활용)
+    Page<ChatLogDocument> findByRatingOrderByCreatedAtDesc(String rating, Pageable pageable);
+
+    long countByRating(String rating);
+
+    long countByDislikeReason(String dislikeReason);
 }

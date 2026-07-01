@@ -85,6 +85,7 @@ public class ChatStreamService {
     private final BoostModeResolver boostModeResolver;
     private final PromptInjectionGuard injectionGuard;
     private final ContentModerationService contentModerationService;
+    private final com.spring.aichat.service.moderation.ModerationEventService moderationEventService;
     private final UserRepository userRepository;
     private final SecretModeService secretModeService;
     private final ChatService chatService;
@@ -187,6 +188,9 @@ public class ChatStreamService {
             ContentModerationService.ModerationVerdict verdict =
                 contentModerationService.moderate(userMessage, isSecretCheck);
             if (!verdict.passed()) {
+                moderationEventService.recordModeration(
+                    roomForCheck.getUser().getId(), roomForCheck.getId(), "CHAT",
+                    verdict.blockedAtStep(), verdict.category(), verdict.totalLatencyMs(), userMessage);
                 sendSseError(emitter, "CONTENT_BLOCKED", verdict.userMessage());
                 return;
             }
@@ -208,6 +212,9 @@ public class ChatStreamService {
                 injectionGuard.checkChatMessage(userMessage, jpa.username());
             if (injCheck.detected()) {
                 log.warn("⚠️ [INJECTION] Detected: user={}", jpa.username());
+                moderationEventService.recordInjection(
+                    roomForCheck.getUser().getId(), jpa.username(), roomForCheck.getId(), "CHAT",
+                    injCheck.severity().name(), injCheck.matchedPattern(), userMessage);
             }
 
             // ── MongoDB: USER 메시지 저장 ──
@@ -234,7 +241,7 @@ public class ChatStreamService {
                 effectiveSecretMode, emitter, rollbackCtx);
             if (parsed == null) return; // 에러 시 이미 emitter 처리됨
 
-            boolean isStory = jpa.room().isStoryMode();
+            // [이관] isStory 변수 제거 — 모든 게이트가 ChatModePolicy로 정책화됨 (SANDBOX 이관 완성)
 
             // [Phase 5.5-EV] 디렉터 모드 중 유저 개입 → RESOLVED 판정
             boolean wasEventActive = jpa.room().isEventActive();
@@ -278,13 +285,13 @@ public class ChatStreamService {
 
                     // 승급 이벤트 처리
                     PromotionEvent promoEvent = null;
-                    if (isStory) {
+                    if (ChatModePolicy.supportsPromotion(freshRoom.getChatMode())) {  // [이관] isStory→정책 (SANDBOX 활성)
                         promoEvent = resolvePromotionLogic(freshRoom, parsed, jpa.wasPromotionPending(),
                             isUserIntervention);
                     }
 
                     freshRoom.updateLastActive(parsed.mainEmotion());
-                    if (isStory) {
+                    if (ChatModePolicy.supportsSceneDirection(freshRoom.getChatMode())) {  // [이관]
                         freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
                             parsed.lastOutfit(), parsed.lastTime());
                     }
@@ -294,13 +301,13 @@ public class ChatStreamService {
                     }
 
                     // [Phase 5.5-Sep] 승급 대기: 스토리 모드 전용
-                    PromotionEvent deferredPromo = isStory
+                    PromotionEvent deferredPromo = ChatModePolicy.supportsPromotion(freshRoom.getChatMode())  // [이관]
                         ? checkAndStartDeferredPromotion(freshRoom, parsed.topicConcluded()) : null;
                     if (deferredPromo != null) promoEvent = deferredPromo;
 
                     // 엔딩 트리거
                     EndingTrigger endingTrigger = null;
-                    if (isStory) {
+                    if (ChatModePolicy.supportsEnding(freshRoom.getChatMode())) {  // [이관]
                         String endingCheck = freshRoom.checkEndingTrigger();
                         if (endingCheck != null) {
                             endingTrigger = new EndingTrigger(endingCheck);
@@ -313,7 +320,7 @@ public class ChatStreamService {
                     }
 
                     // [Phase 5.5-Sep] 이스터에그: 스토리 모드 전용
-                    EasterEggEvent easterEgg = isStory
+                    EasterEggEvent easterEgg = ChatModePolicy.supportsEasterEggs(freshRoom.getChatMode())  // [이관]
                         ? processEasterEgg(parsed.aiOutput(), jpa.userId()) : null;
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
@@ -324,8 +331,8 @@ public class ChatStreamService {
                         statsSnapshot, freshRoom.getCurrentBpm(),
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
-                        isStory ? freshRoom.isTopicConcluded() : false,
-                        isStory ? (wasEventActive ? "RESOLVED" : (freshRoom.isEventActive() ? freshRoom.getEventStatus() : null)) : null);
+                        ChatModePolicy.supportsTopicConcluded(freshRoom.getChatMode()) ? freshRoom.isTopicConcluded() : false,  // [이관]
+                        ChatModePolicy.supportsEvents(freshRoom.getChatMode()) ? (wasEventActive ? "RESOLVED" : (freshRoom.isEventActive() ? freshRoom.getEventStatus() : null)) : null);
                 });
             } catch (Exception e) {
                 log.error("❌ TX-2 failed | roomId={}", roomId, e);
@@ -340,7 +347,8 @@ public class ChatStreamService {
             //   신규 흐름: 3회 재시도 + 데드레터 보존 + null 시 운영 alert.
             String assistantLogId = null;
             boolean hasInnerThought = false;
-            String innerThoughtToSave = isStory ? parsed.innerThought() : null;
+            String innerThoughtToSave = ChatModePolicy.supportsInnerThought(jpa.room().getChatMode())
+                ? parsed.innerThought() : null;  // [이관] 속마음 SANDBOX 활성
             ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
                 roomId, parsed.cleanJson(), parsed.combinedDialogue(),
                 parsed.mainEmotion(), null, innerThoughtToSave, parsed.scenesJson());
@@ -377,7 +385,11 @@ public class ChatStreamService {
             // ★ [Phase 5.5-Illust] 새로운 장소 전환 처리 ★
             // [Phase 6-Illust hotfix] canonical_key 기반 중복 가드 + 같은 장소면 transition 응답 생략
             LocationTransition locationTransition = null;
-            if (isStory && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
+            // [Q2-Fix] isStory 하드코딩 → ChatModePolicy.supportsSceneDirection 정책 게이트.
+            //   프롬프트는 이미 정책 게이트(SANDBOX 포함)로 location 출력을 지시하면서, 처리만 STORY로
+            //   막혀 있어 SANDBOX 장소이동/동적배경이 통째로 무시되던 이관 누락의 수정.
+            if (ChatModePolicy.supportsSceneDirection(jpa.room().getChatMode())
+                && parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
                 if (jpa.room().getCurrentDynamicLocationName() != null
                     && isSameDynamicLocation(jpa.room(), parsed)) {
                     // 같은 canonical_key → 의미상 동일 장소. 표시명만 달라도(예: "어둡고 축축한 뒷골목" /
@@ -434,8 +446,11 @@ public class ChatStreamService {
             applyParsedToRoom(roomId, parsed);
 
             // ── SSE: final_result ──
-            sendFinalResult(emitter, response, isStory && hasInnerThought, assistantLogId,
-                isStory && parsed.generateIllustration(), locationTransition);
+            sendFinalResult(emitter, response,
+                ChatModePolicy.supportsInnerThought(jpa.room().getChatMode()) && hasInnerThought,  // [이관]
+                assistantLogId,
+                ChatModePolicy.supportsSceneDirection(jpa.room().getChatMode()) && parsed.generateIllustration(),  // [이관]
+                locationTransition);
             emitter.complete();
 
             log.info("⏱ [STREAM-PERF] sendMessageStream DONE: {}ms", System.currentTimeMillis() - totalStart);
@@ -1034,7 +1049,8 @@ public class ChatStreamService {
                 "allow_fallbacks", false
             );
             OpenAiChatRequest llmRequest = new OpenAiChatRequest(
-                model, messages, 0.8, true, 0.3, 0.15, providerRouting, Map.of("type", "json_object"));
+                model, messages, 0.8, true, 0.3, 0.15, providerRouting, Map.of("type", "json_object"),
+                6144);  // [Q2-Fix] 멀티씬(2~3)+location 필드 한글 JSON 여유 — scenes 배열 중간 잘림(파스 에러) 방지
 
             streamResult = streamClient.streamCompletion(
                 llmRequest, onFirstScene, onEventStatus, decision.ttftDeadlineMs());
@@ -1056,7 +1072,8 @@ public class ChatStreamService {
                     "allow_fallbacks", false
                 );
                 OpenAiChatRequest fallbackRequest = new OpenAiChatRequest(
-                    model, messages, 0.8, true, 0.3, 0.15, fallbackRouting, Map.of("type", "json_object"));
+                    model, messages, 0.8, true, 0.3, 0.15, fallbackRouting, Map.of("type", "json_object"),
+                    6144);  // [Q2-Fix]
 
                 streamResult = streamClient.streamCompletion(
                     fallbackRequest, onFirstScene, onEventStatus, 0); // Vertex는 데드라인 없음

@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.core.JsonParser;
+import com.spring.aichat.domain.enums.RelationStatus;
+
 import java.io.IOException;
 
 import java.util.List;
@@ -120,7 +122,12 @@ public record AiJsonOutputV2(
         @JsonProperty("bgm_mode") String bgmMode,
         @JsonProperty("ending_triggered") Boolean endingTriggered,
         @JsonProperty("ending_type") String endingType,
-        @JsonProperty("relation_transition") RelationTransition relationTransition
+        @JsonProperty("relation_transition") RelationTransition relationTransition,
+        /**
+         * [UX3] 유저에 대한 캐릭터의 *누적 인상* (5~10턴 주기, LLM 자율 갱신).
+         * scenes[].inner_thought(매 응답, 그 순간의 숨은 속마음)와 성격이 다름 — 상태창 INNER THOUGHT의 단일 소스.
+         */
+        @JsonProperty("user_impressions") List<UserImpression> userImpressions
     ) {
         public boolean isTopicConcluded() {
             return Boolean.TRUE.equals(topicConcluded);
@@ -138,6 +145,10 @@ public record AiJsonOutputV2(
         public boolean hasCharacterMovements() {
             return characterMovements != null && !characterMovements.isEmpty();
         }
+
+        public boolean hasUserImpressions() {
+            return userImpressions != null && !userImpressions.isEmpty();
+        }
     }
 
     public record CharacterMovement(
@@ -154,6 +165,12 @@ public record AiJsonOutputV2(
         @JsonProperty("character_id") @JsonDeserialize(using = LenientLongDeserializer.class) Long characterId,
         String from,
         String to
+    ) {}
+
+    /** [UX3] 유저에 대한 누적 인상 — 캐릭터 상태창 INNER THOUGHT 소스. */
+    public record UserImpression(
+        @JsonProperty("character_id") @JsonDeserialize(using = LenientLongDeserializer.class) Long characterId,
+        String impression
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

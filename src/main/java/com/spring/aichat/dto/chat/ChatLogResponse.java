@@ -38,15 +38,26 @@ public record ChatLogResponse(
     boolean hasInnerThought,    // [Phase 5.5-IT] 속마음 존재 여부
     String innerThought,        // [Phase 5.5-IT] 해금된 경우만 텍스트, 아니면 null
     boolean thoughtUnlocked,    // [Phase 5.5-IT] 해금 완료 여부
-    String scenesJson           // [Phase 5.5-Fix] 구조화된 씬 배열 JSON (ASSISTANT만, 나머지 null)
+    String scenesJson,          // [Phase 5.5-Fix] 구조화된 씬 배열 JSON (ASSISTANT만, 나머지 null)
+    String dialogueOptionsJson  // [Bug-Restore] 디렉터 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용
 ) {
+    /** 하위 호환: dialogueOptionsJson 없는 생성자 */
+    public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
+                           EmotionTag emotionTag, LocalDateTime createdAt,
+                           String rating, String dislikeReason,
+                           boolean hasInnerThought, String innerThought, boolean thoughtUnlocked,
+                           String scenesJson) {
+        this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
+            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked, scenesJson, null);
+    }
+
     /** 하위 호환: scenesJson 없는 생성자 */
     public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
                            EmotionTag emotionTag, LocalDateTime createdAt,
                            String rating, String dislikeReason,
                            boolean hasInnerThought, String innerThought, boolean thoughtUnlocked) {
         this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
-            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked, null);
+            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked, null, null);
     }
 
     /** 하위 호환: 속마음 필드 없는 생성자 */
@@ -54,6 +65,6 @@ public record ChatLogResponse(
                            EmotionTag emotionTag, LocalDateTime createdAt,
                            String rating, String dislikeReason) {
         this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
-            rating, dislikeReason, false, null, false, null);
+            rating, dislikeReason, false, null, false, null, null);
     }
 }

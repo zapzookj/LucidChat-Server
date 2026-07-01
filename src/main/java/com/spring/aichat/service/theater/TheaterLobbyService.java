@@ -95,7 +95,7 @@ public class TheaterLobbyService {
 
         for (World world : worlds) {
             List<Character> heroines = characterRepository
-                .findByWorldIdAndTheaterAvailableTrue(world.getId());
+                .findByWorldIdAndTheaterAvailableTrueAndHiddenFalse(world.getId());
 
             List<HeroineSummary> summaries = heroines.stream()
                 .map(c -> new HeroineSummary(

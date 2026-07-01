@@ -216,6 +216,10 @@ public class Character {
     @Column(name = "theater_available", nullable = false)
     private boolean theaterAvailable = false;
 
+    /** [Phase 6] 관리자 전역 숨김(로비/목록에서 즉시 비노출). 시드(YAML)가 건드리지 않아 admin 편집이 보존됨. */
+    @Column(name = "hidden", nullable = false)
+    private boolean hidden = false;
+
     /**
      * 영역 장소 — Theater의 Act 초입 장소 선택 분기에서 사용
      * 줄 단위 구분: 한 줄 = 하나의 장소
@@ -497,6 +501,11 @@ public class Character {
         return theaterIntroBeat != null ? theaterIntroBeat
             : name + "과의 첫 만남. 운명이 갈리는 순간이 다가온다.";
     }
+
+    // [Phase 6] 관리자 노출 토글 — 좁은 도메인 뮤테이터.
+    public void setHidden(boolean hidden) { this.hidden = hidden; }
+    public void setStoryAvailable(boolean storyAvailable) { this.storyAvailable = storyAvailable; }
+    public void setTheaterAvailable(boolean theaterAvailable) { this.theaterAvailable = theaterAvailable; }
 
     /** 관리 용도: Theater 메타데이터 수동 업데이트 */
     public void updateTheaterMetadata(WorldId worldId, boolean theaterAvailable,

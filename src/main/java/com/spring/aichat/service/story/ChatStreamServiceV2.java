@@ -93,6 +93,7 @@ public class ChatStreamServiceV2 {
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final ContentModerationService contentModerationService;
     private final PromptInjectionGuard injectionGuard;
+    private final com.spring.aichat.service.moderation.ModerationEventService moderationEventService;
     private final SecretModeService secretModeService;
     private final BoostModeResolver boostModeResolver;
     private final MemoryService memoryService;
@@ -166,6 +167,9 @@ public class ChatStreamServiceV2 {
                 ContentModerationService.ModerationVerdict verdict =
                     contentModerationService.moderate(userMessage, isSecretCheck);
                 if (!verdict.passed()) {
+                    moderationEventService.recordModeration(
+                        roomForCheck.getUser().getId(), roomId, "CHAT_V2",
+                        verdict.blockedAtStep(), verdict.category(), verdict.totalLatencyMs(), userMessage);
                     sendSseError(emitter, "CONTENT_BLOCKED", verdict.userMessage());
                     return;
                 }
@@ -189,6 +193,9 @@ public class ChatStreamServiceV2 {
                     injectionGuard.checkChatMessage(userMessage, jpa.username());
                 if (injCheck.detected()) {
                     log.warn("⚠️ [V2-INJECTION] Detected: user={}", jpa.username());
+                    moderationEventService.recordInjection(
+                        roomForCheck.getUser().getId(), jpa.username(), roomId, "CHAT_V2",
+                        injCheck.severity().name(), injCheck.matchedPattern(), userMessage);
                 }
             }
 
@@ -460,7 +467,7 @@ public class ChatStreamServiceV2 {
             );
             OpenAiChatRequest req = new OpenAiChatRequest(
                 model, messages, 0.8, true, 0.3, 0.15, providerRouting,
-                Map.of("type", "json_object"));
+                Map.of("type", "json_object"), 8192);  // [Q2-Fix] 멀티씬+system_updates 한글 JSON 여유 — 잘림 방지
             streamResult = streamClient.streamCompletion(
                 req, onFirstScene, onEventStatus, decision.ttftDeadlineMs());
             if (decision.isPrimary()) {
@@ -476,7 +483,7 @@ public class ChatStreamServiceV2 {
                     "allow_fallbacks", false);
                 OpenAiChatRequest fbReq = new OpenAiChatRequest(
                     model, messages, 0.8, true, 0.3, 0.15, fb,
-                    Map.of("type", "json_object"));
+                    Map.of("type", "json_object"), 8192);  // [Q2-Fix]
                 streamResult = streamClient.streamCompletion(fbReq, onFirstScene, onEventStatus, 0);
                 log.info("✅ [V2-CIRCUIT] Vertex fallback OK | TTFT={}ms", streamResult.ttft());
             } catch (Exception fbEx) {
@@ -668,6 +675,17 @@ public class ChatStreamServiceV2 {
                 promotionService.processDirectorTrigger(freshRoom,
                     new RelationPromotionService.RelationTransition(rt.characterId(), rt.from(), rt.to()));
             }
+            // [UX3] 유저에 대한 *누적 인상* 적용 — 상태창 INNER THOUGHT의 단일 소스.
+            if (sysUpdates.hasUserImpressions()) {
+                Map<Long, ChatRoomHeroine> heroineByCharId = heroineRepository.findByChatRoom_Id(freshRoom.getId()).stream()
+                    .filter(h -> h.getCharacter() != null)
+                    .collect(Collectors.toMap(h -> h.getCharacter().getId(), h -> h, (a, b) -> a));
+                for (AiJsonOutputV2.UserImpression ui : sysUpdates.userImpressions()) {
+                    if (ui.characterId() == null || ui.impression() == null || ui.impression().isBlank()) continue;
+                    ChatRoomHeroine target = heroineByCharId.get(ui.characterId());
+                    if (target != null) target.updateCharacterThought(ui.impression().trim(), 0);
+                }
+            }
         }
         // (i) 스탯 갱신 후 자격 활성 체크
         endingService.checkAndActivateEligibility(freshRoom);
@@ -682,6 +700,7 @@ public class ChatStreamServiceV2 {
 
         // 응답 빌딩 — *마지막 씬의 speaker*를 currentSpeaker로
         Long lastSpeakerId = resolveSpeakerIdByName(freshRoom, lastScene);
+        log.info("[V2-UPDATES] all updates applied in tx-scope — room={} (이후 DB에 없으면 트랜잭션 롤백 의심)", roomId);
         return buildSendChatResponseV2(freshRoom, parsed, lastSpeakerId, effectiveSecretMode);
     }
 
@@ -769,17 +788,41 @@ public class ChatStreamServiceV2 {
 
     private void applyHeroineStatChanges(ChatRoom room, AiJsonOutputV2.SystemUpdates sysUpdates,
                                          boolean effectiveSecretMode) {
-        if (sysUpdates == null || sysUpdates.statChanges() == null) return;
+        if (sysUpdates == null || sysUpdates.statChanges() == null) {
+            log.info("[V2-STATS] no stat_changes in this turn (sysUpdates={} )", sysUpdates == null ? "null" : "present");
+            return;
+        }
+        log.info("[V2-STATS] incoming keys={} room={}", sysUpdates.statChanges().keySet(), room.getId());
+        // [Bug-Stats] LLM이 키를 캐릭터 *이름*("로제타")으로 출력하는 사례 — ID 파싱 실패→continue로
+        //   전부 스킵돼 스탯이 0에 고정되던 버그. 이름 키도 해석(이름→ChatRoomHeroine 폴백)한다.
+        Map<String, ChatRoomHeroine> byName = null;  // lazy — 이름 키가 실제로 올 때만 1회 빌드
         for (Map.Entry<String, AiJsonOutput.StatChanges> entry : sysUpdates.statChanges().entrySet()) {
-            Long charId;
-            try { charId = Long.parseLong(entry.getKey()); }
-            catch (NumberFormatException e) { continue; }
-            ChatRoomHeroine h = heroineRepository
-                .findByChatRoom_IdAndCharacter_Id(room.getId(), charId).orElse(null);
-            if (h == null) continue;
+            ChatRoomHeroine h = null;
+            try {
+                Long charId = Long.parseLong(entry.getKey().trim());
+                h = heroineRepository.findByChatRoom_IdAndCharacter_Id(room.getId(), charId).orElse(null);
+            } catch (NumberFormatException e) {
+                if (byName == null) {
+                    byName = heroineRepository.findByChatRoom_Id(room.getId()).stream()
+                        .filter(x -> x.getCharacter() != null && x.getCharacter().getName() != null)
+                        .collect(Collectors.toMap(x -> x.getCharacter().getName(), x -> x, (a, b) -> a));
+                }
+                h = byName.get(entry.getKey().trim());
+                if (h != null) log.info("[V2-STATS] name-key resolved: '{}' → charId={}", entry.getKey(), h.getCharacter().getId());
+                else log.warn("[V2-STATS] unresolvable stat key skipped: '{}'", entry.getKey());
+            }
+            if (h == null) {
+                log.warn("[V2-STATS] numeric key but heroine NOT FOUND in room — key='{}' room={} (방 히로인의 character_id와 불일치?)",
+                    entry.getKey(), room.getId());
+                continue;
+            }
             AiJsonOutput.StatChanges sc = entry.getValue();
+            int beforeAff = h.getStatAffection(), beforePlay = h.getStatPlayfulness();
             h.applyNormalStatChanges(sc.safeIntimacy(), sc.safeAffection(),
                 sc.safeDependency(), sc.safePlayfulness(), sc.safeTrust());
+            log.info("[V2-STATS] applied charId={} ΔAff={} ΔPlay={} | aff {}→{} play {}→{}",
+                h.getCharacter().getId(), sc.safeAffection(), sc.safePlayfulness(),
+                beforeAff, h.getStatAffection(), beforePlay, h.getStatPlayfulness());
             if (effectiveSecretMode) {
                 h.applySecretStatChanges(sc.safeLust(), sc.safeCorruption(), sc.safeObsession());
             }
@@ -817,16 +860,10 @@ public class ChatStreamServiceV2 {
             speaker.markSpoken();
         }
 
-        // 2. 마지막 씬의 inner_thought만 그 화자에게
-        AiJsonOutputV2.SceneV2 lastScene = ai.lastScene();
-        if (lastScene != null && lastScene.hasInnerThought()
-            && lastScene.speaker() != null && !lastScene.speaker().isBlank()) {
-            ChatRoomHeroine speaker = heroineByName.get(lastScene.speaker());
-            if (speaker != null) {
-                int currentTurnCount = 0;  // V2에서 thoughtUpdatedAtTurn은 해금 만료 정책 약함
-                speaker.updateCharacterThought(lastScene.innerThought(), currentTurnCount);
-            }
-        }
+        // [UX3] (제거) 마지막 씬 inner_thought를 characterThought에 복사하던 로직 —
+        //   ① 순간 속마음(scenes[].inner_thought)은 로그(innerThought)·속마음 말풍선 전용,
+        //   ② 누적 인상(characterThought)은 system_updates.user_impressions가 단일 소스.
+        //   두 성격이 다른 데이터가 한 슬롯에 섞여 상태창에 순간 속마음이 노출되던 버그의 수정.
     }
 
     /**
@@ -1021,9 +1058,16 @@ public class ChatStreamServiceV2 {
         String innerThought = lastScene != null ? lastScene.innerThought() : null;
         if (innerThought != null && innerThought.isBlank()) innerThought = null;
 
+        // [Bug-Restore] dialogue_options 영속화 — 새로고침/재진입 시 복원용 (빈 리스트는 null로 절약).
+        String dialogueOptionsJson = null;
+        java.util.List<String> opts = parsed.aiOutput().dialogueOptions();
+        if (opts != null && !opts.isEmpty()) {
+            try { dialogueOptionsJson = objectMapper.writeValueAsString(opts); }
+            catch (Exception e) { log.warn("[V2-CHAT-LOG] dialogue_options serialize failed: {}", e.getMessage()); }
+        }
         ChatLogDocument doc = ChatLogDocument.assistantWithThought(
             roomId, parsed.cleanJson(), parsed.combinedContent(),
-            parsed.lastEmotion(), null, innerThought, parsed.scenesJson());
+            parsed.lastEmotion(), null, innerThought, parsed.scenesJson(), dialogueOptionsJson);
         ChatLogDocument saved = chatLogPersister.saveWithRetry(doc);
         if (saved != null) return saved.getId();
 

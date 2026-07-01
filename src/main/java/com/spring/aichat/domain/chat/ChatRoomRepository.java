@@ -41,6 +41,9 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     long countByUser_Id(Long userId);
 
+    /** [Phase 6] CS 로그 뷰어 — 유저의 방 목록. */
+    List<ChatRoom> findByUser_IdOrderByIdDesc(Long userId);
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [V1/Sandbox] character 기반 조회 (유지)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -3,12 +3,15 @@ package com.spring.aichat.service.auth;
 import com.spring.aichat.config.JwtProperties;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AuthProvider;
+import com.spring.aichat.domain.enums.UserStatus;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.auth.AuthResponse;
 import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.exception.BadRequestException;
+import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -87,6 +90,11 @@ public class AuthService {
             throw new NotFoundException("아이디 또는 비밀번호가 올바르지 않습니다.");
         }
 
+        // [Phase 6] 정지/차단 계정은 로그인(토큰 발급) 차단.
+        if (user.isAccessBlocked()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, blockedMessage(user));
+        }
+
         // [Phase 4.5] 기존 방 존재 여부 확인 (Continue 메뉴 활성화 판단용)
         boolean hasRooms = chatRoomRepository.countByUser_Id(user.getId()) > 0;
 
@@ -122,5 +130,13 @@ public class AuthService {
         map.put("boostMode", Boolean.TRUE.equals(user.getBoostMode()));
         map.put("isSecretMode", Boolean.TRUE.equals(user.getIsSecretMode()));
         return map;
+    }
+
+    private String blockedMessage(User user) {
+        if (user.getStatus() == UserStatus.BANNED) {
+            return "이용이 영구 제한된 계정입니다.";
+        }
+        String reason = user.getStatusReason();
+        return "일시 정지된 계정입니다." + (reason != null && !reason.isBlank() ? " 사유: " + reason : "");
     }
 }

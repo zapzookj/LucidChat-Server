@@ -138,7 +138,7 @@ public class StoryV2Service {
         }
 
         // 히로인 풀
-        List<Character> heroines = characterRepository.findByWorldIdAndStoryAvailableTrueOrderByIdAsc(worldId);
+        List<Character> heroines = characterRepository.findByWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(worldId);
         List<WorldHeroineCardResponse> heroineCards = heroines.stream()
             .map(c -> new WorldHeroineCardResponse(
                 c.getId(),

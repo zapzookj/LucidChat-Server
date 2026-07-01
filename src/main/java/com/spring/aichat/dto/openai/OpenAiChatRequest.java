@@ -23,8 +23,17 @@ public record OpenAiChatRequest(
     @JsonProperty("frequency_penalty") Double frequencyPenalty,
     @JsonProperty("presence_penalty")  Double presencePenalty,
     Map<String, Object> provider,
-    @JsonProperty("response_format") Map<String, String> responseFormat
+    @JsonProperty("response_format") Map<String, String> responseFormat,
+    @JsonProperty("max_tokens") Integer maxTokens   // [Q2-Fix] 미지정(null) 시 직렬화 제외(NON_NULL) → 기존 동작 보존
 ) {
+    /** 하위 호환: maxTokens 없는 8-인자 (기존 호출처 보존) */
+    public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature,
+                             Boolean stream, Double frequencyPenalty, Double presencePenalty,
+                             Map<String, Object> provider, Map<String, String> responseFormat) {
+        this(model, messages, temperature, stream, frequencyPenalty, presencePenalty,
+            provider, responseFormat, null);
+    }
+
     /** 기본 생성자 — penalty 적용 (일반 대화용) */
     public OpenAiChatRequest(String model, List<OpenAiMessage> messages, Double temperature) {
         this(model, messages, temperature, false, 0.3, 0.15, null, null);

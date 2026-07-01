@@ -9,7 +9,9 @@ package com.spring.aichat.domain.enums;
  * Ex: bgm_romantic.mp3, bgm_exciting.mp3
  */
 public enum BgmMode {
-    DAILY,        // 일상적인 분위기
+    DAILY,        // 일상적인 분위기 (레거시 — V1 전용. V2는 CALM/BRIGHT 이원화)
+    DAILY_CALM,   // [V2] 잔잔하고 조용한 일상 — 차분한 대화, 사색, 늦은 밤
+    DAILY_BRIGHT, // [V2] 밝고 활기찬 일상 — 외출, 장난, 즐거운 분위기
     ROMANTIC,     // 설레는 분위기
     EXCITING,     // 신나는 분위기
     TOUCHING,     // 감동적인 분위기

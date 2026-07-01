@@ -200,7 +200,7 @@ public class ChatController {
             doc.getId(), doc.getRole(), doc.getRawContent(), doc.getCleanContent(),
             doc.getEmotionTag(), doc.getCreatedAt(), doc.getRating(), doc.getDislikeReason(),
             doc.hasInnerThought(), visibleInnerThought, doc.isThoughtUnlocked(),
-            doc.getScenesJson());
+            doc.getScenesJson(), doc.getDialogueOptionsJson());
     }
 
     // ── DTO ──
