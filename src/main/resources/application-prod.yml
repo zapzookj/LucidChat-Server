@@ -1,0 +1,39 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:5432/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  data:
+    redis:
+      host: ${REDIS_HOST}       # 예: loved-bobcat-89270.upstash.io
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: true           # 🔥 Upstash 등 클라우드 Redis 사용 시 필수
+    mongodb:
+      uri: ${MONGO_URI}         # 예: mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/...
+      auto-index-creation: false # 운영에서는 인덱스 자동 생성을 끄는 것이 안전함
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # 운영 DB 스키마를 실수로 덮어쓰지 않도록 보호
+
+  security:
+    oauth2:
+      client:
+        registration:
+          naver:
+            redirect-uri: https://api.lucid-chat.com/login/oauth2/code/naver
+
+auth:
+  oauth2:
+    success-redirect: https://lucid-chat.com/oauth2/success
+
+fal:
+  webhook-base-url: "https://api.lucid-chat.com"
+#  use-webhook: true  # 운영은 웹훅 사용

@@ -1,0 +1,53 @@
+app:
+  worlds:
+    - id: MEDIEVAL_FANTASY
+      display-name: 중세 판타지
+      tagline: 고딕 저택에서 피어나는 로맨스
+      description: 석조 저택의 긴 복도, 흔들리는 촛불, 밤마다 들려오는 바람 소리. 클래식 오케스트라가 울려퍼지는 유럽풍 로맨스의 무대.
+      hero-image-url: https://d3578f1gfp49r6.cloudfront.net/worlds/medieval_fantasy/hero.png
+      thumbnail-url: https://d3578f1gfp49r6.cloudfront.net/worlds/medieval_fantasy/thumb.png
+      opening-narration: 낡은 저택의 문이 삐걱이며 열린다. 오랜 시간을 머금은 공기가 당신을 맞이한다. 이곳에서 어떤 이야기가 시작될지, 아직은 아무도 모른다.
+      default-bgm: TOUCHING
+      mood-keywords: 고딕,저택,귀족,클래식
+      secret-allowed: true
+      active: true
+      display-order: 1
+
+    - id: ORIENTAL_FANTASY
+      display-name: 동양 판타지
+      tagline: 신화와 현실의 경계에서 펼쳐지는 동양 판타지의 무대
+      description: 안개 낀 숲, 달빛 스미는 호수, 비단 옷자락. 신화와 현실의 경계에서 펼쳐지는 동양 판타지의 무대.
+      hero-image-url: https://d3578f1gfp49r6.cloudfront.net/worlds/oriental_fantasy/hero.png
+      thumbnail-url: https://d3578f1gfp49r6.cloudfront.net/worlds/oriental_fantasy/thumb.png
+      opening-narration: 숲의 공기는 달랐다. 달빛조차 안개 사이로 부드럽게 흩어지는 곳. 이 숲 어딘가에서, 누군가 당신을 기다리고 있다.
+      default-bgm: TOUCHING
+      mood-keywords: 무협,구미호,숲,신비
+      secret-allowed: true
+      active: true
+      display-order: 2
+
+    - id: MODERN_KOREA
+      display-name: 현대 한국
+      tagline: 도시의 낮과 밤, 엇갈리는 일상
+      description: 대학 캠퍼스의 풋풋한 낮, 심야 편의점의 고요한 새벽. 현대 한국의 일상 속에서 엇갈리는 이야기.
+      hero-image-url: https://d3578f1gfp49r6.cloudfront.net/worlds/modern_korea/hero.png
+      thumbnail-url: https://d3578f1gfp49r6.cloudfront.net/worlds/modern_korea/thumb.png
+      opening-narration: 평범한 하루의 시작. 하지만 오늘은 어쩐지 다른 예감이 든다. 도시의 어느 한 구석에서, 운명은 이미 움직이고 있다.
+      default-bgm: DAILY
+      mood-keywords: 캠퍼스,도시,일상,현대
+      secret-allowed: false
+      active: true
+      display-order: 3
+
+    - id: FANTASY_ACADEMY
+      display-name: 판타지 아카데미
+      tagline: 마법과 모험이 공존하는 학교
+      description: 고대의 마법이 숨쉬는 학교, 신비로운 도서관, 비밀스러운 실험실. 판타지 세계의 아카데미에서 펼쳐지는 모험과 성장의 이야기.
+      hero-image-url: https://d3578f1gfp49r6.cloudfront.net/worlds/fantasy_academy/hero.png
+      thumbnail-url: https://d3578f1gfp49r6.cloudfront.net/worlds/fantasy_academy/thumb.png
+      opening-narration: 학교의 종이 울리고, 학생들이 분주히 움직인다. 하지만 이곳은 단순한 학교가 아니다. 마법과 모험이 기다리는 판타지 아카데미다.
+      default-bgm: MYSTERIOUS
+      mood-keywords: 마법,학교,모험,성장
+      secret-allowed: true
+      active: true
+      display-order: 4

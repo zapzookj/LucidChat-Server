@@ -35,3 +35,11 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Secrets / local artifacts (2026-07-20) ###
+lucid-key.pem
+*.pem
+hs_err_pid*.log
+replay_pid*.log
+src/main/java/com/spring/aichat.zip
+src/main/resources/application.zip

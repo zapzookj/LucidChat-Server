@@ -1,0 +1,36 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aichat
+    username: postgres
+    password: wkqwnr123
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+    mongodb:
+      uri: mongodb://localhost:27017/lucidchat
+      auto-index-creation: true
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  security:
+    oauth2:
+      client:
+        registration:
+          naver:
+            redirect-uri: http://localhost:8080/login/oauth2/code/naver
+
+auth:
+  oauth2:
+    success-redirect: http://localhost:5173/oauth2/success
+
+fal:
+  webhook-base-url: "http://localhost:8080"
+  use-webhook: false  # 로컬은 폴링 사용
