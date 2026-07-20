@@ -39,9 +39,13 @@ public class LobbyService {
 
     /**
      * 전체 캐릭터 목록 조회
+     *
+     * <p>[UGC v1] 공식 캐릭터만 — UGC는 스튜디오 탭(/ugc/characters/mine·explore) 전용.
+     * PRIVATE UGC가 공용 로비에 노출되는 것을 여기서 차단한다.
      */
     public List<CharacterResponse> getAllCharacters() {
         return characterRepository.findAll().stream()
+            .filter(c -> !c.isUgc())
             .map(this::toCharacterResponse)
             .toList();
     }
@@ -56,6 +60,7 @@ public class LobbyService {
             return getAllCharacters();
         }
         return characterRepository.findAll().stream()
+            .filter(c -> !c.isUgc()) // [UGC v1] 공식 전용
             .filter(c -> c.getWorldId() != null && c.getWorldId().name().equals(worldId))
             .map(this::toCharacterResponse)
             .toList();
@@ -102,6 +107,15 @@ public class LobbyService {
         // 스토리 모드인데 해당 캐릭터가 스토리 미지원이면 차단
         if (chatMode == ChatMode.STORY && !character.isStoryAvailable()) {
             throw new BadRequestException("해당 캐릭터는 아직 스토리 모드를 지원하지 않습니다.");
+        }
+
+        // [UGC v1] 접근 규칙: PUBLIC은 전체, PRIVATE/PENDING_PUBLIC은 소유자만 (존재 은닉)
+        if (!character.isAccessibleBy(user.getId())) {
+            throw new NotFoundException("존재하지 않는 캐릭터입니다. characterId=" + request.characterId());
+        }
+        // [UGC v1] v1 스코프: UGC 캐릭터는 SANDBOX 전용 (story/theaterAvailable=false와 이중 방어)
+        if (character.isUgc() && chatMode != ChatMode.SANDBOX) {
+            throw new BadRequestException("커스텀 캐릭터는 자유 대화 모드만 지원해요.");
         }
 
         // 기존 방이 있으면 반환 (Idempotent)

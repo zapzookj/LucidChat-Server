@@ -23,7 +23,9 @@ import java.util.stream.Collectors;
 /**
  * [Story V2] Character Routine 시더.
  *
- * <p>실행 순서: {@code @Order(3)} — CharacterSeeder 이후 (Character ID slug 매핑 안정).
+ * <p>실행 순서: 러너 빈 {@code @Order(4)} — CharacterSeeder(러너 빈 @Order(3)) 이후 (Character ID slug 매핑 안정).
+ * [Seed-Order Fix 2026-07-20] 기존 @Order(3)은 CharacterSeeder 러너(당시 무순위=최후순위)보다
+ * 먼저 실행되어 빈 DB 첫 부팅에서 루틴이 전부 skip되던 버그의 원인이었다.
  *
  * <p>[업데이트 정책]
  * - 시드에 등장한 *모든 캐릭터 slug*에 대해 *기존 루틴 일괄 삭제* → *시드 행 일괄 재삽입*
@@ -42,7 +44,7 @@ public class CharacterRoutineSeeder {
 
     private final org.springframework.transaction.PlatformTransactionManager txManager;
 
-    @Bean @Order(3)
+    @Bean @Order(4)
     public ApplicationRunner seedCharacterRoutinesRunner() {
         return args -> new org.springframework.transaction.support.TransactionTemplate(txManager)
             .executeWithoutResult(status -> seedAllRoutines());

@@ -154,4 +154,12 @@ public class ApiRateLimiter {
     public boolean checkSignup(String ipOrUsername) {
         return isRateLimited("signup", ipOrUsername, 3, 60);
     }
+
+    /**
+     * [UGC v1] 편의 메서드: 생성 파이프라인 뮤테이션 (제출/선택/리롤/확정)
+     * — GPU·LLM 비용 방어선. 에너지 차감과 별개의 남용 차단.
+     */
+    public boolean checkUgcMutation(String username) {
+        return isRateLimited("ugc_mutation", username, 2, 5);
+    }
 }

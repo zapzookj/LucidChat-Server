@@ -1,5 +1,5 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  [Story V2] V2 시드 데이터
+#  [Story V2] V2 시드 데이터  (전 세계관 완성본)
 #
 #  본 파일에는 3종 시드 데이터를 정의:
 #    - locations         : 각 World의 장소들
@@ -7,7 +7,7 @@
 #    - character-routines: 각 캐릭터의 시간대×장소 루틴
 #
 #  실행 순서 (Spring @Order):
-#    0  WorldSeeder          — World 마스터 (기존 application-worlds.yml)
+#    0  WorldSeeder          — World 마스터 (application-worlds.yml)
 #    1  WorldLocationSeeder  — 본 파일의 locations
 #    2  UserPersonaPresetSeeder — 본 파일의 persona-presets
 #    3  CharacterRoutineSeeder — 본 파일의 character-routines
@@ -16,9 +16,12 @@
 #    - locations / persona-presets : (worldId, key) unique 기준 upsert
 #    - character-routines: 시드에 등장한 캐릭터의 *전체 루틴 삭제 후 재삽입*
 #
-#  ※ 본 파일은 *MEDIEVAL_FANTASY 1개만* 완전 작성된 샘플.
-#    나머지 World(ORIENTAL_FANTASY, MODERN_KOREA, FANTASY_ACADEMY)는
-#    구조 예시 + TODO 코멘트만 두었다. 기획팀에서 채워야 함.
+#  연계: 모든 시드는 application-characters.yml 의 캐릭터 컨셉(role/personality/
+#       backstory/world-id)과 정합하도록 작성. character-slug 는 정확히 일치해야 함.
+#
+#  default-bgm 유효값(BgmMode): DAILY / ROMANTIC / EXCITING / TOUCHING / TENSE
+#       (EROTIC 은 시크릿 전용이므로 장소 기본값으로 쓰지 않음.)
+#       ※ 이전 샘플의 'MYSTERIOUS' 는 BgmMode 에 없는 무효값이라 유효값으로 교정함.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 app:
@@ -29,7 +32,9 @@ app:
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     locations:
-      # ── MEDIEVAL_FANTASY (8 locations) ──
+      # ─────────────────────────────────────────
+      #  MEDIEVAL_FANTASY (8) — 아이리(메이드) · 클레어(성녀)
+      # ─────────────────────────────────────────
       - world-id: MEDIEVAL_FANTASY
         location-key: MANOR_HALL
         display-name: 저택 응접실
@@ -87,25 +92,196 @@ app:
         display-order: 8
         selectable-as-start: true
 
-      # ── ORIENTAL_FANTASY ─── TODO: 기획 채움 ───
-      # 예시 키 풀: MOONLIT_FOREST, LAKE_PAVILION, ANCIENT_SHRINE, TEAHOUSE,
-      #            HIDDEN_GROVE, BAMBOO_PATH, MOUNTAIN_CABIN, SHRINE_GATE
+      # ─────────────────────────────────────────
+      #  ORIENTAL_FANTASY (8) — 연화(구미호) · 설아(용녀)
+      #  안개와 달빛의 숲, 옛 사당, 산기슭 마을이 어우러진 동양 판타지.
+      # ─────────────────────────────────────────
+      - world-id: ORIENTAL_FANTASY
+        location-key: DEEP_FOREST
+        display-name: 깊은 숲
+        description: 안개가 발목을 휘감는 숲의 가장 깊은 곳. 인간의 발길이 잘 닿지 않는, 구미호의 영역.
+        default-bgm: TOUCHING
+        display-order: 1
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: LAKE_PAVILION
+        display-name: 호수 정자
+        description: 잔잔한 산정 호수 위에 떠 있는 듯한 목조 정자. 물그림자에 달과 구름이 비치고, 풍경(風磬) 소리가 바람을 따라 멀리 퍼진다.
+        default-bgm: TOUCHING
+        display-order: 2
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: ANCIENT_SHRINE
+        display-name: 옛 사당
+        description: 한때 영물을 모시던 낡은 사당. 색이 바랜 단청과 깨진 향로, 끊긴 향불. 위엄의 잔향만이 먼지 속에 남아 있다.
+        default-bgm: TENSE
+        display-order: 3
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: TEAHOUSE
+        display-name: 산기슭 찻집
+        description: 마을 어귀, 등불을 내건 작은 찻집. 김이 오르는 차와 사람들의 나직한 이야기 소리. 인간 세상으로 통하는 가장 가까운 문.
+        default-bgm: DAILY
+        display-order: 4
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: BAMBOO_PATH
+        display-name: 대숲 오솔길
+        description: 키 큰 대나무가 하늘을 가린 좁은 길. 바람이 지날 때마다 댓잎이 서걱이고, 빛이 초록으로 부서져 내린다.
+        default-bgm: DAILY
+        display-order: 5
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: SHRINE_GATE
+        display-name: 사당 일주문
+        description: 사당으로 오르는 길목에 선 붉은 일주문. 빛바랜 주칠 기둥과 돌계단. 인간과 신령의 경계를 가르는 문지방.
+        default-bgm: TOUCHING
+        display-order: 6
+        selectable-as-start: true
+      - world-id: ORIENTAL_FANTASY
+        location-key: MOUNTAIN_CABIN
+        display-name: 산속 오두막
+        description: 숲 한켠에 숨은 자그마한 초막. 약초 다발이 처마에 매달려 있고, 작은 화로의 온기가 밴 은거의 공간.
+        default-bgm: DAILY
+        display-order: 7
+        selectable-as-start: false  # 사적 공간
+      - world-id: ORIENTAL_FANTASY
+        location-key: HIDDEN_GROVE
+        display-name: 숨은 공터
+        description: 덤불에 가려 좀처럼 찾을 수 없는 숲속 빈터. 이끼 낀 바위와 들꽃, 나비. 누군가 낮잠을 청하기 딱 좋은 비밀스러운 자리.
+        default-bgm: TOUCHING
+        display-order: 8
+        selectable-as-start: false
 
-      # ── MODERN_KOREA ─── TODO: 기획 채움 ───
-      # 예시 키 풀: CAMPUS_QUAD, CONVENIENCE_STORE_24H, COFFEE_SHOP, ROOFTOP,
-      #            STUDIO_APT, LIBRARY, HAN_RIVER, NIGHT_BUS_STOP
+      # ─────────────────────────────────────────
+      #  MODERN_KOREA (8) — 태리(디자인과 후배) · 루나(하꼬 스트리머) · 채린(소꿉친구)
+      #  캠퍼스와 도시의 낮과 밤이 엇갈리는 현대 한국.
+      # ─────────────────────────────────────────
+      - world-id: MODERN_KOREA
+        location-key: CAMPUS_QUAD
+        display-name: 캠퍼스 잔디광장
+        description: 강의동에 둘러싸인 대학 중앙 잔디밭. 벤치와 플라타너스, 오가는 학생들. 계절이 가장 먼저 내려앉는 곳.
+        default-bgm: DAILY
+        display-order: 1
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: CLUB_ROOM
+        display-name: 동아리실
+        description: 낡은 소파와 어지러운 작업 책상, 벽을 메운 포스터. 누군가의 헤드폰에서 새어 나오는 음악. 늘 누군가는 남아 있는 구석방.
+        default-bgm: DAILY
+        display-order: 2
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: CONVENIENCE_STORE
+        display-name: 24시 편의점
+        description: 형광등이 환한 심야의 편의점. 라면 냄새와 냉장고의 윙윙거림. 잠들지 못한 사람들이 잠시 머무는 작은 섬.
+        default-bgm: DAILY
+        display-order: 3
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: COFFEE_SHOP
+        display-name: 카페
+        description: 원두 향이 밴 동네 카페. 창가 자리의 햇살과 나직한 재즈. 과제든 잡담이든, 시간을 흘려보내기 좋은 곳.
+        default-bgm: ROMANTIC
+        display-order: 4
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: ROOFTOP
+        display-name: 옥상
+        description: 건물 옥상. 널어둔 빨래와 낡은 평상, 그리고 도시의 스카이라인. 밤이면 멀리 네온과 별이 함께 깜빡인다.
+        default-bgm: TOUCHING
+        display-order: 5
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: HAN_RIVER
+        display-name: 한강 둔치
+        description: 강바람이 시원한 한강 공원. 자전거 길과 잔디밭, 편의점 라면. 도시 한복판에서 가장 탁 트인 숨통.
+        default-bgm: TOUCHING
+        display-order: 6
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: NIGHT_BUS_STOP
+        display-name: 심야 버스정류장
+        description: 막차를 기다리는 빈 정류장. 점멸하는 전광판과 가로등 불빛. 하루의 끝과 시작이 스치는 자리.
+        default-bgm: TOUCHING
+        display-order: 7
+        selectable-as-start: true
+      - world-id: MODERN_KOREA
+        location-key: STUDIO_APT
+        display-name: 원룸 자취방
+        description: 한 사람의 세계가 압축된 좁은 방. 듀얼 모니터와 링라이트, 쌓인 택배 상자. 커튼은 늘 닫혀 있고, 시간은 바깥과 다르게 흐른다.
+        default-bgm: DAILY
+        display-order: 8
+        selectable-as-start: false  # 사적 공간
 
-      # ── FANTASY_ACADEMY ─── TODO (FANTASY_ACADEMY 히로인 활성화 후) ───
-      # 예시 키 풀: GREAT_HALL, LIBRARY_TOWER, ALCHEMY_LAB, ENCHANTED_FOREST,
-      #            DORMITORY, ASTRONOMY_TOWER, ARENA, GARDEN_OF_MIRRORS
+      # ─────────────────────────────────────────
+      #  FANTASY_ACADEMY (8) — 로제타(문제아 영애) · 시에라(힐링 후배) · 에델(쿨데레 조교)
+      #  ※ default-bgm: 무효값 MYSTERIOUS → 유효값으로 교정
+      # ─────────────────────────────────────────
+      - world-id: FANTASY_ACADEMY
+        location-key: GREAT_HALL
+        display-name: 대강당
+        description: 아카데미의 중심이 되는 대강당. 학생들이 모여 식사도 하고, 중요한 행사도 열리는 곳.
+        default-bgm: DAILY
+        display-order: 1
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: LIBRARY_TOWER
+        display-name: 도서관 탑
+        description: 아카데미 도서관의 가장 높은 탑. 고대 마법서와 희귀한 문헌들이 보관되어 있다.
+        default-bgm: TOUCHING
+        display-order: 2
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: ALCHEMY_LAB
+        display-name: 연금술 실험실
+        description: 연금술 수업이 열리는 실험실. 다양한 약초와 재료들이 가득하며, 항상 신비로운 연기가 피어오른다.
+        default-bgm: DAILY
+        display-order: 3
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: ENCHANTED_FOREST
+        display-name: 마법의 숲
+        description: 아카데미 뒤편에 펼쳐진 마법의 숲. 신비로운 생물들이 살고 있으며, 때때로 마법의 현상이 일어난다.
+        default-bgm: TOUCHING
+        display-order: 4
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: DORMITORY
+        display-name: 기숙사
+        description: 학생들이 생활하는 기숙사 건물. 각 방마다 개성이 뚜렷하며, 학생들의 사적인 공간이기도 하다.
+        default-bgm: DAILY
+        display-order: 5
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: ASTRONOMY_TOWER
+        display-name: 천문대 탑
+        description: 아카데미의 천문대가 위치한 탑. 밤하늘을 관측하기에 최적의 장소로, 별과 행성의 움직임을 연구하는 학생들이 자주 찾는다.
+        default-bgm: TOUCHING
+        display-order: 6
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: ARENA
+        display-name: 아레나
+        description: 학생들이 마법 대결이나 체력 단련을 하는 아레나. 관중석도 마련되어 있어 종종 시합이 열린다.
+        default-bgm: EXCITING
+        display-order: 7
+        selectable-as-start: true
+      - world-id: FANTASY_ACADEMY
+        location-key: GARDEN_OF_ACADEMY
+        display-name: 아카데미 정원
+        description: 아카데미의 넓은 정원. 학생들이 휴식을 취하거나 산책을 하는 공간으로 활용된다.
+        default-bgm: TENSE
+        display-order: 8
+        selectable-as-start: true
 
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    #  Persona Presets (각 World의 사전 정의 페르소나)
+    #  Persona Presets (각 World의 사전 정의 페르소나 = 유저가 연기할 주인공)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     persona-presets:
-      # ── MEDIEVAL_FANTASY (3 presets) ──
+      # ── MEDIEVAL_FANTASY (3) ──
       - world-id: MEDIEVAL_FANTASY
         preset-key: YOUNG_LORD
         name: 젊은 영주
@@ -137,69 +313,291 @@ app:
         suggested-start-location-key: LIBRARY
         display-order: 3
 
-      # ── ORIENTAL_FANTASY ─── TODO ───
-      # 예시 페르소나: 떠도는 검객 / 산속 약초꾼 / 도성에서 추방된 귀공자
-      # ── MODERN_KOREA ─── TODO ───
-      # 예시 페르소나: 휴학생 / 야간 편의점 알바 / 갓 입사한 신입사원
-      # ── FANTASY_ACADEMY ─── TODO ───
+      # ── ORIENTAL_FANTASY (3) ──
+      - world-id: ORIENTAL_FANTASY
+        preset-key: WANDERING_SWORDSMAN
+        name: 떠도는 검객
+        description: |
+          정처 없이 강호를 떠도는 젊은 검객. 한 자루 검과 등짐이 가진 전부지만, 그 검에 베지 못할
+          것이 없다는 소문이 따라다닌다. 이 깊은 산자락에 흘러든 건 우연인지, 무언가에 이끌린
+          것인지. 인간이 아닌 것들의 기척에도 검을 함부로 뽑지 않을 만큼의 담대함이 있다.
+        default-nickname: 협객
+        suggested-start-location-key: BAMBOO_PATH
+        display-order: 1
+      - world-id: ORIENTAL_FANTASY
+        preset-key: MOUNTAIN_HERBALIST
+        name: 산속 약초꾼
+        description: |
+          산을 집 삼아 약초를 캐며 사는 사람. 마을과 숲 사이를 오가며 약을 짓고, 다친 짐승을
+          돌본다. 인간과 영물의 경계에 가장 익숙한 직업이라, 안개 너머의 존재들에게도 두려움보다
+          호기심이 앞선다. 욕심이 없어 누구에게도 위협이 되지 않는다.
+        default-nickname: 약초꾼
+        suggested-start-location-key: TEAHOUSE
+        display-order: 2
+      - world-id: ORIENTAL_FANTASY
+        preset-key: EXILED_NOBLE
+        name: 추방된 귀공자
+        description: |
+          도성의 권력 다툼에서 밀려나 변방으로 쫓겨난 명문가의 자제. 비단옷은 빛이 바랬어도
+          몸에 밴 기품은 감추지 못한다. 잃어버린 자리를 되찾을 야심과, 차라리 이 조용한 산골에서
+          새 삶을 시작하고 싶은 마음 사이에서 흔들린다.
+        default-nickname: 공자님
+        suggested-start-location-key: SHRINE_GATE
+        display-order: 3
+
+      # ── MODERN_KOREA (3) ──
+      - world-id: MODERN_KOREA
+        preset-key: RETURNING_STUDENT
+        name: 복학생
+        description: |
+          한 학기 휴학 끝에 캠퍼스로 돌아온 복학생. 후배들 사이에서 어딘가 붕 뜬 기분이지만,
+          그만큼 한발 물러나 사람들을 여유롭게 바라볼 줄 안다. 무엇을 하며 살지 아직 정하지
+          못했고, 그래서 누군가의 사소한 하루에 쉽게 마음이 쓰인다.
+        default-nickname: 선배
+        suggested-start-location-key: CAMPUS_QUAD
+        display-order: 1
+      - world-id: MODERN_KOREA
+        preset-key: NIGHT_CLERK
+        name: 야간 편의점 알바
+        description: |
+          밤을 낮 삼아 사는 편의점 야간 알바생. 새벽의 단골들과 짧은 인사를 나누고, 잠들지 못한
+          사람들의 사연을 카운터 너머로 흘려듣는다. 화려할 것 없는 일상이지만, 누군가에게는
+          이 환한 불빛이 유일한 안식처라는 걸 안다.
+        default-nickname: 알바님
+        suggested-start-location-key: CONVENIENCE_STORE
+        display-order: 2
+      - world-id: MODERN_KOREA
+        preset-key: NEW_EMPLOYEE
+        name: 신입사원
+        description: |
+          이제 막 사회에 발을 디딘 갓 입사한 신입사원. 서툴고 긴장도 많지만 무엇이든 배우려는
+          의욕만은 가득하다. 퇴근 후의 텅 빈 시간이 아직 익숙지 않아, 우연히 마주친 인연 하나에도
+          오래 마음이 머문다.
+        default-nickname: 사원님
+        suggested-start-location-key: COFFEE_SHOP
+        display-order: 3
+
+      # ── FANTASY_ACADEMY (3) ──
+      - world-id: FANTASY_ACADEMY
+        preset-key: TRANSFER_STUDENT
+        name: 편입생
+        description: |
+          학기 중에 아카데미로 편입해 온 학생. 모두가 이미 짜인 무리 속에서 혼자만 새 얼굴이지만,
+          낯선 시선을 견디는 데는 제법 단련돼 있다. 어느 학파에도 속하지 않은 중립지대의 인물이라,
+          누구에게나 선입견 없이 다가갈 수 있다.
+        default-nickname: 편입생
+        suggested-start-location-key: GREAT_HALL
+        display-order: 1
+      - world-id: FANTASY_ACADEMY
+        preset-key: SCHOLARSHIP_COMMONER
+        name: 평민 장학생
+        description: |
+          귀족 자제들 틈에서 오직 실력만으로 입학한 평민 출신 장학생. 마법 재능은 누구에게도
+          뒤지지 않지만, 배경도 인맥도 없어 늘 한 발짝 더 노력해야 한다. 자존심과 현실 사이에서
+          균형을 잡는 법을 일찍 배운, 단단한 사람.
+        default-nickname: 장학생
+        suggested-start-location-key: LIBRARY_TOWER
+        display-order: 2
+      - world-id: FANTASY_ACADEMY
+        preset-key: EXCHANGE_STUDENT
+        name: 교환학생
+        description: |
+          먼 타국의 마법 학교에서 건너온 교환학생. 이곳의 관습도, 학파의 알력도 잘 모르지만
+          그래서 더 자유롭다. 모든 것이 신기하고, 모든 사람이 새로운 친구가 될 수 있다고 믿는
+          호기심 많은 이방인.
+        default-nickname: 교환학생
+        suggested-start-location-key: DORMITORY
+        display-order: 3
 
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    #  Character Routines (캐릭터 × 시간대 × 장소 확률)
+    #  Character Routines (캐릭터 × DayPart × 장소 확률)
     #
+    #  DayPart: MORNING / NOON / AFTERNOON / EVENING / NIGHT (5단계)
     #  같은 (character-slug, time-of-day)에 여러 후보 가능 — probability 가중치로 정규화 후 선택.
     #  확률 합이 100일 필요는 없음. 비율로만 사용.
+    #  character-slug 는 application-characters.yml 의 slug 와 정확히 일치.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     character-routines:
-      # ━━ 클레어 (자애로운 성녀, MEDIEVAL_FANTASY) ━━
+      # ━━ 클레어 (순백의 성녀, MEDIEVAL_FANTASY) ━━
       - { character-slug: claire, time-of-day: MORNING,   location-key: CATHEDRAL, probability: 80, notes: "새벽 기도 시간" }
       - { character-slug: claire, time-of-day: MORNING,   location-key: GARDEN,    probability: 20, notes: "기도 후 산책" }
-
       - { character-slug: claire, time-of-day: NOON,      location-key: CATHEDRAL, probability: 50, notes: "예배" }
       - { character-slug: claire, time-of-day: NOON,      location-key: KITCHEN,   probability: 30, notes: "고아원 아이들 식사 준비" }
       - { character-slug: claire, time-of-day: NOON,      location-key: GARDEN,    probability: 20, notes: "약초 손질" }
-
       - { character-slug: claire, time-of-day: AFTERNOON, location-key: LIBRARY,   probability: 50, notes: "성서 묵상" }
       - { character-slug: claire, time-of-day: AFTERNOON, location-key: GARDEN,    probability: 30, notes: "조용한 독서" }
       - { character-slug: claire, time-of-day: AFTERNOON, location-key: COURTYARD, probability: 20, notes: "영지민들과의 대화" }
-
       - { character-slug: claire, time-of-day: EVENING,   location-key: CATHEDRAL, probability: 60, notes: "저녁 기도" }
       - { character-slug: claire, time-of-day: EVENING,   location-key: MANOR_HALL,probability: 25, notes: "영주와의 만찬" }
       - { character-slug: claire, time-of-day: EVENING,   location-key: BALCONY,   probability: 15, notes: "노을 묵상" }
-
       - { character-slug: claire, time-of-day: NIGHT,     location-key: CATHEDRAL, probability: 40, notes: "야간 기도" }
       - { character-slug: claire, time-of-day: NIGHT,     location-key: BEDROOM,   probability: 60, notes: "수면 (몰래 연애소설 읽기)" }
 
-      # ━━ 아이리 (MEDIEVAL_FANTASY) ━━ TODO: 아이리 personality 기반 루틴 작성 ━━
-      # 참고: application-characters.yml line 10~145
-      # - { character-slug: iri, time-of-day: MORNING, location-key: ..., probability: ..., notes: "..." }
+      # ━━ 아이리 (저택의 메이드, MEDIEVAL_FANTASY) ━━
+      #  헌신형 전속 메이드 — 저택의 살림을 중심으로 동선이 돈다. 밤에야 '한 사람'이 되는 곳(침실).
+      - { character-slug: airi, time-of-day: MORNING,   location-key: KITCHEN,    probability: 60, notes: "이른 아침 차·식사 준비" }
+      - { character-slug: airi, time-of-day: MORNING,   location-key: MANOR_HALL, probability: 40, notes: "응접실 청소와 정돈" }
+      - { character-slug: airi, time-of-day: NOON,      location-key: MANOR_HALL, probability: 50, notes: "주인님 시중" }
+      - { character-slug: airi, time-of-day: NOON,      location-key: KITCHEN,    probability: 30, notes: "점심 준비" }
+      - { character-slug: airi, time-of-day: NOON,      location-key: COURTYARD,  probability: 20, notes: "장 본 것 정리" }
+      - { character-slug: airi, time-of-day: AFTERNOON, location-key: GARDEN,     probability: 40, notes: "빨래 널기·꽃 손질" }
+      - { character-slug: airi, time-of-day: AFTERNOON, location-key: LIBRARY,    probability: 35, notes: "서가 먼지 떨기" }
+      - { character-slug: airi, time-of-day: AFTERNOON, location-key: COURTYARD,  probability: 25, notes: "산책 시중" }
+      - { character-slug: airi, time-of-day: EVENING,   location-key: MANOR_HALL, probability: 55, notes: "만찬 시중" }
+      - { character-slug: airi, time-of-day: EVENING,   location-key: KITCHEN,    probability: 30, notes: "만찬 준비·뒷정리" }
+      - { character-slug: airi, time-of-day: EVENING,   location-key: BALCONY,    probability: 15, notes: "등불 켜기" }
+      - { character-slug: airi, time-of-day: NIGHT,     location-key: BEDROOM,    probability: 50, notes: "취침 시중 후 자기 방 (홀로 소녀가 되는 시간)" }
+      - { character-slug: airi, time-of-day: NIGHT,     location-key: MANOR_HALL, probability: 35, notes: "야간 마무리 정리" }
+      - { character-slug: airi, time-of-day: NIGHT,     location-key: LIBRARY,    probability: 15, notes: "몰래 책장 정리하며 읽기" }
 
-      # ━━ 연화 (ORIENTAL_FANTASY) ━━ TODO: ORIENTAL_FANTASY locations 시드 후 작성 ━━
+      # ━━ 연화 (천 년 묵은 구미호, ORIENTAL_FANTASY) ━━
+      #  야행성. 밤의 달빛 숲에서 가장 생기가 돈다. 낮에는 나른히 잠을 청한다.
+      - { character-slug: yeonhwa, time-of-day: MORNING,   location-key: HIDDEN_GROVE,   probability: 60, notes: "밤새 노닐다 새벽잠" }
+      - { character-slug: yeonhwa, time-of-day: MORNING,   location-key: MOUNTAIN_CABIN, probability: 40, notes: "몸을 누이는 은신처" }
+      - { character-slug: yeonhwa, time-of-day: NOON,      location-key: LAKE_PAVILION,  probability: 45, notes: "물그림자 보며 나른히" }
+      - { character-slug: yeonhwa, time-of-day: NOON,      location-key: BAMBOO_PATH,    probability: 30, notes: "대숲 산책" }
+      - { character-slug: yeonhwa, time-of-day: NOON,      location-key: HIDDEN_GROVE,   probability: 25, notes: "낮잠" }
+      - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: MOONLIT_FOREST, probability: 50, notes: "자기 영역 거닐기" }
+      - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: HIDDEN_GROVE,   probability: 30, notes: "꽃·나비와 장난" }
+      - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: LAKE_PAVILION,  probability: 20, notes: "물가에서 머리 빗기" }
+      - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: LAKE_PAVILION,  probability: 45, notes: "달 뜨길 기다림" }
+      - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: MOONLIT_FOREST, probability: 35, notes: "밤마실 채비" }
+      - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: SHRINE_GATE,    probability: 20, notes: "인간 세상 기웃거리기" }
+      - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: MOONLIT_FOREST, probability: 55, notes: "가장 생기 도는 시간" }
+      - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: LAKE_PAVILION,  probability: 30, notes: "달빛 아래 춤" }
+      - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: TEAHOUSE,       probability: 15, notes: "변신하여 인간 홀리기" }
 
-      # ━━ 서태리 (MODERN_KOREA) ━━ TODO: MODERN_KOREA locations 시드 후 작성 ━━
+      # ━━ 설아 (힘이 봉인된 용녀, ORIENTAL_FANTASY) ━━
+      #  옛 영광에 집착하는 자존심. 사당을 제 자리로 여기지만, 잃은 힘 탓에 낮잠이 잦다.
+      - { character-slug: seolah, time-of-day: MORNING,   location-key: ANCIENT_SHRINE, probability: 50, notes: "과거의 영광을 회상" }
+      - { character-slug: seolah, time-of-day: MORNING,   location-key: MOUNTAIN_CABIN, probability: 50, notes: "늦잠 (위엄과 달리 게으름)" }
+      - { character-slug: seolah, time-of-day: NOON,      location-key: TEAHOUSE,       probability: 45, notes: "인간 음식 몰래 탐닉" }
+      - { character-slug: seolah, time-of-day: NOON,      location-key: ANCIENT_SHRINE, probability: 30, notes: "참배객을 기다림 (아무도 안 옴)" }
+      - { character-slug: seolah, time-of-day: NOON,      location-key: MOUNTAIN_CABIN, probability: 25, notes: "비늘 손질" }
+      - { character-slug: seolah, time-of-day: AFTERNOON, location-key: MOUNTAIN_CABIN, probability: 45, notes: "낮잠으로 힘 충전" }
+      - { character-slug: seolah, time-of-day: AFTERNOON, location-key: LAKE_PAVILION,  probability: 30, notes: "물가에서 햇볕 쬐기" }
+      - { character-slug: seolah, time-of-day: AFTERNOON, location-key: ANCIENT_SHRINE, probability: 25, notes: "옛 권능 되찾기 수련" }
+      - { character-slug: seolah, time-of-day: EVENING,   location-key: ANCIENT_SHRINE, probability: 45, notes: "위엄 과시하듯 좌정" }
+      - { character-slug: seolah, time-of-day: EVENING,   location-key: SHRINE_GATE,    probability: 30, notes: "해질녘 산책" }
+      - { character-slug: seolah, time-of-day: EVENING,   location-key: TEAHOUSE,       probability: 25, notes: "저녁거리 구하기" }
+      - { character-slug: seolah, time-of-day: NIGHT,     location-key: MOUNTAIN_CABIN, probability: 55, notes: "수면" }
+      - { character-slug: seolah, time-of-day: NIGHT,     location-key: ANCIENT_SHRINE, probability: 30, notes: "달에게 옛 권능을 빎" }
+      - { character-slug: seolah, time-of-day: NIGHT,     location-key: BAMBOO_PATH,    probability: 15, notes: "잠 안 올 때 야간 배회" }
 
-      # ━━ 백루나 (MODERN_KOREA) ━━ TODO ━━
+      # ━━ 태리 (표현이 서툰 츤데레 후배, MODERN_KOREA) ━━
+      #  디자인과 2학년. 동아리실에 틀어박혀 혼자 작업하는 시간이 압도적으로 길다.
+      - { character-slug: taeri, time-of-day: MORNING,   location-key: CAMPUS_QUAD,       probability: 45, notes: "지각 직전 등교" }
+      - { character-slug: taeri, time-of-day: MORNING,   location-key: COFFEE_SHOP,       probability: 35, notes: "카페인 수혈" }
+      - { character-slug: taeri, time-of-day: MORNING,   location-key: CLUB_ROOM,         probability: 20, notes: "일찍 와 헤드폰 끼고 작업" }
+      - { character-slug: taeri, time-of-day: NOON,      location-key: CLUB_ROOM,         probability: 55, notes: "점심 거르고 작업" }
+      - { character-slug: taeri, time-of-day: NOON,      location-key: CAMPUS_QUAD,       probability: 25, notes: "혼밥 산책" }
+      - { character-slug: taeri, time-of-day: NOON,      location-key: COFFEE_SHOP,       probability: 20, notes: "구석 자리 스케치" }
+      - { character-slug: taeri, time-of-day: AFTERNOON, location-key: CLUB_ROOM,         probability: 60, notes: "그림·과제 몰두" }
+      - { character-slug: taeri, time-of-day: AFTERNOON, location-key: COFFEE_SHOP,       probability: 25, notes: "카페에서 레퍼런스 서칭" }
+      - { character-slug: taeri, time-of-day: AFTERNOON, location-key: CAMPUS_QUAD,       probability: 15, notes: "강의 이동" }
+      - { character-slug: taeri, time-of-day: EVENING,   location-key: CLUB_ROOM,         probability: 55, notes: "야간 작업 돌입" }
+      - { character-slug: taeri, time-of-day: EVENING,   location-key: COFFEE_SHOP,       probability: 30, notes: "마감 직전 카페 작업" }
+      - { character-slug: taeri, time-of-day: EVENING,   location-key: CONVENIENCE_STORE, probability: 15, notes: "끼니 때우기" }
+      - { character-slug: taeri, time-of-day: NIGHT,     location-key: CLUB_ROOM,         probability: 50, notes: "밤샘 작업" }
+      - { character-slug: taeri, time-of-day: NIGHT,     location-key: STUDIO_APT,        probability: 35, notes: "귀가" }
+      - { character-slug: taeri, time-of-day: NIGHT,     location-key: CONVENIENCE_STORE, probability: 15, notes: "야식 사러" }
 
-      # ━━ 로제타 (FANTASY_ACADEMY) ━━ TODO: world-id 주석 해제 + locations 시드 후 작성 ━━
+      # ━━ 루나 (세상이 무서운 하꼬 스트리머, MODERN_KOREA) ━━
+      #  은둔형. 세상은 '자기 방'과 '편의점' 단 두 곳뿐. 야행성 방송 스케줄.
+      - { character-slug: luna, time-of-day: MORNING,   location-key: STUDIO_APT,        probability: 90, notes: "방송 끝내고 수면" }
+      - { character-slug: luna, time-of-day: MORNING,   location-key: CONVENIENCE_STORE, probability: 10, notes: "새벽 귀가길 군것질" }
+      - { character-slug: luna, time-of-day: NOON,      location-key: STUDIO_APT,        probability: 80, notes: "늦은 기상" }
+      - { character-slug: luna, time-of-day: NOON,      location-key: CONVENIENCE_STORE, probability: 20, notes: "끼니 사기 (사람 없는 시간 노려서)" }
+      - { character-slug: luna, time-of-day: AFTERNOON, location-key: STUDIO_APT,        probability: 75, notes: "방송 준비·영상 편집" }
+      - { character-slug: luna, time-of-day: AFTERNOON, location-key: CONVENIENCE_STORE, probability: 25, notes: "방송용 간식 보충" }
+      - { character-slug: luna, time-of-day: EVENING,   location-key: STUDIO_APT,        probability: 60, notes: "방송 워밍업·세팅 점검" }
+      - { character-slug: luna, time-of-day: EVENING,   location-key: CONVENIENCE_STORE, probability: 40, notes: "야식·음료 사기" }
+      - { character-slug: luna, time-of-day: NIGHT,     location-key: STUDIO_APT,        probability: 70, notes: "생방송 (유일하게 살아 있는 시간)" }
+      - { character-slug: luna, time-of-day: NIGHT,     location-key: CONVENIENCE_STORE, probability: 30, notes: "새벽 충동구매" }
+
+      # ━━ 채린 (밝고 활발한 소꿉친구, MODERN_KOREA) ━━
+      #  톰보이. 야외·운동을 좋아하고 발이 넓다. 한강·옥상을 제 마당처럼 쓴다.
+      - { character-slug: chaerin, time-of-day: MORNING,   location-key: HAN_RIVER,         probability: 45, notes: "아침 조깅" }
+      - { character-slug: chaerin, time-of-day: MORNING,   location-key: CAMPUS_QUAD,       probability: 35, notes: "등교" }
+      - { character-slug: chaerin, time-of-day: MORNING,   location-key: CONVENIENCE_STORE, probability: 20, notes: "삼각김밥 아침" }
+      - { character-slug: chaerin, time-of-day: NOON,      location-key: CAMPUS_QUAD,       probability: 45, notes: "친구들과 점심" }
+      - { character-slug: chaerin, time-of-day: NOON,      location-key: COFFEE_SHOP,       probability: 30, notes: "수다 타임" }
+      - { character-slug: chaerin, time-of-day: NOON,      location-key: CLUB_ROOM,         probability: 25, notes: "태리 놀리러 들름" }
+      - { character-slug: chaerin, time-of-day: AFTERNOON, location-key: ROOFTOP,           probability: 40, notes: "옥상 농구·낮잠" }
+      - { character-slug: chaerin, time-of-day: AFTERNOON, location-key: HAN_RIVER,         probability: 35, notes: "자전거 타기" }
+      - { character-slug: chaerin, time-of-day: AFTERNOON, location-key: CAMPUS_QUAD,       probability: 25, notes: "강의·산책" }
+      - { character-slug: chaerin, time-of-day: EVENING,   location-key: HAN_RIVER,         probability: 45, notes: "강변 산책·치맥" }
+      - { character-slug: chaerin, time-of-day: EVENING,   location-key: CONVENIENCE_STORE, probability: 30, notes: "야외 술자리 보급" }
+      - { character-slug: chaerin, time-of-day: EVENING,   location-key: ROOFTOP,           probability: 25, notes: "노을 보며 멍때리기" }
+      - { character-slug: chaerin, time-of-day: NIGHT,     location-key: ROOFTOP,           probability: 45, notes: "별·도시 야경 보기" }
+      - { character-slug: chaerin, time-of-day: NIGHT,     location-key: NIGHT_BUS_STOP,    probability: 30, notes: "막차로 귀가" }
+      - { character-slug: chaerin, time-of-day: NIGHT,     location-key: HAN_RIVER,         probability: 25, notes: "야간 러닝" }
+
+      # ━━ 로제타 (장난 심한 문제아 영애, FANTASY_ACADEMY) ━━
+      #  환영 마법의 천재. 주목받기를 즐기고, 거울의 정원에서 환영 장난을 꾸민다.
+      - { character-slug: rosetta, time-of-day: MORNING,   location-key: GREAT_HALL,        probability: 50, notes: "화려한 등장" }
+      - { character-slug: rosetta, time-of-day: MORNING,   location-key: DORMITORY,         probability: 30, notes: "느긋한 치장" }
+      - { character-slug: rosetta, time-of-day: MORNING,   location-key: GARDEN_OF_MIRRORS, probability: 20, notes: "환영 장난 구상" }
+      - { character-slug: rosetta, time-of-day: NOON,      location-key: GREAT_HALL,        probability: 50, notes: "주목받으며 식사" }
+      - { character-slug: rosetta, time-of-day: NOON,      location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "장난 마법 시연" }
+      - { character-slug: rosetta, time-of-day: NOON,      location-key: ARENA,             probability: 20, notes: "결투 구경하며 야유" }
+      - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: GARDEN_OF_MIRRORS, probability: 45, notes: "환영 마법 연습" }
+      - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: ARENA,             probability: 30, notes: "실력 과시" }
+      - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: GREAT_HALL,        probability: 25, notes: "추종자들과 어울림" }
+      - { character-slug: rosetta, time-of-day: EVENING,   location-key: ARENA,             probability: 40, notes: "도발과 결투" }
+      - { character-slug: rosetta, time-of-day: EVENING,   location-key: GREAT_HALL,        probability: 35, notes: "저녁 사교" }
+      - { character-slug: rosetta, time-of-day: EVENING,   location-key: GARDEN_OF_MIRRORS, probability: 25, notes: "노을 속 환영 연출" }
+      - { character-slug: rosetta, time-of-day: NIGHT,     location-key: ASTRONOMY_TOWER,   probability: 40, notes: "몰래 야경 독차지" }
+      - { character-slug: rosetta, time-of-day: NIGHT,     location-key: DORMITORY,         probability: 40, notes: "취침 (의외로 일찍)" }
+      - { character-slug: rosetta, time-of-day: NIGHT,     location-key: GARDEN_OF_MIRRORS, probability: 20, notes: "한밤의 장난 준비" }
+
+      # ━━ 시에라 (잠꾸러기 힐링계 후배, FANTASY_ACADEMY) ━━
+      #  느긋하고 무해함. 마법의 숲에서 동물·식물과 어울리고, 늘 졸리다.
+      - { character-slug: sierra, time-of-day: MORNING,   location-key: DORMITORY,         probability: 60, notes: "늦잠 (못 일어남)" }
+      - { character-slug: sierra, time-of-day: MORNING,   location-key: ENCHANTED_FOREST,  probability: 25, notes: "이른 동물 친구들과 인사" }
+      - { character-slug: sierra, time-of-day: MORNING,   location-key: GREAT_HALL,        probability: 15, notes: "지각 조식" }
+      - { character-slug: sierra, time-of-day: NOON,      location-key: ENCHANTED_FOREST,  probability: 45, notes: "동물들과 점심 나눔" }
+      - { character-slug: sierra, time-of-day: NOON,      location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "꽃 구경" }
+      - { character-slug: sierra, time-of-day: NOON,      location-key: GREAT_HALL,        probability: 25, notes: "간식 탐험" }
+      - { character-slug: sierra, time-of-day: AFTERNOON, location-key: ENCHANTED_FOREST,  probability: 50, notes: "숲 산책·식물 관찰" }
+      - { character-slug: sierra, time-of-day: AFTERNOON, location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "거울 정원에서 멍하니" }
+      - { character-slug: sierra, time-of-day: AFTERNOON, location-key: DORMITORY,         probability: 20, notes: "오후 낮잠" }
+      - { character-slug: sierra, time-of-day: EVENING,   location-key: GARDEN_OF_MIRRORS, probability: 40, notes: "해질녘 꽃밭" }
+      - { character-slug: sierra, time-of-day: EVENING,   location-key: ENCHANTED_FOREST,  probability: 35, notes: "동물들 재워주기" }
+      - { character-slug: sierra, time-of-day: EVENING,   location-key: DORMITORY,         probability: 25, notes: "이른 저녁 휴식" }
+      - { character-slug: sierra, time-of-day: NIGHT,     location-key: DORMITORY,         probability: 65, notes: "일찍 잠듦" }
+      - { character-slug: sierra, time-of-day: NIGHT,     location-key: ASTRONOMY_TOWER,   probability: 20, notes: "별 보다 졸기" }
+      - { character-slug: sierra, time-of-day: NIGHT,     location-key: ENCHANTED_FOREST,  probability: 15, notes: "야행성 동물과 산책" }
+
+      # ━━ 에델 (차가운 쿨데레 조교, FANTASY_ACADEMY) ━━
+      #  무표정한 일중독. 연금술 실험실과 도서관 탑 사이를 오가며 연구·수업을 맡는다.
+      - { character-slug: edel, time-of-day: MORNING,   location-key: ALCHEMY_LAB,     probability: 50, notes: "실험 준비" }
+      - { character-slug: edel, time-of-day: MORNING,   location-key: GREAT_HALL,      probability: 30, notes: "조강(早講) 보조" }
+      - { character-slug: edel, time-of-day: MORNING,   location-key: LIBRARY_TOWER,   probability: 20, notes: "문헌 점검" }
+      - { character-slug: edel, time-of-day: NOON,      location-key: GREAT_HALL,      probability: 40, notes: "혼자 빠르게 식사" }
+      - { character-slug: edel, time-of-day: NOON,      location-key: LIBRARY_TOWER,   probability: 35, notes: "자료 정리" }
+      - { character-slug: edel, time-of-day: NOON,      location-key: ALCHEMY_LAB,     probability: 25, notes: "실험 경과 확인" }
+      - { character-slug: edel, time-of-day: AFTERNOON, location-key: ALCHEMY_LAB,     probability: 55, notes: "연구·수업 보조" }
+      - { character-slug: edel, time-of-day: AFTERNOON, location-key: LIBRARY_TOWER,   probability: 30, notes: "논문 집필" }
+      - { character-slug: edel, time-of-day: AFTERNOON, location-key: ARENA,           probability: 15, notes: "실기 시험 감독" }
+      - { character-slug: edel, time-of-day: EVENING,   location-key: ALCHEMY_LAB,     probability: 50, notes: "야근" }
+      - { character-slug: edel, time-of-day: EVENING,   location-key: LIBRARY_TOWER,   probability: 35, notes: "늦은 자료 조사" }
+      - { character-slug: edel, time-of-day: EVENING,   location-key: GREAT_HALL,      probability: 15, notes: "늦은 식사" }
+      - { character-slug: edel, time-of-day: NIGHT,     location-key: ALCHEMY_LAB,     probability: 45, notes: "심야 연구" }
+      - { character-slug: edel, time-of-day: NIGHT,     location-key: ASTRONOMY_TOWER, probability: 35, notes: "관측 데이터 수집" }
+      - { character-slug: edel, time-of-day: NIGHT,     location-key: LIBRARY_TOWER,   probability: 20, notes: "도서관에서 밤 새우기" }
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  [기획팀 가이드]
 #
 #  1. 한 World당 *최소 5개 장소* + *최소 1개 시작 가능 장소(selectable-as-start: true)*가 필요.
-#     장소 부재 시 StoryCreateFlow의 시작 장소 선택 단계가 빈 화면.
-#
 #  2. 한 World당 *최소 2개 페르소나 프리셋* 권장 (3개가 이상적).
-#     자유 페르소나는 BM이라 무료 유저는 프리셋만 사용.
-#
 #  3. 각 캐릭터의 character-routines는 *5단계 DayPart 모두 정의* 권장.
-#     누락된 DayPart는 WorldRoutingService가 *fallback 처리* (캐릭터 default_location).
-#
-#  4. probability 비율 권장:
-#     - 주거점(예: 침실, 사무실): 50~70
-#     - 보조 거점(예: 정원, 카페): 20~40
-#     - 가끔 등장(예: 회의실, 옥상): 5~15
-#
+#     누락된 DayPart는 WorldRoutingService가 *fallback 처리*.
+#  4. probability 비율 권장: 주거점 50~70 / 보조 거점 20~40 / 가끔 등장 5~15.
 #  5. 캐릭터 slug는 application-characters.yml의 slug 필드와 정확히 일치해야 함.
+#  6. default-bgm 유효값: DAILY / ROMANTIC / EXCITING / TOUCHING / TENSE (EROTIC=시크릿 전용).
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

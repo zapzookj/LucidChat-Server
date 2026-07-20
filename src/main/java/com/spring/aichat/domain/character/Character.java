@@ -1,7 +1,10 @@
 package com.spring.aichat.domain.character;
 
 import com.spring.aichat.config.CharacterSeedProperties;
+import com.spring.aichat.domain.enums.CharacterSource;
+import com.spring.aichat.domain.enums.CharacterVisibility;
 import com.spring.aichat.domain.enums.RelationStatus;
+import com.spring.aichat.domain.enums.SecretReviewStatus;
 import com.spring.aichat.domain.enums.WorldId;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -236,6 +239,39 @@ public class Character {
     private String theaterIntroBeat;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [UGC v1] 소유·공개·Secret 심사 (additive only — V1 무회귀)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 생성자 유저 (null = 공식 캐릭터). 의도적 FK 미설정(Long 참조 — V2 도메인 관례). */
+    @Column(name = "owner_user_id")
+    private Long ownerUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 20)
+    private CharacterSource source = CharacterSource.OFFICIAL;
+
+    /**
+     * Secret Mode 허용 여부 — 런타임 fast-path.
+     * 공식 캐릭터는 true(V9 마이그레이션에서 일괄 설정), UGC는 승인 전 false.
+     */
+    @Column(name = "secret_eligible", nullable = false)
+    private boolean secretEligible = false;
+
+    /** 접근 규칙: PUBLIC은 전체, 그 외는 소유자만. PENDING_PUBLIC 동작은 PRIVATE와 동일. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility", nullable = false, length = 20)
+    private CharacterVisibility visibility = CharacterVisibility.PUBLIC;
+
+    /** Secret 허용 심사 상태 — 공개 심사와 독립 경로. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "secret_review_status", nullable = false, length = 20)
+    private SecretReviewStatus secretReviewStatus = SecretReviewStatus.NONE;
+
+    /** 마지막 심사(공개/Secret) 반려·승인 사유. */
+    @Column(name = "review_note", length = 500)
+    private String reviewNote;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자 & 시드 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -297,6 +333,12 @@ public class Character {
         if (seed.theaterAvailable() != null) this.theaterAvailable = seed.theaterAvailable();
         if (seed.homeLocations() != null) this.homeLocations = seed.homeLocations();
         if (seed.theaterIntroBeat() != null) this.theaterIntroBeat = seed.theaterIntroBeat();
+
+        // [UGC v1] YAML 시드 = 공식 캐릭터 불변식 (신규 시드에도 Secret 허용 보장 — V9 일괄 UPDATE와 동일 의미)
+        this.source = CharacterSource.OFFICIAL;
+        this.visibility = CharacterVisibility.PUBLIC;
+        this.secretEligible = true;
+        this.ownerUserId = null;
     }
 
     // ── 기존 편의 메서드 ──
@@ -514,5 +556,156 @@ public class Character {
         this.theaterAvailable = theaterAvailable;
         this.homeLocations = homeLocations;
         this.theaterIntroBeat = theaterIntroBeat;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [UGC v1] 생성·접근·심사
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** UGC 캐릭터 생성 스펙 — Stage 0 산출 + 에셋 바인딩 결과를 도메인으로 전달하는 경계 레코드. */
+    public record UgcCharacterSpec(
+        Long ownerUserId,
+        String name,
+        String slug,
+        String baseSystemPrompt,
+        String llmModelName,
+        String tagline,
+        String description,
+        String role,
+        String personality,
+        String tone,
+        String appearance,
+        String clothing,
+        String backstory,
+        String coreValues,
+        String flaws,
+        String speechQuirks,
+        String firstGreeting,
+        /** 첫 만남 장면 묘사 — SYSTEM 나레이션 채널 (공식 intro-narration과 동일 렌더 경로). */
+        String introNarration,
+        String defaultImageUrl,
+        String thumbnailUrl,
+        String defaultOutfit,
+        WorldId worldId
+    ) {}
+
+    /**
+     * UGC 캐릭터 바인딩 (Stage 4).
+     * 불변식: source=UGC · visibility=PRIVATE(공개는 승인제) · secretEligible=false(승인 전 차단) ·
+     * storyAvailable=false · theaterAvailable=false (v1 SANDBOX 전용 — 루틴 데이터는 별도 생성하되 개방은 v1.1).
+     */
+    public static Character createUgc(UgcCharacterSpec spec) {
+        Character c = new Character(spec.name(), spec.slug(), spec.baseSystemPrompt(), spec.llmModelName());
+        c.ownerUserId = spec.ownerUserId();
+        c.source = CharacterSource.UGC;
+        c.visibility = CharacterVisibility.PRIVATE;
+        c.secretEligible = false;
+        c.secretReviewStatus = SecretReviewStatus.NONE;
+        c.storyAvailable = false;
+        c.theaterAvailable = false;
+        c.hidden = false;
+
+        c.tagline = spec.tagline();
+        c.description = spec.description();
+        c.role = spec.role();
+        c.personality = spec.personality();
+        c.tone = spec.tone();
+        c.appearance = spec.appearance();
+        c.clothing = spec.clothing();
+        c.backstory = spec.backstory();
+        c.coreValues = spec.coreValues();
+        c.flaws = spec.flaws();
+        c.speechQuirks = spec.speechQuirks();
+        c.firstGreeting = spec.firstGreeting();
+        c.introNarration = spec.introNarration();
+        c.defaultImageUrl = spec.defaultImageUrl();
+        c.thumbnailUrl = spec.thumbnailUrl();
+        c.defaultOutfit = spec.defaultOutfit();
+        c.worldId = spec.worldId();
+        return c;
+    }
+
+    public boolean isUgc() {
+        return source == CharacterSource.UGC;
+    }
+
+    public boolean isOwnedBy(Long userId) {
+        return ownerUserId != null && ownerUserId.equals(userId);
+    }
+
+    /** 접근 규칙: PUBLIC은 전체, 그 외(PRIVATE/PENDING_PUBLIC)는 소유자만. */
+    public boolean isAccessibleBy(Long userId) {
+        return visibility.isPubliclyVisible() || isOwnedBy(userId);
+    }
+
+    /** UGC 텍스트 설정 수정 (완성 화면 인라인 수정 — 에셋 무관, 무료). */
+    public void updateUgcTexts(String name, String tagline, String personality,
+                               String tone, String firstGreeting) {
+        if (name != null && !name.isBlank()) this.name = name;
+        if (tagline != null) this.tagline = tagline;
+        if (personality != null) this.personality = personality;
+        if (tone != null) this.tone = tone;
+        if (firstGreeting != null) this.firstGreeting = firstGreeting;
+    }
+
+    // ── 공개 심사 경로 ──
+
+    public void requestPublish() {
+        requireUgc();
+        if (visibility == CharacterVisibility.PUBLIC) {
+            throw new IllegalStateException("이미 공개된 캐릭터: " + id);
+        }
+        this.visibility = CharacterVisibility.PENDING_PUBLIC;
+    }
+
+    public void cancelPublishRequest() {
+        requireUgc();
+        if (visibility == CharacterVisibility.PENDING_PUBLIC) {
+            this.visibility = CharacterVisibility.PRIVATE;
+        }
+    }
+
+    /** 승인 큐: 공개 승인 (+선택적 Secret 동시 판정은 approveSecret 별도 호출). */
+    public void approvePublish(String note) {
+        requireUgc();
+        this.visibility = CharacterVisibility.PUBLIC;
+        this.reviewNote = note;
+    }
+
+    /** 승인 큐: 공개 반려 → PRIVATE 회귀 + 사유. */
+    public void rejectPublish(String note) {
+        requireUgc();
+        this.visibility = CharacterVisibility.PRIVATE;
+        this.reviewNote = note;
+    }
+
+    // ── Secret 심사 경로 (독립 — PRIVATE 캐릭터도 단독 신청 가능) ──
+
+    public void requestSecretReview() {
+        requireUgc();
+        if (secretEligible) {
+            throw new IllegalStateException("이미 Secret 허용된 캐릭터: " + id);
+        }
+        this.secretReviewStatus = SecretReviewStatus.PENDING;
+    }
+
+    public void approveSecret(String note) {
+        requireUgc();
+        this.secretEligible = true;
+        this.secretReviewStatus = SecretReviewStatus.APPROVED;
+        if (note != null) this.reviewNote = note;
+    }
+
+    public void rejectSecret(String note) {
+        requireUgc();
+        this.secretEligible = false;
+        this.secretReviewStatus = SecretReviewStatus.REJECTED;
+        if (note != null) this.reviewNote = note;
+    }
+
+    private void requireUgc() {
+        if (!isUgc()) {
+            throw new IllegalStateException("공식 캐릭터에 UGC 전용 연산 시도: " + id);
+        }
     }
 }

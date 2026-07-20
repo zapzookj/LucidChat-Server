@@ -25,7 +25,6 @@ import java.util.List;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
-@Order(3)
 public class CharacterSeeder {
 
     private final CharacterRepository characterRepository;
@@ -34,7 +33,14 @@ public class CharacterSeeder {
     @Value("${app.seed.update-existing:true}")
     private boolean updateExisting;
 
+    /**
+     * [Seed-Order Fix 2026-07-20] ApplicationRunner 순서는 @Configuration 클래스가 아니라
+     * <b>@Bean 메서드의 @Order</b>가 결정한다. 기존엔 클래스에만 @Order(3)이 있어 이 러너가
+     * 최후순위로 밀렸고, 빈 DB 첫 부팅 시 RoutineSeeder(@Order 3)가 먼저 돌아 루틴 140건이
+     * 전부 skip되는 버그가 있었다. 체인: World(0) → Location(1) → Persona(2) → <b>Character(3)</b> → Routine(4).
+     */
     @Bean
+    @Order(3)
     public ApplicationRunner seedCharactersRunner() {
         return args -> seedAllCharacters();
     }

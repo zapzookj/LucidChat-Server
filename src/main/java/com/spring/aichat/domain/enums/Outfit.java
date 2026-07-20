@@ -15,5 +15,11 @@ public enum Outfit {
     DATE,       // 데이트룩
     SWIMWEAR,   // 수영복
     NEGLIGEE,    // 네글리제 (시크릿 전용)
-    DAILY       // 일상복 (서태리, 백루나 기본)
+    DAILY,      // 일상복 (서태리, 백루나 기본)
+    /**
+     * [UGC v1] UGC 캐릭터 단일 복장 — 에셋 규약 characters/{slug}/default_{emotion}.png.
+     * 이 상수가 없으면 ChatRoom.parseOutfitOrDefault("DEFAULT")가 MAID로 폴백되어
+     * UGC 방의 스탠딩 URL이 maid_*.png(404)로 조립되는 버그가 있었다 (2026-07-20 수정).
+     */
+    DEFAULT
 }

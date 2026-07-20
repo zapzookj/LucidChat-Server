@@ -75,12 +75,26 @@ public class SecretModeService {
      * V1 호출처(ChatService/ChatStreamService/EndingService/UserService)는 시그니처를
      * 그대로 사용하되, 동작은 user-global로 전환됨 (BM 가치 상승).
      *
-     * @deprecated user-global 1-arg {@link #canAccessSecretMode(User)} 사용 권장.
-     *             기존 호출처는 BM 피벗으로 자연 마이그레이션됨.
+     * <p>[UGC v1] characterId가 주어지면 <b>캐릭터 레벨 게이트</b>가 추가된다 —
+     * UGC 캐릭터는 승인({@code secretEligible=true}) 전 Secret 차단. 공식 캐릭터는 항상 eligible
+     * (V9 마이그레이션 + applySeed 불변식)이라 기존 동작과 동일.
+     *
+     * @deprecated user-global 1-arg {@link #canAccessSecretMode(User)} 사용 권장 —
+     *             단, <b>캐릭터 문맥이 있는 V1 경로는 이 2-arg를 유지</b>해야 UGC 게이트가 작동한다.
      */
     @Deprecated
     public boolean canAccessSecretMode(User user, Long characterId) {
+        if (characterId != null && !isCharacterSecretEligible(characterId)) {
+            return false;
+        }
         return canAccessSecretMode(user);
+    }
+
+    /** [UGC v1] 캐릭터 레벨 Secret 허용 여부 — 미존재 캐릭터는 차단. */
+    public boolean isCharacterSecretEligible(Long characterId) {
+        return characterRepository.findById(characterId)
+            .map(Character::isSecretEligible)
+            .orElse(false);
     }
 
     /**

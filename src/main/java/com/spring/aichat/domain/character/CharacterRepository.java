@@ -24,4 +24,31 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
      * StoryCreateFlow의 히로인 풀 노출에 사용.
      */
     List<Character> findByWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(WorldId worldId);
+
+    // ━━━ [UGC v1] ━━━
+
+    /** 내 UGC 캐릭터 (스튜디오 '내 캐릭터' 섹션). */
+    List<Character> findByOwnerUserIdOrderByIdDesc(Long ownerUserId);
+
+    /** 탐색 피드 첫 페이지 — 공개 UGC 최신순. */
+    List<Character> findBySourceAndVisibilityAndHiddenFalseOrderByIdDesc(
+        com.spring.aichat.domain.enums.CharacterSource source,
+        com.spring.aichat.domain.enums.CharacterVisibility visibility,
+        org.springframework.data.domain.Pageable pageable);
+
+    /** 탐색 피드 커서 페이지 — id < cursor 최신순. */
+    List<Character> findBySourceAndVisibilityAndHiddenFalseAndIdLessThanOrderByIdDesc(
+        com.spring.aichat.domain.enums.CharacterSource source,
+        com.spring.aichat.domain.enums.CharacterVisibility visibility,
+        Long idCursor,
+        org.springframework.data.domain.Pageable pageable);
+
+    /** 백오피스 승인 큐 — 공개 심사 대기. */
+    List<Character> findByVisibilityOrderByIdAsc(com.spring.aichat.domain.enums.CharacterVisibility visibility);
+
+    /** 백오피스 승인 큐 — Secret 단독 심사 대기. */
+    List<Character> findBySecretReviewStatusOrderByIdAsc(com.spring.aichat.domain.enums.SecretReviewStatus status);
+
+    /** UGC slug 충돌 방지용. */
+    boolean existsBySlug(String slug);
 }

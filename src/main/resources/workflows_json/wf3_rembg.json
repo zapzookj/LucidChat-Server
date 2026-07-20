@@ -1,0 +1,77 @@
+{
+  "1": {
+    "inputs": {
+      "image": "PLACEHOLDER_INPUT.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "이미지 로드"
+    }
+  },
+  "23": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "22:16",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "이미지 저장"
+    }
+  },
+  "22:13": {
+    "inputs": {
+      "bg_removal_model": [
+        "22:14",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "RemoveBackground",
+    "_meta": {
+      "title": "배경 제거"
+    }
+  },
+  "22:14": {
+    "inputs": {
+      "bg_removal_name": "birefnet.safetensors"
+    },
+    "class_type": "LoadBackgroundRemovalModel",
+    "_meta": {
+      "title": "배경 제거 모델 불러오기"
+    }
+  },
+  "22:15": {
+    "inputs": {
+      "mask": [
+        "22:13",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "마스크 반전"
+    }
+  },
+  "22:16": {
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "alpha": [
+        "22:15",
+        0
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "알파와 함께 이미지 결합"
+    }
+  }
+}

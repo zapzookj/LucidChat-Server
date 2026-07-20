@@ -353,8 +353,12 @@ public class ChatService {
             return room.getCharacter();
         });
 
+        // [UGC 폴리싱 2026-07-20] 나레이션이 없는 캐릭터(과거 생성 UGC 등)는 SYSTEM 로그 자체를 생략
+        //   — null 콘텐츠 로그가 저장되던 문제 방지.
         String introNarration = character.getIntroNarration();
-        chatLogRepository.save(ChatLogDocument.system(roomId, introNarration));
+        if (introNarration != null && !introNarration.isBlank()) {
+            chatLogRepository.save(ChatLogDocument.system(roomId, introNarration));
+        }
 
         String firstGreeting = character.getFirstGreeting();
         chatLogRepository.save(ChatLogDocument.of(
