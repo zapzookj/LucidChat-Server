@@ -30,11 +30,14 @@
 
 - **트리거**: `master` push (또는 수동 `workflow_dispatch`)
 - **인증**: GitHub OIDC → `lucid-gha-deploy-role` assume. 장기 액세스키/GitHub Secrets 불필요.
-  롤 신뢰 정책이 `repo:zapzookj/AI-CharacterChat-Server:ref:refs/heads/master`로 제한됨.
+  롤 신뢰 정책이 `repo:zapzookj/LucidChat-Server:ref:refs/heads/master`로 제한됨.
+  ⚠ **리포를 리네임하면 OIDC sub가 바뀌어 배포가 깨진다** — 리네임 시 신뢰 정책도 함께 수정할 것
+  (`aws iam update-assume-role-policy --role-name lucid-gha-deploy-role ...`). 2026-07-23 실제로
+  AI-CharacterChat-Server → LucidChat-Server 리네임 때문에 첫 실행이 실패했던 이력 있음.
 - **흐름**: JDK17 + gradle 캐시 → 유닛 테스트(`--tests '*Test'` — `@SpringBootTest`인 `AichatApplicationTests`는 제외) → `bootJar` → docker build → ECR push (`{git sha}` + `latest` 태그) → 현행 태스크 정의 다운로드 → 이미지만 교체해 신규 리비전 등록 → 서비스 업데이트 → 안정화 대기(최대 10분)
 - **env 변경 방법**: 파이프라인은 이미지만 갈아끼우므로, 환경변수 변경은 콘솔/CLI로 태스크 정의 신규 리비전을 만들고 서비스에 반영하면 다음 배포부터 그 리비전을 베이스로 사용.
 
-### 2.1 1회성 셋업 (IAM) — 미완이면 파이프라인 동작 불가
+### 2.1 1회성 셋업 (IAM) — 2026-07-23 완료됨 (재구축 시 참고용)
 
 ```bash
 # ① GitHub OIDC 프로바이더 (계정에 1개만 있으면 됨)
