@@ -4,9 +4,14 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.enums.CharacterSource;
 import com.spring.aichat.domain.enums.CharacterVisibility;
+import com.spring.aichat.domain.enums.WorldId;
+import com.spring.aichat.domain.ugc.UgcWorld;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
+import com.spring.aichat.domain.ugc.WorldReviewStatus;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.ugc.UgcDtos;
+import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.exception.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +37,7 @@ public class UgcCharacterService {
 
     private final CharacterRepository characterRepository;
     private final UserRepository userRepository;
+    private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 연결 검증·이름 해석
 
     // ── 공개 심사 경로 ──
 
@@ -61,6 +67,65 @@ public class UgcCharacterService {
     public void updateTexts(String username, Long characterId, UgcDtos.UpdateTextsRequest req) {
         Character character = ownedUgc(username, characterId);
         character.updateUgcTexts(req.name(), req.tagline(), req.personality(), req.tone(), req.firstGreeting());
+    }
+
+    // ── [세계관 빌더] 세계관 연결/변경 (에셋 무관 — 무료, 카드 메뉴 소급 연결) ──
+
+    /**
+     * 세계관 연결/변경/해제. 심사 우회 방지 게이트: 월드 검수는 캐릭터 공개 심사에 피기백되므로,
+     * <b>이미 PUBLIC인 캐릭터에는 APPROVED 월드만</b> 연결 허용(2026-07-20 종원 확정).
+     * PRIVATE/PENDING_PUBLIC은 자유 연결(PENDING이면 심사 상세에 최신 월드가 자동 반영).
+     * 공식 세계관은 검수 대상이 아니므로 상시 허용.
+     */
+    @Transactional
+    public void linkWorld(String username, Long characterId, UgcDtos.WorldLinkRequest req) {
+        Character character = ownedUgc(username, characterId);
+
+        // [리뷰 픽스] 공개 심사 중 월드 교체 차단 — 관리자가 상세에서 본 월드와 판정 시점 월드가
+        // 달라지는 TOCTOU(미심사 월드가 승인·공개) 방지. 심사 취소 후 변경 가능.
+        if (character.getVisibility() == CharacterVisibility.PENDING_PUBLIC) {
+            throw new BadRequestException("공개 심사 중에는 세계관을 변경할 수 없어요. 심사 취소 후 변경해 주세요.");
+        }
+
+        WorldId official = null;
+        if (req != null && req.officialWorldId() != null && !req.officialWorldId().isBlank()) {
+            official = WorldId.fromStringOrNull(req.officialWorldId());
+            if (official == null) {
+                throw new BadRequestException("알 수 없는 세계관입니다: " + req.officialWorldId());
+            }
+        }
+        Long ugcWorldId = req != null ? req.ugcWorldId() : null;
+        if (official != null && ugcWorldId != null) {
+            throw new BadRequestException("세계관은 하나만 연결할 수 있어요.");
+        }
+
+        if (ugcWorldId != null) {
+            UgcWorld world = ugcWorldRepository.findByIdAndOwnerUserId(ugcWorldId, character.getOwnerUserId())
+                .orElseThrow(this::hiddenNotFound); // 타인/미존재 월드 은닉
+            if (character.getVisibility() == CharacterVisibility.PUBLIC
+                && world.getReviewStatus() != WorldReviewStatus.APPROVED) {
+                throw new BadRequestException("공개된 캐릭터에는 검수 승인된 세계관만 연결할 수 있어요.");
+            }
+            character.linkUgcWorld(world.getId());
+        } else if (official != null) {
+            character.linkOfficialWorld(official);
+        } else {
+            character.unlinkWorld();
+        }
+        log.info("[UGC] 세계관 연결 변경: characterId={}, official={}, ugcWorldId={}", characterId, official, ugcWorldId);
+    }
+
+    /** [세계관 빌더] 카드 뷰용 UGC 월드 이름 일괄 해석 (N+1 방지). */
+    @Transactional(readOnly = true)
+    public Map<Long, String> ugcWorldNames(List<Character> characters) {
+        List<Long> ids = characters.stream()
+            .map(Character::getUgcWorldId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+        if (ids.isEmpty()) return Map.of();
+        return ugcWorldRepository.findAllById(ids).stream()
+            .collect(Collectors.toMap(UgcWorld::getId, UgcWorld::getName, (a, b) -> a));
     }
 
     // ── 목록 ──

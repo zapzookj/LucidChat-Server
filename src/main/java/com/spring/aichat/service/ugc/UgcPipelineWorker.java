@@ -54,6 +54,8 @@ public class UgcPipelineWorker {
     private static final Duration PRESIGN_TTL = Duration.ofHours(2); // fal 큐 대기 커버
     /** externalJobs 스크래치 맵의 내부 키 접두어 — 폴러가 RunPod id로 오인하지 않도록 구분. */
     private static final String SCRATCH_KEY_PREFIX = "K_";
+    /** [2026-07-21 리롤 외형 수정] 대기 중인 외형 지정 블록 — 서비스가 저장, 리롤 워커가 소비. */
+    static final String APPEARANCE_EDIT_KEY = SCRATCH_KEY_PREFIX + "APPEARANCE_EDIT";
     /** [2026-07-20 개편] 스탠딩 후보 수 — 유저가 BASE_WAIT에서 선택. */
     static final int BASE_CANDIDATE_COUNT = 2;
 
@@ -116,8 +118,33 @@ public class UgcPipelineWorker {
         CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
         if (job == null || job.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
         try {
+            // [2026-07-21 리롤 외형 수정] 외형 지정이 동봉된 리롤 — 외형 전용 경량 재구조화 후 제출.
+            // 페르소나·서사·유저 편집분은 보존되고 외형 태그·씬·배경색·외형 서술만 바뀐다.
+            String hintsBlock = json.readScratch(job.getExternalJobsJson()).get(APPEARANCE_EDIT_KEY);
+            if (hintsBlock != null && !hintsBlock.isBlank()) {
+                runWithRetries(jobId, "APPEARANCE_EDIT", () -> {
+                    CharacterCreationJob fresh = jobRepository.findById(jobId).orElseThrow();
+                    StructuredConcept current = json.readConcept(fresh.getStructuredConceptJson());
+                    StructuredConcept updated = conceptStructuringService.restructureAppearance(
+                        fresh.getConceptInputRaw(), current, hintsBlock);
+                    moderationService.assertStructuredConceptAllowed(updated);
+                    // [리뷰 픽스] LLM 콜(수 초~수십 초) 동안 커밋된 프로필 편집(레이턴시 하이딩)이
+                    // 스냅샷 기반 전체 덮어쓰기로 유실되지 않도록, 락 안에서 최신본을 재조회해
+                    // 외형 산출 필드만 병합한다 (deriveEmotionPromptsSafely 동일 패턴).
+                    mutateJob(jobId, j -> {
+                        StructuredConcept latest = json.readConcept(j.getStructuredConceptJson());
+                        j.applyStage0(json.writeConcept(latest.withAppearanceFrom(updated)), updated.bgColor());
+                        removeExternalJob(j, APPEARANCE_EDIT_KEY);
+                    });
+                    submitGoldenShots(jobId, updated);
+                });
+                return;
+            }
             runWithRetries(jobId, "GOLDEN_REROLL",
                 () -> submitGoldenShots(jobId, json.readConcept(job.getStructuredConceptJson())));
+        } catch (ContentModerationException e) {
+            // LLM 판정 차단 — 누적 과금 전액 환불이므로 유저 금전 손실 없음 (Stage0 차단과 동일 정책)
+            failAndRefund(jobId, UgcModerationService.BLOCK_MESSAGE);
         } catch (Exception e) {
             failAndRefund(jobId, "황금샷 리롤 실패: " + e.getMessage());
         }
@@ -169,7 +196,7 @@ public class UgcPipelineWorker {
         String goldenUrl = assetService.presignGet(job.getSelectedGoldenShotKey(), PRESIGN_TTL);
 
         poseEditClient.edit(new PoseEditClient.EditRequest(
-                promptAssembler.qwenPosePrompt(), promptAssembler.qwenNegative(), goldenUrl, null))
+                promptAssembler.qwenPosePrompt(concept.basePose()), promptAssembler.qwenNegative(), goldenUrl, null))
             .thenCompose(pass1 -> poseEditClient.edit(new PoseEditClient.EditRequest(
                 promptAssembler.qwenBackgroundPrompt(bgColor), promptAssembler.qwenNegative(),
                 pass1.imageUrl(), null)))
@@ -262,7 +289,9 @@ public class UgcPipelineWorker {
         String inputName = "job_" + jobId + "_" + suffix + "_in.png";
         String positive = promptAssembler.refinePositive(
             concept.appearanceTags(), concept.personaTags(), emotion, bgColor);
-        String faceWildcard = promptAssembler.faceDetailWildcard(concept.appearanceTags());
+        // [2026-07-21 재구성] 감정 표정 포함 — 디테일 패스가 Qwen 표정을 중화하지 않도록
+        String faceWildcard = promptAssembler.faceDetailWildcard(
+            concept.appearanceTags(), concept.personaTags(), emotion);
         var workflow = workflowFactory.buildRefine(inputName, positive, faceWildcard, "job_" + jobId + "_" + suffix);
         var submit = comfyClient.submit(workflow,
             List.of(new UgcComfyClient.InputImage(inputName, Base64.getEncoder().encodeToString(bytes))),
@@ -280,8 +309,29 @@ public class UgcPipelineWorker {
         CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
         if (job == null || job.getStatus() != CreationJobStatus.EMOTIONS_PROCESSING) return;
 
+        // [2026-07-21 컨셉 반영 감정] 캐릭터별 동적 표정·자세 산출 — 잡에 저장(리롤 재현성).
+        // 실패는 서버 상수 폴백으로 흡수 (파이프라인 비차단).
+        deriveEmotionPromptsSafely(jobId);
+
         for (EmotionTag tag : UgcPromptAssembler.derivedEmotions()) {
             submitEmotionDerivation(jobId, tag, job.getBaseEditSeed());
+        }
+    }
+
+    private void deriveEmotionPromptsSafely(Long jobId) {
+        CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
+        if (job == null || job.getStructuredConceptJson() == null) return;
+        StructuredConcept concept = json.readConcept(job.getStructuredConceptJson());
+        if (concept.emotionPrompts() != null && !concept.emotionPrompts().isEmpty()) return; // 이미 산출(멱등)
+        try {
+            var prompts = conceptStructuringService.deriveEmotionPrompts(concept);
+            mutateJob(jobId, j -> {
+                StructuredConcept current = json.readConcept(j.getStructuredConceptJson());
+                j.applyStage0(json.writeConcept(current.withEmotionPrompts(prompts)), current.bgColor());
+            });
+            log.info("[UGC-WORKER] 감정 연출 산출 완료: jobId={}, {}종", jobId, prompts.size());
+        } catch (Exception e) {
+            log.warn("[UGC-WORKER] 감정 연출 산출 실패 — 서버 상수 폴백: jobId={}, {}", jobId, e.getMessage());
         }
     }
 
@@ -304,8 +354,10 @@ public class UgcPipelineWorker {
 
         String personaHint = (concept.personaTags() == null || concept.personaTags().isEmpty())
             ? null : String.join(", ", concept.personaTags());
+        // [2026-07-21] 캐릭터별 동적 감정 연출 (없으면 상수 폴백 — qwenEmotionPrompt 내부 처리)
+        StructuredConcept.EmotionPromptOverride override = concept.emotionPromptFor(tag.name());
         poseEditClient.edit(new PoseEditClient.EditRequest(
-                promptAssembler.qwenEmotionPrompt(tag, personaHint), promptAssembler.qwenNegative(), baseUrl, fixedSeed))
+                promptAssembler.qwenEmotionPrompt(tag, personaHint, override), promptAssembler.qwenNegative(), baseUrl, fixedSeed))
             .whenComplete((result, err) -> {
                 if (err != null) {
                     log.warn("[UGC-WORKER] Qwen 감정 파생 실패: jobId={}, tag={}, {}", jobId, tag, err.getMessage());
@@ -433,7 +485,17 @@ public class UgcPipelineWorker {
                 assetService.publicUrl(neutralKey),
                 assetService.publicUrl(thumbnailKey),
                 "DEFAULT",
-                null // v1: SANDBOX 전용 — 세계관 편입(루틴 생성)은 STORY 개방(v1.1)과 함께
+                // [세계관 빌더] 위저드 3택 요청 주입 — 공식은 worldId(enum), UGC는 ugcWorldId(Long).
+                // 채팅 효과(lore·장소 풀)만 열리고 STORY/THEATER는 createUgc 불변식이 계속 차단한다.
+                job.getRequestedWorldId(),
+                job.getRequestedUgcWorldId(),
+                // [2026-07-22 프로필 뷰] 몰입형 신상 + 무드 태그(persona 조인 — 200자 절삭:
+                // varchar 초과가 완주한 잡을 최종 단계에서 죽이지 않도록)
+                profile.height(),
+                profile.likes(),
+                profile.dislikes(),
+                profile.hobby(),
+                UgcWorldPipelineWorker.joinMood(concept.personaTags())
             );
 
             Long characterId = txTemplate.execute(status -> {
@@ -502,6 +564,10 @@ public class UgcPipelineWorker {
         }
         mutateJob(jobId, j -> {
             if (j.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return; // 멱등 가드
+            // [리뷰 픽스] 리플레이 가드 — 이미 처리된 GOLDEN 이벤트(웹훅 중복 전달)가 리롤 진행 중
+            // 재도착하면 상태를 GACHA_WAIT로 되돌려 진행 중인 리롤 결과를 삼킨다. 스크래치에
+            // 미결 GOLDEN 키가 있을 때만 수용 (월드 트랙 세대 가드와 동일 원리).
+            if (!json.readScratch(j.getExternalJobsJson()).containsKey(UgcStage.GOLDEN.name())) return;
             removeExternalJob(j, UgcStage.GOLDEN.name());
             // [2026-07-20 리롤 누적] 기존 후보 뒤에 새 배치를 붙인다 (1회차가 더 나은 케이스 보존)
             List<String> merged = new ArrayList<>(json.readKeys(j.getGoldenShotKeysJson()));

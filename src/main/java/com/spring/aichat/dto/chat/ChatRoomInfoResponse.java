@@ -43,5 +43,7 @@ public record ChatRoomInfoResponse(
     String currentDynamicBgUrl,
     // ── [Bug #3 Fix] 도메인 분리 ──
     boolean secretModeActive,       // 이 방에서의 시크릿 모드 활성 여부
-    String userPersona              // 이 방 전용 유저 페르소나 (null이면 유저 기본값)
+    String userPersona,             // 이 방 전용 유저 페르소나 (null이면 유저 기본값)
+    // ── [세계관 빌더] UGC 월드 연동 ──
+    Long ugcWorldId                 // 캐릭터 소속 UGC 월드 (null=미연결). 프론트는 이 값으로 동적 배경 클리어 가드를 스킵
 ) {}

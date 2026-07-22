@@ -1,8 +1,12 @@
 package com.spring.aichat.service.illustration;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.illustration.BackgroundCache;
 import com.spring.aichat.domain.illustration.BackgroundCacheRepository;
+import com.spring.aichat.domain.ugc.UgcWorldLocation;
+import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
 import com.spring.aichat.domain.world.World;
 import com.spring.aichat.external.FalAiClient;
 import com.spring.aichat.external.ModelsLabClient;
@@ -15,6 +19,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -43,6 +48,10 @@ public class BackgroundGenerationService {
     private final BackgroundPromptAssembler promptAssembler;
     private final BackgroundCacheRepository backgroundCacheRepository;
     private final RedisCacheService cacheService;
+    // [세계관 빌더] UGC 월드 장소 풀 인터셉트·무드 주입용
+    private final CharacterRepository characterRepository;
+    private final UgcWorldRepository ugcWorldRepository;
+    private final UgcWorldLocationRepository ugcWorldLocationRepository;
 
     private static final String REDIS_BG_PREFIX = "bg:";
 
@@ -68,6 +77,15 @@ public class BackgroundGenerationService {
         String locationName, String canonicalKey, String locationDescription,
         String timeOfDay, Long characterId
     ) {
+        // [세계관 빌더] UGC 월드 장소 풀 인터셉트 — 사전 확정 대표 배경 1장을 즉시 서빙.
+        //   BackgroundCache(전역 공유 캐시)를 경유하지 않아 canonical key 오염/timeOfDay 차원 문제가 없다.
+        //   미스매치(LLM 즉석 장소)면 기존 동적 생성 경로로 폴스루.
+        String ugcWorldUrl = resolveUgcWorldBackground(characterId, canonicalKey, locationName);
+        if (ugcWorldUrl != null) {
+            log.info("[BG] UGC world location HIT: ckey={} → {}", canonicalKey, ugcWorldUrl);
+            return BackgroundResult.hit(ugcWorldUrl);
+        }
+
         String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
         // Layer 1: Redis
@@ -216,7 +234,13 @@ public class BackgroundGenerationService {
     ) {
         // [Phase 6 v2] Flux 2는 positive-only. 시간대 분위기는 LLM이 locationDescription에 포함.
         //   negative 금지사항은 promptAssembler가 prompt 후미에 자연어로 통합함.
-        String positivePrompt = promptAssembler.assemblePositivePrompt(locationDescription, String.valueOf(world));
+        // [세계관 빌더 수정] 기존 String.valueOf(world)가 deprecated (String,String) 오버로드에
+        //   바인딩되어 World 인자가 통째로 무시되던 버그 정리 + UGC 월드는 moodTags를 무드로 주입
+        //   (즉석 동적 장소의 세계관 정합성 이중 안전망).
+        String ugcMood = (world == null) ? resolveUgcWorldMood(characterId) : null;
+        String positivePrompt = (ugcMood != null)
+            ? promptAssembler.assembleWithMood(locationDescription, ugcMood)
+            : promptAssembler.assemblePositivePrompt(locationDescription, world);
         String cacheHash = BackgroundCache.computeHash(canonicalKey, timeOfDay, locationName);
 
         String s3Url;
@@ -361,6 +385,57 @@ public class BackgroundGenerationService {
         );
         backgroundCacheRepository.save(cache);
         log.info("[BG] DB cache persisted: ckey={} hash={}", canonicalKey, cacheHash);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  7. [세계관 빌더] UGC 월드 연동
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * UGC 월드 캐릭터의 장소 풀 매칭 — canonical key({@code UGCW_{worldId}__{KEY}}) 정확 일치 우선,
+     * 표시명 정확 일치 폴백(LLM 키 드리프트 방어). 매칭 실패나 배경 미보유면 null(기존 경로 폴스루).
+     */
+    private String resolveUgcWorldBackground(Long characterId, String canonicalKey, String locationName) {
+        Long ugcWorldId = resolveUgcWorldId(characterId);
+        if (ugcWorldId == null) return null;
+
+        List<UgcWorldLocation> locations =
+            ugcWorldLocationRepository.findByUgcWorldIdAndActiveTrueOrderByDisplayOrderAsc(ugcWorldId);
+        if (locations.isEmpty()) return null;
+
+        // [리뷰 픽스] 2-패스 — canonical key 정확 일치를 전수 확인한 뒤에만 표시명 폴백.
+        // (동명 장소가 있을 때 앞순서 장소의 nameMatch가 뒷장소의 keyMatch를 가로채지 않도록)
+        String keyPrefix = "UGCW_" + ugcWorldId + "__";
+        for (UgcWorldLocation loc : locations) {
+            if (canonicalKey != null && canonicalKey.equals(keyPrefix + loc.getLocationKey())
+                && loc.getBackgroundUrl() != null && !loc.getBackgroundUrl().isBlank()) {
+                return loc.getBackgroundUrl();
+            }
+        }
+        for (UgcWorldLocation loc : locations) {
+            if (locationName != null && locationName.trim().equals(loc.getDisplayName())
+                && loc.getBackgroundUrl() != null && !loc.getBackgroundUrl().isBlank()) {
+                return loc.getBackgroundUrl();
+            }
+        }
+        return null;
+    }
+
+    /** UGC 월드의 무드 태그 CSV — 즉석 동적 장소 생성 시 프롬프트 무드 주입용. */
+    private String resolveUgcWorldMood(Long characterId) {
+        Long ugcWorldId = resolveUgcWorldId(characterId);
+        if (ugcWorldId == null) return null;
+        return ugcWorldRepository.findById(ugcWorldId)
+            .map(w -> w.getMoodTags())
+            .filter(m -> m != null && !m.isBlank())
+            .orElse(null);
+    }
+
+    private Long resolveUgcWorldId(Long characterId) {
+        if (characterId == null) return null;
+        return characterRepository.findById(characterId)
+            .map(c -> c.getUgcWorldId())
+            .orElse(null);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

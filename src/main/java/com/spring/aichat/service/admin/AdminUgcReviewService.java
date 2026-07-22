@@ -7,6 +7,10 @@ import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.SecretReviewStatus;
 import com.spring.aichat.domain.ugc.CharacterCreationJob;
 import com.spring.aichat.domain.ugc.CharacterCreationJobRepository;
+import com.spring.aichat.domain.ugc.UgcWorld;
+import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
+import com.spring.aichat.domain.ugc.WorldReviewStatus;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.admin.UgcReviewDtos;
@@ -46,6 +50,8 @@ public class AdminUgcReviewService {
 
     private final CharacterRepository characterRepository;
     private final UserRepository userRepository;
+    private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 월드 섹션·피기백 판정
+    private final UgcWorldLocationRepository ugcWorldLocationRepository;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
     private final UgcAssetService assetService;
@@ -83,8 +89,29 @@ public class AdminUgcReviewService {
             c.getPersonality(), c.getTone(), c.getAppearance(), c.getClothing(),
             c.getBackstory(), c.getCoreValues(), c.getFlaws(), c.getSpeechQuirks(),
             c.getFirstGreeting(), c.getReviewNote(), c.isSecretEligible(),
-            emotionAssets
+            emotionAssets,
+            buildWorldSection(c)
         );
+    }
+
+    /** [세계관 빌더] 소속 UGC 월드 섹션 — 공개 심사에 월드 검수 자동 포함(피기백). */
+    private UgcReviewDtos.WorldSection buildWorldSection(Character c) {
+        if (c.getUgcWorldId() == null) return null;
+        return ugcWorldRepository.findById(c.getUgcWorldId())
+            .map(w -> new UgcReviewDtos.WorldSection(
+                w.getId(), w.getName(), w.getIntro(), w.getLore(),
+                splitMood(w.getMoodTags()), w.getThumbnailUrl(),
+                w.getReviewStatus().name(), w.getReviewNote(),
+                ugcWorldLocationRepository.findByUgcWorldIdAndActiveTrueOrderByDisplayOrderAsc(w.getId()).stream()
+                    .map(l -> new UgcReviewDtos.WorldLocationItem(
+                        l.getLocationKey(), l.getDisplayName(), l.getDescription(), l.getBackgroundUrl()))
+                    .toList()))
+            .orElse(null);
+    }
+
+    private static List<String> splitMood(String moodCsv) {
+        if (moodCsv == null || moodCsv.isBlank()) return List.of();
+        return List.of(moodCsv.split("\\s*,\\s*"));
     }
 
     /**
@@ -96,6 +123,48 @@ public class AdminUgcReviewService {
     public void review(String actor, Long characterId, UgcReviewDtos.ReviewRequest req) {
         Character c = findUgc(characterId);
         StringBuilder detail = new StringBuilder();
+
+        // [세계관 빌더] 통반려 정책 — 월드 반려와 캐릭터 공개 승인의 조합은 모순 (심사 우회 방지)
+        if (Boolean.TRUE.equals(req.publishApprove()) && Boolean.FALSE.equals(req.worldApprove())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                "세계관 반려 시 캐릭터 공개는 승인할 수 없습니다 — 함께 반려해 주세요 (통반려 정책).");
+        }
+
+        // [세계관 빌더] 월드 판정 축 — 소속 월드가 있어야 유효. Secret 축처럼 관리자 재량 상시 판정.
+        UgcWorld world = null;
+        if (req.worldApprove() != null) {
+            if (c.getUgcWorldId() == null) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "연결된 세계관이 없는 캐릭터입니다: " + characterId);
+            }
+            world = ugcWorldRepository.findById(c.getUgcWorldId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
+                    "세계관을 찾을 수 없습니다: " + c.getUgcWorldId()));
+        }
+
+        // [세계관 빌더] 공개 승인 게이트 — 소속 월드가 미승인이면 worldApprove=true 동시 제출 필수
+        if (Boolean.TRUE.equals(req.publishApprove()) && c.getUgcWorldId() != null
+            && !Boolean.TRUE.equals(req.worldApprove())) {
+            WorldReviewStatus current = ugcWorldRepository.findById(c.getUgcWorldId())
+                .map(UgcWorld::getReviewStatus).orElse(WorldReviewStatus.NONE);
+            if (current != WorldReviewStatus.APPROVED) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "소속 세계관이 미승인 상태입니다 — worldApprove 판정을 함께 제출해 주세요.");
+            }
+        }
+
+        if (world != null) {
+            if (req.worldApprove()) {
+                world.approve(req.note());
+                detail.append("world=APPROVED ");
+                notifyOwnerWorld(c, world, "세계관이 승인되었어요",
+                    world.getName() + " 세계관이 검수를 통과했어요.");
+            } else {
+                world.reject(req.note());
+                detail.append("world=REJECTED ");
+                notifyOwnerWorld(c, world, "세계관이 반려되었어요",
+                    world.getName() + " 세계관이 반려되었어요. 사유를 확인해 주세요.");
+            }
+        }
 
         if (req.publishApprove() != null) {
             if (c.getVisibility() != CharacterVisibility.PENDING_PUBLIC) {
@@ -130,7 +199,7 @@ public class AdminUgcReviewService {
         }
 
         if (detail.isEmpty()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "판정 항목이 없습니다 (publishApprove/secretApprove).");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "판정 항목이 없습니다 (publishApprove/secretApprove/worldApprove).");
         }
 
         auditLogService.record(actor, "UGC_REVIEW", "CHARACTER", String.valueOf(characterId),
@@ -164,11 +233,13 @@ public class AdminUgcReviewService {
             promptAssembler.goldenShotPositive(concept.appearanceTags(), concept.personaTags(), concept.sceneTags()),
             promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.NEUTRAL, job.getBgColor()),
             promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY, job.getBgColor()),
-            promptAssembler.faceDetailWildcard(concept.appearanceTags()),
+            // [2026-07-21 재구성] 감정 표정 포함 구성 — JOY 예시로 실구성 확인
+            promptAssembler.faceDetailWildcard(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY),
             workflowFactory.templateNegative(),
-            promptAssembler.qwenPosePrompt(),
+            promptAssembler.qwenPosePrompt(concept.basePose()),
             promptAssembler.qwenBackgroundPrompt(job.getBgColor()),
-            promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint),
+            promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint,
+                concept.emotionPromptFor(EmotionTag.JOY.name())),
             promptAssembler.qwenNegative()
         );
     }
@@ -188,13 +259,20 @@ public class AdminUgcReviewService {
         return new UgcReviewDtos.QueueItem(
             c.getId(), c.getName(), c.getSlug(), c.getThumbnailUrl(),
             c.getOwnerUserId(), nickname,
-            c.getVisibility().name(), c.getSecretReviewStatus().name(), requestType);
+            c.getVisibility().name(), c.getSecretReviewStatus().name(), requestType,
+            c.getUgcWorldId() != null);
     }
 
     private void notifyOwner(Character c, String title, String body) {
         if (c.getOwnerUserId() == null) return;
         notificationService.notify(c.getOwnerUserId(), "UGC_REVIEW_RESULT", title, body,
             "UGC_CHARACTER", String.valueOf(c.getId()));
+    }
+
+    private void notifyOwnerWorld(Character c, UgcWorld world, String title, String body) {
+        if (c.getOwnerUserId() == null) return;
+        notificationService.notify(c.getOwnerUserId(), "UGC_REVIEW_RESULT", title, body,
+            "UGC_WORLD", String.valueOf(world.getId()));
     }
 
     private Character findUgc(Long characterId) {

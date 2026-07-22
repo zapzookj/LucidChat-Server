@@ -38,4 +38,10 @@ public interface CharacterCreationJobRepository extends JpaRepository<CharacterC
 
     /** [어드민 프롬프트 인스펙션] 바인딩된 캐릭터 → 원본 잡 역조회. */
     Optional<CharacterCreationJob> findByCharacterId(Long characterId);
+
+    /**
+     * [2026-07-21] LLM 구간(Stage0·외형 재구조화) 스테일 스윕 대상 — 외부 잡 id가 없어
+     * 폴링 폴백이 못 잡는 구간의 서버 재시작 유실 감지 (N분 무진행).
+     */
+    List<CharacterCreationJob> findByStatusAndUpdatedAtBefore(CreationJobStatus status, LocalDateTime cutoff);
 }

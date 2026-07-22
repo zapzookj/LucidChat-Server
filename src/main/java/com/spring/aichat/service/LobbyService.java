@@ -5,8 +5,12 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatMode;
+import com.spring.aichat.domain.ugc.UgcWorldLocation;
+import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.dto.lobby.CharacterProfileResponse;
 import com.spring.aichat.dto.lobby.CharacterResponse;
 import com.spring.aichat.dto.lobby.CreateRoomRequest;
 import com.spring.aichat.dto.lobby.RoomSummaryResponse;
@@ -36,6 +40,8 @@ public class LobbyService {
     private final ChatRoomRepository chatRoomRepository;
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
+    private final UgcWorldLocationRepository ugcWorldLocationRepository; // [세계관 빌더] 방 생성 배경 시딩
+    private final UgcWorldRepository ugcWorldRepository; // [프로필 뷰] 소속 월드 이름 해석
 
     /**
      * 전체 캐릭터 목록 조회
@@ -123,6 +129,9 @@ public class LobbyService {
             .findByUser_IdAndCharacter_IdAndChatMode(user.getId(), character.getId(), chatMode)
             .orElseGet(() -> {
                 ChatRoom newRoom = chatRoomRepository.save(new ChatRoom(user, character, chatMode));
+                // [세계관 빌더] UGC 월드 캐릭터 — 첫 장소 대표 배경을 초기 동적 배경으로 시딩
+                //   (UGC는 slug 정적 배경 에셋이 없어 dynamicBg가 유일한 실효 렌더 소스)
+                seedUgcWorldBackground(newRoom, character);
                 // AuthGuard 소유권 캐싱
                 cacheService.cacheRoomOwner(newRoom.getId(), user.getUsername());
                 log.info("🏠 [LOBBY] New room created: roomId={}, character={}, mode={}",
@@ -133,7 +142,116 @@ public class LobbyService {
         return toRoomSummary(room);
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-07-22 프로필 뷰] 몰입형 캐릭터 프로필 (카드 클릭 → 프로필 → 대화)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 접근 규칙: 공개 캐릭터 전체 + 비공개는 소유자만 — 그 외 404 은닉. hidden도 404. */
+    @Transactional(readOnly = true)
+    public CharacterProfileResponse getCharacterProfile(String username, Long characterId) {
+        User user = findUserByUsername(username);
+        Character c = characterRepository.findById(characterId)
+            .filter(ch -> !ch.isHidden())
+            .filter(ch -> ch.isAccessibleBy(user.getId()))
+            .orElseThrow(() -> new NotFoundException("존재하지 않는 캐릭터입니다. characterId=" + characterId));
+
+        String worldType = null;
+        String worldName = null;
+        if (c.getWorldId() != null) {
+            worldType = "OFFICIAL";
+            worldName = c.getWorldId().getDisplayName();
+        } else if (c.getUgcWorldId() != null) {
+            worldType = "UGC";
+            worldName = ugcWorldRepository.findById(c.getUgcWorldId())
+                .map(w -> w.getName()).orElse(null);
+        }
+
+        String creatorNickname = null;
+        if (c.isUgc() && c.getOwnerUserId() != null) {
+            creatorNickname = userRepository.findById(c.getOwnerUserId())
+                .map(u -> (u.getNickname() != null && !u.getNickname().isBlank()) ? u.getNickname() : "크리에이터")
+                .orElse(null);
+        }
+
+        return new CharacterProfileResponse(
+            c.getId(), c.getName(), c.getSlug(), c.getAge(),
+            c.getEffectiveRole(), c.getTagline(),
+            splitCsv(c.getMoodTags()),
+            worldType, worldName,
+            c.getAppearance(), c.getClothing(),
+            c.getHeight(), c.getLikes(), c.getDislikes(), c.getHobby(),
+            firstSentence(c.getIntroNarration()),
+            firstSentence(c.getFirstGreeting()),
+            c.getDefaultImageUrl(), c.getThumbnailUrl(),
+            c.isUgc(), creatorNickname
+        );
+    }
+
+    private static List<String> splitCsv(String csv) {
+        if (csv == null || csv.isBlank()) return List.of();
+        return java.util.Arrays.stream(csv.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty()).toList();
+    }
+
+    private static final char[] SENTENCE_DELIMS = {'.', '!', '?', '…', '\n'};
+
+    /**
+     * 첫 문장 절삭 — 티저/발췌는 스포일러 방지를 위해 한 문장(최대 90자)만 노출.
+     * [리뷰 픽스] "……안녕하세요" 류 말줄임표 시작 텍스트가 구분자 한 글자로 붕괴하지 않도록
+     * 선행 구분자 런을 건너뛴 위치부터 경계를 찾고, 90자 절삭은 서로게이트 페어 안전 처리.
+     */
+    static String firstSentence(String text) {
+        if (text == null || text.isBlank()) return null;
+        String t = text.strip();
+        int start = 0;
+        while (start < t.length() && (isSentenceDelim(t.charAt(start)) || t.charAt(start) == ' ')) start++;
+        if (start >= t.length()) return null; // 구분자·공백뿐인 텍스트
+
+        int end = t.length();
+        for (char delim : SENTENCE_DELIMS) {
+            int idx = t.indexOf(delim, start);
+            if (idx >= 0 && idx + 1 < end) end = idx + 1;
+        }
+        String sentence = t.substring(0, Math.min(end, t.length())).strip();
+        if (sentence.length() > 90) {
+            int cut = 90;
+            // 이모지 페어 중간 절단 방지 (도메인 Character 엔티티 import와의 충돌로 FQN 사용)
+            if (java.lang.Character.isHighSurrogate(sentence.charAt(cut - 1))) cut--;
+            sentence = sentence.substring(0, cut).strip() + "…";
+        }
+        return sentence;
+    }
+
+    private static boolean isSentenceDelim(char c) {
+        for (char d : SENTENCE_DELIMS) {
+            if (c == d) return true;
+        }
+        return false;
+    }
+
     // ── Private Helpers ──
+
+    /**
+     * [세계관 빌더] UGC 월드 소속 캐릭터의 방 생성 시 첫 장소(display order 0) 배경을
+     * 초기 동적 배경으로 세팅 — 방 진입 즉시 세계관 배경이 보이게 한다. 실패는 비차단.
+     */
+    private void seedUgcWorldBackground(ChatRoom room, Character character) {
+        if (character.getUgcWorldId() == null) return;
+        try {
+            List<UgcWorldLocation> locations = ugcWorldLocationRepository
+                .findByUgcWorldIdAndActiveTrueOrderByDisplayOrderAsc(character.getUgcWorldId());
+            for (UgcWorldLocation loc : locations) {
+                if (loc.getBackgroundUrl() != null && !loc.getBackgroundUrl().isBlank()) {
+                    room.updateDynamicBackground(loc.getDisplayName(),
+                        "UGCW_" + character.getUgcWorldId() + "__" + loc.getLocationKey(),
+                        loc.getBackgroundUrl());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("🏠 [LOBBY] UGC 월드 배경 시딩 실패 (non-blocking): roomId={}, {}", room.getId(), e.getMessage());
+        }
+    }
 
     private User findUserByUsername(String username) {
         return userRepository.findByUsername(username)

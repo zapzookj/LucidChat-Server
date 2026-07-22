@@ -23,7 +23,7 @@ class UgcComfyClientTest {
 
     @BeforeEach
     void setUp() {
-        client = new UgcComfyClient(new UgcPipelineProperties(null, null, null, null, null), om);
+        client = new UgcComfyClient(new UgcPipelineProperties(null, null, null, null, null, null, null), om);
     }
 
     @Test

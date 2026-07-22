@@ -271,6 +271,39 @@ public class Character {
     @Column(name = "review_note", length = 500)
     private String reviewNote;
 
+    /**
+     * [UGC 세계관 빌더] 소속 UGC 월드 (FK 미설정 Long 참조 — {@code UgcWorld}).
+     * 공식 연결은 기존 {@code worldId}(enum) 그대로 — 두 컬럼은 <b>배타적</b>(앱 레벨 XOR 가드).
+     * 시드({@code applySeed})가 건드리지 않아 유저 연결이 보존된다(hidden 필드와 동일 관례).
+     */
+    @Column(name = "ugc_world_id")
+    private Long ugcWorldId;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-07-22 프로필 뷰] 몰입형 신상 정보 (전부 선택 — 없으면 "기록 없음" 처리)
+    //  UGC는 Stage0 산출, 공식은 시드 수기 입력. 프롬프트 원문과 달리 유저에게 그대로 노출된다.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 키 — "164cm" 형식 짧은 문자열. */
+    @Column(name = "height", length = 30)
+    private String height;
+
+    /** 좋아하는 것 — 짧은 구, 콤마 구분. */
+    @Column(name = "likes", length = 200)
+    private String likes;
+
+    /** 싫어하는 것 — 짧은 구, 콤마 구분. */
+    @Column(name = "dislikes", length = 200)
+    private String dislikes;
+
+    /** 취미 — 짧은 구. */
+    @Column(name = "hobby", length = 200)
+    private String hobby;
+
+    /** 무드 태그 칩 — 콤마 구분 (UGC: persona 태그 조인 저장 · 공식: 시드 입력). */
+    @Column(name = "mood_tags", length = 200)
+    private String moodTags;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자 & 시드 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -333,6 +366,13 @@ public class Character {
         if (seed.theaterAvailable() != null) this.theaterAvailable = seed.theaterAvailable();
         if (seed.homeLocations() != null) this.homeLocations = seed.homeLocations();
         if (seed.theaterIntroBeat() != null) this.theaterIntroBeat = seed.theaterIntroBeat();
+
+        // [2026-07-22 프로필 뷰] 몰입형 신상 — 공식 캐릭터는 시드 수기 입력
+        if (seed.height() != null) this.height = seed.height();
+        if (seed.likes() != null) this.likes = seed.likes();
+        if (seed.dislikes() != null) this.dislikes = seed.dislikes();
+        if (seed.hobby() != null) this.hobby = seed.hobby();
+        if (seed.moodTags() != null) this.moodTags = seed.moodTags();
 
         // [UGC v1] YAML 시드 = 공식 캐릭터 불변식 (신규 시드에도 Secret 허용 보장 — V9 일괄 UPDATE와 동일 의미)
         this.source = CharacterSource.OFFICIAL;
@@ -586,7 +626,16 @@ public class Character {
         String defaultImageUrl,
         String thumbnailUrl,
         String defaultOutfit,
-        WorldId worldId
+        WorldId worldId,
+        /** [세계관 빌더] UGC 월드 연결 (worldId와 배타 — 위저드 3택 중 '내 커스텀 월드'). */
+        Long ugcWorldId,
+        // ── [2026-07-22 프로필 뷰] 몰입형 신상 (Stage0 산출 — 전부 선택) ──
+        String height,
+        String likes,
+        String dislikes,
+        String hobby,
+        /** 무드 태그 CSV — persona 태그 조인. */
+        String moodTags
     ) {}
 
     /**
@@ -621,7 +670,14 @@ public class Character {
         c.defaultImageUrl = spec.defaultImageUrl();
         c.thumbnailUrl = spec.thumbnailUrl();
         c.defaultOutfit = spec.defaultOutfit();
+        requireWorldXor(spec.worldId(), spec.ugcWorldId());
         c.worldId = spec.worldId();
+        c.ugcWorldId = spec.ugcWorldId();
+        c.height = spec.height();
+        c.likes = spec.likes();
+        c.dislikes = spec.dislikes();
+        c.hobby = spec.hobby();
+        c.moodTags = spec.moodTags();
         return c;
     }
 
@@ -636,6 +692,35 @@ public class Character {
     /** 접근 규칙: PUBLIC은 전체, 그 외(PRIVATE/PENDING_PUBLIC)는 소유자만. */
     public boolean isAccessibleBy(Long userId) {
         return visibility.isPubliclyVisible() || isOwnedBy(userId);
+    }
+
+    // ── [세계관 빌더] 월드 연결/변경 (에셋 무관, 무료 — updateUgcTexts와 동일 정책) ──
+
+    /** 공식 세계관 연결 — UGC 월드 연결은 해제된다(XOR 유지). */
+    public void linkOfficialWorld(WorldId worldId) {
+        requireUgc();
+        this.worldId = worldId;
+        this.ugcWorldId = null;
+    }
+
+    /** UGC 월드 연결 — 공식 연결은 해제된다(XOR 유지). 승인 게이트는 서비스 계층 책임. */
+    public void linkUgcWorld(Long ugcWorldId) {
+        requireUgc();
+        this.ugcWorldId = ugcWorldId;
+        this.worldId = null;
+    }
+
+    /** 세계관 연결 해제 ('나중에 연결' 회귀). */
+    public void unlinkWorld() {
+        requireUgc();
+        this.worldId = null;
+        this.ugcWorldId = null;
+    }
+
+    private static void requireWorldXor(WorldId worldId, Long ugcWorldId) {
+        if (worldId != null && ugcWorldId != null) {
+            throw new IllegalArgumentException("공식 세계관과 UGC 월드는 동시 연결 불가");
+        }
     }
 
     /** UGC 텍스트 설정 수정 (완성 화면 인라인 수정 — 에셋 무관, 무료). */

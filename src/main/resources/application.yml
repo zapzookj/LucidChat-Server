@@ -76,8 +76,8 @@ auth:
 openai:
   api-key: ${OPENROUTER_API_KEY}
   base-url: https://openrouter.ai/api/v1
-  model: google/gemini-3.5-flash
-  sentiment-model: google/gemini-3.5-flash
+  model: google/gemini-3-flash-preview
+  sentiment-model: google/gemini-3-flash-preview
   app-referer: https://your-service.com
   app-title: ai-character-chat
   pro-model: google/gemini-3.1-pro-preview
@@ -135,6 +135,8 @@ aws:
 # 레거시 runpod.*와 무관) · 자세/감정 편집 = fal.ai Qwen(기존 FAL_API_KEY 재사용, SDK subscribe).
 # 실값(엔드포인트 ID/키/시크릿)은 환경변수로 주입 — 미설정 시 빈 값으로 기동은 되되 호출 시점 검증.
 ugc:
+  # ⚠ stage0-model은 ugc 루트 키 — runpod 하위에 두면 조용히 무시된다 (2026-07-22 실측 수정)
+  stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)
   energy:
     base-package-cost: 20     # 기본 패키지: 황금샷 1배치 + 스탠딩 후보 + 감정 14종 + 누끼
     golden-reroll-cost: 2     # 황금샷 배치 리롤
@@ -152,9 +154,17 @@ ugc:
     webhook-secret: ${UGC_RUNPOD_WEBHOOK_SECRET:}
   qwen:
     model: fal-ai/qwen-image-edit-2511
+    # use-negative-prompt: false  # [튜닝] 네거티브 비우기 실험 노브 — 실측상 빈 쪽이 나은 관찰, A/B 후 전환
   generation:
     golden-batch-size: 2      # 2026-07-20 개편: 4→2 (스탠딩 후보 선택 단계 신설 — 황금샷은 썸네일·원화 확정용)
     # refine-denoise: 0.4     # 품질 튜닝 노브(0.30~0.45) — 미지정 시 템플릿 검증값 유지
+    # bg-emphasis-weight: 1.3 # [튜닝] WF-2 배경 보색 어텐션 가중치(1.1~1.5) — 누끼 경계 품질
+  world:                      # [세계관 빌더] fal flux-2 전용 트랙 (RunPod/Qwen 불필요 — FAL_API_KEY만)
+    base-package-cost: 10     # 기본 패키지: W0 구조화 + 썸네일 1 + 장소 배경(제안 6, 상한 10)
+    reroll-cost: 1            # 썸네일·장소 배경 리롤 각 1
+    wait-ttl-hours: 72        # EDIT_WAIT/REVIEW_WAIT 방치 만료 (캐릭터와 동일값·독립 키)
+    stale-sweep-minutes: 30   # fal 전용이라 웹훅/폴링 폴백 없음 — 무진행 PROCESSING 잡 회수/환불 기준
+    max-locations: 20         # 장소 상한 (LLM 제안 6 + 유저 추가 — 2026-07-22 10→20 상향)
 
 
 

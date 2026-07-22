@@ -89,6 +89,18 @@ public record CharacterSeedProperties(
         /** 영역 장소 (줄 구분, Theater 장소 선택 분기용) */
         String homeLocations,
         /** Theater Act 1 첫 만남 시드 나레이션 */
-        String theaterIntroBeat
+        String theaterIntroBeat,
+
+        // ── [2026-07-22 프로필 뷰] 몰입형 신상 (전부 선택 — 미입력 시 프로필에서 "기록 없음") ──
+        /** 키 — "164cm" 형식 */
+        String height,
+        /** 좋아하는 것 — 콤마 구분 짧은 구 */
+        String likes,
+        /** 싫어하는 것 */
+        String dislikes,
+        /** 취미 */
+        String hobby,
+        /** 무드 태그 칩 — 콤마 구분 */
+        String moodTags
     ) {}
 }

@@ -45,6 +45,10 @@ public class UgcAssetService {
 
     private static final String JOB_PREFIX = "ugc/jobs/";
     private static final String CHARACTER_PREFIX = "characters/";
+    /** [세계관 빌더] 월드 잡 중간 산출물 — 캐릭터 잡과 jobId 시퀀스가 달라 prefix로 네임스페이스 분리. */
+    private static final String WORLD_JOB_PREFIX = "ugc/world-jobs/";
+    /** [세계관 빌더] 월드 확정본 — worlds/{slug}/ (백엔드 버킷 내 미사용 prefix — 공식 월드 에셋은 별도 CDN). */
+    private static final String WORLD_PREFIX = "worlds/";
 
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
@@ -72,6 +76,28 @@ public class UgcAssetService {
         return key;
     }
 
+    /** [세계관 빌더] fal 산출물을 월드 잡 중간 에셋으로 복사 (즉시 복사 원칙 동일). */
+    public String storeWorldJobAsset(String sourceUrl, Long worldJobId, String label) {
+        byte[] bytes = downloadBytes(sourceUrl);
+        String key = WORLD_JOB_PREFIX + worldJobId + "/" + label + "_" + shortUuid() + ".png";
+        putPng(key, bytes);
+        log.info("[UGC-ASSET] world stored: key={} ({} bytes)", key, bytes.length);
+        return key;
+    }
+
+    /**
+     * [2026-07-22 사후 장소 추가] READY 월드에 직접 추가되는 장소 배경 — 잡 네임스페이스가 없어
+     * 월드 ID 기반 확정 경로에 바로 저장 (재생성 대비 uuid 접미).
+     */
+    public String storeWorldLocationAsset(String sourceUrl, Long worldId, String locationKey) {
+        byte[] bytes = downloadBytes(sourceUrl);
+        String key = WORLD_PREFIX + "w" + worldId + "/bg_" + locationKey.toLowerCase()
+            + "_" + shortUuid() + ".png";
+        putPng(key, bytes);
+        log.info("[UGC-ASSET] world location stored: key={} ({} bytes)", key, bytes.length);
+        return key;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  확정본 승격 (Stage 4 바인딩)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -94,6 +120,27 @@ public class UgcAssetService {
             .contentType("image/png")
             .build());
         log.info("[UGC-ASSET] promoted: {} → {}", srcKey, destKey);
+        return destKey;
+    }
+
+    /**
+     * [세계관 빌더] 월드 잡 중간 에셋을 월드 확정 경로로 서버사이드 복사.
+     *
+     * @param filename 확정 파일명 (예: thumbnail.png, bg_rooftop_garden.png)
+     * @return 확정 키 (worlds/{slug}/{filename})
+     */
+    public String promoteToWorldAsset(String srcKey, String slug, String filename) {
+        String destKey = WORLD_PREFIX + slug + "/" + filename;
+        s3Client.copyObject(CopyObjectRequest.builder()
+            .sourceBucket(s3Props.bucketName())
+            .sourceKey(srcKey)
+            .destinationBucket(s3Props.bucketName())
+            .destinationKey(destKey)
+            .cacheControl("public, max-age=31536000, immutable")
+            .metadataDirective("REPLACE")
+            .contentType("image/png")
+            .build());
+        log.info("[UGC-ASSET] world promoted: {} → {}", srcKey, destKey);
         return destKey;
     }
 

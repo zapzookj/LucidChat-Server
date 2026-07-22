@@ -66,7 +66,8 @@ public class CharacterCreationController {
     ) {
         guardRate(authentication);
         Long jobId = creationService.startCreation(
-            authentication.getName(), request.name(), request.concept(), request.appearance());
+            authentication.getName(), request.name(), request.concept(), request.appearance(),
+            request.officialWorldId(), request.ugcWorldId());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
             .body(new UgcDtos.StartCreationResponse(jobId));
     }
@@ -88,7 +89,7 @@ public class CharacterCreationController {
     ) {
         guardRate(authentication);
         if (Boolean.TRUE.equals(action.reroll())) {
-            creationService.rerollGoldenShots(authentication.getName(), jobId);
+            creationService.rerollGoldenShots(authentication.getName(), jobId, action.appearance());
         } else if (action.selectedIndex() != null) {
             creationService.selectGoldenShot(authentication.getName(), jobId, action.selectedIndex());
         } else {
@@ -179,8 +180,10 @@ public class CharacterCreationController {
     @GetMapping("/mine")
     public ResponseEntity<UgcDtos.MineResponse> mine(Authentication authentication) {
         String username = authentication.getName();
-        List<UgcDtos.UgcCharacterView> characters = ugcCharacterService.myCharacters(username).stream()
-            .map(this::toCharacterView)
+        List<Character> mine = ugcCharacterService.myCharacters(username);
+        Map<Long, String> worldNames = ugcCharacterService.ugcWorldNames(mine);
+        List<UgcDtos.UgcCharacterView> characters = mine.stream()
+            .map(c -> toCharacterView(c, worldNames))
             .toList();
         List<CharacterCreationJob> active = creationService.getActiveJobs(username);
         UgcDtos.CreationJobView activeJob = active.isEmpty() ? null : toView(active.get(0));
@@ -228,6 +231,17 @@ public class CharacterCreationController {
         Authentication authentication
     ) {
         ugcCharacterService.updateTexts(authentication.getName(), characterId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    /** [세계관 빌더] 세계관 연결/변경/해제 (무료 — 카드 메뉴 소급 연결). */
+    @PatchMapping("/{characterId:\\d+}/world")
+    public ResponseEntity<Void> linkWorld(
+        @PathVariable Long characterId,
+        @RequestBody(required = false) UgcDtos.WorldLinkRequest request,
+        Authentication authentication
+    ) {
+        ugcCharacterService.linkWorld(authentication.getName(), characterId, request);
         return ResponseEntity.ok().build();
     }
 
@@ -296,13 +310,27 @@ public class CharacterCreationController {
         return job.getStatus().name();
     }
 
-    private UgcDtos.UgcCharacterView toCharacterView(Character c) {
+    private UgcDtos.UgcCharacterView toCharacterView(Character c, Map<Long, String> ugcWorldNames) {
+        // [세계관 빌더] 연결 상태 — 공식은 enum displayName, UGC는 배치 해석된 월드 이름
+        String worldType = null;
+        String worldName = null;
+        if (c.getWorldId() != null) {
+            worldType = "OFFICIAL";
+            worldName = c.getWorldId().getDisplayName();
+        } else if (c.getUgcWorldId() != null) {
+            worldType = "UGC";
+            worldName = ugcWorldNames.get(c.getUgcWorldId());
+        }
         return new UgcDtos.UgcCharacterView(
             c.getId(), c.getName(), c.getSlug(), c.getTagline(),
             c.getThumbnailUrl(), c.getDefaultImageUrl(),
             c.getVisibility().name(), c.isSecretEligible(),
             c.getSecretReviewStatus().name(), c.getReviewNote(),
-            c.getPersonality(), c.getTone(), c.getFirstGreeting()
+            c.getPersonality(), c.getTone(), c.getFirstGreeting(),
+            worldType,
+            c.getWorldId() != null ? c.getWorldId().name() : null,
+            c.getUgcWorldId(),
+            worldName
         );
     }
 

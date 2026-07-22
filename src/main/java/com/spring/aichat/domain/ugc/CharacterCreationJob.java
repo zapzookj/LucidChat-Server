@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.ugc;
 
+import com.spring.aichat.domain.enums.WorldId;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -103,6 +104,18 @@ public class CharacterCreationJob {
     /** READY 시 확정되는 캐릭터 참조 (FK 미설정 관례). */
     @Column(name = "character_id")
     private Long characterId;
+
+    /**
+     * [세계관 빌더] 위저드 컨셉 스텝 3택(공식 4종 | 내 커스텀 월드 | 나중에 연결)의 공식 선택 —
+     * 바인딩(Stage 4)에서 Character.worldId에 주입. requestedUgcWorldId와 배타(둘 다 null = 나중에 연결).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "requested_world_id", length = 50)
+    private WorldId requestedWorldId;
+
+    /** [세계관 빌더] 위저드 3택의 UGC 월드 선택 — 바인딩에서 Character.ugcWorldId에 주입. */
+    @Column(name = "requested_ugc_world_id")
+    private Long requestedUgcWorldId;
 
     /** *_WAIT 진입 시 설정되는 방치 만료 시각. 진행 재개 시 해제. */
     @Column(name = "expires_at")
@@ -270,6 +283,15 @@ public class CharacterCreationJob {
 
     public void fixBaseEditSeed(Long seed) {
         this.baseEditSeed = seed;
+    }
+
+    /** [세계관 빌더] 위저드 3택 세계관 요청 기록 (시작 시 1회 — 둘 다 null이면 '나중에 연결'). */
+    public void assignRequestedWorld(WorldId requestedWorldId, Long requestedUgcWorldId) {
+        if (requestedWorldId != null && requestedUgcWorldId != null) {
+            throw new IllegalArgumentException("공식 세계관과 UGC 월드는 동시 지정 불가");
+        }
+        this.requestedWorldId = requestedWorldId;
+        this.requestedUgcWorldId = requestedUgcWorldId;
     }
 
     /** 리롤 등 추가 과금 누적. */

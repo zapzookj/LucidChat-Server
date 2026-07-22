@@ -21,7 +21,10 @@ import java.util.Map;
  * </ul>
  */
 @Component
+@lombok.RequiredArgsConstructor
 public class UgcPromptAssembler {
+
+    private final com.spring.aichat.config.UgcPipelineProperties props;
 
     /** 검증 Export 값 (wf1/wf2 node 12 프리픽스). */
     static final String QUALITY_PREFIX = "masterpiece, best quality, newest, absurdres";
@@ -32,19 +35,33 @@ public class UgcPromptAssembler {
     //  Qwen 편집 템플릿 (§4.3 — 검증 최종본의 일반화)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private static final String QWEN_POSE_PROMPT = """
+    /**
+     * [2026-07-21 컨셉 반영 자세] 자세 슬롯(%s)만 캐릭터별 동적 값으로 치환하는 템플릿.
+     * 프레이밍·카메라 가드는 서버가 사수 — 카메라 방향 기울임이 비율을 깨는 실측(Pleading 사례) 대응.
+     */
+    private static final String QWEN_POSE_TEMPLATE = """
         Change the character's pose and framing: reframe to a cowboy shot (from mid-thigh up),
-        standing and facing the viewer, but in a natural, relaxed stance — weight shifted subtly
-        onto one leg, shoulders loose, a very slight tilt of the head. One hand resting lightly
-        on her hip, the other arm relaxed at her side; both hands empty — remove any held objects
-        and any furniture she is leaning on. Calm, composed expression looking at the viewer.
-        Avoid a stiff, symmetrical, ID-photo-like pose.
+        standing and facing the viewer. %s
+        Both hands empty — remove any held objects and any furniture she is leaning on.
+        Avoid a stiff, symmetrical, ID-photo-like pose. Beyond this reframing, do not change
+        the camera distance or angle — she must not lean toward or away from the camera.
         Keep the background, lighting, character identity, face, hairstyle, outfit details,
         proportions, and art style completely unchanged.""";
 
+    /** 동적 자세 부재 시 폴백 — 기존 검증 스탠스. */
+    private static final String DEFAULT_BASE_STANCE = """
+        A natural, relaxed stance — weight shifted subtly onto one leg, shoulders loose,
+        a very slight tilt of the head. One hand resting lightly on her hip, the other arm
+        relaxed at her side. Calm, composed expression looking at the viewer.""";
+
+    /** [2026-07-21 누끼 품질] 균일 단색·실루엣 주변 강조 — WF-3 배경 제거 경계 품질의 근간. */
     private static final String QWEN_BACKGROUND_PROMPT = """
-        Replace the entire background with a plain solid %s background, removing all background
-        scenery and effects. Change the lighting on the character to flat, even, neutral lighting —
+        Replace the entire background with a completely uniform, perfectly solid %s background —
+        one single flat color filling the whole frame edge to edge. Remove all background scenery,
+        gradients, textures, shadows, and lighting effects. Pay special attention to the area
+        around the character's hair and silhouette: it must be the same clean solid color,
+        with no halos, glow, or leftover background pixels between hair strands.
+        Change the lighting on the character to flat, even, neutral lighting —
         remove any colored ambient cast, dramatic shadows, and rim light from her.
         Do not change the character herself: same pose, same face, same hairstyle,
         same outfit details, same proportions, same art style.""";
@@ -53,6 +70,8 @@ public class UgcPromptAssembler {
         Change the character's emotion from neutral to %s.
         Facial expression: %s.
         Pose: %s.
+        She must not lean or move toward or away from the camera — keep her distance from
+        the camera, her scale in the frame, and her body proportions exactly the same.
         Keep everything else exactly the same: same character identity and face shape,
         same hairstyle and hair color, same eye color, same outfit with identical details,
         same body proportions, same framing and camera angle, same flat lighting,
@@ -73,9 +92,11 @@ public class UgcPromptAssembler {
     private static final Map<EmotionTag, EmotionPromptSpec> EMOTIONS = new EnumMap<>(Map.ofEntries(
         Map.entry(EmotionTag.NEUTRAL, new EmotionPromptSpec(null, null,
             "neutral expression")),
+        // [2026-07-21 구도 가드] 카메라 방향 기울임·후퇴 자세는 비율 붕괴 실측(Pleading)으로 전면 완화 —
+        // 자세 변주는 팔·손·어깨·고개 등 상반신 제스처로 한정한다.
         Map.entry(EmotionTag.JOY, new EmotionPromptSpec(
             "bright open smile, eyes gently curved in happiness",
-            "shoulders relaxed, slight lively lean forward",
+            "shoulders relaxed, a light lively energy in her posture",
             "smile, happy, cheerful expression")),
         Map.entry(EmotionTag.SAD, new EmotionPromptSpec(
             "downcast eyes, faint frown, brows tilted up",
@@ -83,7 +104,7 @@ public class UgcPromptAssembler {
             "sad, downcast eyes, frown")),
         Map.entry(EmotionTag.ANGRY, new EmotionPromptSpec(
             "furrowed brows drawn together, sharp glare, displeased frown",
-            "both hands on hips with elbows out, upper body leaning slightly forward, tense shoulders",
+            "both hands on hips with elbows out, tense squared shoulders",
             "angry, furrowed brow, glare, v-shaped eyebrows")),
         Map.entry(EmotionTag.SHY, new EmotionPromptSpec(
             "soft blush across cheeks, gaze averted downward, small bashful smile",
@@ -91,7 +112,7 @@ public class UgcPromptAssembler {
             "shy, blush, looking away, embarrassed")),
         Map.entry(EmotionTag.SURPRISE, new EmotionPromptSpec(
             "wide open eyes, raised eyebrows, mouth slightly open",
-            "upper body pulled back a little, one hand raised near her face",
+            "shoulders raised in a startled flinch, one hand raised near her face",
             "surprised, wide eyes, open mouth")),
         Map.entry(EmotionTag.PANIC, new EmotionPromptSpec(
             "flustered wide eyes, wavering mouth, light sweat",
@@ -111,7 +132,7 @@ public class UgcPromptAssembler {
             "scared, fearful expression, trembling, wavy mouth")),
         Map.entry(EmotionTag.FLIRTATIOUS, new EmotionPromptSpec(
             "seductive half-lidded eyes, knowing smirk, slight head tilt",
-            "body leaning toward the viewer, one hand near her lips or on her hip",
+            "one hand near her lips or resting on her hip, a slight playful tilt of the head and shoulders",
             "seductive smile, half-lidded eyes, smirk, head tilt")),
         Map.entry(EmotionTag.HEATED, new EmotionPromptSpec(
             "deep full-face blush, heavy-lidded dazed eyes, parted lips",
@@ -127,7 +148,7 @@ public class UgcPromptAssembler {
             "pout, puffy cheeks, looking away, sulking")),
         Map.entry(EmotionTag.PLEADING, new EmotionPromptSpec(
             "large teary begging eyes, brows tilted up desperately",
-            "both hands clasped together in front, leaning toward the viewer",
+            "both hands clasped together in front of her chest, shoulders slightly raised",
             "pleading eyes, tearing up, hands clasped, begging"))
     ));
 
@@ -165,33 +186,56 @@ public class UgcPromptAssembler {
         appendTags(sb, personaTags, seen);
         sb.append(", ").append(WF2_POSE_TAGS);
         sb.append(", ").append(EMOTIONS.get(emotion).wf2Tags());
-        sb.append(", simple background, ").append(bgColor).append(" background, flat lighting");
+        // [2026-07-21 누끼 품질] 배경 단색화 어텐션 강화 — WF-3 경계 품질(머리카락 계단 현상)의
+        // 근본 원인이 배경 보색 주입 미흡으로 실측되어 가중치 부여. 색 가중치는 튜닝 노브.
+        sb.append(", (simple background:1.2), (")
+            .append(bgColor).append(" background:").append(bgEmphasis())
+            .append("), (flat lighting:1.1)");
         return sb.toString();
+    }
+
+    private String bgEmphasis() {
+        double w = props.generation().bgEmphasis();
+        return java.math.BigDecimal.valueOf(w).stripTrailingZeros().toPlainString();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  FaceDetailer 와일드카드 (2026-07-20 — 감정 15종 간 얼굴 디테일 일관성)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [2026-07-21 재구성] 눈 관련 + 얼굴 식별점(mole/freckle)만 — 헤어 태그는 디테일 패스에서
+     * 무의미하며 어텐션만 희석하는 것으로 실측되어 제외(플레이그라운드 PoC).
+     */
     private static final List<String> FACE_TAG_KEYWORDS = List.of(
-        "eye", "hair", "face", "skin", "lip", "brow", "lash", "pupil", "iris",
-        "makeup", "bangs", "mole", "freckle", "eyeshadow", "blush");
+        "eye", "pupil", "iris", "lash", "brow", "heterochromia", "mole", "freckle");
 
     /**
-     * FaceDetailer 와일드카드 확장 — 검증 상수("detailed beautiful eyes")에 캐릭터의 얼굴 관련
-     * 외형 태그(눈 색/눈매/머리색 등)를 병합한다. 와일드카드는 디테일 패스의 프롬프트를 대체하므로
-     * 이 태그들이 없으면 컷마다 얼굴 디테일이 제각각 재해석되는 드리프트가 생긴다(실측 이슈).
+     * FaceDetailer 와일드카드 — 와일드카드는 디테일 패스의 프롬프트를 <b>대체</b>하므로 구성이 곧
+     * 얼굴 품질이다. [2026-07-21 PoC 확정 구성]: detailed beautiful eyes(기본 품질) + 눈 색·눈매
+     * 태그 + 캐릭터 무드(persona) + <b>감정 표정 태그</b> — 표정이 빠지면 디테일 패스가 Qwen이
+     * 만든 표정을 중화시킨다(감정 컷 밋밋함의 원인).
      */
-    public String faceDetailWildcard(List<String> appearanceTags) {
+    public String faceDetailWildcard(List<String> appearanceTags, List<String> personaTags, EmotionTag emotion) {
         StringBuilder sb = new StringBuilder("detailed beautiful eyes");
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
         if (appearanceTags != null) {
             for (String tag : appearanceTags) {
                 if (tag == null || tag.isBlank()) continue;
                 String lower = tag.toLowerCase();
-                if (FACE_TAG_KEYWORDS.stream().anyMatch(lower::contains)) {
+                if (FACE_TAG_KEYWORDS.stream().anyMatch(lower::contains) && seen.add(lower)) {
                     sb.append(", ").append(tag.trim());
                 }
             }
+        }
+        if (personaTags != null) {
+            for (String tag : personaTags) {
+                if (tag == null || tag.isBlank() || !seen.add(tag.toLowerCase())) continue;
+                sb.append(", ").append(tag.trim());
+            }
+        }
+        if (emotion != null) {
+            sb.append(", ").append(EMOTIONS.get(emotion).wf2Tags());
         }
         return sb.toString();
     }
@@ -211,9 +255,20 @@ public class UgcPromptAssembler {
     //  Qwen 프롬프트 (§4.3~4.4)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 패스 1 — 자세·구도 표준화 (배경 유지). */
+    /** 패스 1 — 자세·구도 표준화 (배경 유지). 기본 스탠스 폴백. */
     public String qwenPosePrompt() {
-        return QWEN_POSE_PROMPT;
+        return qwenPosePrompt(null);
+    }
+
+    /**
+     * [2026-07-21 컨셉 반영 자세] 패스 1 — Stage0가 산출한 캐릭터별 기본 자세를 슬롯에 주입.
+     * 프레이밍·카메라 가드는 템플릿이 사수(카메라 방향 기울임 금지 — 비율 붕괴 완화).
+     */
+    public String qwenPosePrompt(String basePose) {
+        String stance = (basePose != null && !basePose.isBlank())
+            ? basePose.trim() : DEFAULT_BASE_STANCE.strip();
+        if (!stance.endsWith(".")) stance = stance + ".";
+        return QWEN_POSE_TEMPLATE.formatted(stance);
     }
 
     /** 패스 2 — 배경·조명 클린업. BG_COLOR는 WF-2 positive와 반드시 동일 값 주입. */
@@ -232,18 +287,36 @@ public class UgcPromptAssembler {
      * (기존: 전 캐릭터 공통 고정 지시 → 단조로움 실측 지적)
      */
     public String qwenEmotionPrompt(EmotionTag emotion, String personaHint) {
+        return qwenEmotionPrompt(emotion, personaHint, null);
+    }
+
+    /**
+     * [2026-07-21 컨셉 반영 감정] 캐릭터별 동적 표정·자세(LLM 산출)가 있으면 상수 대신 주입.
+     * 카메라 거리·앵글·프레이밍 가드는 템플릿이 사수 — 동적 값이 무엇이든 구도는 불변.
+     */
+    public String qwenEmotionPrompt(EmotionTag emotion, String personaHint,
+                                    StructuredConcept.EmotionPromptOverride override) {
         EmotionPromptSpec spec = EMOTIONS.get(emotion);
         if (spec == null || spec.expression() == null) {
             throw new IllegalArgumentException("파생 불가 감정: " + emotion);
         }
+        String expression = (override != null && override.expression() != null && !override.expression().isBlank())
+            ? override.expression().trim() : spec.expression();
+        String pose = (override != null && override.pose() != null && !override.pose().isBlank())
+            ? override.pose().trim() : spec.pose();
         String base = QWEN_EMOTION_PROMPT.formatted(
-            emotion.name().toLowerCase(), spec.expression(), spec.pose());
+            emotion.name().toLowerCase(), expression, pose);
         if (personaHint != null && !personaHint.isBlank()) {
             base += "\nHer personality: " + personaHint.trim()
                 + ". Let the expression and small gestures subtly reflect this personality"
                 + " while strictly keeping the emotion " + emotion.name().toLowerCase() + ".";
         }
         return base;
+    }
+
+    /** 감정별 WF-2 태그 (동적 감정 프롬프트 산출 지시·와일드카드 조립 공용). */
+    static String wf2TagsFor(EmotionTag emotion) {
+        return EMOTIONS.get(emotion).wf2Tags();
     }
 
     public String qwenNegative() {

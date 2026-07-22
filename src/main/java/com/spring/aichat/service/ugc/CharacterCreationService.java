@@ -2,9 +2,11 @@ package com.spring.aichat.service.ugc;
 
 import com.spring.aichat.config.UgcPipelineProperties;
 import com.spring.aichat.domain.enums.EmotionTag;
+import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.ugc.CharacterCreationJob;
 import com.spring.aichat.domain.ugc.CharacterCreationJobRepository;
 import com.spring.aichat.domain.ugc.CreationJobStatus;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.ugc.BaseCandidate;
@@ -43,6 +45,7 @@ public class CharacterCreationService {
 
     private final CharacterCreationJobRepository jobRepository;
     private final UserRepository userRepository;
+    private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 3택 소유 검증
     private final UgcPipelineProperties props;
     private final UgcModerationService moderationService;
     private final UgcPipelineWorker worker;
@@ -55,7 +58,8 @@ public class CharacterCreationService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public Long startCreation(String username, String requestedName, String conceptRaw,
-                              UgcDtos.AppearanceHints appearanceHints) {
+                              UgcDtos.AppearanceHints appearanceHints,
+                              String officialWorldIdRaw, Long requestedUgcWorldId) {
         String userConcept = conceptRaw == null ? "" : conceptRaw.trim();
         if (userConcept.length() < CONCEPT_MIN_LENGTH || userConcept.length() > CONCEPT_MAX_LENGTH) {
             throw new BadRequestException(
@@ -64,6 +68,18 @@ public class CharacterCreationService {
         String name = (requestedName == null || requestedName.isBlank()) ? null : requestedName.trim();
         if (name != null && name.length() > 50) {
             throw new BadRequestException("이름은 50자 이하로 입력해 주세요.");
+        }
+
+        // [세계관 빌더] 3택 검증 — 공식(enum) | 내 커스텀 월드(소유 검증) | 생략('나중에 연결')
+        WorldId officialWorldId = null;
+        if (officialWorldIdRaw != null && !officialWorldIdRaw.isBlank()) {
+            officialWorldId = WorldId.fromStringOrNull(officialWorldIdRaw);
+            if (officialWorldId == null) {
+                throw new BadRequestException("알 수 없는 세계관입니다: " + officialWorldIdRaw);
+            }
+        }
+        if (officialWorldId != null && requestedUgcWorldId != null) {
+            throw new BadRequestException("세계관은 하나만 선택할 수 있어요.");
         }
 
         // [2026-07-20 개편] 외형 구조화 힌트를 컨셉 원문에 병합 — Stage 0가 태그에 강제 반영
@@ -75,17 +91,24 @@ public class CharacterCreationService {
             moderationService.assertRawConceptAllowed(name);
         }
 
+        WorldId finalOfficialWorldId = officialWorldId;
         Long jobId = txTemplate.execute(tx -> {
             User user = findUser(username);
             if (jobRepository.existsByUserIdAndStatusIn(user.getId(), ACTIVE_STATUSES)) {
                 throw new BadRequestException("이미 진행 중인 캐릭터 생성이 있어요. 완료하거나 정리한 뒤 다시 시도해 주세요.");
             }
+            // [세계관 빌더] 내 커스텀 월드 소유 검증 — 타인/미존재 월드는 404 은닉
+            if (requestedUgcWorldId != null) {
+                ugcWorldRepository.findByIdAndOwnerUserId(requestedUgcWorldId, user.getId())
+                    .orElseThrow(() -> new NotFoundException("세계관을 찾을 수 없습니다. worldId=" + requestedUgcWorldId));
+            }
             int cost = props.energy().basePackage();
             user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
             userRepository.save(user);
 
-            CharacterCreationJob job = jobRepository.save(
-                CharacterCreationJob.start(user.getId(), name, concept, cost));
+            CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, cost);
+            job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
+            job = jobRepository.save(job);
             return job.getId();
         });
 
@@ -202,11 +225,13 @@ public class CharacterCreationService {
                 or(req.appearance(), p.appearance()), or(req.clothing(), p.clothing()),
                 or(req.backstory(), p.backstory()), or(req.coreValues(), p.coreValues()),
                 or(req.flaws(), p.flaws()), or(req.speechQuirks(), p.speechQuirks()),
-                greeting, intro);
+                greeting, intro,
+                p.height(), p.likes(), p.dislikes(), p.hobby());
 
             StructuredConcept merged = new StructuredConcept(
                 concept.appearanceTags(), concept.personaTags(), concept.sceneTags(),
-                concept.bgColor(), updated, concept.moderation());
+                concept.bgColor(), updated, concept.moderation(),
+                concept.basePose(), concept.emotionPrompts());
             job.applyStage0(json.writeConcept(merged), concept.bgColor());
         });
         log.info("[UGC] 프로필 초안 수정: username={}, jobId={}", username, jobId);
@@ -222,7 +247,14 @@ public class CharacterCreationService {
 
     /** 외형 구조화 힌트를 [외형 지정] 블록으로 병합 — Stage 0 시스템 프롬프트가 이 블록을 태그에 강제 반영. */
     private static String withAppearanceHints(String concept, UgcDtos.AppearanceHints h) {
-        if (h == null) return concept;
+        String block = appearanceHintsBlock(h);
+        if (block == null) return concept;
+        return concept + "\n\n[외형 지정 — appearance_tags에 반드시 반영]\n" + block;
+    }
+
+    /** 힌트 6필드 → 블록 텍스트 (전부 비면 null) — 시작·리롤 외형 수정 공용. */
+    static String appearanceHintsBlock(UgcDtos.AppearanceHints h) {
+        if (h == null) return null;
         StringBuilder block = new StringBuilder();
         appendHint(block, "머리", h.hair());
         appendHint(block, "눈", h.eyes());
@@ -230,8 +262,7 @@ public class CharacterCreationService {
         appendHint(block, "의상", h.outfit());
         appendHint(block, "액세서리", h.accessories());
         appendHint(block, "기타", h.extra());
-        if (block.isEmpty()) return concept;
-        return concept + "\n\n[외형 지정 — appearance_tags에 반드시 반영]\n" + block;
+        return block.isEmpty() ? null : block.toString();
     }
 
     private static void appendHint(StringBuilder sb, String label, String value) {
@@ -239,7 +270,17 @@ public class CharacterCreationService {
         sb.append("- ").append(label).append(": ").append(value.trim()).append("\n");
     }
 
-    public void rerollGoldenShots(String username, Long jobId) {
+    /**
+     * 황금샷 배치 리롤. [2026-07-21] 외형 지정 동봉 가능 — 베이스 확정 전(GACHA_WAIT)이라
+     * 외형 재구조화가 안전한 유일 구간. 지정 시 워커가 외형 전용 재구조화 후 새 프롬프트로 제출.
+     */
+    public void rerollGoldenShots(String username, Long jobId, UgcDtos.AppearanceHints appearanceEdit) {
+        String hintsBlock = appearanceHintsBlock(appearanceEdit);
+        if (hintsBlock != null) {
+            // 하드 키워드 게이트 — 에너지 차감 전 (유저 손실 없음)
+            moderationService.assertRawConceptAllowed(hintsBlock);
+        }
+
         txTemplate.executeWithoutResult(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.GACHA_WAIT);
@@ -250,6 +291,15 @@ public class CharacterCreationService {
             userRepository.save(user);
             job.chargeEnergy(cost);
             job.restartGoldenGeneration();
+            if (hintsBlock != null) {
+                Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+                scratch.put(UgcPipelineWorker.APPEARANCE_EDIT_KEY, hintsBlock);
+                job.updateExternalJobs(json.writeScratch(scratch));
+                // [리뷰 픽스] 외형이 바뀌면 기존 후보는 스테일(구외형) — 선택 시 새 태그가 구외형
+                // 이미지에 주입되어 프로필-이미지 불일치 캐릭터가 만들어진다. 리롤 누적 정책은
+                // 동일 컨셉 리롤 전용이므로 외형 수정 리롤은 후보를 비우고 새로 누적한다.
+                job.updateGoldenShotKeys(json.writeKeys(List.of()));
+            }
         });
         cacheService.evictUserProfile(username);
         worker.runGoldenReroll(jobId);

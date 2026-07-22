@@ -1,6 +1,7 @@
 package com.spring.aichat.service.ugc;
 
 import com.spring.aichat.dto.ugc.StructuredConcept;
+import com.spring.aichat.dto.ugc.StructuredWorld;
 import com.spring.aichat.exception.ContentModerationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -67,6 +68,18 @@ public class UgcModerationService {
     }
 
     /**
+     * [세계관 빌더] W0 산출 검증 — LLM minor_signal 판정 (월드는 연령 축 없음).
+     * 원문 게이트는 {@link #assertRawConceptAllowed} 공용.
+     */
+    public void assertStructuredWorldAllowed(StructuredWorld world) {
+        if (world.moderation() != null && world.moderation().minorSignal()) {
+            log.info("[UGC-MOD] LLM minor_signal block (world): reason={}",
+                world.moderation().reason());
+            throw blockedWorld("MINOR_SIGNAL");
+        }
+    }
+
+    /**
      * Stage 0 산출 검증 — 연령 하한 + LLM minor_signal 판정.
      */
     public void assertStructuredConceptAllowed(StructuredConcept concept) {
@@ -85,5 +98,12 @@ public class UgcModerationService {
     private ContentModerationException blocked(String category) {
         // blockedAtStep=0 — Stage 0 게이트 (에너지 차감 전이므로 유저 손실 없음)
         return new ContentModerationException(BLOCK_MESSAGE, category, 0);
+    }
+
+    /** 유저 노출용 일반 안내 — 세계관 문구 (기준 미노출 원칙 동일). */
+    static final String WORLD_BLOCK_MESSAGE = "이 컨셉으로는 세계관을 만들 수 없어요. 내용을 수정해 다시 시도해 주세요.";
+
+    private ContentModerationException blockedWorld(String category) {
+        return new ContentModerationException(WORLD_BLOCK_MESSAGE, category, 0);
     }
 }

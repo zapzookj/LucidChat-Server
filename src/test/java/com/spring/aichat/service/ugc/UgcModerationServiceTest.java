@@ -63,11 +63,30 @@ class UgcModerationServiceTest {
             .doesNotThrowAnyException(); // 나이 미기재는 차단하지 않는다 (좁은 게이트)
     }
 
+    @Test
+    @DisplayName("[세계관 빌더] W0 산출: minor_signal=true면 차단, false면 통과한다")
+    void blocksWorldStructuredSignals() {
+        assertThatThrownBy(() -> service.assertStructuredWorldAllowed(world(true)))
+            .isInstanceOf(ContentModerationException.class);
+        assertThatCode(() -> service.assertStructuredWorldAllowed(world(false)))
+            .doesNotThrowAnyException();
+    }
+
     private StructuredConcept concept(Integer age, boolean minorSignal) {
         return new StructuredConcept(
             List.of("1girl", "silver hair"), List.of("kuudere"), List.of("library"), "light gray",
             new StructuredConcept.CharacterProfile("설아", "차가운 교수", age, "교수",
-                "차분함", "존댓말", "은발", "터틀넥", "과거사", "가치관", "약점", "말버릇", "첫인사", "장면 묘사"),
-            new StructuredConcept.Moderation(minorSignal, ""));
+                "차분함", "존댓말", "은발", "터틀넥", "과거사", "가치관", "약점", "말버릇", "첫인사", "장면 묘사",
+                "164cm", "홍차", "소란", "독서"),
+            new StructuredConcept.Moderation(minorSignal, ""), null, null);
+    }
+
+    private com.spring.aichat.dto.ugc.StructuredWorld world(boolean minorSignal) {
+        return new com.spring.aichat.dto.ugc.StructuredWorld(
+            new com.spring.aichat.dto.ugc.StructuredWorld.WorldProfile("달빛 학원", "소개", "설정 본문", List.of("몽환적")),
+            List.of(new com.spring.aichat.dto.ugc.StructuredWorld.LocationSuggestion(
+                "ROOFTOP_GARDEN", "옥상 정원", "설명", "a rooftop garden at dusk")),
+            "a moonlit academy skyline",
+            new com.spring.aichat.dto.ugc.StructuredWorld.Moderation(minorSignal, ""));
     }
 }

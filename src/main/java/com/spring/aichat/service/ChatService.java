@@ -321,7 +321,9 @@ public class ChatService {
                     dynamicBgUrl,
                     // [Bug #3 Fix] 도메인 분리
                     room.isSecretModeActive(),
-                    room.getUserPersona()
+                    room.getUserPersona(),
+                    // [세계관 빌더] UGC 월드 연동 — 프론트 동적 배경 클리어 가드 스킵용
+                    character.getUgcWorldId()
                 );
 
                 cacheService.cacheRoomInfo(roomId, response);

@@ -59,7 +59,10 @@ public class FalQwenEditClient implements PoseEditClient {
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("prompt", req.prompt());
         input.put("image_urls", List.of(req.imageUrl())); // 배열 계약
-        if (req.negativePrompt() != null && !req.negativePrompt().isBlank()) {
+        // [2026-07-21 튜닝 노브] use-negative-prompt=false면 네거티브 전면 생략 —
+        // 플레이그라운드 실측상 빈 쪽 퀄리티가 나은 관찰 (identity 가드는 positive Keep-지시 담당)
+        if (ugcProps.qwen().useNegative()
+            && req.negativePrompt() != null && !req.negativePrompt().isBlank()) {
             input.put("negative_prompt", req.negativePrompt());
         }
         input.put("num_inference_steps", ugcProps.qwen().steps());

@@ -12,7 +12,8 @@
 유저가 컨셉 입력 → 황금샷 가챠 → 스탠딩 후보 선택 → 감정 14종 파생 → 검수 → 누끼 → Character 등록까지
 전 구간이 동작하며, 실측 완주 사례 2건(characterId 11=ugc-4, 12=ugc-5, 로컬 DB).
 
-**바로 다음 태스크 = §12 세계관(월드) 빌더** — 설계 확정 완료(2026-07-20 종원 승인), 구현 미착수.
+**§12 세계관(월드) 빌더 — 구현 완료(2026-07-21, 백엔드+프런트)**. E2E 관통·실측은 미실행(다음 태스크).
+어드민 검수 SPA는 종원 결정으로 UGC 폴리싱 완료 후 최후순위(백엔드 피기백 판정은 구현됨 — curl 검수 가능).
 
 ## 1. 리포지토리 배치 (경로 정확성 중요)
 
@@ -197,7 +198,9 @@ npm run build
 
 ---
 
-## 12. ★다음 태스크: 세계관(월드) 빌더 — 확정 설계 (2026-07-20 종원 승인)
+## 12. 세계관(월드) 빌더 — 구현 완료 (2026-07-21) · 원 확정 설계 (2026-07-20 종원 승인)
+
+> **구현 상태**: 아래 설계 전부 + 종원 추가 확정(2026-07-21: ① 월드 반려 = worldApprove 3축+통반려 ② PUBLIC 캐릭터엔 APPROVED 월드만 연결·READY 후 월드 편집 API 없음 ③ 어드민 SPA 최후순위 ④ assets-v2 lifecycle은 종원 확인 대기)이 코드로 반영됨. 상세는 §12-A(하단) 참조.
 
 **구조**: 독립 빌더 + 지연 바인딩 + 레이턴시 구간 CTA
 - 스튜디오에 월드 빌더 신설(캐릭터 빌더와 독립). 월드는 재사용 자산(1 월드:N 캐릭터)
@@ -232,6 +235,59 @@ W3. 확정 → UgcWorld 저장
 5. W-BE-5: 승인 큐 상세에 월드 섹션
 6. W-FE: 월드 빌더 플로우(캐릭터 위저드 패턴 복제 — 컨셉→편집(레이턴시 하이딩)→일러 선택→완성), 캐릭터 위저드 3택, 감정 구간 CTA, 카드 메뉴
 7. E2E 관통 + 원가 실측(flux-2 단가)
+
+## 12-A. 세계관 빌더 구현 기록 (2026-07-21 — 다른 세션의 에이전트가 이어받을 수 있게)
+
+**상태머신**: `UgcWorldCreationJob` — CONCEPT_PROCESSING→EDIT_WAIT→ILLUSTRATING→REVIEW_WAIT→BINDING→READY | FAILED | EXPIRED(WAIT 72h). 캐릭터 잡과 **타입별 독립 동시 1잡**(감정 파생 중 CTA 병행이 전제).
+
+**백엔드 신규/수정 클래스 맵**:
+| 파일 | 역할 |
+|---|---|
+| `domain/ugc/UgcWorld(+Location,+CreationJob,+WorldCreationJobStatus,+WorldReviewStatus,리포 3종)` | 월드 도메인. UgcWorld.reviewStatus=NONE/APPROVED/REJECTED(월드 단독 신청 없음—피기백 판정 결과만) |
+| `V12__ugc_world_builder.sql` | 테이블 3종 + characters.ugc_world_id + ccj.requested_(ugc_)world_id. 전문 멱등 + enum check 선제 DROP 3종 |
+| `service/ugc/WorldConceptStructuringService` | W0 구조화(장소 6 제안·locationKey 정규화 SCREAMING_SNAKE≤40) + promptizeLocations(유저 추가 장소 일괄 프롬프트화). **텍스트 상한 단일 소스**(intro500/lore2000/장소설명300/무드20×10 — updateDraft와 대칭) |
+| `service/ugc/UgcWorldPipelineWorker` | fal flux-2 전용. **H-16 절충**: externalJobs에 PENDING 선커밋→`FalAiClient.submitToQueue()`(requestId 선확보)→치환→`awaitResult()` 부착. 콜백은 **scratch 값과 requestId 대조(세대 가드)** — 구세대/중복 이벤트 무해. 전량 병렬 제출(fal이 큐 직렬화) |
+| `service/ugc/UgcWorldService` | 유저 액션 TX. GENERATING 컷 리롤/버전선택 400, confirm은 allReady+빈 scratch 요구(바인딩 중 바꿔치기 차단) |
+| `service/ugc/UgcWorldJobJson` · `dto/ugc/WorldAssetState(+WorldIllustrationAssets,WorldDraft,StructuredWorld,UgcWorldDtos)` | 코덱·리롤 누적 record(감정 컷 동형: history+selectVersion+revertToReady) |
+| `controller/UgcWorldController` | `/api/v1/ugc/worlds/**` (계약은 UgcWorldDtos javadoc). world_mutation 레이트리밋 버킷(ugc_mutation과 분리) |
+| `UgcJobScheduler` 확장 | 월드 TTL 만료 + **스테일 스윕**(5분 주기, 30분 무진행): CONCEPT=failAndRefund / ILLUSTRATING 빈 scratch=runIllustration 재기동 / PENDING=재제출·requestId=재부착(+touchRecovery로 중복 재부착 억제) / BINDING=재실행(멱등) |
+| `UgcAssetService` 확장 | 중간산출 `ugc/world-jobs/{jobId}/`(캐릭터 잡과 jobId 충돌 방지 분리) → 확정 `worlds/ugc-world-{jobId}/thumbnail.png·bg_{key}.png`. 엔티티엔 publicUrl 저장 |
+| 캐릭터 연결 | `Character.ugcWorldId`(worldId enum과 XOR, link/unlink 뮤테이터), 위저드 3택(StartCreationRequest.officialWorldId/ugcWorldId → 잡 기록 → bind 주입 — **공식 선택=worldId enum 실세팅**, 기존 3중 가드로 Theater/STORY 안 열림), `PATCH /ugc/characters/{id}/world`(무료. PUBLIC=APPROVED만·**PENDING_PUBLIC=변경 차단**(심사 TOCTOU)) |
+| 채팅 주입(SANDBOX) | `CharacterPromptAssembler`: ugcWorld 분기(# 🌍 World Setting 동일 헤더 — lore는 encapsulate) + 장소 풀 블록(`UGCW_{worldId}__{KEY}` 에코 지시). `BackgroundGenerationService.resolveBackground`에 **장소 풀 인터셉트**(사전 배경 즉시 서빙 — BackgroundCache 미경유) + 즉석 장소는 moodTags 주입(`assembleWithMood`). 방 생성 시 첫 장소 배경 시딩(LobbyService). `ChatRoomInfoResponse.ugcWorldId` 추가 |
+| 어드민 피기백 | `ReviewRequest.worldApprove` 3축 + 통반려(월드 반려+공개 승인=400) + 미승인 월드 공개 승인 시 worldApprove 동시 제출 강제. DetailResponse.world 섹션, QueueItem.hasWorld |
+
+**프런트 (LucidChat-Front)**: `api/WorldStudioApi.js`(+OFFICIAL_WORLDS 상수), `hooks/useUgcWorldJob.js`, `pages/StudioWorldPage.jsx`+`components/studio/WorldCreateFlow.jsx`(4스텝: 컨셉→편집→일러검수→완성, /studio/world 라우트), StudioCreateFlow 3택 셀렉터+감정 대기 CTA, StudioPage 내 세계관 섹션+카드 메뉴 연결 시트, ChatPage 클리어 가드(ugcWorldId 방은 enum 폴백이 동적 배경을 지우지 않음).
+
+**검증 상태**: 컴파일·테스트 그린(신규 테스트 5클래스 — contextLoads 실패는 JWT_SECRET 미설정 기존 환경 이슈). V12 로컬 적용 확인. 7렌즈 멀티에이전트 적대 리뷰 → 확정 결함 8건 전부 수정. **미실행: E2E 관통(§10 커맨드+실서버)·flux-2 원가 실측·웹훅 실환경**. 커밋 안 됨(종원 확인 후).
+
+**주의(구현 중 확정)**: fal 계정 동시성 2 공유(Qwen 트랙과) — 11장 순차화로 최악 수 분, 출시 전 상향 필수. 썸네일도 landscape_16_9. UGC 월드는 STORY/THEATER 구조적 차단 유지(worlds 테이블 enum PK 비침투). 시더는 ugcWorldId 비관리.
+
+## 12-B. 캐릭터 빌더 개선 (2026-07-21 — 종원 PoC 피드백 반영)
+
+**폐기 결정**: GPT Image 2 하이브리드(fal 경유 이중 필터·API edit 모더레이션 low 불가 확인 → 거부 리스크로 폐기, Qwen 파라미터 튜닝으로 대체), Danbooru 태그 직접 편집.
+
+**반영 항목** (전부 구현·테스트 그린):
+1. **FaceDetailer 와일드카드 재구성** — `faceDetailWildcard(tags, personaTags, emotion)`: detailed beautiful eyes + 눈 관련(eye/pupil/iris/lash/brow/heterochromia)+mole/freckle + persona + **감정 wf2 태그**. 헤어 태그 제외(어텐션 희석 실측). 표정 미포함이 디테일 패스의 감정 중화 원인이었음.
+2. **동적 감정·자세 프롬프트** — Stage0가 `base_pose`(캐릭터별 기본 스탠스) 산출, 감정 스테이지 진입 시 `ConceptStructuringService.deriveEmotionPrompts` 1콜로 14종 expression/pose 산출 → `StructuredConcept.emotionPrompts`에 저장(리롤 재현·어드민 인스펙션 노출). 실패 시 상수 폴백(비차단). **구도 가드**: 카메라 방향 기울임·거리·앵글 변경 금지(Pleading 비율 붕괴 완화) — 템플릿 가드 문장 + 기존 상수 5종(JOY/ANGRY/SURPRISE/FLIRTATIOUS/PLEADING) 완화 + LLM 지시.
+3. **배경 보색 강화** — WF-2 positive `(simple background:1.2), ({색} background:1.3⟵ugc.generation.bg-emphasis-weight 노브), (flat lighting:1.1)` + Qwen 패스2 균일 단색·실루엣 주변 강조 문구 (누끼 계단 대응).
+4. **노브 2종** — `ugc.stage0-model`(Stage0/W0 전용 LLM — 미지정 시 openai.model), `ugc.qwen.use-negative-prompt`(기본 true — 빈 네거티브 실험은 감정 14종 identity drift A/B 후 전환).
+5. **황금샷 리롤 외형 수정** — `POST /{jobId}/golden-shot {reroll:true, appearance?:{6필드}}`: 하드 게이트(차감 전)→과금→K_APPEARANCE_EDIT 스크래치→워커가 `restructureAppearance`(외형 태그·씬·bg_color·외형/복장 서술만 교체, 페르소나·서사·유저 편집분 보존)→새 프롬프트 제출. LLM 차단=failAndRefund(전액). **기존 후보는 무효화**(구외형 스테일 — 리롤 누적은 동일 컨셉 전용). FE: GachaStep 리롤 모달(6필드 선택 입력, GoldenRerollModal).
+
+**리뷰 픽스(적대 리뷰 확정 4건)**: ① 외형 재구조화 applyStage0를 락 안 최신본 재조회+외형 필드만 병합으로(동시 프로필 편집 lost update 방지 — `StructuredConcept.withAppearanceFrom`) ② 외형 수정 리롤 시 goldenShotKeys 초기화 ③ onGoldenResult에 GOLDEN 스크래치 리플레이 가드(중복 웹훅이 리롤 삼키는 캐스케이드 차단) ④ **CONCEPT_PROCESSING 스테일 스윕 신설**(30분 무진행+미결 외부 잡 없음 → failAndRefund — Stage0/외형 LLM 구간의 재시작 유실은 폴링 폴백 사각이었음, 기존 Stage0에도 있던 구멍).
+
+**튜닝 루프**: `GET /admin/characters/ugc/{id}/prompts`가 개선 후 실구성(감정 포함 와일드카드·동적 base_pose·JOY 동적 감정) 반영. 미실행: 실이미지 E2E(원가·품질 확인은 실기동 필요).
+
+## 12-C. 도그푸딩 일괄 패치 (2026-07-22 — 종원 테스트 피드백 8건 + 신규 기능 2종)
+
+**결정 (종원)**: 프로필 뷰=혼합안(진입 A안 몰입/스튜디오 상세 B안 도시어, 시안: claude.ai/code/artifact/6095bd17), 신규 신상 필드=키·좋아하는 것·싫어하는 것·취미, 적용 전 지점. 월드 사후 편집 개방(공유 멀티유저 리스크 현 단계 미고려), 장소 상한 20, 장소 추가 1E. GPT Image 2 하이브리드·태그 직접 편집은 §12-B에서 폐기 확정.
+
+**신규 기능**:
+1. **캐릭터 프로필 뷰** — `GET /api/v1/lobby/characters/{id}/profile`(공개/소유자, hidden 404). characters에 height/likes/dislikes/hobby/mood_tags(V13, UGC=Stage0 산출·공식=시드 수기 — **공식 12종 시드 입력은 종원 몫**). 티저(introNarration)·발췌(firstGreeting)는 firstSentence 절삭(선행 말줄임표 런 스킵·서로게이트 안전·90자). FE: `CharacterProfileView.jsx`(immersive/dossier variant) — 로비·탐색(immersive), 스튜디오 내 캐릭터(dossier), 챗 PROFILE 버튼(immersive, CTA=닫기). 진입 동선: 카드 클릭→프로필→기존 진입 로직 재사용.
+2. **월드 사후 편집** — PATCH /ugc/worlds/{id}(텍스트 무료 — **판정 이력 NONE 리셋**, 빈 이름 400, moodTags []=클리어), POST .../locations(1E, GENERATING row→promptize→flux(5분 타임아웃)→READY, 실패 FAILED), retry(무료 — FAILED/멈춘 GENERATING), DELETE(FAILED만, 1E 환불). 상한 20(월드 row 비관락으로 TOCTOU 차단). **공개 심사 중(PENDING_PUBLIC 연결) 월드 내용 변경 400**(requireNotUnderReview — 월드 교체 차단과 동일 원칙). ugc_world_locations.status(V13). FE: `WorldDetailSheet.jsx`(설정 수정+장소 관리, GENERATING 5s 폴링).
+
+**버그 픽스**: #6 스탠딩 유령 플레이스홀더(FE 휴리스틱), #7 stage0-model yml 위치(ugc 루트 — runpod 하위는 무시됨), #4 스크롤바 전수(전역 textarea 규칙+12곳), #5 확대 프리뷰 92vw/86vh, #8 더블클릭 전면 방어(busyRef 재진입 락·confirm 이중 발화 가드·BiometricStatusPanel excludeRef·BottomSheet 250ms 백드롭 가드), #3-a 외형 리롤 안내 카피. #3-b 리롤 4분 지연은 RunPod 측(-e2=재시도, crash-loop 보조 워커/idle 콜드스타트) — **종원 콘솔 확인 항목**.
+
+**일괄 리뷰 픽스(4렌즈 확정 15건→12근원)**: firstSentence 말줄임표 붕괴(HIGH — 출시 시드 재현), bind 신상·moodTags 무절삭 varchar 초과(완주 잡 최종 실패 — normalizeShort+joinMood 절삭), moodTags [] 클리어 불가, 프롬프트 장소 풀에 배경 미보유 장소 광고(유료 중복 생성), 사후 배경 join() 무한 대기(5분 타임아웃), 장소 상한 TOCTOU(비관락), 동명 장소 키 매칭 가로채기(2-패스), FE: GENERATING 복구 버튼(90s 후 노출)·'최대 10개' 하드코딩·빈 값 저장 재동기화·ESC 폼 유실·종결 잡 재진입 무통보(localStorage).
 
 ## 13. 백로그·열린 항목
 

@@ -4,6 +4,10 @@ import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
 import com.spring.aichat.domain.enums.*;
+import com.spring.aichat.domain.ugc.UgcWorld;
+import com.spring.aichat.domain.ugc.UgcWorldLocation;
+import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
+import com.spring.aichat.domain.ugc.UgcWorldRepository;
 import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.security.PromptInjectionGuard;
@@ -28,10 +32,16 @@ public class CharacterPromptAssembler {
 
     private final PromptInjectionGuard injectionGuard;
     private final WorldRepository worldRepository;
+    private final UgcWorldRepository ugcWorldRepository;
+    private final UgcWorldLocationRepository ugcWorldLocationRepository;
 
-    public CharacterPromptAssembler(PromptInjectionGuard injectionGuard, WorldRepository worldRepository) {
+    public CharacterPromptAssembler(PromptInjectionGuard injectionGuard, WorldRepository worldRepository,
+                                    UgcWorldRepository ugcWorldRepository,
+                                    UgcWorldLocationRepository ugcWorldLocationRepository) {
         this.injectionGuard = injectionGuard;
         this.worldRepository = worldRepository;
+        this.ugcWorldRepository = ugcWorldRepository;
+        this.ugcWorldLocationRepository = ugcWorldLocationRepository;
     }
 
     public record SystemPromptPayload(String staticRules, String dynamicRules, String outputFormat) {}
@@ -140,6 +150,21 @@ public class CharacterPromptAssembler {
         //  LLM이 location_description / illustration_scene_hint를 생성할 때
         //  세계관 정합성을 자동 반영하도록 시스템 프롬프트에 명시.
         //  (BackgroundPromptAssembler가 한 번 더 prefix를 추가하는 이중 안전망 구조)
+        // [세계관 빌더] UGC 월드 컨텍스트 — 이 블록 조회 결과는 장소 풀 블록에서도 재사용
+        UgcWorld ugcWorld = null;
+        java.util.List<UgcWorldLocation> ugcWorldLocations = java.util.List.of();
+        if (character.getWorldId() == null && character.getUgcWorldId() != null) {
+            ugcWorld = ugcWorldRepository.findById(character.getUgcWorldId()).orElse(null);
+            if (ugcWorld != null) {
+                // [리뷰 픽스] 배경 보유 장소만 풀에 광고 — GENERATING/FAILED(사후 추가 중) 장소를
+                // 'pre-made instant load'로 안내하면 인터셉트 미스 → 유료 동적 생성이 중복 발생한다
+                ugcWorldLocations = ugcWorldLocationRepository
+                    .findByUgcWorldIdAndActiveTrueOrderByDisplayOrderAsc(ugcWorld.getId()).stream()
+                    .filter(l -> l.getBackgroundUrl() != null && !l.getBackgroundUrl().isBlank())
+                    .toList();
+            }
+        }
+
         if (character.getWorldId() != null) {
             worldRepository.findById(character.getWorldId()).ifPresent(world -> {
                 staticBuilder.append("""
@@ -160,6 +185,29 @@ public class CharacterPromptAssembler {
                     defaultIfBlank(world.getMoodKeywords(), "(no mood keywords)")
                 ));
             });
+        } else if (ugcWorld != null) {
+            // [세계관 빌더] UGC 월드 — 공식과 동일한 헤더(# 🌍 World Setting)로 주입해
+            // canonical key <WORLD> prefix 유도·location_description 정합성 지시가 자동 연동된다.
+            // lore는 유저 생성 텍스트이므로 캡슐화(Nickname/Persona 컨벤션)로 프롬프트 구조 위장을 차단.
+            staticBuilder.append("""
+            # 🌍 World Setting
+            - World: %s
+            - Description: %s
+            - Mood: %s
+
+            ## World Lore
+            %s
+
+            **Constraint:** All location descriptions, scene hints, and environmental details
+            you produce MUST be consistent with this world setting. Do NOT include objects,
+            technology, or cultural elements that contradict the setting.
+
+            """.formatted(
+                ugcWorld.getName(),
+                defaultIfBlank(ugcWorld.getIntro(), "(no extended description)"),
+                defaultIfBlank(ugcWorld.getMoodTags(), "(no mood keywords)"),
+                injectionGuard.encapsulate("WORLD_LORE", defaultIfBlank(ugcWorld.getLore(), "(no lore)"))
+            ));
         }
 
         // ── [Phase 5.5-Sep] 시크릿 모드: 수위 해제 블록 ──
@@ -172,6 +220,10 @@ public class CharacterPromptAssembler {
             staticBuilder.append(buildSceneDirectionGuide(room, character, effectiveSecretMode));
             staticBuilder.append(buildIllustrationTriggerBlock());
             staticBuilder.append(buildDynamicLocationBlock(character, room));
+            // [세계관 빌더] UGC 월드 장소 풀 — 사전 배경이 있는 장소를 동적 장소 채널로 우선 사용
+            if (ugcWorld != null && !ugcWorldLocations.isEmpty()) {
+                staticBuilder.append(buildUgcWorldLocationsBlock(ugcWorld, ugcWorldLocations));
+            }
         }
 
         if (ChatModePolicy.supportsInnerThought(mode)) {
@@ -726,6 +778,35 @@ public class CharacterPromptAssembler {
         - When using a dynamic location, still set the `location` field in scenes to the CLOSEST static location as a fallback.
         - `new_location_name`, `location_canonical_key`, and `location_description` are ROOT-level fields, NOT inside individual scenes.
         """.formatted(staticLocations, dynamicLocationWarning);
+    }
+
+    /**
+     * [세계관 빌더] UGC 월드 장소 풀 블록 — 사전 생성 배경이 있는 장소를 동적 장소 채널
+     * (new_location_name + location_canonical_key)로 우선 사용하도록 지시한다.
+     * canonical key는 서버 규약({@code UGCW_{worldId}__{KEY}})을 그대로 에코해야
+     * {@code BackgroundGenerationService}의 장소 풀 인터셉트가 즉시 히트한다.
+     */
+    private String buildUgcWorldLocationsBlock(UgcWorld world, java.util.List<UgcWorldLocation> locations) {
+        StringBuilder list = new StringBuilder();
+        for (UgcWorldLocation loc : locations) {
+            list.append("- key: `UGCW_%d__%s` — **%s**: %s\n".formatted(
+                world.getId(), loc.getLocationKey(), loc.getDisplayName(),
+                defaultIfBlank(loc.getDescription(), "(no description)")));
+        }
+        return """
+
+        ## 🗺️ World Location Pool (이 세계관 전용 — PREFER THESE)
+        This world has a curated location pool with pre-made backgrounds (instant load):
+        %s
+        ### Rules for moving within this world:
+        - To move to a pool location, output the dynamic location fields at the JSON root:
+          `"new_location_name"` = the location's Korean display name shown above (verbatim),
+          `"location_canonical_key"` = the location's `UGCW_...` key shown above (copy EXACTLY as-is),
+          `"location_description"` = an English 1-3 sentence scene description consistent with the world.
+        - **Prefer pool locations over inventing new dynamic locations** — they load instantly.
+        - Only invent a brand-new dynamic location (generic `<WORLD>__<CATEGORY>_<MOD>` key) when the
+          story genuinely requires a place outside this pool.
+        """.formatted(list.toString());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -5,6 +5,9 @@ import ai.fal.client.ClientConfig;
 import ai.fal.client.CredentialsResolver;
 import ai.fal.client.Output;
 import ai.fal.client.SubscribeOptions;
+import ai.fal.client.queue.QueueResultOptions;
+import ai.fal.client.queue.QueueSubmitOptions;
+import ai.fal.client.queue.QueueSubscribeOptions;
 import com.google.gson.JsonObject;
 import com.spring.aichat.config.FalAiProperties;
 import jakarta.annotation.PostConstruct;
@@ -68,16 +71,7 @@ public class FalAiClient {
      * @return 생성된 이미지 URL의 CompletableFuture (실패 시 예외 완성)
      */
     public CompletableFuture<GenerationResult> generate(GenerationRequest req) {
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("prompt", req.prompt());
-        input.put("image_size", req.imageSize() != null ? req.imageSize() : "landscape_16_9");
-        input.put("num_inference_steps", req.numInferenceSteps() != null ? req.numInferenceSteps() : 28);
-        input.put("guidance_scale", req.guidanceScale() != null ? req.guidanceScale() : 2.5);
-        input.put("acceleration", req.acceleration() != null ? req.acceleration() : "regular");
-        input.put("enable_safety_checker", false);
-        input.put("output_format", "png");
-        // negative_prompt 없음 — Flux 2 positive-only (금지사항은 prompt 후미 자연어 통합)
-
+        Map<String, Object> input = buildInput(req);
         String endpoint = props.effectiveModel();
         log.info("[FAL] subscribe: model={}, promptLen={}", endpoint, req.prompt().length());
 
@@ -119,6 +113,57 @@ public class FalAiClient {
             log.error("[FAL] generateBlocking failed: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [UGC 세계관 빌더] 큐 프리미티브 — requestId 선확보 + 재부착 복구
+    //  subscribe() 편의 메서드는 requestId를 완료 시점에야 주므로, 서버 재시작 시
+    //  in-flight future가 유실되면 복구 수단이 없다(H-16 계보). 월드 트랙은
+    //  submit으로 requestId를 먼저 영속화하고, awaitResult는 언제든 재부착 가능하다.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 큐 제출만 수행 — 반환된 requestId를 잡 스크래치에 영속화한 뒤 {@link #awaitResult}로 대기한다. */
+    public CompletableFuture<String> submitToQueue(GenerationRequest req) {
+        String endpoint = props.effectiveModel();
+        log.info("[FAL] queue submit: model={}, promptLen={}", endpoint, req.prompt().length());
+        return fal.queue()
+            .submit(endpoint, QueueSubmitOptions.builder().input(buildInput(req)).build())
+            .thenApply(inQueue -> inQueue.getRequestId());
+    }
+
+    /**
+     * 제출된 요청의 완료 대기(SSE) + 결과 회수. 서버 재시작 후 스테일 스윕이 같은 requestId로
+     * 재호출해도 안전하다(이미 완료된 요청은 즉시 반환).
+     */
+    public CompletableFuture<GenerationResult> awaitResult(String requestId) {
+        String endpoint = props.effectiveModel();
+        return fal.queue()
+            .subscribeToStatus(endpoint, QueueSubscribeOptions.builder().requestId(requestId).build())
+            .thenCompose(done -> fal.queue()
+                .result(endpoint, QueueResultOptions.withRequestId(requestId)))
+            .thenApply(output -> {
+                String imageUrl = extractImageUrl(output.getData());
+                if (imageUrl == null) {
+                    log.error("[FAL] No image url in queued result: requestId={}", requestId);
+                    throw new IllegalStateException("Fal.ai returned no image url (requestId=" + requestId + ")");
+                }
+                log.info("[FAL] ✅ Queue completed: requestId={}", requestId);
+                return new GenerationResult(requestId, imageUrl);
+            });
+    }
+
+    /** flux-2 공통 입력 조립 — subscribe/queue 두 경로 단일 소스. */
+    private Map<String, Object> buildInput(GenerationRequest req) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("prompt", req.prompt());
+        input.put("image_size", req.imageSize() != null ? req.imageSize() : "landscape_16_9");
+        input.put("num_inference_steps", req.numInferenceSteps() != null ? req.numInferenceSteps() : 28);
+        input.put("guidance_scale", req.guidanceScale() != null ? req.guidanceScale() : 2.5);
+        input.put("acceleration", req.acceleration() != null ? req.acceleration() : "regular");
+        input.put("enable_safety_checker", false);
+        input.put("output_format", "png");
+        // negative_prompt 없음 — Flux 2 positive-only (금지사항은 prompt 후미 자연어 통합)
+        return input;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

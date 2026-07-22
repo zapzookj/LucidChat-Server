@@ -16,15 +16,27 @@ public final class UgcDtos {
 
     // ── 요청 ──
 
-    /** 컨셉 제출. name은 선택(비우면 LLM 작명). appearance는 외형 구조화 힌트(전부 선택 — 2026-07-20 개편). */
-    public record StartCreationRequest(String name, String concept, AppearanceHints appearance) {}
+    /**
+     * 컨셉 제출. name은 선택(비우면 LLM 작명). appearance는 외형 구조화 힌트(전부 선택 — 2026-07-20 개편).
+     * [세계관 빌더] 3택: officialWorldId(WorldId enum name) | ugcWorldId | 둘 다 생략('나중에 연결').
+     * 동시 지정은 400.
+     */
+    public record StartCreationRequest(String name, String concept, AppearanceHints appearance,
+                                       String officialWorldId, Long ugcWorldId) {}
+
+    /** [세계관 빌더] 완성 캐릭터 세계관 연결/변경 (무료) — 둘 다 null이면 연결 해제. */
+    public record WorldLinkRequest(String officialWorldId, Long ugcWorldId) {}
 
     /** 외형 구조화 힌트 — Stage 0 프롬프트에 "반드시 반영" 지시로 주입 (생성 시작 전에만 지정 가능). */
     public record AppearanceHints(String hair, String eyes, String body,
                                   String outfit, String accessories, String extra) {}
 
-    /** 황금샷/스탠딩 선택 액션 — {@code reroll=true} 또는 {@code selectedIndex} 중 하나. */
-    public record GoldenShotAction(Integer selectedIndex, Boolean reroll) {}
+    /**
+     * 황금샷/스탠딩 선택 액션 — {@code reroll=true} 또는 {@code selectedIndex} 중 하나.
+     * [2026-07-21] {@code appearance}: 황금샷 리롤에 한해 외형 지정 동봉 가능(선택 — 외형 전용
+     * 재구조화 후 새 프롬프트로 제출). 스탠딩 리롤에서는 무시된다(베이스 원화 고정).
+     */
+    public record GoldenShotAction(Integer selectedIndex, Boolean reroll, AppearanceHints appearance) {}
 
     /**
      * 프로필 초안 수정 (Stage0 이후 ~ REVIEW_WAIT — 레이턴시 하이딩 편집. null 필드 유지).
@@ -106,7 +118,12 @@ public final class UgcDtos {
         String reviewNote,
         String personality,
         String tone,
-        String firstGreeting
+        String firstGreeting,
+        // ── [세계관 빌더] 연결 상태 (카드 메뉴 '세계관 연결/변경' 표기) ──
+        String worldType,   // "OFFICIAL" | "UGC" | null(미연결)
+        String worldId,     // 공식 연결 시 WorldId enum name
+        Long ugcWorldId,    // UGC 연결 시 월드 ID
+        String worldName    // 연결된 세계관 표시명
     ) {}
 
     public record MineResponse(List<UgcCharacterView> characters, CreationJobView activeJob) {}

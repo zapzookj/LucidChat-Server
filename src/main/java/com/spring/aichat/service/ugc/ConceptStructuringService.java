@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -58,26 +59,41 @@ public class ConceptStructuringService {
           · core_values: 가치관/철학 bullet 5~7개 — 무엇을 옳다/그르다 여기는가
           · flaws: 약점·두려움·모순 bullet 3~5개 — 살아있는 사람의 결
           · speech_quirks: 어휘 습관·말버릇 (구체 예시 포함)
+          · height: 키 — "164cm" 형식 (성인 체형에 자연스러운 값)
+          · likes: 좋아하는 것 — 짧은 구 1~2개, 콤마 구분 (컨셉·성격과 정합)
+          · dislikes: 싫어하는 것 — 짧은 구 1~2개, 콤마 구분
+          · hobby: 취미 — 짧은 구 1~2개
           · first_greeting: 유저를 처음 만났을 때 캐릭터가 입으로 말하는 **첫인사 대사만**.
             순수 발화 텍스트 1~4문장. 마크다운(*), 괄호 지문, 감싸는 따옴표, '이름:' 접두, 줄바꿈 구획 금지.
           · intro_narration: 유저가 캐릭터를 처음 만나는 장면 묘사 2~3문장 (관찰자 시점, "당신은…" 톤).
             상황·행동 묘사는 전부 여기에 — first_greeting에 넣지 않는다.
           · 주의: character의 모든 값은 JSON 배열이 아니라 **단일 문자열**이다.
             bullet은 문자열 안에서 "- 항목" 형태로 개행 구분한다.
+        - base_pose: 캐릭터 컨셉·성격에 어울리는 기본 스탠딩 자세 묘사 (영문 1~2문장).
+          카우보이샷 프레이밍 안에서 팔·손·어깨·고개 각도 중심으로. 소품 금지.
+          카메라 쪽으로 기울이거나 멀어지는 자세, 앵글·구도를 바꾸는 묘사 절대 금지.
         - moderation: 명백한 미성년 신체·설정 시그널이 있을 때만 minor_signal=true (모호하면 false).
         출력 스키마:
         {"appearance_tags":[...], "persona_tags":[...], "scene_tags":[...], "bg_color":"...",
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",
           "tone":"...","appearance":"...","clothing":"...","backstory":"...",
           "core_values":"...","flaws":"...","speech_quirks":"...","first_greeting":"...",
-          "intro_narration":"..."},
+          "intro_narration":"...","height":"164cm","likes":"...","dislikes":"...","hobby":"..."},
+         "base_pose":"...",
          "moderation":{"minor_signal":false,"reason":""}}
         출력은 JSON 외 어떤 텍스트도 금지.
         """;
 
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties openAiProps;
+    private final com.spring.aichat.config.UgcPipelineProperties ugcProps;
     private final ObjectMapper objectMapper;
+
+    /** [2026-07-21] Stage0 전용 모델 — ugc.stage0-model 지정 시 우선(외형 태그 품질), 미지정 시 전역 모델. */
+    private String effectiveModel() {
+        String override = ugcProps.stage0ModelOrNull();
+        return override != null ? override : openAiProps.model();
+    }
 
     /**
      * 컨셉 구조화 실행 (블로킹 — @Async 오케스트레이터 스레드에서 호출).
@@ -91,7 +107,7 @@ public class ConceptStructuringService {
         String raw;
         try {
             raw = openRouterClient.completeJson(
-                openAiProps.model(), SYSTEM_PROMPT, userMessage, 8192, 0.7);
+                effectiveModel(), SYSTEM_PROMPT, userMessage, 8192, 0.7);
         } catch (Exception e) {
             log.error("[UGC-STAGE0] LLM 호출 실패: {}", e.getMessage());
             throw new ExternalApiException("컨셉 구조화 실패 — 잠시 후 다시 시도해 주세요.");
@@ -145,15 +161,181 @@ public class ConceptStructuringService {
             : "……안녕하세요. 만나서 반가워요.";
         String intro = firstNonBlank(p.introNarration(), greeting.extractedNarration());
 
+        // [리뷰 픽스] 신상 4종은 VARCHAR(30/200) 컬럼에 저장된다 — LLM 과다 산출·배열 bullet 펼침이
+        // 최종 바인딩(전 스테이지 완주 후)에서 varchar 초과로 잡 전체를 죽이지 않도록 정규화·절삭.
         StructuredConcept.CharacterProfile fixed = new StructuredConcept.CharacterProfile(
             effectiveName, p.tagline(), p.age(), p.role(), p.personality(), p.tone(),
             p.appearance(), p.clothing(), p.backstory(), p.coreValues(), p.flaws(),
-            p.speechQuirks(), dialogue, intro);
+            p.speechQuirks(), dialogue, intro,
+            normalizeShort(p.height(), 30), normalizeShort(p.likes(), 200),
+            normalizeShort(p.dislikes(), 200), normalizeShort(p.hobby(), 200));
 
         List<String> personaTags = c.personaTags() == null ? List.of() : c.personaTags();
         List<String> sceneTags = c.sceneTags() == null ? List.of() : c.sceneTags();
-        return new StructuredConcept(c.appearanceTags(), personaTags, sceneTags, effectiveBg, fixed, c.moderation());
+        return new StructuredConcept(c.appearanceTags(), personaTags, sceneTags, effectiveBg, fixed,
+            c.moderation(), c.basePose(), c.emotionPrompts());
     }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-07-21] 감정 14종 동적 프롬프트 파생 (감정 스테이지 진입 시 1콜)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final String EMOTION_PROMPT_SYSTEM = """
+        너는 캐릭터 감정 연출 엔진이다. 캐릭터 프로필을 받아, 감정 14종 각각에 대해 이 캐릭터답게
+        연출된 표정(expression)과 자세(pose)를 영문으로 산출한다. 아래 JSON 스키마로만 응답한다.
+        규칙:
+        - expression: 얼굴 표정 묘사 (영문, 20단어 이내) — 눈·눈썹·입 중심. 감정이 명확히 드러나야 한다.
+        - pose: 상반신 제스처만 (영문, 20단어 이내) — 팔·손·어깨·고개 각도로 한정.
+          절대 금지: 카메라 쪽으로 기울이기/멀어지기, 카메라 거리·앵글·프레이밍 변경, 전신 자세 전환,
+          앉기/눕기/돌아서기, 소품 사용. (구도 변화는 캐릭터 비율을 깨뜨린다)
+        - HEATED·FLIRTATIOUS 는 SFW 라인 유지 — 노출·성적 행위 묘사 금지, 분위기 표현만.
+        - 캐릭터의 성격·말투·역할이 표정과 제스처에 배어나게 하되, 감정 자체는 명확히 유지한다.
+        - 14종 키를 전부 포함: JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, RELAX, DISGUST,
+          FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING
+        출력 스키마:
+        {"emotions":{"JOY":{"expression":"...","pose":"..."}, ...}}
+        출력은 JSON 외 어떤 텍스트도 금지.
+        """;
+
+    /**
+     * 캐릭터별 감정 연출 프롬프트 일괄 산출 — 감정 스테이지 진입 시 워커가 1회 호출해 잡에 저장한다
+     * (리롤 재현성). 실패는 호출측이 상수 폴백으로 흡수하므로 예외를 그대로 던진다.
+     */
+    public Map<String, StructuredConcept.EmotionPromptOverride> deriveEmotionPrompts(StructuredConcept concept) {
+        StructuredConcept.CharacterProfile p = concept.character();
+        StringBuilder sb = new StringBuilder("[캐릭터 프로필]\n");
+        sb.append("- 이름: ").append(p.name()).append('\n');
+        if (p.role() != null) sb.append("- 역할: ").append(p.role()).append('\n');
+        if (p.personality() != null) sb.append("- 성격: ").append(p.personality()).append('\n');
+        if (p.tone() != null) sb.append("- 말투: ").append(p.tone()).append('\n');
+        if (concept.personaTags() != null && !concept.personaTags().isEmpty()) {
+            sb.append("- 무드 태그: ").append(String.join(", ", concept.personaTags())).append('\n');
+        }
+
+        String raw;
+        try {
+            raw = openRouterClient.completeJson(
+                effectiveModel(), EMOTION_PROMPT_SYSTEM, sb.toString(), 4096, 0.7);
+        } catch (Exception e) {
+            log.warn("[UGC-EMOPROMPT] LLM 호출 실패: {}", e.getMessage());
+            throw new ExternalApiException("감정 연출 산출 실패");
+        }
+        try {
+            String json = LlmOutputParser.extractJson(raw);
+            EmotionPromptsEnvelope parsed = objectMapper.readValue(json, EmotionPromptsEnvelope.class);
+            Map<String, StructuredConcept.EmotionPromptOverride> result = new java.util.LinkedHashMap<>();
+            if (parsed.emotions() != null) {
+                parsed.emotions().forEach((k, v) -> {
+                    // 유효 감정 키 + 두 슬롯 모두 있는 항목만 채택 — 나머지는 서버 상수 폴백
+                    if (v == null || v.expression() == null || v.expression().isBlank()
+                        || v.pose() == null || v.pose().isBlank()) return;
+                    try {
+                        com.spring.aichat.domain.enums.EmotionTag.valueOf(k.trim().toUpperCase(Locale.ROOT));
+                        result.put(k.trim().toUpperCase(Locale.ROOT), v);
+                    } catch (IllegalArgumentException ignored) {
+                        // 알 수 없는 키 스킵
+                    }
+                });
+            }
+            if (result.isEmpty()) {
+                throw new ExternalApiException("감정 연출 산출 실패 — 유효 항목 없음");
+            }
+            return result;
+        } catch (ExternalApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("[UGC-EMOPROMPT] 산출 파싱 실패: {}", e.getMessage());
+            throw new ExternalApiException("감정 연출 산출 실패");
+        }
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    record EmotionPromptsEnvelope(Map<String, StructuredConcept.EmotionPromptOverride> emotions) {}
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-07-21] 외형 전용 경량 재구조화 (황금샷 리롤 외형 수정 — GACHA_WAIT 전용)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final String APPEARANCE_SYSTEM_PROMPT = """
+        너는 캐릭터 외형 재구조화 엔진이다. 기존 캐릭터의 컨셉과 새 [외형 지정]을 받아,
+        외형 관련 산출만 다시 만든다. 캐릭터의 성격·서사는 절대 건드리지 않는다.
+        규칙:
+        - appearance_tags: Danbooru 태그 관례(영문 소문자, 개별 태그 문자열 배열), 외형만 40~60개.
+          [외형 지정]의 특징을 빠짐없이 최우선 반영. 지정되지 않은 부분은 기존 외형 태그를 유지·계승한다.
+        - scene_tags: 새 외형·분위기에 어울리는 황금샷 연출 10~20개.
+        - bg_color: 새 머리색(우선)·의상색과 명도 대비가 큰 저채도 1개 —
+          ["light gray","pale blue gray","muted teal","soft beige","dusty lavender"] 중 선택.
+        - appearance: 새 외형 한국어 서술 / clothing: 새 복장 한국어 서술.
+        - moderation: 명백한 미성년 신체 시그널이 있을 때만 minor_signal=true.
+        출력 스키마:
+        {"appearance_tags":[...], "scene_tags":[...], "bg_color":"...",
+         "appearance":"...", "clothing":"...", "moderation":{"minor_signal":false,"reason":""}}
+        출력은 JSON 외 어떤 텍스트도 금지.
+        """;
+
+    /**
+     * 황금샷 리롤 외형 수정 — 새 외형 힌트로 외형 태그·씬·배경색·외형 한국어 서술만 재산출해
+     * 기존 컨셉에 병합한다 (페르소나·서사·유저 편집분은 그대로 보존).
+     */
+    public StructuredConcept restructureAppearance(String rawConcept, StructuredConcept current,
+                                                   String appearanceHintsBlock) {
+        String userMessage = "[원래 컨셉 서술]:\n" + rawConcept
+            + "\n\n[기존 외형 태그]: " + String.join(", ", current.appearanceTags())
+            + "\n\n[외형 지정 — 변경 요청, 최우선 반영]\n" + appearanceHintsBlock;
+
+        String raw;
+        try {
+            raw = openRouterClient.completeJson(
+                effectiveModel(), APPEARANCE_SYSTEM_PROMPT, userMessage, 8192, 0.7);
+        } catch (Exception e) {
+            log.error("[UGC-APPEARANCE] LLM 호출 실패: {}", e.getMessage());
+            throw new ExternalApiException("외형 재구조화 실패 — 잠시 후 다시 시도해 주세요.");
+        }
+
+        AppearanceRestructure parsed;
+        try {
+            parsed = objectMapper.readValue(LlmOutputParser.extractJson(raw), AppearanceRestructure.class);
+        } catch (Exception e) {
+            log.error("[UGC-APPEARANCE] 산출 파싱 실패: {}", e.getMessage());
+            throw new ExternalApiException("외형 재구조화 실패 — 잠시 후 다시 시도해 주세요.");
+        }
+        if (parsed.appearanceTags() == null || parsed.appearanceTags().isEmpty()) {
+            throw new ExternalApiException("외형 재구조화 실패 — 잠시 후 다시 시도해 주세요.");
+        }
+
+        String bg = parsed.bgColor() == null ? null : parsed.bgColor().toLowerCase(Locale.ROOT).trim();
+        String effectiveBg = (bg != null && BG_COLOR_PALETTE.contains(bg)) ? bg : BG_COLOR_FALLBACK;
+        List<String> sceneTags = parsed.sceneTags() != null && !parsed.sceneTags().isEmpty()
+            ? parsed.sceneTags() : current.sceneTags();
+
+        StructuredConcept.CharacterProfile p = current.character();
+        StructuredConcept.CharacterProfile merged = new StructuredConcept.CharacterProfile(
+            p.name(), p.tagline(), p.age(), p.role(), p.personality(), p.tone(),
+            firstNonBlank(parsed.appearance(), p.appearance()),
+            firstNonBlank(parsed.clothing(), p.clothing()),
+            p.backstory(), p.coreValues(), p.flaws(), p.speechQuirks(),
+            p.firstGreeting(), p.introNarration(),
+            p.height(), p.likes(), p.dislikes(), p.hobby());
+
+        return new StructuredConcept(parsed.appearanceTags(), current.personaTags(), sceneTags,
+            effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts());
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @com.fasterxml.jackson.databind.annotation.JsonNaming(
+        com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record AppearanceRestructure(
+        List<String> appearanceTags,
+        List<String> sceneTags,
+        String bgColor,
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            using = com.spring.aichat.dto.ugc.FlexibleStringDeserializer.class)
+        String appearance,
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
+            using = com.spring.aichat.dto.ugc.FlexibleStringDeserializer.class)
+        String clothing,
+        StructuredConcept.Moderation moderation
+    ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  첫인사 정규화 (패키지 가시성 — 테스트용)
@@ -204,5 +386,24 @@ public class ConceptStructuringService {
     private static String firstNonBlank(String a, String b) {
         if (a != null && !a.isBlank()) return a;
         return (b != null && !b.isBlank()) ? b : null;
+    }
+
+    /**
+     * [리뷰 픽스] 신상 필드 정규화 — FlexibleStringDeserializer의 "- 항목" 개행 bullet을
+     * 콤마 구분으로 되돌리고(프로필 노출 계약), 컬럼 길이에 맞춰 절삭한다.
+     */
+    static String normalizeShort(String s, int max) {
+        if (s == null || s.isBlank()) return null;
+        String flat = s.replaceAll("\\R+\\s*-\\s*", ", ")   // 개행 bullet → 콤마
+            .replaceAll("^\\s*-\\s*", "")                    // 선두 bullet 제거
+            .replaceAll("\\R+", ", ")                        // 잔여 개행 → 콤마
+            .replaceAll("\\s{2,}", " ")
+            .strip();
+        if (flat.length() > max) {
+            int cut = max;
+            if (Character.isHighSurrogate(flat.charAt(cut - 1))) cut--;
+            flat = flat.substring(0, cut).strip();
+        }
+        return flat.isBlank() ? null : flat;
     }
 }

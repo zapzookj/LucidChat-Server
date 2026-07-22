@@ -51,4 +51,8 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
 
     /** UGC slug 충돌 방지용. */
     boolean existsBySlug(String slug);
+
+    /** [2026-07-22 사후 편집 가드] 공개 심사 중인 캐릭터가 연결된 월드의 내용 변경 차단(TOCTOU 방지). */
+    boolean existsByUgcWorldIdAndVisibility(Long ugcWorldId,
+        com.spring.aichat.domain.enums.CharacterVisibility visibility);
 }

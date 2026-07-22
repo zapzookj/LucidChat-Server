@@ -80,6 +80,26 @@ public class BackgroundPromptAssembler {
     }
 
     /**
+     * [UGC 세계관 빌더] 무드 문자열 직접 주입 오버로드 — {@code UgcWorld}는 World 엔티티가
+     * 아니므로(Long PK 별도 도메인) 무드를 CSV 문자열로 받는다. 월드 일러(W2)와
+     * UGC 월드 채팅의 즉석 동적 배경 생성이 사용.
+     */
+    public String assembleWithMood(String locationDescription, String moodCsv) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(STYLE_PREFIX).append(". ");
+        if (moodCsv != null && !moodCsv.isBlank()) {
+            sb.append("Setting mood: ").append(moodCsv.trim()).append(". ");
+        }
+        if (locationDescription != null && !locationDescription.isBlank()) {
+            String desc = locationDescription.trim();
+            if (!desc.endsWith(".")) desc = desc + ".";
+            sb.append(desc).append(" ");
+        }
+        sb.append(NEGATIVE_AS_NATURAL).append(".");
+        return sb.toString();
+    }
+
+    /**
      * [Deprecated 시그니처 호환] 이전 (description, timeOfDay, world) 호출 경로 보호용.
      * timeOfDay 인자는 *무시*된다 — 시간대 분위기는 이제 LLM이 locationDescription에 포함.
      */

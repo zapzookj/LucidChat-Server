@@ -23,7 +23,7 @@ class UgcWorkflowFactoryTest {
 
     @BeforeEach
     void setUp() {
-        props = new UgcPipelineProperties(null, null, null, null, null);
+        props = new UgcPipelineProperties(null, null, null, null, null, null, null);
         factory = new UgcWorkflowFactory(new ObjectMapper(), props);
         factory.loadTemplates();
     }
@@ -106,7 +106,7 @@ class UgcWorkflowFactoryTest {
     @DisplayName("WF-2: refine-denoise 노브 지정 시에만 denoise 오버라이드")
     void refine_denoiseKnobOverrides() {
         UgcPipelineProperties tuned = new UgcPipelineProperties(
-            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35));
+            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35, null), null, null);
         UgcWorkflowFactory tunedFactory = new UgcWorkflowFactory(new ObjectMapper(), tuned);
         tunedFactory.loadTemplates();
 

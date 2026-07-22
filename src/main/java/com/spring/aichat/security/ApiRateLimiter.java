@@ -162,4 +162,12 @@ public class ApiRateLimiter {
     public boolean checkUgcMutation(String username) {
         return isRateLimited("ugc_mutation", username, 2, 5);
     }
+
+    /**
+     * [세계관 빌더] 편의 메서드: 월드 생성 뮤테이션 — 캐릭터 잡과 병행 진행이 설계 전제라
+     * ugc_mutation과 버킷을 분리한다(정상 교차 조작이 서로의 한도를 잠식하지 않도록).
+     */
+    public boolean checkWorldMutation(String username) {
+        return isRateLimited("world_mutation", username, 2, 5);
+    }
 }

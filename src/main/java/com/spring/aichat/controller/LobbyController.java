@@ -2,6 +2,7 @@ package com.spring.aichat.controller;
 
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.dto.lobby.CharacterProfileResponse;
 import com.spring.aichat.dto.lobby.CharacterResponse;
 import com.spring.aichat.dto.lobby.CreateRoomRequest;
 import com.spring.aichat.dto.lobby.RoomSummaryResponse;
@@ -46,6 +47,16 @@ public class LobbyController {
         // [Phase 7-V2 Pivot] worldId 쿼리 파라미터 — 통합 로비의 세계관별 캐릭터 필터.
         //   미전달 시 전체 반환 (V1 호환).
         return lobbyService.getCharactersByWorld(worldId);
+    }
+
+    /**
+     * [2026-07-22 프로필 뷰] 몰입형 캐릭터 프로필 — 카드 클릭 → 프로필 → 대화 플로우의 2단계.
+     * 공개 캐릭터 전체 + 비공개는 소유자만 (그 외 404 은닉).
+     */
+    @GetMapping("/characters/{characterId:\\d+}/profile")
+    public CharacterProfileResponse getCharacterProfile(
+        @PathVariable Long characterId, Authentication authentication) {
+        return lobbyService.getCharacterProfile(authentication.getName(), characterId);
     }
 
     /**
