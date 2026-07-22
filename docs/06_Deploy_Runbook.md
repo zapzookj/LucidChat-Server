@@ -117,3 +117,5 @@ RDS는 퍼블릭 액세스 ON이므로 로컬에서 psql/docker로 직접 접속
 - [ ] S3 버킷 퍼블릭 액세스 차단 원복 확인 (docs/03 런북 미완 항목)
 - [ ] RDS 퍼블릭 액세스 OFF 전환 검토 (초기화 작업 이후)
 - [ ] 프론트 `ngrok-skip-browser-warning` 헤더 등 개발 잔재 제거 검토
+- [ ] **모더레이션 무력화 수정** — OpenAiModerationClient가 OpenRouter 키(sk-or-v1...)로 api.openai.com/v1/moderations 호출 → 401 → failsafe로 전량 통과 중 (2026-07-23 운영 로그에서 확인). 별도 OpenAI 키를 발급하거나 OpenRouter 경유로 교체 필요.
+- [ ] **어드민 부트스트랩 하드닝** — 셀프 사인업이 공개인데 bootstrap-usernames('zapzook')가 리포에 노출됨. 계정은 2026-07-23 선점·승격 완료(러너는 이제 no-op). 런칭 전 bootstrap-usernames 비우기(또는 env 이관 + 사인업 정책 결정) 권장.
