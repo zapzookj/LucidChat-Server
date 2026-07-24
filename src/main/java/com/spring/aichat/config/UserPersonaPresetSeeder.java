@@ -90,6 +90,7 @@ public class UserPersonaPresetSeeder {
                     UserPersonaPreset p = existing.get();
                     p.update(name, description, defaultNickname, suggestedStartLocationKey, displayOrder);
                     p.setActive(active);
+                    presetRepository.save(p); // [Fix 2026-07-24] 갱신 영속화(자기호출 @Transactional 우회 대비)
                     log.info("🔄 [PERSONA-SEED] Preset updated: {}/{}", worldId, presetKey);
                     updated++;
                 } else {

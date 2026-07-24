@@ -59,6 +59,11 @@ public class CharacterSeeder {
                     existing -> {
                         if (updateExisting) {
                             existing.applySeed(seed);
+                            // [Fix 2026-07-24] UPDATE 경로 영속화 버그: seedAllCharacters()가 @Bean 람다에서
+                            //   자기호출되어 @Transactional이 우회됨 → 트랜잭션/영속 컨텍스트 없이 detached 엔티티라
+                            //   dirty-checking이 안 돌아 기존 캐릭터의 필드 변경(예: 신설 프로필 필드)이 유실됐다.
+                            //   명시적 save()로 merge하여 트랜잭션 상태와 무관하게 갱신을 영속화한다.
+                            characterRepository.save(existing);
                             log.info("🔄 [SEED] Character updated: {} (slug={})", seed.name(), seed.slug());
                         } else {
                             log.debug("⏭️ [SEED] Character exists, skip: {} (slug={})", seed.name(), seed.slug());

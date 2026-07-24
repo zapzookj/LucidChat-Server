@@ -103,6 +103,7 @@ public class WorldSeeder {
                     );
                     // World.update()는 active 필드를 다루지 않으므로 별도 적용
                     w.setActive(active);
+                    worldRepository.save(w); // [Fix 2026-07-24] 자기호출로 @Transactional 우회 → 명시 저장으로 갱신 영속화
                     log.info("🔄 [WORLD-SEED] World updated: {} ({})", displayName, worldId);
                     updated++;
                 } else {
