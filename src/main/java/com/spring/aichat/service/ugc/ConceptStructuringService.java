@@ -63,6 +63,7 @@ public class ConceptStructuringService {
           · likes: 좋아하는 것 — 짧은 구 1~2개, 콤마 구분 (컨셉·성격과 정합)
           · dislikes: 싫어하는 것 — 짧은 구 1~2개, 콤마 구분
           · hobby: 취미 — 짧은 구 1~2개
+          · profile_quote: 캐릭터를 한 줄로 압축한 자기소개 또는 명대사 1문장 (프로필 카드 노출용 — 성격·말투가 드러나게, 따옴표·마크다운·줄바꿈 금지)
           · first_greeting: 유저를 처음 만났을 때 캐릭터가 입으로 말하는 **첫인사 대사만**.
             순수 발화 텍스트 1~4문장. 마크다운(*), 괄호 지문, 감싸는 따옴표, '이름:' 접두, 줄바꿈 구획 금지.
           · intro_narration: 유저가 캐릭터를 처음 만나는 장면 묘사 2~3문장 (관찰자 시점, "당신은…" 톤).
@@ -78,7 +79,7 @@ public class ConceptStructuringService {
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",
           "tone":"...","appearance":"...","clothing":"...","backstory":"...",
           "core_values":"...","flaws":"...","speech_quirks":"...","first_greeting":"...",
-          "intro_narration":"...","height":"164cm","likes":"...","dislikes":"...","hobby":"..."},
+          "intro_narration":"...","height":"164cm","likes":"...","dislikes":"...","hobby":"...","profile_quote":"..."},
          "base_pose":"...",
          "moderation":{"minor_signal":false,"reason":""}}
         출력은 JSON 외 어떤 텍스트도 금지.
@@ -168,7 +169,8 @@ public class ConceptStructuringService {
             p.appearance(), p.clothing(), p.backstory(), p.coreValues(), p.flaws(),
             p.speechQuirks(), dialogue, intro,
             normalizeShort(p.height(), 30), normalizeShort(p.likes(), 200),
-            normalizeShort(p.dislikes(), 200), normalizeShort(p.hobby(), 200));
+            normalizeShort(p.dislikes(), 200), normalizeShort(p.hobby(), 200),
+            normalizeShort(p.profileQuote(), 200));
 
         List<String> personaTags = c.personaTags() == null ? List.of() : c.personaTags();
         List<String> sceneTags = c.sceneTags() == null ? List.of() : c.sceneTags();
@@ -315,7 +317,7 @@ public class ConceptStructuringService {
             firstNonBlank(parsed.clothing(), p.clothing()),
             p.backstory(), p.coreValues(), p.flaws(), p.speechQuirks(),
             p.firstGreeting(), p.introNarration(),
-            p.height(), p.likes(), p.dislikes(), p.hobby());
+            p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
         return new StructuredConcept(parsed.appearanceTags(), current.personaTags(), sceneTags,
             effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts());

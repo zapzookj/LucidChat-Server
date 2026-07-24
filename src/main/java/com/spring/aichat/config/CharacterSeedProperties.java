@@ -101,6 +101,8 @@ public record CharacterSeedProperties(
         /** 취미 */
         String hobby,
         /** 무드 태그 칩 — 콤마 구분 */
-        String moodTags
+        String moodTags,
+        /** 프로필 카드 전용 한 줄 문장 (자기소개/명대사) — 미입력 시 firstGreeting 첫 문장 폴백 */
+        String profileQuote
     ) {}
 }

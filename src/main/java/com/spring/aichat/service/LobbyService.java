@@ -180,6 +180,9 @@ public class LobbyService {
             worldType, worldName,
             c.getAppearance(), c.getClothing(),
             c.getHeight(), c.getLikes(), c.getDislikes(), c.getHobby(),
+            (c.getProfileQuote() != null && !c.getProfileQuote().isBlank())
+                ? c.getProfileQuote()
+                : firstSentence(c.getFirstGreeting()),
             firstSentence(c.getIntroNarration()),
             firstSentence(c.getFirstGreeting()),
             c.getDefaultImageUrl(), c.getThumbnailUrl(),

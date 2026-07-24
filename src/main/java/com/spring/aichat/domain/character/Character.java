@@ -304,6 +304,10 @@ public class Character {
     @Column(name = "mood_tags", length = 200)
     private String moodTags;
 
+    /** 프로필 카드 전용 한 줄 문장(자기소개/명대사) — null이면 firstGreeting 첫 문장 폴백. */
+    @Column(name = "profile_quote", length = 200)
+    private String profileQuote;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자 & 시드 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -373,6 +377,7 @@ public class Character {
         if (seed.dislikes() != null) this.dislikes = seed.dislikes();
         if (seed.hobby() != null) this.hobby = seed.hobby();
         if (seed.moodTags() != null) this.moodTags = seed.moodTags();
+        if (seed.profileQuote() != null) this.profileQuote = seed.profileQuote();
 
         // [UGC v1] YAML 시드 = 공식 캐릭터 불변식 (신규 시드에도 Secret 허용 보장 — V9 일괄 UPDATE와 동일 의미)
         this.source = CharacterSource.OFFICIAL;
@@ -635,7 +640,9 @@ public class Character {
         String dislikes,
         String hobby,
         /** 무드 태그 CSV — persona 태그 조인. */
-        String moodTags
+        String moodTags,
+        /** 프로필 카드 한 줄 문장 (Stage0 산출 profile_quote). */
+        String profileQuote
     ) {}
 
     /**
@@ -678,6 +685,7 @@ public class Character {
         c.dislikes = spec.dislikes();
         c.hobby = spec.hobby();
         c.moodTags = spec.moodTags();
+        c.profileQuote = spec.profileQuote();
         return c;
     }
 

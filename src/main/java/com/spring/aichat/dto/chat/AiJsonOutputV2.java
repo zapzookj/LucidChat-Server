@@ -3,6 +3,7 @@ package com.spring.aichat.dto.chat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.core.JsonParser;
 import com.spring.aichat.domain.enums.RelationStatus;
@@ -122,7 +123,9 @@ public record AiJsonOutputV2(
         @JsonProperty("bgm_mode") String bgmMode,
         @JsonProperty("ending_triggered") Boolean endingTriggered,
         @JsonProperty("ending_type") String endingType,
-        @JsonProperty("relation_transition") RelationTransition relationTransition,
+        @JsonProperty("relation_transition")
+        @JsonDeserialize(using = LenientRelationTransitionDeserializer.class)
+        RelationTransition relationTransition,
         /**
          * [UX3] 유저에 대한 캐릭터의 *누적 인상* (5~10턴 주기, LLM 자율 갱신).
          * scenes[].inner_thought(매 응답, 그 순간의 숨은 속마음)와 성격이 다름 — 상태창 INNER THOUGHT의 단일 소스.
@@ -226,6 +229,44 @@ public record AiJsonOutputV2(
             if (v == null || v.isBlank()) return null;
             try { return Long.parseLong(v.trim()); }
             catch (NumberFormatException e) { return null; }
+        }
+    }
+
+    /**
+     * [Bug-Fix] relation_transition이 객체가 아니라 문자열("LOVER", "FRIEND→LOVER", "연인")로 와도
+     * 응답 전체 파싱이 깨지지 않도록. 문자열이면 to로 해석(화살표 있으면 뒤쪽), character_id/from은 null →
+     * 서비스 레이어가 방의 단일 활성 자격으로 복원한다. 객체면 관용 파싱, 그 외 타입은 null.
+     */
+    static class LenientRelationTransitionDeserializer extends JsonDeserializer<RelationTransition> {
+        @Override
+        public RelationTransition deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
+            JsonNode node = ctxt.readTree(parser);
+            if (node == null || node.isNull()) return null;
+            if (node.isTextual()) {
+                String to = node.asText();
+                if (to == null || to.isBlank()) return null;
+                to = to.trim();
+                for (String arrow : new String[]{"→", "->", "=>", ">"}) {
+                    int i = to.lastIndexOf(arrow);
+                    if (i >= 0) { to = to.substring(i + arrow.length()).trim(); break; }
+                }
+                return new RelationTransition(null, null, to.isBlank() ? null : to);
+            }
+            if (node.isObject()) {
+                Long charId = null;
+                JsonNode idNode = node.get("character_id");
+                if (idNode != null && !idNode.isNull()) {
+                    if (idNode.isNumber()) charId = idNode.asLong();
+                    else { try { charId = Long.parseLong(idNode.asText().trim()); } catch (NumberFormatException ignore) {} }
+                }
+                return new RelationTransition(charId, textOrNull(node.get("from")), textOrNull(node.get("to")));
+            }
+            return null;
+        }
+        private static String textOrNull(JsonNode n) {
+            if (n == null || n.isNull()) return null;
+            String s = n.asText();
+            return (s == null || s.isBlank()) ? null : s.trim();
         }
     }
 }

@@ -30,6 +30,8 @@ public record CharacterProfileResponse(
     String likes,
     String dislikes,
     String hobby,
+    /** 프로필 카드 전용 한 줄 문장 — 없으면 greetingExcerpt(첫인사 첫 문장)로 폴백해 채워 내려준다. */
+    String profileQuote,
     /** 첫 만남 나레이션 티저 — 첫 문장만 (A안 몰입 뷰). */
     String introTeaser,
     /** 첫인사 발췌 — 첫 문장만 (B안 인용 블록 — 말투 미리보기). */

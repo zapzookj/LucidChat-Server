@@ -226,7 +226,7 @@ public class CharacterCreationService {
                 or(req.backstory(), p.backstory()), or(req.coreValues(), p.coreValues()),
                 or(req.flaws(), p.flaws()), or(req.speechQuirks(), p.speechQuirks()),
                 greeting, intro,
-                p.height(), p.likes(), p.dislikes(), p.hobby());
+                p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
             StructuredConcept merged = new StructuredConcept(
                 concept.appearanceTags(), concept.personaTags(), concept.sceneTags(),

@@ -495,7 +495,8 @@ public class UgcPipelineWorker {
                 profile.likes(),
                 profile.dislikes(),
                 profile.hobby(),
-                UgcWorldPipelineWorker.joinMood(concept.personaTags())
+                UgcWorldPipelineWorker.joinMood(concept.personaTags()),
+                profile.profileQuote()
             );
 
             Long characterId = txTemplate.execute(status -> {

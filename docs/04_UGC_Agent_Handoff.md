@@ -291,6 +291,8 @@ W3. 확정 → UgcWorld 저장
 
 ## 13. 백로그·열린 항목
 
+> **→ 2026-07-24 재정리·갱신: `07_UGC_V2_Plan.md` 참조 (V1 마감 요약 + 확정 결정[LoRA 폐기·RunPod 재피벗·외형태그 영속] + 우선순위 백로그 + 캐릭터 에셋 애니메이션). 아래 원본 리스트는 이력용. 어드민 심사 SPA·유저 알림·텍스트 드래그는 구현 완료.**
+
 **즉시(종원 콘솔 확인 대기)**: RunPod 보조 워커 crash-loop(Container Disk), fal 동시성 상향
 **프롬프트 튜닝(종원 진행 중)**: GET /admin/characters/ugc/{id}/prompts 로 실프롬프트 확인 → 튜닝 지점은
 UgcPromptAssembler(상수)·ConceptStructuringService(Stage0 지시)

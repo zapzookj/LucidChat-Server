@@ -127,21 +127,34 @@ public class RelationPromotionService {
      */
     @Transactional
     public PromotionResult processDirectorTrigger(ChatRoom room, RelationTransition transition) {
-        if (transition == null || transition.characterId() == null) return null;
+        if (transition == null) return null;
         if (!room.isStoryMode()) return null;
 
+        Long charId = transition.characterId();
         RelationStatus toLevel = parseStatus(transition.to());
-        if (toLevel == null) {
-            log.warn("💗 [PROMOTION] Invalid 'to' level: '{}', roomId={}", transition.to(), room.getId());
+
+        // [Bug-Fix] LLM이 relation_transition을 문자열로 주거나 character_id를 누락해도 크래시 없이 복원.
+        //   도메인상 방당 활성(미발동) 자격은 최대 1건이므로, 단일 자격이면 그걸로 characterId/toLevel을 채운다.
+        if (charId == null || toLevel == null) {
+            List<RelationPromotionEligibility> pending = eligibilityRepository
+                .findByChatRoomIdAndTriggeredFalse(room.getId());
+            if (pending.size() == 1) {
+                RelationPromotionEligibility only = pending.get(0);
+                if (charId == null) charId = only.getCharacterId();
+                if (toLevel == null) toLevel = only.getNextLevel();
+            }
+        }
+        if (charId == null || toLevel == null) {
+            log.warn("💗 [PROMOTION] Unresolvable transition: roomId={}, raw={}", room.getId(), transition);
             return null;
         }
 
         // 활성 자격 조회
         Optional<RelationPromotionEligibility> eOpt = eligibilityRepository
-            .findByChatRoomIdAndCharacterIdAndTriggeredFalse(room.getId(), transition.characterId());
+            .findByChatRoomIdAndCharacterIdAndTriggeredFalse(room.getId(), charId);
         if (eOpt.isEmpty()) {
             log.warn("💗 [PROMOTION] LLM attempted trigger without eligibility: roomId={}, charId={}",
-                room.getId(), transition.characterId());
+                room.getId(), charId);
             return null;
         }
 
@@ -154,11 +167,11 @@ public class RelationPromotionService {
 
         // 히로인 단계 갱신 + 자격 발동 마킹
         ChatRoomHeroine h = heroineRepository
-            .findByChatRoom_IdAndCharacter_Id(room.getId(), transition.characterId())
+            .findByChatRoom_IdAndCharacter_Id(room.getId(), charId)
             .orElse(null);
         if (h == null) {
             log.warn("💗 [PROMOTION] Heroine row not found: roomId={}, charId={}",
-                room.getId(), transition.characterId());
+                room.getId(), charId);
             return null;
         }
 
@@ -168,9 +181,9 @@ public class RelationPromotionService {
         eligibility.markTriggered();
 
         log.info("💗 [PROMOTION-TRIGGER] Activated: roomId={}, charId={} ({} → {})",
-            room.getId(), transition.characterId(), from, toLevel);
+            room.getId(), charId, from, toLevel);
 
-        return new PromotionResult(transition.characterId(), from, toLevel, h.getCharacter().getName());
+        return new PromotionResult(charId, from, toLevel, h.getCharacter().getName());
     }
 
     public record RelationTransition(Long characterId, String from, String to) {}

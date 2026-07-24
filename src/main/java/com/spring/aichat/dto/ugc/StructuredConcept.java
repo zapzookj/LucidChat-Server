@@ -90,7 +90,10 @@ public record StructuredConcept(
         String dislikes,
         /** 취미 — 짧은 구 1~2개. */
         @JsonDeserialize(using = FlexibleStringDeserializer.class)
-        String hobby
+        String hobby,
+        /** 프로필 카드 전용 한 줄 문장 — 자기소개 또는 명대사 1문장. */
+        @JsonDeserialize(using = FlexibleStringDeserializer.class)
+        String profileQuote
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -132,7 +135,7 @@ public record StructuredConcept(
             sp != null && sp.clothing() != null && !sp.clothing().isBlank() ? sp.clothing() : p.clothing(),
             p.backstory(), p.coreValues(), p.flaws(), p.speechQuirks(),
             p.firstGreeting(), p.introNarration(),
-            p.height(), p.likes(), p.dislikes(), p.hobby());
+            p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
         return new StructuredConcept(source.appearanceTags(), personaTags, source.sceneTags(),
             source.bgColor(), merged, source.moderation(), basePose, emotionPrompts);
     }

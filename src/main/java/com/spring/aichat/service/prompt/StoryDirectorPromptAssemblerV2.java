@@ -329,8 +329,9 @@ public class StoryDirectorPromptAssemblerV2 {
         String oocSection = optionalSection("### OOC 회피 예시", c.getOocExample());
 
         return """
-            ## ── 히로인 %d: %s ──
+            ## ── 히로인 %d: %s (Character ID: %d) ──
 
+            - **Character ID**: `%d` ← stat_changes 키·character_id·from_character_id·by_character 키 등 *모든 ID 필드*에 반드시 이 숫자를 그대로 사용 (순번·이름 절대 금지)
             - **Name**: %s
             - **Age**: %s
             - **Role**: %s
@@ -339,7 +340,8 @@ public class StoryDirectorPromptAssemblerV2 {
 
             ### Background
             %s%s%s%s%s%s%s""".formatted(
-            index, c.getName(),
+            index, c.getName(), c.getId(),
+            c.getId(),
             c.getName(),
             c.getAge() != null ? c.getAge().toString() : "(미상)",
             safe(c.getRole()),
@@ -388,7 +390,7 @@ public class StoryDirectorPromptAssemblerV2 {
         return """
             # [4-marker] CURRENT TURN SPEAKER
 
-            이번 턴 화자: **%s**
+            이번 턴 화자: **%s** (Character ID: %d)
 
             - 현재 관계 단계: %s (%s)
             - 동적 관계 태그: %s
@@ -396,7 +398,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - 현재 BPM: %d (기준 %d)
 
             위 [4] HEROINES 섹션의 %s 깊은 정의를 *작가의 충실함*으로 살려서 응답하라. 그녀의 영혼은 유저의 호감을 위해 휘어지지 않는다.""".formatted(
-            c.getName(),
+            c.getName(), c.getId(),
             speaker.getStatusLevel().name(),
             toKoreanRelation(speaker.getStatusLevel()),
             safe(speaker.getDynamicRelationTag()),
@@ -425,8 +427,9 @@ public class StoryDirectorPromptAssemblerV2 {
             body = "(같은 공간에 화자 외 다른 캐릭터 없음)";
         } else {
             String list = others.stream()
-                .map(h -> "- **%s**: 관계 %s, 호감도 %d/100".formatted(
+                .map(h -> "- **%s** (ID: %d): 관계 %s, 호감도 %d/100".formatted(
                     h.getCharacter().getName(),
+                    h.getCharacter().getId(),
                     toKoreanRelation(h.getStatusLevel()),
                     h.getStatAffection()))
                 .collect(Collectors.joining("\n"));
@@ -466,8 +469,9 @@ public class StoryDirectorPromptAssemblerV2 {
                     String locDisplay = p != null
                         ? resolveLocationDisplay(p.getCurrentLocationKey(), worldLocations)
                         : "위치 미상";
-                    return "- **%s** (%s): 관계 %s, 호감도 %d/100".formatted(
+                    return "- **%s** (ID: %d, %s): 관계 %s, 호감도 %d/100".formatted(
                         h.getCharacter().getName(),
+                        h.getCharacter().getId(),
                         locDisplay,
                         toKoreanRelation(h.getStatusLevel()),
                         h.getStatAffection());
@@ -672,7 +676,7 @@ public class StoryDirectorPromptAssemblerV2 {
                 "bgm_mode": "DAILY_CALM | DAILY_BRIGHT | ROMANTIC | EXCITING | TOUCHING | TENSE | null (CALM=잔잔한 일상·차분한 대화, BRIGHT=활기찬 외출·즐거운 분위기)",
                 "ending_triggered": false,
                 "ending_type": "HAPPY | BAD | null",
-                "relation_transition": null,
+                "relation_transition": null,  // 평상시 null. 아래 [신호] RELATION PROMOTION ELIGIBILITY가 있을 때만 → 반드시 *객체*: { "character_id": 47, "from": "FRIEND", "to": "LOVER" }. 문자열("LOVER" 등) 절대 금지.
                 "user_impressions": [
                   { "character_id": 47, "impression": "유저에 대한 그 캐릭터의 *누적 인상* 1~2문장 (한국어)" }
                 ]
@@ -705,7 +709,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - `new_dynamic_location` / `location_change`는 *해당 씬에서 변경된 경우*만. 다른 씬에서는 null.
             - `inner_thought`는 *그 씬의 화자 속마음*만. 다른 화자는 다른 씬에서 별도 출력.
             - `incoming_messages` / `dialogue_options`는 *비어있어도 OK* — 빈 배열로 출력하거나 키 자체 생략.
-            - `relation_transition`은 [신호 인젝션] 섹션에 RELATION PROMOTION ELIGIBILITY가 있을 때만 발동 가능.
+            - `relation_transition`은 [신호 인젝션]에 RELATION PROMOTION ELIGIBILITY가 있을 때만 발동. 발동 시 **반드시 객체** `{ "character_id": <숫자>, "from": "<현재 단계>", "to": "<목표 단계>" }` — 문자열("LOVER" 등) 절대 금지. 단계값은 STRANGER|ACQUAINTANCE|FRIEND|LOVER 영문 대문자.
             - `ending_triggered`는 [신호 인젝션] 섹션에 ENDING ELIGIBILITY가 있을 때만 true 가능.
 
             **⚠️ stat_changes 필수 규칙 (중요)**:
@@ -775,7 +779,8 @@ public class StoryDirectorPromptAssemblerV2 {
 
             %s
 
-            *자연스러운 순간*(낭만적 분위기, 깊은 대화의 끝, 둘만의 시간 등)에 `system_updates.relation_transition`으로 발동 가능. 강제 발동 금지.""".formatted(list);
+            *자연스러운 순간*(낭만적 분위기, 깊은 대화의 끝, 둘만의 시간 등)에 `system_updates.relation_transition`으로 발동 가능. 강제 발동 금지.
+            발동 형식(반드시 객체, 문자열 금지): `"relation_transition": { "character_id": <위 캐릭터의 숫자 ID>, "from": "<현재 단계 영문>", "to": "<목표 단계 영문>" }`""".formatted(list);
     }
 
     private String buildPendingNotificationsSignal(List<OffscreenNotification> pending,
