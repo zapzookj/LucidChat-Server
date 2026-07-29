@@ -210,7 +210,7 @@ public class CharacterCreationService {
 
             // 첫인사는 편집본에도 정규화 규칙 재적용 (괄호 지문 → 나레이션 채널)
             String greeting = p.firstGreeting();
-            String intro = or(req.introNarration(), p.introNarration());
+            String intro = patch(req.introNarration(), p.introNarration());
             if (req.firstGreeting() != null) {
                 var parts = ConceptStructuringService.normalizeGreeting(req.firstGreeting());
                 greeting = parts.dialogue() != null ? parts.dialogue() : greeting;
@@ -219,12 +219,14 @@ public class CharacterCreationService {
                 }
             }
 
+            // [2026-07-30 P1 빈값=삭제] null=유지 · 빈 문자열=삭제 · 값=교체.
+            // 이름은 필수(빈값도 유지), 첫인사는 정규화 경로가 별도 처리(빈값 유지).
             StructuredConcept.CharacterProfile updated = new StructuredConcept.CharacterProfile(
-                or(req.name(), p.name()), or(req.tagline(), p.tagline()), p.age(),
-                or(req.role(), p.role()), or(req.personality(), p.personality()), or(req.tone(), p.tone()),
-                or(req.appearance(), p.appearance()), or(req.clothing(), p.clothing()),
-                or(req.backstory(), p.backstory()), or(req.coreValues(), p.coreValues()),
-                or(req.flaws(), p.flaws()), or(req.speechQuirks(), p.speechQuirks()),
+                or(req.name(), p.name()), patch(req.tagline(), p.tagline()), p.age(),
+                patch(req.role(), p.role()), patch(req.personality(), p.personality()), patch(req.tone(), p.tone()),
+                patch(req.appearance(), p.appearance()), patch(req.clothing(), p.clothing()),
+                patch(req.backstory(), p.backstory()), patch(req.coreValues(), p.coreValues()),
+                patch(req.flaws(), p.flaws()), patch(req.speechQuirks(), p.speechQuirks()),
                 greeting, intro,
                 p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
@@ -239,6 +241,16 @@ public class CharacterCreationService {
 
     private static String or(String override, String base) {
         return (override != null && !override.isBlank()) ? override.trim() : base;
+    }
+
+    /**
+     * [2026-07-30 P1 빈값=삭제] PATCH 의미론 — null=유지 · 빈 문자열=삭제(null) · 값=trim 교체.
+     * 기존 or()는 빈 문자열을 '유지'로 삼켜 유저가 필드를 지울 수 없었다.
+     */
+    private static String patch(String override, String base) {
+        if (override == null) return base;
+        String t = override.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private static String nz(String s) {

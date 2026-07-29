@@ -766,14 +766,19 @@ public class Character {
         }
     }
 
-    /** UGC 텍스트 설정 수정 (완성 화면 인라인 수정 — 에셋 무관, 무료). */
+    /**
+     * UGC 텍스트 설정 수정 (완성 화면 인라인 수정 — 에셋 무관, 무료).
+     * [2026-07-30 P1 빈값=삭제] tagline은 빈 문자열=삭제(null). 프롬프트 필수 필드
+     * (name/personality/tone/firstGreeting)는 빈 문자열도 '유지' — "" 저장으로
+     * getEffective* 폴백이 무력화되는 사고 방지.
+     */
     public void updateUgcTexts(String name, String tagline, String personality,
                                String tone, String firstGreeting) {
         if (name != null && !name.isBlank()) this.name = name;
-        if (tagline != null) this.tagline = tagline;
-        if (personality != null) this.personality = personality;
-        if (tone != null) this.tone = tone;
-        if (firstGreeting != null) this.firstGreeting = firstGreeting;
+        if (tagline != null) this.tagline = tagline.isBlank() ? null : tagline;
+        if (personality != null && !personality.isBlank()) this.personality = personality;
+        if (tone != null && !tone.isBlank()) this.tone = tone;
+        if (firstGreeting != null && !firstGreeting.isBlank()) this.firstGreeting = firstGreeting;
     }
 
     // ── 공개 심사 경로 ──
