@@ -19,7 +19,8 @@ import org.springframework.web.client.RestClient;
     WorldSeedProperties.class,
     WorldLocationSeedProperties.class,
     CharacterRoutineSeedProperties.class,
-    UserPersonaPresetSeedProperties.class
+    UserPersonaPresetSeedProperties.class,
+    SceneIllustrationProperties.class  // [2026-07-30 A-1 재피벗] illustration.scene.*
 })
 public class RestClientConfig {
 

@@ -119,6 +119,23 @@ modelslab:
   guidance-scale: 7.0
   sampler: "DPMSolverMultistepScheduler"
 
+# ────────────────────────────────────────────────
+# [2026-07-30 A-1 재피벗] 실시간 씬 일러 — 전용 RunPod Serverless (lucid_comfy_worker_illu)
+# ────────────────────────────────────────────────
+# 기본 비활성 — 켜기 전까지 채팅/일러 흐름에 어떤 변화도 없다.
+# 활성 절차: ① 전용 엔드포인트 가동(웜 워커 권장 — 콜드스타트 8분+ 실측)
+#           ② SCENE_RUNPOD_* env 주입 ③ SCENE_ILLUST_ENABLED=true
+# UGC 빌더(ugc.runpod.*)와 별개 엔드포인트 — 배치 vs 저지연 head-of-line blocking 회피(docs/07 B-2).
+illustration:
+  scene:
+    enabled: ${SCENE_ILLUST_ENABLED:false}
+    runpod:
+      api-key: ${SCENE_RUNPOD_API_KEY:}
+      endpoint-id: ${SCENE_RUNPOD_ENDPOINT_ID:}
+    generation:
+      width: 1344     # 실측 확정(docs/09 A-1): 배경 포함 랜드스케이프, 30step/cfg4는 템플릿 동결
+      height: 768
+
 # AWS S3
 aws:
   s3:

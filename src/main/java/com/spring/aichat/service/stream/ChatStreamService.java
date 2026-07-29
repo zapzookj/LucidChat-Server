@@ -91,6 +91,8 @@ public class ChatStreamService {
     private final ChatService chatService;
     private final IllustrationService illustrationService;
     private final BackgroundGenerationService backgroundGenerationService;
+    // [2026-07-30 A-1 재피벗] 매턴 씬 일러 — illustration.scene.enabled 기본 off
+    private final com.spring.aichat.service.illustration.scene.SceneRenderService sceneRenderService;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final DirectorService directorService;
     /** [Phase 6-Illust] World 컨텍스트 조회 — 배경 prompt mood prefix 이중 안전망용. */
@@ -454,12 +456,28 @@ public class ChatStreamService {
             // [Phase 6-Illust] illustration_scene_hint 영속화 (동적 장소 처리와 무관하게 매 응답마다)
             applyParsedToRoom(roomId, parsed);
 
+            // ── [2026-07-30 A-1 재피벗] 매턴 씬 일러 — 플래그 기본 off. 실패해도 채팅 흐름 불침해. ──
+            SendChatResponse.SceneIllustrationInfo sceneIllust = null;
+            if (sceneRenderService.ready()) {
+                try {
+                    com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView view = sceneRenderService.resolveForTurn(
+                        roomId, List.of(jpa.room().getCharacter()),
+                        parsed.aiOutput(), (int) (jpa.logCount() + 1));
+                    if (view != null) {
+                        sceneIllust = new SendChatResponse.SceneIllustrationInfo(
+                            view.id(), view.turnIndex(), view.status(), view.imageUrl());
+                    }
+                } catch (Exception e) {
+                    log.warn("⚠️ [SCENE-RENDER] resolve 실패 (non-blocking): {}", e.getMessage());
+                }
+            }
+
             // ── SSE: final_result ──
             sendFinalResult(emitter, response,
                 ChatModePolicy.supportsInnerThought(jpa.room().getChatMode()) && hasInnerThought,  // [이관]
                 assistantLogId,
                 ChatModePolicy.supportsSceneDirection(jpa.room().getChatMode()) && parsed.generateIllustration(),  // [이관]
-                locationTransition);
+                locationTransition, sceneIllust);
             emitter.complete();
 
             log.info("⏱ [STREAM-PERF] sendMessageStream DONE: {}ms", System.currentTimeMillis() - totalStart);
@@ -1190,6 +1208,15 @@ public class ChatStreamService {
                                  boolean hasInnerThought, String assistantLogId,
                                  boolean generateIllustration,
                                  LocationTransition locationTransition) {
+        sendFinalResult(emitter, response, hasInnerThought, assistantLogId,
+            generateIllustration, locationTransition, null);
+    }
+
+    private void sendFinalResult(SseEmitter emitter, SendChatResponse response,
+                                 boolean hasInnerThought, String assistantLogId,
+                                 boolean generateIllustration,
+                                 LocationTransition locationTransition,
+                                 SendChatResponse.SceneIllustrationInfo sceneIllustration) {
         try {
             SendChatResponse finalResponse = new SendChatResponse(
                 response.roomId(), response.scenes(),
@@ -1199,7 +1226,7 @@ public class ChatStreamService {
                 response.dynamicRelationTag(), response.characterThought(),
                 hasInnerThought, assistantLogId,
                 response.topicConcluded(), response.eventStatus(),
-                generateIllustration, locationTransition);
+                generateIllustration, locationTransition, null, sceneIllustration);
 
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));

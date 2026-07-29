@@ -41,7 +41,13 @@ public record AiJsonOutput(
 
     // ── [Phase 6-Illust] 신규 필드 ──
     @JsonProperty("location_canonical_key") String locationCanonicalKey,
-    @JsonProperty("illustration_scene_hint") String illustrationSceneHint
+    @JsonProperty("illustration_scene_hint") String illustrationSceneHint,
+
+    // ── [2026-07-30 A-1 재피벗] 매턴 씬 일러 (illustration.scene.enabled일 때만 프롬프트가 지시 —
+    //     비활성이면 LLM이 출력하지 않아 null, 전체 파이프라인 무영향) ──
+    /** 옵트아웃 반전(디오라마 검증): 기본 매턴 렌더, 변화가 적으면 LLM이 스킵 지시. */
+    @JsonProperty("skip_illustration_regen") Boolean skipIllustrationRegen,
+    @JsonProperty("scene_illustration") SceneIllustrationSpec sceneIllustration
 ) {
     // ── 하위 호환 생성자 체인 ──
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
@@ -50,27 +56,27 @@ public record AiJsonOutput(
                         Boolean topicConcluded, String eventStatus) {
         this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
             statChanges, bpm, innerThought, topicConcluded, eventStatus,
-            null, null, null, null, null);
+            null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger,
                         StatChanges statChanges, Integer bpm, String innerThought) {
         this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            statChanges, bpm, innerThought, null, null, null, null, null, null, null);
+            statChanges, bpm, innerThought, null, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger, StatChanges statChanges, Integer bpm) {
         this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            statChanges, bpm, null, null, null, null, null, null, null, null);
+            statChanges, bpm, null, null, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
                         Integer moodScore, String easterEggTrigger) {
         this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange, Integer moodScore) {
         this(reasoning, scenes, affectionChange, moodScore, null,
-            null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public boolean isTopicConcluded() { return Boolean.TRUE.equals(topicConcluded); }
@@ -108,6 +114,43 @@ public record AiJsonOutput(
         public Scene(String narration, String dialogue, String emotion,
                      String location, String time, String outfit, String bgmMode) {
             this(null, narration, dialogue, emotion, location, time, outfit, bgmMode);
+        }
+    }
+
+    /**
+     * [2026-07-30 A-1 재피벗] 매턴 씬 일러 구성 — 배경 + 행위 + 등장 인물(cast, 화면 내 총원≤2 규약).
+     * 디오라마 검증 스키마의 개별 포팅(snake_case 명시 — 이 레코드는 클래스 전역 네이밍 전략이 없음).
+     */
+    public record SceneIllustrationSpec(
+        @JsonProperty("location_description") String locationDescription,
+        @JsonProperty("action_description") String actionDescription,
+        List<SceneCast> cast
+    ) {}
+
+    /**
+     * 씬 등장 인물 1명.
+     * @param ref    히로인이면 캐릭터 이름과 일치, 유저면 "user"
+     * @param kind   "heroine" | "user"
+     * @param gender "female" | "male" — 인원 카운트·성별 앵커용. 미지정 시 히로인=여성, 유저=남성
+     */
+    public record SceneCast(
+        String ref,
+        String kind,
+        String gender,
+        String emotion,
+        String pose
+    ) {
+        public boolean isUser() {
+            return "user".equalsIgnoreCase(kind) || "user".equalsIgnoreCase(ref);
+        }
+
+        /** 성별 해석 — 미지정 폴백: 유저=남성, 히로인=여성. */
+        public boolean isMale() {
+            if (gender != null && !gender.isBlank()) {
+                String g = gender.trim().toLowerCase();
+                return g.startsWith("m") || g.contains("boy") || "남".equals(g) || g.startsWith("남자");
+            }
+            return isUser();
         }
     }
 

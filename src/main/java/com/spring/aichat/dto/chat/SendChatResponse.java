@@ -25,8 +25,24 @@ public record SendChatResponse(
     LocationTransition locationTransition,  // 새 장소 전환 정보 (null이면 전환 없음)
 
     // ── [Phase 7-V2 Pivot] ──
-    List<String> dialogueOptions            // V2 디렉터 선택지 (V1은 null)
+    List<String> dialogueOptions,           // V2 디렉터 선택지 (V1은 null)
+
+    // ── [2026-07-30 A-1 재피벗] 매턴 씬 일러 (illustration.scene 비활성이면 항상 null — additive) ──
+    SceneIllustrationInfo sceneIllustration
 ) {
+    // ── 하위 호환 생성자: 18-param (sceneIllustration 미지원) ──
+    public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
+                            PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
+                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+                            boolean hasInnerThought, String assistantLogId,
+                            boolean topicConcluded, String eventStatus,
+                            boolean generateIllustration, LocationTransition locationTransition,
+                            List<String> dialogueOptions) {
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
+            stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
+            topicConcluded, eventStatus, generateIllustration, locationTransition, dialogueOptions, null);
+    }
+
     // ── 하위 호환 생성자: 17-param (V1 path, dialogueOptions 미지원) ──
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
@@ -36,7 +52,7 @@ public record SendChatResponse(
                             boolean generateIllustration, LocationTransition locationTransition) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
             stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
-            topicConcluded, eventStatus, generateIllustration, locationTransition, null);
+            topicConcluded, eventStatus, generateIllustration, locationTransition, null, null);
     }
 
     // ── 15-param 호환 생성자 (이전 patch 전) ──
@@ -94,6 +110,12 @@ public record SendChatResponse(
     public record AchievementInfo(String code, String title, String titleKo, String description, String icon, boolean isNew) {}
     public record StatsSnapshot(int intimacy, int affection, int dependency, int playfulness, int trust,
                                 Integer lust, Integer corruption, Integer obsession) {}
+
+    /**
+     * [2026-07-30 A-1 재피벗] 매턴 씬 일러 정보 — status가 PENDING/GENERATING이면 프론트가
+     * GET /chat/rooms/{roomId}/scene-illustrations/{id}로 폴링, SKIPPED/COMPLETED면 imageUrl 즉시 사용.
+     */
+    public record SceneIllustrationInfo(Long id, int turnIndex, String status, String imageUrl) {}
 
     /**
      * [Phase 5.5-Illust] 장소 전환 정보

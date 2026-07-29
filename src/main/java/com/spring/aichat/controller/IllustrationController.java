@@ -28,6 +28,29 @@ public class IllustrationController {
 
     private final IllustrationService illustrationService;
     private final BackgroundGenerationService backgroundGenerationService;
+    private final com.spring.aichat.service.illustration.scene.SceneRenderService sceneRenderService;
+
+    // ━━━ [2026-07-30 A-1 재피벗] 매턴 씬 일러 — 폴링 + 씬 네비게이션(A-2) ━━━
+
+    /** 씬 일러 단건 폴링 — final_result의 sceneIllustration.id로 PENDING/GENERATING 추적. */
+    @org.springframework.security.access.prepost.PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @GetMapping("/scenes/{illustrationId}")
+    public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView> sceneStatus(
+        @PathVariable Long illustrationId,
+        @RequestParam Long roomId
+    ) {
+        var view = sceneRenderService.getView(roomId, illustrationId);
+        return view == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(view);
+    }
+
+    /** 방의 턴별 씬 목록 — 대화 기록 클릭→해당 씬 표시 + 앞/뒤 넘기기(docs/09 A-2). */
+    @org.springframework.security.access.prepost.PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    @GetMapping("/scenes")
+    public ResponseEntity<List<com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView>> sceneList(
+        @RequestParam Long roomId
+    ) {
+        return ResponseEntity.ok(sceneRenderService.listViews(roomId));
+    }
 
     /**
      * 일러스트 생성 요청.

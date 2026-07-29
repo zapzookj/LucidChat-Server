@@ -34,14 +34,17 @@ public class CharacterPromptAssembler {
     private final WorldRepository worldRepository;
     private final UgcWorldRepository ugcWorldRepository;
     private final UgcWorldLocationRepository ugcWorldLocationRepository;
+    private final com.spring.aichat.config.SceneIllustrationProperties sceneIllustrationProps;
 
     public CharacterPromptAssembler(PromptInjectionGuard injectionGuard, WorldRepository worldRepository,
                                     UgcWorldRepository ugcWorldRepository,
-                                    UgcWorldLocationRepository ugcWorldLocationRepository) {
+                                    UgcWorldLocationRepository ugcWorldLocationRepository,
+                                    com.spring.aichat.config.SceneIllustrationProperties sceneIllustrationProps) {
         this.injectionGuard = injectionGuard;
         this.worldRepository = worldRepository;
         this.ugcWorldRepository = ugcWorldRepository;
         this.ugcWorldLocationRepository = ugcWorldLocationRepository;
+        this.sceneIllustrationProps = sceneIllustrationProps;
     }
 
     public record SystemPromptPayload(String staticRules, String dynamicRules, String outputFormat) {}
@@ -989,7 +992,39 @@ public class CharacterPromptAssembler {
             """;
         }
 
-        return jsonSchema + guideBlock;
+        return jsonSchema + guideBlock + sceneIllustrationBlock(character);
+    }
+
+    /**
+     * [2026-07-30 A-1 재피벗] 매턴 씬 일러 지시 블록 — {@code illustration.scene.enabled}일 때만 부착.
+     * 디오라마 V1.1 위생 규약의 개별 포팅(공유 레이어 개별 포즈 금지 · 감정 enum 누출 차단 ·
+     * 화면 내 총원≤2 · 앵글은 LLM 유동 판단). 무검열 지시는 이식하지 않음 — 콘텐츠 수위는
+     * 기존 시스템 프롬프트/모더레이션 정책이 그대로 지배한다.
+     */
+    private String sceneIllustrationBlock(Character character) {
+        if (!sceneIllustrationProps.isEnabled()) return "";
+        return """
+
+            ## 🎬 Scene Illustration (ADDITIONAL fields — output every turn)
+            Also output "skip_illustration_regen" (boolean) and "scene_illustration" (object) in your JSON:
+
+            "skip_illustration_regen": true ONLY if the visual scene is unchanged from the previous turn
+              (same place, same people on screen, same activity). Default: false.
+            "scene_illustration": {
+              "location_description": "place as danbooru-style english tags (e.g. \\"cafe interior, window seat, afternoon sunlight\\") — NO character appearance here",
+              "action_description": "SHARED interaction tags only (e.g. \\"sitting across table, holding hands\\"). ⚠️ NEVER put one person's pose/state here — shared tags apply to EVERYONE on screen. Per-person pose goes in cast[].pose.",
+              "cast": [ { "ref": "%s" or "user", "kind": "heroine"|"user", "gender": "female"|"male",
+                          "emotion": "facial expression as lowercase danbooru tags (e.g. \\"smile, blush\\") — ⚠️ NOT the scene emotion enum (JOY/SHY...)",
+                          "pose": "this person's pose/action tags" } ]
+            }
+
+            ### Cast rules (STRICT):
+            - ⚠️ HARD LIMIT: at most 2 people total on screen. NEVER 3+.
+            - Default: heroine alone (cast = 1). Include "user" ONLY when physical interaction between
+              user and heroine is the visual core of the moment.
+            - Choose the camera/angle freely per scene — no fixed rule. The user's face is never shown
+              consistently; treat the user as faceless.
+            """.formatted(character.getName());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
