@@ -110,6 +110,8 @@ public class ChatStreamServiceV2 {
     private final OffscreenNotificationService notificationService;
     private final EndingEligibilityService endingService;
     private final RelationPromotionService promotionService;
+    // [2026-07-30 P2 정적-우선 배선] location_change → 시드 장소 배경 브리지
+    private final com.spring.aichat.domain.world.WorldLocationRepository worldLocationRepository;
 
     private static final int RAG_SKIP_THRESHOLD = 6;
 
@@ -949,7 +951,10 @@ public class ChatStreamServiceV2 {
                 if (s.hasNewDynamicLocation()) { lastWithLoc = s; break; }
             }
         }
-        if (lastWithLoc == null) return null;
+        if (lastWithLoc == null) {
+            // [2026-07-30 P2 정적-우선 배선] 신규 동적 장소가 없으면 location_change(시드 장소 이동) 브리지
+            return processStaticLocationBackground(room, parsed);
+        }
         AiJsonOutputV2.NewDynamicLocation loc = lastWithLoc.newDynamicLocation();
         if (loc.name() == null || loc.name().isBlank()) return null;
 
@@ -1005,6 +1010,82 @@ public class ChatStreamServiceV2 {
     private String mapDayPartToTimeOfDay(DayPart dp) {
         if (dp == null) return "DAY";
         return dp.toBackgroundTimeOfDay().name();
+    }
+
+    /**
+     * [2026-07-30 P2 정적-우선 배선] 시드 Key Location 간 이동(location_change)의 배경 브리지.
+     *
+     * <p>기획(정적 우선 + 신규 장소만 동적)의 '정적-우선 절반'이 미배선이던 문제 수정(docs/07 §C):
+     * 프롬프트 운용규칙은 시드 장소 이동을 location_change로만 강제하는데, 기존 코드는
+     * new_dynamic_location만 배경을 만들어 큐레이션 장소(TEAHOUSE·GARDEN 등)는 배경이 안 떴다.
+     *
+     * <p>canonical key는 LLM 자유텍스트가 아니라 <b>결정론 키({WORLD}__{LOCATION_KEY})</b> —
+     * 최초 1회 생성 후 영구 캐시(기존 자유텍스트 키의 적중률 0% 문제 동시 해결).
+     * timeOfDay가 해시에 포함되므로 DAY/NIGHT 변형은 자연히 별도 생성·캐시된다.
+     */
+    private LocationTransition processStaticLocationBackground(ChatRoom room, ParsedV2Result parsed) {
+        String locationKey = latestLocationChangeKey(parsed.aiOutput());
+        if (locationKey == null || room.getWorld() == null) return null;
+        com.spring.aichat.domain.enums.WorldId worldId = room.getWorld().getId();
+
+        com.spring.aichat.domain.world.WorldLocation loc = worldLocationRepository
+            .findByWorldIdAndLocationKey(worldId, locationKey).orElse(null);
+        if (loc == null) {
+            // 미시드 키(유령 장소) — 조용히 무시. 루틴 시더 무검증 삽입 전례가 있어 방어적으로.
+            log.debug("[V2-BG-STATIC] 미시드 location_change 키 무시: {} ({})", locationKey, worldId);
+            return null;
+        }
+
+        String canonicalKey = worldId.name() + "__" + loc.getLocationKey();
+        if (canonicalKey.equals(room.getCurrentDynamicCanonicalKey())) return null; // 동일 장소 재진입
+
+        String timeOfDay = mapDayPartToTimeOfDay(room.getCurrentDayPart());
+        String description = (loc.getDescription() != null && !loc.getDescription().isBlank())
+            ? loc.getDescription() : loc.getDisplayName();
+
+        BackgroundGenerationService.BackgroundResult bg = backgroundGenerationService.resolveBackground(
+            loc.getDisplayName(), canonicalKey, description, timeOfDay, 0L);
+
+        LocationTransition transition;
+        if (bg.cacheHit()) {
+            transition = LocationTransition.cached(loc.getDisplayName(), bg.imageUrl());
+        } else {
+            transition = LocationTransition.generating(loc.getDisplayName(), bg.cacheHash());
+            backgroundGenerationService.generateBackgroundAsync(
+                loc.getDisplayName(), canonicalKey, description, timeOfDay, 0L,
+                room.getWorld(), room.isSecretModeActive());
+        }
+
+        final String bgUrlToStore = bg.cacheHit() ? bg.imageUrl() : null;
+        try {
+            txTemplate.execute(status -> {
+                ChatRoom bgRoom = chatRoomRepository.findById(room.getId()).orElse(null);
+                if (bgRoom != null) {
+                    if (bgUrlToStore != null) {
+                        bgRoom.updateDynamicBackground(loc.getDisplayName(), canonicalKey, bgUrlToStore);
+                    } else {
+                        bgRoom.updateDynamicLocationName(loc.getDisplayName(), canonicalKey);
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("[V2-BG-STATIC] persist failed (non-blocking): {}", e.getMessage());
+        }
+        cacheService.evictRoomInfo(room.getId());
+        log.info("[V2-BG-STATIC] 정적 장소 배경 브리지: roomId={} key={} hit={}",
+            room.getId(), canonicalKey, bg.cacheHit());
+        return transition;
+    }
+
+    /** 응답 씬 역순 탐색 — 가장 마지막 location_change의 locationKey (없으면 null). */
+    private String latestLocationChangeKey(AiJsonOutputV2 ai) {
+        if (ai.scenes() == null) return null;
+        for (int i = ai.scenes().size() - 1; i >= 0; i--) {
+            AiJsonOutputV2.SceneV2 s = ai.scenes().get(i);
+            if (s.hasLocationChange()) return s.locationChange();
+        }
+        return null;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -75,6 +75,8 @@ public class StoryV2Service {
     private final MemorySummaryRepository memorySummaryRepository;
 
     private final WorldRoutingService routingService;
+    // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩
+    private final com.spring.aichat.service.illustration.BackgroundGenerationService backgroundGenerationService;
     private final HeroineMemoryService heroineMemoryService;
     private final OffscreenNotificationService notificationService;
     private final RelationPromotionService promotionService;
@@ -260,6 +262,9 @@ public class StoryV2Service {
             // 히로인/위치 재구성
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
 
+            // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩 (overwrite에도 동일)
+            seedOfficialWorldBackground(room, worldId, startLocationKey, world);
+
             return new CreateStoryV2Response(room.getId(), worldId.name(), false, true);
         }
 
@@ -271,6 +276,10 @@ public class StoryV2Service {
         storyV2StateRepository.save(StoryV2State.create(room.getId()));
 
         reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+
+        // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩 — 시작 장소의 정적-우선 배경
+        // (seedUgcWorldBackground의 공식판 — 캐시 히트면 즉시, 미스면 1회 생성 후 영구 캐시)
+        seedOfficialWorldBackground(room, worldId, startLocationKey, world);
 
         log.info("✨ [STORY-V2] Created new room: roomId={}, worldId={}, heroineCount={}, startLocation={}",
             room.getId(), worldId, heroines.size(), startLocationKey);
@@ -288,6 +297,39 @@ public class StoryV2Service {
         // 2. CharacterPresence 위치 초기화 (루틴 기반)
         List<Long> heroineCharIds = heroines.stream().map(Character::getId).toList();
         routingService.initializePresences(room, heroineCharIds, startDayPart);
+    }
+
+    /**
+     * [2026-07-30 P2 정적-우선 배선] 시작 장소 배경 시딩 — {@code seedUgcWorldBackground}의 공식판.
+     * 결정론 키({WORLD}__{LOCATION_KEY})로 캐시 조회: 히트면 즉시 세팅, 미스면 비동기 1회 생성
+     * (완성분은 영구 캐시 — 이후 모든 방 진입·이동에서 재사용). 실패는 비차단.
+     */
+    private void seedOfficialWorldBackground(ChatRoom room, WorldId worldId, String startLocationKey,
+                                             com.spring.aichat.domain.world.World world) {
+        try {
+            WorldLocation loc = worldLocationRepository
+                .findByWorldIdAndLocationKey(worldId, startLocationKey).orElse(null);
+            if (loc == null) return;
+
+            String canonicalKey = worldId.name() + "__" + loc.getLocationKey();
+            String timeOfDay = DayPart.defaultStart().toBackgroundTimeOfDay().name();
+            String description = (loc.getDescription() != null && !loc.getDescription().isBlank())
+                ? loc.getDescription() : loc.getDisplayName();
+
+            com.spring.aichat.service.illustration.BackgroundGenerationService.BackgroundResult bg
+                = backgroundGenerationService.resolveBackground(
+                loc.getDisplayName(), canonicalKey, description, timeOfDay, 0L);
+            if (bg.cacheHit()) {
+                room.updateDynamicBackground(loc.getDisplayName(), canonicalKey, bg.imageUrl());
+            } else {
+                room.updateDynamicLocationName(loc.getDisplayName(), canonicalKey);
+                backgroundGenerationService.generateBackgroundAsync(
+                    loc.getDisplayName(), canonicalKey, description, timeOfDay, 0L, world, false);
+            }
+        } catch (Exception e) {
+            log.warn("🏠 [STORY-V2] 시작 장소 배경 시딩 실패 (non-blocking): roomId={}, {}",
+                room.getId(), e.getMessage());
+        }
     }
 
     private String resolveStartLocation(WorldId worldId, String requestedKey) {
