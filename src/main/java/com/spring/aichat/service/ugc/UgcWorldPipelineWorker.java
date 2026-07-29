@@ -83,7 +83,7 @@ public class UgcWorldPipelineWorker {
             runWithRetries(jobId, "WORLD-W0", () -> {
                 StructuredWorld structured = structuringService.structure(
                     job.getConceptInputRaw(), job.getRequestedName(), job.getMoodHint());
-                moderationService.assertStructuredWorldAllowed(structured);
+                moderationService.assertStructuredWorldAllowed(structured, job.getConceptInputRaw(), job.getUserId());
 
                 String structuredJson = json.writeStructured(structured);
                 String draftJson = json.writeDraft(draftFrom(structured));

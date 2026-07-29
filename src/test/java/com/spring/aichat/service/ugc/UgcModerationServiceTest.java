@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class UgcModerationServiceTest {
 
-    private final UgcModerationService service = new UgcModerationService();
+    private final UgcModerationService service = new UgcModerationService(null, null, null, null, null);
 
     @Test
     @DisplayName("정상 성인 컨셉은 통과한다 — childhood friend 같은 무해 표현 포함")
@@ -50,25 +50,25 @@ class UgcModerationServiceTest {
     @DisplayName("Stage 0 산출: minor_signal=true 또는 age<19면 차단한다")
     void blocksStructuredSignals() {
         StructuredConcept minorSignal = concept(23, true);
-        assertThatThrownBy(() -> service.assertStructuredConceptAllowed(minorSignal))
+        assertThatThrownBy(() -> service.assertStructuredConceptAllowed(minorSignal, "원문", 1L))
             .isInstanceOf(ContentModerationException.class);
 
         StructuredConcept underage = concept(17, false);
-        assertThatThrownBy(() -> service.assertStructuredConceptAllowed(underage))
+        assertThatThrownBy(() -> service.assertStructuredConceptAllowed(underage, "원문", 1L))
             .isInstanceOf(ContentModerationException.class);
 
-        assertThatCode(() -> service.assertStructuredConceptAllowed(concept(23, false)))
+        assertThatCode(() -> service.assertStructuredConceptAllowed(concept(23, false), "원문", 1L))
             .doesNotThrowAnyException();
-        assertThatCode(() -> service.assertStructuredConceptAllowed(concept(null, false)))
+        assertThatCode(() -> service.assertStructuredConceptAllowed(concept(null, false), "원문", 1L))
             .doesNotThrowAnyException(); // 나이 미기재는 차단하지 않는다 (좁은 게이트)
     }
 
     @Test
     @DisplayName("[세계관 빌더] W0 산출: minor_signal=true면 차단, false면 통과한다")
     void blocksWorldStructuredSignals() {
-        assertThatThrownBy(() -> service.assertStructuredWorldAllowed(world(true)))
+        assertThatThrownBy(() -> service.assertStructuredWorldAllowed(world(true), "원문", 1L))
             .isInstanceOf(ContentModerationException.class);
-        assertThatCode(() -> service.assertStructuredWorldAllowed(world(false)))
+        assertThatCode(() -> service.assertStructuredWorldAllowed(world(false), "원문", 1L))
             .doesNotThrowAnyException();
     }
 

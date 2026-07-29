@@ -90,7 +90,7 @@ public class UgcPipelineWorker {
             runWithRetries(jobId, "STAGE0", () -> {
                 StructuredConcept concept = conceptStructuringService.structure(
                     job.getConceptInputRaw(), job.getRequestedName());
-                moderationService.assertStructuredConceptAllowed(concept);
+                moderationService.assertStructuredConceptAllowed(concept, job.getConceptInputRaw(), job.getUserId());
 
                 String conceptJson = json.writeConcept(concept);
                 mutateJob(jobId, j -> j.applyStage0(conceptJson, concept.bgColor()));
@@ -128,7 +128,7 @@ public class UgcPipelineWorker {
                     StructuredConcept current = json.readConcept(fresh.getStructuredConceptJson());
                     StructuredConcept updated = conceptStructuringService.restructureAppearance(
                         fresh.getConceptInputRaw(), current, hintsBlock);
-                    moderationService.assertStructuredConceptAllowed(updated);
+                    moderationService.assertStructuredConceptAllowed(updated, fresh.getConceptInputRaw(), fresh.getUserId());
                     // [리뷰 픽스] LLM 콜(수 초~수십 초) 동안 커밋된 프로필 편집(레이턴시 하이딩)이
                     // 스냅샷 기반 전체 덮어쓰기로 유실되지 않도록, 락 안에서 최신본을 재조회해
                     // 외형 산출 필드만 병합한다 (deriveEmotionPromptsSafely 동일 패턴).
