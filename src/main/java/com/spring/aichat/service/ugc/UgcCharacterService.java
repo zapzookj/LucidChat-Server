@@ -39,6 +39,7 @@ public class UgcCharacterService {
     private final UserRepository userRepository;
     private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 연결 검증·이름 해석
     private final UgcVlmPrefilterService vlmPrefilterService; // [P0 PoC-5] 공개 신청 이미지 자문 스캔
+    private final UgcRoutineGenerationService routineGenerationService; // [P2 STORY 개방 1단] 루틴 자동생성
 
     // ── 공개 심사 경로 ──
 
@@ -127,6 +128,8 @@ public class UgcCharacterService {
         } else {
             character.unlinkWorld();
         }
+        // [2026-07-30 P2 STORY 개방 1단] 연결 변경 → 루틴 재생성(해제면 삭제) — 비동기·비차단
+        routineGenerationService.regenerateForCharacterAsync(characterId);
         log.info("[UGC] 세계관 연결 변경: characterId={}, official={}, ugcWorldId={}", characterId, official, ugcWorldId);
     }
 

@@ -74,6 +74,7 @@ public class UgcPipelineWorker {
     private final UgcJobJson json;
     private final RedisCacheService cacheService;
     private final NotificationService notificationService;
+    private final UgcRoutineGenerationService routineGenerationService; // [P2 STORY 개방 1단]
     private final TransactionTemplate txTemplate;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -518,6 +519,10 @@ public class UgcPipelineWorker {
                 "캐릭터가 깨어났어요",
                 profile.name() + " 캐릭터가 완성되었어요. 스튜디오에서 만나보세요.",
                 "UGC_CHARACTER", String.valueOf(characterId));
+
+            // [2026-07-30 P2 STORY 개방 1단] 루틴 자동생성 — 월드 연결 시 오프스크린 일과 확보
+            // (STORY 개방 전까지 휴면 데이터, 비동기·비차단)
+            routineGenerationService.regenerateForCharacterAsync(characterId);
 
             log.info("[UGC-WORKER] ✅ READY: jobId={}, characterId={}, slug={}", jobId, characterId, slug);
         } catch (Exception e) {
