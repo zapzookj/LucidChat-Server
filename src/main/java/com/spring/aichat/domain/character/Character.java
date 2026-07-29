@@ -309,6 +309,23 @@ public class Character {
     private String profileQuote;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (V15 — 유저 비노출, 이미지 프롬프트 전용)
+    //  UGC: Stage0 산출 저장 · 공식: 시드 입력. null이면 일러 조립기가 하드코딩 맵 폴백.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** Danbooru 외형 태그 CSV (영문) — 실시간 일러 정체성의 단일 소스. */
+    @Column(name = "appearance_tags", columnDefinition = "TEXT")
+    private String appearanceTags;
+
+    /** 성격·무드 태그 CSV (영문) — 이미지 positive 무드 보조. 프로필 노출용 moodTags(한글)와 별개. */
+    @Column(name = "persona_tags", columnDefinition = "TEXT")
+    private String personaTags;
+
+    /** 기본 스탠딩 자세 (영문 1~2문장) — 씬 프롬프트 자세 폴백. */
+    @Column(name = "base_pose", columnDefinition = "TEXT")
+    private String basePose;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자 & 시드 적용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -378,6 +395,17 @@ public class Character {
         if (seed.hobby() != null) this.hobby = seed.hobby();
         if (seed.moodTags() != null) this.moodTags = seed.moodTags();
         if (seed.profileQuote() != null) this.profileQuote = seed.profileQuote();
+
+        // [2026-07-30 A-4 동반 픽스] appearance/clothing/age가 시드 바인딩만 되고 여기서 미복사돼
+        // YAML의 공식 외형 데이터가 DB에 영속된 적이 없던 누락 수정 (UGC는 createUgc로 정상이었음).
+        if (seed.appearance() != null) this.appearance = seed.appearance();
+        if (seed.clothing() != null) this.clothing = seed.clothing();
+        if (seed.age() != null) this.age = seed.age();
+
+        // [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 — 공식 캐릭터 시드 입력
+        if (seed.appearanceTags() != null) this.appearanceTags = seed.appearanceTags();
+        if (seed.personaTags() != null) this.personaTags = seed.personaTags();
+        if (seed.basePose() != null) this.basePose = seed.basePose();
 
         // [UGC v1] YAML 시드 = 공식 캐릭터 불변식 (신규 시드에도 Secret 허용 보장 — V9 일괄 UPDATE와 동일 의미)
         this.source = CharacterSource.OFFICIAL;
@@ -642,7 +670,11 @@ public class Character {
         /** 무드 태그 CSV — persona 태그 조인. */
         String moodTags,
         /** 프로필 카드 한 줄 문장 (Stage0 산출 profile_quote). */
-        String profileQuote
+        String profileQuote,
+        // ── [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (Stage0 산출 CSV) ──
+        String appearanceTags,
+        String personaTags,
+        String basePose
     ) {}
 
     /**
@@ -686,6 +718,9 @@ public class Character {
         c.hobby = spec.hobby();
         c.moodTags = spec.moodTags();
         c.profileQuote = spec.profileQuote();
+        c.appearanceTags = spec.appearanceTags();
+        c.personaTags = spec.personaTags();
+        c.basePose = spec.basePose();
         return c;
     }
 

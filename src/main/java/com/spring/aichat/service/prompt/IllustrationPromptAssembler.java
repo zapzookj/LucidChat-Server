@@ -193,6 +193,21 @@ public class IllustrationPromptAssembler {
         String characterSlug, String emotion, String location, String outfit,
         String sceneHint, String dynamicLocationDescription
     ) {
+        return assemblePositivePrompt(characterSlug, emotion, location, outfit,
+            sceneHint, dynamicLocationDescription, null);
+    }
+
+    /**
+     * [2026-07-30 B-3] 7-arg 시그니처 — 정체성 태그 DB 우선.
+     *
+     * @param identityTagsOverride Character.appearanceTags(V15 영속 CSV). 존재 시 (2) 정체성
+     *                             슬롯을 이 값으로 대체 — 하드코딩 slug 맵(4종)의 DB 일반화.
+     *                             null/공백이면 기존 맵 폴백(airi 최종 폴백)으로 무회귀.
+     */
+    public String assemblePositivePrompt(
+        String characterSlug, String emotion, String location, String outfit,
+        String sceneHint, String dynamicLocationDescription, String identityTagsOverride
+    ) {
         CharacterVisual visual = CHARACTER_VISUALS.getOrDefault(
             characterSlug, CHARACTER_VISUALS.get("airi"));
 
@@ -201,8 +216,10 @@ public class IllustrationPromptAssembler {
         // (1) LoRA 트리거 + 고정 품질
         sb.append(visual.loraTrigger).append(", ").append(FIXED_QUALITY_PREFIX).append(", ");
 
-        // (2) 캐릭터 아이덴티티
-        sb.append(visual.identityPrompt).append(", ");
+        // (2) 캐릭터 아이덴티티 — DB 영속 태그 우선, 없으면 하드코딩 맵 폴백
+        String identity = (identityTagsOverride != null && !identityTagsOverride.isBlank())
+            ? identityTagsOverride.trim() : visual.identityPrompt;
+        sb.append(identity).append(", ");
 
         // (3) 복장
         sb.append(resolveOutfit(characterSlug, outfit)).append(", ");

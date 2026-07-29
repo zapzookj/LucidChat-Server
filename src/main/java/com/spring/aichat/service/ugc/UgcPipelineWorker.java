@@ -499,7 +499,12 @@ public class UgcPipelineWorker {
                 UgcWorldPipelineWorker.joinMood(
                     concept.moodTags() != null && !concept.moodTags().isEmpty()
                         ? concept.moodTags() : concept.personaTags()),
-                profile.profileQuote()
+                profile.profileQuote(),
+                // [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 영속화 — Stage0 산출 CSV 저장
+                // (기존엔 job.structuredConceptJson에만 있어 실시간 일러가 airi 폴백에 갇혔음)
+                joinCsv(concept.appearanceTags()),
+                joinCsv(concept.personaTags()),
+                concept.basePose()
             );
 
             Long characterId = txTemplate.execute(status -> {
@@ -519,6 +524,13 @@ public class UgcPipelineWorker {
             log.error("[UGC-WORKER] 바인딩 실패: jobId={}", jobId, e);
             failAndRefund(jobId, "캐릭터 등록 실패: " + e.getMessage());
         }
+    }
+
+    /** [2026-07-30 A-4] 태그 리스트 → CSV (TEXT 컬럼 저장용 — null/빈 리스트는 null). */
+    private static String joinCsv(java.util.List<String> tags) {
+        if (tags == null || tags.isEmpty()) return null;
+        String joined = String.join(", ", tags);
+        return joined.isBlank() ? null : joined;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

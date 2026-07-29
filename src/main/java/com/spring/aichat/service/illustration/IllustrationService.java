@@ -383,8 +383,11 @@ public class IllustrationService {
         String slug = character.getSlug();
 
         // [Phase 6-Illust] 신 6단 시그니처
+        // [2026-07-30 B-3] 정체성 슬롯: Character.appearanceTags(V15) 우선 — UGC 포함 DB 일반화,
+        // null이면 조립기 내부 하드코딩 맵 폴백(기존 동작 무회귀)
         String positivePrompt = promptAssembler.assemblePositivePrompt(
-            slug, emotion, location, outfit, sceneHint, dynamicLocDesc);
+            slug, emotion, location, outfit, sceneHint, dynamicLocDesc,
+            character.getAppearanceTags());
         String negativePrompt = promptAssembler.getNegativePrompt();
         String loraId = promptAssembler.getLoraId(slug);
 

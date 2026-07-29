@@ -103,6 +103,14 @@ public record CharacterSeedProperties(
         /** 무드 태그 칩 — 콤마 구분 */
         String moodTags,
         /** 프로필 카드 전용 한 줄 문장 (자기소개/명대사) — 미입력 시 firstGreeting 첫 문장 폴백 */
-        String profileQuote
+        String profileQuote,
+
+        // ── [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (유저 비노출 — 이미지 프롬프트 전용) ──
+        /** Danbooru 외형 태그 CSV (영문) — 미입력 시 일러 조립기 하드코딩 맵 폴백 */
+        String appearanceTags,
+        /** 성격·무드 태그 CSV (영문, 이미지 positive 보조) */
+        String personaTags,
+        /** 기본 스탠딩 자세 (영문 1~2문장) */
+        String basePose
     ) {}
 }
