@@ -807,6 +807,21 @@ public class Character {
         this.reviewNote = note;
     }
 
+    /**
+     * [2026-07-30 P0 공개 철회] PUBLIC/PENDING_PUBLIC → PRIVATE 즉시 회귀 — 소유자 자진 철회·
+     * 어드민 강제 철회(부적절 공개 캐릭터 즉시 내림) 공용. 모든 노출 표면(프로필·방 생성·탐색 피드)이
+     * {@link #isAccessibleBy}로 수렴하므로 신규 노출은 이 전환만으로 차단된다.
+     * 타 유저의 기존 방은 채팅 전송 경로의 접근 재검증이 막는다(ChatStreamService).
+     */
+    public void unpublish(String note) {
+        requireUgc();
+        if (visibility == CharacterVisibility.PRIVATE) {
+            throw new IllegalStateException("이미 비공개 캐릭터: " + id);
+        }
+        this.visibility = CharacterVisibility.PRIVATE;
+        if (note != null && !note.isBlank()) this.reviewNote = note;
+    }
+
     // ── Secret 심사 경로 (독립 — PRIVATE 캐릭터도 단독 신청 가능) ──
 
     public void requestSecretReview() {

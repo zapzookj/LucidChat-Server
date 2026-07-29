@@ -67,4 +67,13 @@ public class AdminCharacterController {
         adminUgcReviewService.review(auth.getName(), id, req);
         return ResponseEntity.ok().build();
     }
+
+    /** [2026-07-30 P0] 공개 강제 철회 — 부적절 공개 캐릭터 즉시 내림 (PENDING 불요, PUBLIC 대상). */
+    @PostMapping("/ugc/{id}/unpublish")
+    public ResponseEntity<Void> ugcUnpublish(@PathVariable Long id,
+                                             @RequestBody UgcReviewDtos.UnpublishRequest req,
+                                             Authentication auth) {
+        adminUgcReviewService.unpublish(auth.getName(), id, req == null ? null : req.note());
+        return ResponseEntity.ok().build();
+    }
 }

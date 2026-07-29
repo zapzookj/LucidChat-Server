@@ -208,6 +208,25 @@ public class AdminUgcReviewService {
     }
 
     /**
+     * [2026-07-30 P0 공개 철회] 어드민 강제 철회 — 부적절 공개 캐릭터를 즉시 내리는 수단.
+     * 승인 큐 판정(review)과 달리 PENDING 상태를 요구하지 않는다(이미 PUBLIC인 캐릭터 대상).
+     * 신규 노출은 visibility 전환으로 즉시 차단, 타 유저 기존 방은 채팅 전송 재검증이 차단.
+     */
+    @Transactional
+    public void unpublish(String actor, Long characterId, String note) {
+        Character c = findUgc(characterId);
+        if (c.getVisibility() == CharacterVisibility.PRIVATE) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "이미 비공개 상태입니다: " + characterId);
+        }
+        c.unpublish(note);
+        auditLogService.record(actor, "UGC_UNPUBLISH", "CHARACTER", String.valueOf(characterId),
+            "publish=WITHDRAWN (사유: " + note + ")");
+        notifyOwner(c, "캐릭터 공개가 철회되었어요",
+            c.getName() + " 캐릭터의 공개가 운영 정책에 따라 철회되었어요. 사유를 확인해 주세요.");
+        log.info("[ADMIN-UGC] 공개 철회: characterId={}, actor={}", characterId, actor);
+    }
+
+    /**
      * [프롬프트 인스펙션 2026-07-20] 캐릭터 일러 생성에 들어간 실제 프롬프트 재구성 — 튜닝 참조용.
      * 최종 프롬프트 = 잡의 구조화 태그(Stage0 이후 불변) + 서버 상수의 결정적 함수이므로
      * 저장본 없이 제출 시점 값이 정확히 재현된다.

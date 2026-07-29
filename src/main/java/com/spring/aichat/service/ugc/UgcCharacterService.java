@@ -52,6 +52,17 @@ public class UgcCharacterService {
         log.info("[UGC] 공개 신청 {}: characterId={}, username={}", cancel ? "취소" : "접수", characterId, username);
     }
 
+    /**
+     * [2026-07-30 P0] 소유자 자진 공개 철회 — PUBLIC(또는 PENDING_PUBLIC) → PRIVATE 즉시 회귀.
+     * PENDING_PUBLIC 취소는 기존 requestPublish(cancel=true)와 결과 동일(중복 허용 — 프론트 단순화).
+     */
+    @Transactional
+    public void unpublish(String username, Long characterId) {
+        Character character = ownedUgc(username, characterId);
+        character.unpublish(null);
+        log.info("[UGC] 공개 철회(소유자): characterId={}, username={}", characterId, username);
+    }
+
     // ── Secret 단독 심사 경로 (2026-07-17 결정 — PRIVATE 유지 캐릭터도 신청 가능) ──
 
     @Transactional

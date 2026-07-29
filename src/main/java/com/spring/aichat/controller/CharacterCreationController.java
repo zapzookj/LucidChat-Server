@@ -214,6 +214,17 @@ public class CharacterCreationController {
         return ResponseEntity.ok().build();
     }
 
+    /** [2026-07-30 P0] 소유자 자진 공개 철회 — PUBLIC → PRIVATE 즉시 회귀. */
+    @PostMapping("/{characterId:\\d+}/unpublish")
+    public ResponseEntity<Void> unpublish(
+        @PathVariable Long characterId,
+        Authentication authentication
+    ) {
+        guardRate(authentication);
+        ugcCharacterService.unpublish(authentication.getName(), characterId);
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping("/{characterId:\\d+}/secret-request")
     public ResponseEntity<Void> secretRequest(
         @PathVariable Long characterId,

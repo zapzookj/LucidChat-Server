@@ -74,6 +74,9 @@ public final class UgcReviewDtos {
     public record ReviewRequest(Boolean publishApprove, Boolean secretApprove,
                                 Boolean worldApprove, String note) {}
 
+    /** [2026-07-30 P0] 공개 강제 철회 요청 — 사유는 reviewNote로 저장·소유자 알림에 노출. */
+    public record UnpublishRequest(String note) {}
+
     public record QueueResponse(List<QueueItem> items) {}
 
     /**

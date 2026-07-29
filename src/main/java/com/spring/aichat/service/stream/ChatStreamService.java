@@ -181,6 +181,15 @@ public class ChatStreamService {
             // ── Content Moderation ──
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+
+            // ── [2026-07-30 P0 공개 철회] UGC 접근 재검증 — 철회/반려된 캐릭터의 기존 방 신규 대화 차단.
+            // 방 생성 시점 isAccessibleBy 검증은 멱등 재입장(기존 방 반환)을 막지 못한다.
+            // 소유자 본인 방은 계속 허용 · 과거 로그 열람은 별도 경로라 영향 없음(읽기 보존 정책).
+            if (roomForCheck.getCharacter().isUgc()
+                && !roomForCheck.getCharacter().isAccessibleBy(roomForCheck.getUser().getId())) {
+                sendSseError(emitter, "CHARACTER_UNAVAILABLE", "이 캐릭터는 더 이상 대화할 수 없어요.");
+                return;
+            }
             boolean isSecretCheck = roomForCheck.isSecretModeActive()
                 && secretModeService.canAccessSecretMode(
                 roomForCheck.getUser(), roomForCheck.getCharacter().getId());
