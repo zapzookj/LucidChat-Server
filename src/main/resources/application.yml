@@ -154,6 +154,11 @@ aws:
 ugc:
   # ⚠ stage0-model은 ugc 루트 키 — runpod 하위에 두면 조용히 무시된다 (2026-07-22 실측 수정)
   stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)
+  # [2026-07-30 P0 PoC-5] VLM 이미지 프리필터 — 공개 신청 시점 자문 스캔(자동 차단 아님, 기본 비활성)
+  vlm-prefilter:
+    enabled: ${UGC_VLM_PREFILTER_ENABLED:false}
+    model: ${UGC_VLM_PREFILTER_MODEL:google/gemini-3-flash-preview}  # 비전 지원 비사고 모델
+    max-images: 2   # 캐릭터당 검사 상한(썸네일+기본 스탠딩)
   energy:
     base-package-cost: 20     # 기본 패키지: 황금샷 1배치 + 스탠딩 후보 + 감정 14종 + 누끼
     golden-reroll-cost: 2     # 황금샷 배치 리롤

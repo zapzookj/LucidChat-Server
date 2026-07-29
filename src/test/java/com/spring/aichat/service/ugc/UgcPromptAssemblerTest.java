@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class UgcPromptAssemblerTest {
 
     private final UgcPromptAssembler assembler = new UgcPromptAssembler(
-        new UgcPipelineProperties(null, null, null, null, null, null, null));
+        new UgcPipelineProperties(null, null, null, null, null, null, null, null));
 
     @Test
     @DisplayName("와일드카드: 눈·식별점 태그만 채택(헤어 제외) + persona + 감정 표정 태그 포함")
@@ -73,7 +73,7 @@ class UgcPromptAssemblerTest {
         assertThat(positive).contains("(flat lighting:1.1)");
 
         UgcPromptAssembler tuned = new UgcPromptAssembler(new UgcPipelineProperties(
-            null, null, null, null, new UgcPipelineProperties.Generation(null, null, 1.45), null, null));
+            null, null, null, null, new UgcPipelineProperties.Generation(null, null, 1.45), null, null, null));
         assertThat(tuned.refinePositive(List.of(), List.of(), EmotionTag.NEUTRAL, "muted teal"))
             .contains("(muted teal background:1.45)");
     }

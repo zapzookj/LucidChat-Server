@@ -162,6 +162,80 @@ public class OpenRouterClient {
         return retry.content();
     }
 
+    /**
+     * [2026-07-30 P0 VLM 프리필터] 이미지 동봉 JSON 강제 호출 — OpenAI 호환 멀티모달
+     * content parts({type:text}+{type:image_url}) 양식. 비전 판정은 산출이 짧아 length 재시도 없이
+     * 단발 호출(비사고 모델 사용 전제 — docs/09 §B-3).
+     */
+    public String completeJsonWithImages(String model, String systemPrompt, String userMessage,
+                                         java.util.List<String> imageUrls, int maxTokens, double temperature) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("model", model);
+        body.put("max_tokens", maxTokens);
+        body.put("temperature", temperature);
+        body.put("stream", false);
+
+        ObjectNode responseFormat = objectMapper.createObjectNode();
+        responseFormat.put("type", "json_object");
+        body.set("response_format", responseFormat);
+
+        ArrayNode messages = objectMapper.createArrayNode();
+
+        ObjectNode systemMsg = objectMapper.createObjectNode();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", systemPrompt);
+        messages.add(systemMsg);
+
+        ObjectNode userMsg = objectMapper.createObjectNode();
+        userMsg.put("role", "user");
+        ArrayNode parts = objectMapper.createArrayNode();
+        ObjectNode textPart = parts.addObject();
+        textPart.put("type", "text");
+        textPart.put("text", userMessage);
+        for (String url : imageUrls) {
+            ObjectNode imgPart = parts.addObject();
+            imgPart.put("type", "image_url");
+            imgPart.putObject("image_url").put("url", url);
+        }
+        userMsg.set("content", parts);
+        messages.add(userMsg);
+
+        body.set("messages", messages);
+
+        String url = properties.baseUrl() + "/chat/completions";
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(120))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + properties.apiKey())
+                .header("HTTP-Referer", properties.appReferer())
+                .header("X-Title", properties.appTitle())
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                log.warn("🤖 [LLM-VISION] HTTP {} | body: {}", response.statusCode(), response.body());
+                throw new ExternalApiException("LLM 비전 호출 실패 (HTTP " + response.statusCode() + ")");
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode choices = root.path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                throw new ExternalApiException("LLM 응답에 choices가 없습니다.");
+            }
+            JsonNode content = choices.get(0).path("message").path("content");
+            if (content.isMissingNode() || content.isNull()) {
+                throw new ExternalApiException("LLM 응답에 message.content가 없습니다.");
+            }
+            return content.asText();
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            log.error("🤖 [LLM-VISION] Request failed: {}", e.getMessage());
+            throw new ExternalApiException("LLM 요청 실패: " + e.getMessage(), e);
+        }
+    }
+
     private record CompletionResult(String content, String finishReason) {
         boolean truncated() {
             return "length".equalsIgnoreCase(finishReason);

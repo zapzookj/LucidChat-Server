@@ -38,6 +38,7 @@ public class UgcCharacterService {
     private final CharacterRepository characterRepository;
     private final UserRepository userRepository;
     private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 연결 검증·이름 해석
+    private final UgcVlmPrefilterService vlmPrefilterService; // [P0 PoC-5] 공개 신청 이미지 자문 스캔
 
     // ── 공개 심사 경로 ──
 
@@ -48,6 +49,9 @@ public class UgcCharacterService {
             character.cancelPublishRequest();
         } else {
             character.requestPublish();
+            // [2026-07-30 P0 PoC-5] VLM 이미지 프리필터 — 어드민 자문 스캔 (비동기·비차단·플래그 기본 off)
+            vlmPrefilterService.screenForPublishAsync(character.getId(), character.getOwnerUserId(),
+                character.getName(), character.getThumbnailUrl(), character.getDefaultImageUrl());
         }
         log.info("[UGC] 공개 신청 {}: characterId={}, username={}", cancel ? "취소" : "접수", characterId, username);
     }

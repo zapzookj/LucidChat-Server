@@ -45,7 +45,8 @@ public record UgcPipelineProperties(
      * null이면 openai.model 폴백. 외형 태그 변환 품질이 황금샷 퀄리티를 좌우하므로
      * 전역 채팅 모델과 독립적으로 GPT 계열 등 지정 가능(수작업 시절 GPT 사용 실측).
      */
-    String stage0Model
+    String stage0Model,
+    VlmPrefilter vlmPrefilter
 ) {
     public UgcPipelineProperties {
         if (energy == null) energy = new Energy(null, null, null, null);
@@ -54,6 +55,22 @@ public record UgcPipelineProperties(
         if (qwen == null) qwen = new Qwen(null, null, null, null);
         if (generation == null) generation = new Generation(null, null, null);
         if (world == null) world = new World(null, null, null, null, null);
+        if (vlmPrefilter == null) vlmPrefilter = new VlmPrefilter(null, null, null);
+    }
+
+    /**
+     * [2026-07-30 P0 PoC-5] VLM 이미지 프리필터 — 공개 신청 시점 이미지 안전망 (기본 비활성).
+     * 판정은 자동 차단이 아니라 <b>어드민 자문용</b>(moderation_events 적재) — '측정 먼저, 배선은
+     * 판정 후' 규율(docs/09 §B-4)에 따라 자동 차단 배선은 정확도 실측 후 별도 결정.
+     */
+    public record VlmPrefilter(Boolean enabled, String model, Integer maxImages) {
+        public boolean isEnabled() { return Boolean.TRUE.equals(enabled); }
+        /** 비전 판정 모델 — 비사고 모델 권장(docs/09 §B-3). 미지정 시 sentiment 계열 기본. */
+        public String modelOrDefault() {
+            return (model != null && !model.isBlank()) ? model : "google/gemini-3-flash-preview";
+        }
+        /** 캐릭터당 검사 이미지 상한(비용 통제) — 기본 2장(썸네일+기본 스탠딩). */
+        public int maxImagesOrDefault() { return maxImages != null ? maxImages : 2; }
     }
 
     /** Stage0/W0 구조화 모델 — 미지정 시 null(호출측이 openai.model 폴백). */
