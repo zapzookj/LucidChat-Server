@@ -127,8 +127,16 @@ public class OpenRouterClient {
         return false;
     }
 
+    /** finish_reason=length 재시도 시 예산 상한. */
+    private static final int LENGTH_RETRY_MAX_TOKENS = 16384;
+
     /**
      * 완전한 JSON 응답을 받아 텍스트로 반환. (JSON 파싱은 호출자 책임)
+     *
+     * <p>[2026-07-28 잘림 대응] 사고(thinking) 모델(Gemini 3.x Pro 등)은 reasoning 토큰이
+     * max_tokens 예산에 포함돼 가시 출력이 중간에 잘린다(finish_reason=length → 하류에서
+     * "Unexpected end-of-input" 파싱 실패로만 보이던 원인). finish_reason을 검사해
+     * length면 예산 2배(상한 {@value #LENGTH_RETRY_MAX_TOKENS})로 1회 자동 재시도한다.
      *
      * @param model        모델명 (OpenRouter 식별자)
      * @param systemPrompt 시스템 프롬프트
@@ -139,6 +147,29 @@ public class OpenRouterClient {
      */
     public String completeJson(String model, String systemPrompt, String userMessage,
                                int maxTokens, double temperature) {
+        CompletionResult first = completeJsonOnce(model, systemPrompt, userMessage, maxTokens, temperature);
+        if (!first.truncated()) {
+            return first.content();
+        }
+        int retryBudget = Math.min(Math.max(maxTokens * 2, maxTokens + 4096), LENGTH_RETRY_MAX_TOKENS);
+        log.warn("🤖 [LLM-JSON] finish_reason=length — 응답 잘림 (model={}, max_tokens={}, 사고 모델이면 reasoning이 예산 잠식). "
+            + "예산 {}로 1회 재시도", model, maxTokens, retryBudget);
+        CompletionResult retry = completeJsonOnce(model, systemPrompt, userMessage, retryBudget, temperature);
+        if (retry.truncated()) {
+            log.warn("🤖 [LLM-JSON] 재시도에도 finish_reason=length (model={}, max_tokens={}) — 잘린 응답 반환(하류 파싱 실패 예상). "
+                + "모델 교체 또는 예산 상향 필요", model, retryBudget);
+        }
+        return retry.content();
+    }
+
+    private record CompletionResult(String content, String finishReason) {
+        boolean truncated() {
+            return "length".equalsIgnoreCase(finishReason);
+        }
+    }
+
+    private CompletionResult completeJsonOnce(String model, String systemPrompt, String userMessage,
+                                              int maxTokens, double temperature) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("model", model);
         body.put("max_tokens", maxTokens);
@@ -194,7 +225,8 @@ public class OpenRouterClient {
                 throw new ExternalApiException("LLM 응답에 message.content가 없습니다.");
             }
 
-            return content.asText();
+            String finishReason = choices.get(0).path("finish_reason").asText(null);
+            return new CompletionResult(content.asText(), finishReason);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             log.error("🤖 [LLM-JSON] Request failed: {}", e.getMessage());
