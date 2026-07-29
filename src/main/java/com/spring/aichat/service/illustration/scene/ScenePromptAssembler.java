@@ -37,6 +37,10 @@ public class ScenePromptAssembler {
     private static final String SCENERY_BAN =
         "1girl, 1boy, 2girls, 2boys, multiple girls, multiple boys, solo";
 
+    /** [2026-07-30 리뷰픽스] 비시크릿 방 수위 게이트 — TIPO가 NSFW 태그를 증식하지 못하게 차단. */
+    private static final String SFW_BAN =
+        "nsfw, explicit, nude, nudity, topless, bottomless, sex, nipples, pussy, penis, cum";
+
     /**
      * 다중 모드 밴 — TIPO가 씬 레이어에 외형 정의 태그를 추가하면 블록 밖에서 오염이 재발하므로
      * 머리/눈 색·헤어스타일류를 차단(캐릭터 외형은 블록 전담). 튜닝 가능 상수.
@@ -67,17 +71,31 @@ public class ScenePromptAssembler {
     public record ScenePrompt(String sceneTags, List<String> actorBlocks, String banTags,
                               boolean tipoFull, String fullPrompt) {}
 
+    /** 하위 호환 오버로드 — sfw 기본값 true (안전 기본). */
     public ScenePrompt assemble(String locationDescription, String actionDescription, List<SceneActor> actors) {
+        return assemble(locationDescription, actionDescription, actors, true);
+    }
+
+    /**
+     * @param sfw [2026-07-30 리뷰픽스 수위 게이트] 비시크릿 방 강제 — 씬 레이어에 {@code sfw} 태그
+     *            + TIPO ban에 NSFW 계열 추가. 태그 검수기 금지 원칙(무가공)은 LLM 태그 재작성 금지가
+     *            요지 — 이건 재작성이 아니라 콘텐츠 정책 레이어의 추가 제약이다.
+     *            시크릿 방(SecretModeService 통과)만 false.
+     */
+    public ScenePrompt assemble(String locationDescription, String actionDescription,
+                                List<SceneActor> actors, boolean sfw) {
         String action = cleanCsv(actionDescription);
         String location = cleanCsv(locationDescription);
+        String ratingTag = sfw ? "sfw" : "";
+        String ratingBan = sfw ? ", " + SFW_BAN : "";
 
         long girls = actors.stream().filter(a -> !a.male()).count();
         long boys = actors.stream().filter(SceneActor::male).count();
 
         // ── 무인물 씬: 배경 전용 풀-TIPO ──
         if (actors.isEmpty()) {
-            String tags = joinNonBlank(QUALITY_PREFIX, "scenery, no humans", action, location);
-            return new ScenePrompt(tags, List.of(), SCENERY_BAN, true, tags);
+            String tags = joinNonBlank(QUALITY_PREFIX, ratingTag, "scenery, no humans", action, location);
+            return new ScenePrompt(tags, List.of(), SCENERY_BAN + ratingBan, true, tags);
         }
 
         String counts = joinNonBlank(countTag(girls, "girl"), countTag(boys, "boy"));
@@ -88,14 +106,14 @@ public class ScenePromptAssembler {
             String identity = a.user()
                 ? userIdentity(a)
                 : cleanCsv(a.appearanceTags());
-            String tags = joinNonBlank(QUALITY_PREFIX, counts, action, identity,
+            String tags = joinNonBlank(QUALITY_PREFIX, ratingTag, counts, action, identity,
                 cleanCsv(a.emotion()), cleanCsv(a.pose()), location);
-            String ban = SINGLE_MODE_BAN + (a.male() ? ", 1girl" : ", 1boy");
+            String ban = SINGLE_MODE_BAN + (a.male() ? ", 1girl" : ", 1boy") + ratingBan;
             return new ScenePrompt(tags, List.of(), ban, true, tags);
         }
 
         // ── 다중 씬: 씬 레이어(TIPO) + 캐릭터 블록(Concat) ──
-        String sceneLayer = joinNonBlank(QUALITY_PREFIX, counts, action, location);
+        String sceneLayer = joinNonBlank(QUALITY_PREFIX, ratingTag, counts, action, location);
 
         List<SceneActor> ordered = new ArrayList<>();
         actors.stream().filter(a -> !a.user()).forEach(ordered::add);
@@ -108,7 +126,7 @@ public class ScenePromptAssembler {
         }
 
         String full = sceneLayer + (blocks.isEmpty() ? "" : ", " + String.join(", ", blocks));
-        return new ScenePrompt(sceneLayer, blocks, MULTI_MODE_BAN, false, full);
+        return new ScenePrompt(sceneLayer, blocks, MULTI_MODE_BAN + ratingBan, false, full);
     }
 
     private String buildActorBlock(SceneActor a) {

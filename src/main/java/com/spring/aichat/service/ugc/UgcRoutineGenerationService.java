@@ -88,10 +88,14 @@ public class UgcRoutineGenerationService {
             }
 
             List<CharacterRoutine> rows = generateRows(character, locations);
-            txTemplate.executeWithoutResult(tx -> {
-                routineRepository.deleteByCharacterId(characterId);
-                routineRepository.saveAll(rows);
-            });
+            // [리뷰픽스] 동시 재생성 경합(바인딩+linkWorld 등)이 uk_routine_char_time_loc 위반으로
+            // 롤백되면 스테일 루틴이 남는다 — 1회 재시도로 마지막 승자가 정리하게 한다.
+            try {
+                replaceRoutines(characterId, rows);
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                log.warn("[UGC-ROUTINE] unique 경합 — 1회 재시도: characterId={}", characterId);
+                replaceRoutines(characterId, rows);
+            }
             log.info("[UGC-ROUTINE] ✅ 루틴 {}행 생성: characterId={} ({})",
                 rows.size(), characterId, character.getName());
         } catch (Exception e) {
@@ -100,6 +104,13 @@ public class UgcRoutineGenerationService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void replaceRoutines(Long characterId, List<CharacterRoutine> rows) {
+        txTemplate.executeWithoutResult(tx -> {
+            routineRepository.deleteByCharacterId(characterId);
+            routineRepository.saveAll(rows);
+        });
+    }
 
     private Map<String, String> resolveLocations(Character c) {
         Map<String, String> out = new LinkedHashMap<>();

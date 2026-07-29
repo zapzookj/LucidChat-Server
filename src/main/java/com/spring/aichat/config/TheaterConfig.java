@@ -69,4 +69,21 @@ public class TheaterConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * [2026-07-30 A-1 재피벗 리뷰픽스] 씬 렌더 폴링 전용 Executor.
+     *   폴링이 콜드스타트 시 최대 12분 스레드를 점유하므로 채팅 스트림과 격리(H-17 동형).
+     *   포화 시 AbortPolicy — 씬 렌더는 유실돼도 채팅을 막으면 안 된다(호출측이 실패 마킹).
+     */
+    @Bean(name = "sceneRenderExecutor")
+    public Executor sceneRenderExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(32);
+        executor.setThreadNamePrefix("scene-render-");
+        executor.setKeepAliveSeconds(120);
+        executor.initialize();
+        return executor;
+    }
 }

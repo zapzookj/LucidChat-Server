@@ -20,7 +20,7 @@ class SceneRenderServiceTest {
 
     private final ScenePromptAssembler assembler = new ScenePromptAssembler();
     private final SceneRenderService service =
-        new SceneRenderService(props(false, null), assembler, null, null, null, null, null);
+        new SceneRenderService(props(false, null), assembler, null, null, null, null, null, null);
 
     private static SceneIllustrationProperties props(boolean enabled, Boolean tipoEnabled) {
         return new SceneIllustrationProperties(enabled, null,

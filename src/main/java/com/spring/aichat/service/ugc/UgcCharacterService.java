@@ -64,6 +64,11 @@ public class UgcCharacterService {
     @Transactional
     public void unpublish(String username, Long characterId) {
         Character character = ownedUgc(username, characterId);
+        // [리뷰픽스] 멱등 — 이미 PRIVATE(중복 클릭·경합)이면 500 대신 no-op
+        if (character.getVisibility() == CharacterVisibility.PRIVATE) {
+            log.info("[UGC] 공개 철회(소유자) — 이미 비공개, no-op: characterId={}", characterId);
+            return;
+        }
         character.unpublish(null);
         log.info("[UGC] 공개 철회(소유자): characterId={}, username={}", characterId, username);
     }
@@ -128,8 +133,16 @@ public class UgcCharacterService {
         } else {
             character.unlinkWorld();
         }
-        // [2026-07-30 P2 STORY 개방 1단] 연결 변경 → 루틴 재생성(해제면 삭제) — 비동기·비차단
-        routineGenerationService.regenerateForCharacterAsync(characterId);
+        // [2026-07-30 P2 STORY 개방 1단 · 리뷰픽스] 연결 변경 → 루틴 재생성(해제면 삭제).
+        // 커밋 전 @Async 발화는 비동기 스레드가 구(舊) 월드 연결을 읽는 레이스(스테일 루틴 영속) —
+        // afterCommit으로 미뤄 새 연결이 확정된 뒤에만 재생성한다.
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    routineGenerationService.regenerateForCharacterAsync(characterId);
+                }
+            });
         log.info("[UGC] 세계관 연결 변경: characterId={}, official={}, ugcWorldId={}", characterId, official, ugcWorldId);
     }
 

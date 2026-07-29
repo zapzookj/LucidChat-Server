@@ -187,11 +187,7 @@ public class ChatStreamService {
             // ── [2026-07-30 P0 공개 철회] UGC 접근 재검증 — 철회/반려된 캐릭터의 기존 방 신규 대화 차단.
             // 방 생성 시점 isAccessibleBy 검증은 멱등 재입장(기존 방 반환)을 막지 못한다.
             // 소유자 본인 방은 계속 허용 · 과거 로그 열람은 별도 경로라 영향 없음(읽기 보존 정책).
-            if (roomForCheck.getCharacter().isUgc()
-                && !roomForCheck.getCharacter().isAccessibleBy(roomForCheck.getUser().getId())) {
-                sendSseError(emitter, "CHARACTER_UNAVAILABLE", "이 캐릭터는 더 이상 대화할 수 없어요.");
-                return;
-            }
+            if (blockIfUgcInaccessible(roomForCheck, emitter)) return;
             boolean isSecretCheck = roomForCheck.isSecretModeActive()
                 && secretModeService.canAccessSecretMode(
                 roomForCheck.getUser(), roomForCheck.getCharacter().getId());
@@ -460,9 +456,10 @@ public class ChatStreamService {
             SendChatResponse.SceneIllustrationInfo sceneIllust = null;
             if (sceneRenderService.ready()) {
                 try {
+                    // [리뷰픽스 수위 게이트] 비시크릿 방은 sfw 강제 — 시크릿(성인인증+BM 통과)만 해제
                     com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView view = sceneRenderService.resolveForTurn(
                         roomId, List.of(jpa.room().getCharacter()),
-                        parsed.aiOutput(), (int) (jpa.logCount() + 1));
+                        parsed.aiOutput(), (int) (jpa.logCount() + 1), !effectiveSecretMode);
                     if (view != null) {
                         sceneIllust = new SendChatResponse.SceneIllustrationInfo(
                             view.id(), view.turnIndex(), view.status(), view.imageUrl());
@@ -500,12 +497,15 @@ public class ChatStreamService {
 
         try {
             // [Phase 5.5-Sep] 이벤트: 스토리 모드 전용
-            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+            // [2026-07-30 리뷰픽스] findById → fetch join — 철회 가드가 LAZY 밖에서 안전하게 동작
+            ChatRoom modeCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
             if (!ChatModePolicy.supportsEvents(modeCheck.getChatMode())) {
                 sendSseError(emitter, "MODE_RESTRICTED", "이벤트는 자유(샌드박스) 모드에서만 사용할 수 있습니다.");
                 return;
             }
+            // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단 — 메시지 전송 외 SSE에도 동일 가드
+            if (blockIfUgcInaccessible(modeCheck, emitter)) return;
             // ── TX-1: 에너지 차감 + 디렉터 모드 시작 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -604,6 +604,11 @@ public class ChatStreamService {
         log.info("👀 [DIRECTOR-WATCH] START | roomId={}", roomId);
 
         try {
+            // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
+            ChatRoom accessCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (blockIfUgcInaccessible(accessCheck, emitter)) return;
+
             // ── TX-1: 에너지 차감 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -730,12 +735,15 @@ public class ChatStreamService {
 
         try {
             // [Phase 5.5-Sep] 시간 넘기기: 스토리 모드 전용
-            ChatRoom modeCheck = chatRoomRepository.findById(roomId)
+            // [2026-07-30 리뷰픽스] findById → fetch join — 철회 가드가 LAZY 밖에서 안전하게 동작
+            ChatRoom modeCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                 .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
             if (!ChatModePolicy.supportsDirectorMode(modeCheck.getChatMode())) {
                 sendSseError(emitter, "MODE_RESTRICTED", "시간 넘기기는 자유(샌드박스) 모드에서만 사용할 수 있습니다.");
                 return;
             }
+            // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
+            if (blockIfUgcInaccessible(modeCheck, emitter)) return;
             // ── TX-1: 에너지 1 차감 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -1204,6 +1212,22 @@ public class ChatStreamService {
         }
     }
 
+    /**
+     * [2026-07-30 P0 공개 철회 리뷰픽스] UGC 접근 재검증 공용 가드 — 메시지 전송뿐 아니라
+     * 이벤트/지켜보기/시간넘기기/디렉터 자동응답 SSE 전 경로에 적용(우회 차단).
+     * 호출 전 방은 반드시 fetch join(findWithMemberAndCharacterById)으로 로드할 것.
+     *
+     * @return true면 차단됨(SSE 에러 전송 완료) — 호출측은 즉시 return
+     */
+    private boolean blockIfUgcInaccessible(ChatRoom room, SseEmitter emitter) {
+        if (room.getCharacter().isUgc()
+            && !room.getCharacter().isAccessibleBy(room.getUser().getId())) {
+            sendSseError(emitter, "CHARACTER_UNAVAILABLE", "이 캐릭터는 더 이상 대화할 수 없어요.");
+            return true;
+        }
+        return false;
+    }
+
     private void sendFinalResult(SseEmitter emitter, SendChatResponse response,
                                  boolean hasInnerThought, String assistantLogId,
                                  boolean generateIllustration,
@@ -1532,6 +1556,11 @@ public class ChatStreamService {
         boolean isBranchResponse = "BRANCH".equalsIgnoreCase(directiveType);
 
         try {
+            // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
+            ChatRoom accessCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
+                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
+            if (blockIfUgcInaccessible(accessCheck, emitter)) return;
+
             // ── TX-1: 에너지 차감 ──
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)

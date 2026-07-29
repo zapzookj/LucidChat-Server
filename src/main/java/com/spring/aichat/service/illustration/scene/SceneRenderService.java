@@ -7,9 +7,9 @@ import com.spring.aichat.domain.illustration.SceneIllustration;
 import com.spring.aichat.domain.illustration.SceneIllustrationRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.external.SceneComfyClient;
-import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
+
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class SceneRenderService {
 
     private static final int MAX_POLL_ATTEMPTS = 360;   // ~12분 (2s 간격) — 콜드스타트 실측 기준
@@ -46,6 +45,27 @@ public class SceneRenderService {
     private final SceneAssetService assetService;
     private final SceneRenderWriteService writeService;
     private final SceneIllustrationRepository repository;
+    /**
+     * [리뷰픽스] 폴링 전용 executor 명시 제출 — @Async 자기호출은 프록시를 우회해 폴링(최대 12분)이
+     * 채팅 SSE 스레드에서 동기 실행되던 크리티컬. 전용 풀로 채팅 스트림과 격리.
+     */
+    private final java.util.concurrent.Executor sceneRenderExecutor;
+
+    public SceneRenderService(SceneIllustrationProperties props, ScenePromptAssembler assembler,
+                              SceneWorkflowFactory workflowFactory, SceneComfyClient comfyClient,
+                              SceneAssetService assetService, SceneRenderWriteService writeService,
+                              SceneIllustrationRepository repository,
+                              @org.springframework.beans.factory.annotation.Qualifier("sceneRenderExecutor")
+                              java.util.concurrent.Executor sceneRenderExecutor) {
+        this.props = props;
+        this.assembler = assembler;
+        this.workflowFactory = workflowFactory;
+        this.comfyClient = comfyClient;
+        this.assetService = assetService;
+        this.writeService = writeService;
+        this.repository = repository;
+        this.sceneRenderExecutor = sceneRenderExecutor;
+    }
 
     /** 씬 렌더 트랙 가동 가능 여부 — 배선 지점의 단일 게이트. */
     public boolean ready() {
@@ -67,8 +87,19 @@ public class SceneRenderService {
      * @param turnIndex      현재 턴 수(로그 카운트 기준)
      */
     public SceneView resolveForTurn(Long roomId, List<Character> roomCharacters,
-                                    AiJsonOutput out, int turnIndex) {
-        SceneRenderPlan plan = planRender(roomCharacters, out);
+                                    AiJsonOutput out, int turnIndex, boolean sfw) {
+        SceneRenderPlan plan = planRender(roomCharacters, out, sfw);
+
+        // [리뷰픽스] 인플라이트 디덥 — 동일 scene_hash 렌더가 아직 PENDING/GENERATING이면
+        // 새 RunPod 잡을 제출하지 않고 그 행을 그대로 반환(프론트가 같은 id 폴링).
+        // 기존엔 최신 COMPLETED만 비교해 콜드스타트 중 연속 턴이 동일 씬을 중복 과금했다.
+        SceneIllustration latest = repository.findTopByChatRoomIdOrderByIdDesc(roomId).orElse(null);
+        if (latest != null && !latest.isTerminal() && plan.sceneHash().equals(latest.getSceneHash())) {
+            log.info("[SCENE-RENDER] 인플라이트 재사용: roomId={} turn={} illustrationId={}",
+                roomId, turnIndex, latest.getId());
+            return SceneView.of(latest);
+        }
+
         SceneIllustration last = repository
             .findTopByChatRoomIdAndStatusOrderByIdDesc(roomId, "COMPLETED").orElse(null);
 
@@ -84,7 +115,13 @@ public class SceneRenderService {
 
         SceneIllustration pending = repository.save(SceneIllustration.pending(
             roomId, turnIndex, plan.sceneHash(), plan.prompt().fullPrompt()));
-        renderAsync(pending.getId(), plan.prompt(), roomId, turnIndex);
+        // [리뷰픽스] @Async 자기호출(프록시 우회) 대신 전용 executor 명시 제출.
+        // 풀 포화(AbortPolicy) 시 렌더만 실패 처리 — 채팅 흐름은 계속.
+        try {
+            sceneRenderExecutor.execute(() -> render(pending.getId(), plan.prompt(), roomId, turnIndex));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            writeService.failRender(pending.getId(), "씬 렌더 풀 포화 — 렌더 유실");
+        }
         return SceneView.of(pending);
     }
 
@@ -109,8 +146,18 @@ public class SceneRenderService {
 
     public record SceneRenderPlan(ScenePromptAssembler.ScenePrompt prompt, String sceneHash) {}
 
-    /** LLM 출력 + 방 캐릭터로 씬 positive와 scene_hash를 계산. */
+    /** 테스트 편의 오버로드 — sfw 기본값 true. */
     public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out) {
+        return planRender(roomCharacters, out, true);
+    }
+
+    /**
+     * LLM 출력 + 방 캐릭터로 씬 positive와 scene_hash를 계산.
+     *
+     * @param sfw [리뷰픽스 수위 게이트] 비시크릿 방이면 true — sfw 태그 강제 + NSFW 밴.
+     *            시크릿 방(SecretModeService 통과)만 false.
+     */
+    public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out, boolean sfw) {
         AiJsonOutput.SceneIllustrationSpec spec = out == null ? null : out.sceneIllustration();
         String location = spec == null ? "" : nz(spec.locationDescription());
         String action = spec == null ? "" : nz(spec.actionDescription());
@@ -142,18 +189,17 @@ public class SceneRenderService {
             }
         }
 
-        ScenePromptAssembler.ScenePrompt prompt = assembler.assemble(location, action, actors);
+        ScenePromptAssembler.ScenePrompt prompt = assembler.assemble(location, action, actors, sfw);
         String sceneHash = sha256(location + "##" + action + "##" + castKey);
         return new SceneRenderPlan(prompt, sceneHash);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  비동기 렌더 — 제출 + 폴링 + S3 복사
+    //  렌더 본체 — 제출 + 폴링 + S3 복사 (sceneRenderExecutor 스레드에서만 실행)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Async
-    public void renderAsync(Long illustrationId, ScenePromptAssembler.ScenePrompt prompt,
-                            Long roomId, int turnIndex) {
+    void render(Long illustrationId, ScenePromptAssembler.ScenePrompt prompt,
+                Long roomId, int turnIndex) {
         if (!comfyClient.configured()) {
             writeService.failRender(illustrationId, "illustration.scene.runpod 미설정");
             return;
