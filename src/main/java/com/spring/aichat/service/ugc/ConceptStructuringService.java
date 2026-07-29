@@ -76,7 +76,9 @@ public class ConceptStructuringService {
         - base_pose: 캐릭터 컨셉·성격에 어울리는 기본 스탠딩 자세 묘사 (영문 1~2문장).
           카우보이샷 프레이밍 안에서 팔·손·어깨·고개 각도 중심으로. 소품 금지.
           카메라 쪽으로 기울이거나 멀어지는 자세, 앵글·구도를 바꾸는 묘사 절대 금지.
-        - moderation: 명백한 미성년 신체·설정 시그널이 있을 때만 minor_signal=true (모호하면 false).
+        - moderation: minor_signal은 **캐릭터 자신이 미성년(신체·설정)으로 제시될 때만** true.
+          backstory에 어린 시절·성장기 서술이 있는 것은 해당하지 않는다(현재 캐릭터가 성인이면 false).
+          판단 기준은 '이 캐릭터가 미성년인가'이지 '미성년 시절 언급이 있는가'가 아니다. 모호하면 false.
         출력 스키마:
         {"appearance_tags":[...], "persona_tags":[...], "mood_tags":["새침한","다정다감"], "scene_tags":[...], "bg_color":"...",
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",

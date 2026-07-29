@@ -60,7 +60,10 @@ public class WorldConceptStructuringService {
           · background_prompt: 영문 1~3문장 — 2D 애니메이션 비주얼노벨 배경 일러스트 묘사.
             시간대·조명·재질·원근을 포함하고, 사람·글자·로고는 절대 넣지 않는다.
         - thumbnail_prompt: 영문 1~3문장 — 세계관 전체를 상징하는 대표 풍경 묘사 (사람 없음).
-        - moderation: 명백한 미성년 관련 설정 시그널이 있을 때만 minor_signal=true (모호하면 false).
+        - moderation: minor_signal은 **미성년자를 성적·연애적 대상으로 삼는 설정이 명백할 때만** true.
+          판단 기준은 '미성년 대상 성적 맥락'의 유무이지, '미성년자 언급'의 유무가 아니다.
+          서사에 아동·소년기 인물이 등장하는 것 자체(성장담·수련기·과거사·가족사·전쟁고아 등)는
+          정상적인 세계관 설정이며 false다. 모호하면 false.
         출력 스키마:
         {"world":{"name":"...","intro":"...","lore":"...","mood_tags":["..."]},
          "locations":[{"location_key":"...","display_name":"...","description":"...","background_prompt":"..."}],
