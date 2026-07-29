@@ -74,7 +74,7 @@ class UgcModerationServiceTest {
 
     private StructuredConcept concept(Integer age, boolean minorSignal) {
         return new StructuredConcept(
-            List.of("1girl", "silver hair"), List.of("kuudere"), List.of("library"), "light gray",
+            List.of("1girl", "silver hair"), List.of("kuudere"), List.of("새침한"), List.of("library"), "light gray",
             new StructuredConcept.CharacterProfile("설아", "차가운 교수", age, "교수",
                 "차분함", "존댓말", "은발", "터틀넥", "과거사", "가치관", "약점", "말버릇", "첫인사", "장면 묘사",
                 "164cm", "홍차", "소란", "독서", "한 줄 소개"),

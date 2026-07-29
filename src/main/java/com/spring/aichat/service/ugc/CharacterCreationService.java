@@ -229,7 +229,7 @@ public class CharacterCreationService {
                 p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
             StructuredConcept merged = new StructuredConcept(
-                concept.appearanceTags(), concept.personaTags(), concept.sceneTags(),
+                concept.appearanceTags(), concept.personaTags(), concept.moodTags(), concept.sceneTags(),
                 concept.bgColor(), updated, concept.moderation(),
                 concept.basePose(), concept.emotionPrompts());
             job.applyStage0(json.writeConcept(merged), concept.bgColor());

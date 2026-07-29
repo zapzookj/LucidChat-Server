@@ -23,6 +23,12 @@ public record StructuredConcept(
     List<String> appearanceTags,
     /** [2026-07-20] 성격·무드 태그 5~8개 (영문 — kuudere, cold beauty 등). 감정 파생 연출 개성화 + 이미지 positive 무드. */
     List<String> personaTags,
+    /**
+     * [2026-07-30 폴리싱] 프로필 카드 노출용 무드 태그 3~5개 (한국어 — "새침한", "다정다감" 등).
+     * persona_tags(영문·이미지 프롬프트용)와 용도 분리 — Character.moodTags에 저장된다.
+     * 구버전 잡 JSON은 null → 바인딩에서 persona_tags 조인 폴백.
+     */
+    List<String> moodTags,
     /** 황금샷 연출 태그 10~20개 (배경, 소품, 조명, 구도 — WF-1 전용). */
     List<String> sceneTags,
     /** 누끼 대비 배경색 — §4 팔레트 중 1개. */
@@ -117,7 +123,7 @@ public record StructuredConcept(
 
     /** 감정 스테이지 산출 병합 — 잡 스크래치 재기록용 카피. */
     public StructuredConcept withEmotionPrompts(Map<String, EmotionPromptOverride> prompts) {
-        return new StructuredConcept(appearanceTags, personaTags, sceneTags, bgColor,
+        return new StructuredConcept(appearanceTags, personaTags, moodTags, sceneTags, bgColor,
             character, moderation, basePose, prompts);
     }
 
@@ -136,7 +142,7 @@ public record StructuredConcept(
             p.backstory(), p.coreValues(), p.flaws(), p.speechQuirks(),
             p.firstGreeting(), p.introNarration(),
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
-        return new StructuredConcept(source.appearanceTags(), personaTags, source.sceneTags(),
+        return new StructuredConcept(source.appearanceTags(), personaTags, moodTags, source.sceneTags(),
             source.bgColor(), merged, source.moderation(), basePose, emotionPrompts);
     }
 }

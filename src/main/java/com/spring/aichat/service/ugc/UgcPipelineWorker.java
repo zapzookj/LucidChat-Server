@@ -489,13 +489,16 @@ public class UgcPipelineWorker {
                 // 채팅 효과(lore·장소 풀)만 열리고 STORY/THEATER는 createUgc 불변식이 계속 차단한다.
                 job.getRequestedWorldId(),
                 job.getRequestedUgcWorldId(),
-                // [2026-07-22 프로필 뷰] 몰입형 신상 + 무드 태그(persona 조인 — 200자 절삭:
+                // [2026-07-22 프로필 뷰] 몰입형 신상 + 무드 태그(200자 절삭:
                 // varchar 초과가 완주한 잡을 최종 단계에서 죽이지 않도록)
+                // [2026-07-30 폴리싱] 무드 태그는 한국어 mood_tags 우선 — 구버전 잡 JSON(미산출)만 persona 조인 폴백
                 profile.height(),
                 profile.likes(),
                 profile.dislikes(),
                 profile.hobby(),
-                UgcWorldPipelineWorker.joinMood(concept.personaTags()),
+                UgcWorldPipelineWorker.joinMood(
+                    concept.moodTags() != null && !concept.moodTags().isEmpty()
+                        ? concept.moodTags() : concept.personaTags()),
                 profile.profileQuote()
             );
 

@@ -42,6 +42,9 @@ public class ConceptStructuringService {
           입력에 [외형 지정] 블록이 있으면 그 특징을 appearance_tags에 빠짐없이 최우선 반영한다.
         - persona_tags: 캐릭터의 성격·무드 태그 5~8개 (영문 소문자 — 예: kuudere, cold beauty,
           mysterious, playful energy). 외형 태그와 중복 금지. 표정 연출과 무드 표현에 쓰인다.
+        - mood_tags: 프로필 카드에 노출되는 무드 태그 3~5개 (**반드시 한국어**, 각 2~6자 —
+          예: "새침한", "다정다감", "장난기", "미스터리"). persona_tags의 직역이 아니어도 되며,
+          유저가 프로필에서 처음 받는 캐릭터의 인상을 압축한다. 영문·로마자 금지.
         - scene_tags: 캐릭터의 직업·분위기에 어울리는 황금샷 연출 10~20개 (배경, 소품, 조명, 구도).
         - bg_color: 머리색(우선)·의상색과 명도 대비가 큰 저채도 1개 —
           ["light gray","pale blue gray","muted teal","soft beige","dusty lavender"] 중 선택.
@@ -75,7 +78,7 @@ public class ConceptStructuringService {
           카메라 쪽으로 기울이거나 멀어지는 자세, 앵글·구도를 바꾸는 묘사 절대 금지.
         - moderation: 명백한 미성년 신체·설정 시그널이 있을 때만 minor_signal=true (모호하면 false).
         출력 스키마:
-        {"appearance_tags":[...], "persona_tags":[...], "scene_tags":[...], "bg_color":"...",
+        {"appearance_tags":[...], "persona_tags":[...], "mood_tags":["새침한","다정다감"], "scene_tags":[...], "bg_color":"...",
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",
           "tone":"...","appearance":"...","clothing":"...","backstory":"...",
           "core_values":"...","flaws":"...","speech_quirks":"...","first_greeting":"...",
@@ -174,8 +177,23 @@ public class ConceptStructuringService {
 
         List<String> personaTags = c.personaTags() == null ? List.of() : c.personaTags();
         List<String> sceneTags = c.sceneTags() == null ? List.of() : c.sceneTags();
-        return new StructuredConcept(c.appearanceTags(), personaTags, sceneTags, effectiveBg, fixed,
-            c.moderation(), c.basePose(), c.emotionPrompts());
+        return new StructuredConcept(c.appearanceTags(), personaTags, sanitizeMoodTags(c.moodTags()),
+            sceneTags, effectiveBg, fixed, c.moderation(), c.basePose(), c.emotionPrompts());
+    }
+
+    /**
+     * [2026-07-30 폴리싱] 프로필 무드 태그 정규화 — 공백 제거·개수 5개·태그당 20자 제한
+     * (세계관 빌더 MOOD_TAG_MAX_LENGTH와 동일 정책). LLM 미산출이면 빈 리스트 —
+     * 바인딩에서 persona_tags 조인 폴백.
+     */
+    static List<String> sanitizeMoodTags(List<String> raw) {
+        if (raw == null) return List.of();
+        return raw.stream()
+            .filter(t -> t != null && !t.isBlank())
+            .map(t -> normalizeShort(t.trim(), WorldConceptStructuringService.MOOD_TAG_MAX_LENGTH))
+            .filter(t -> t != null && !t.isBlank())
+            .limit(5)
+            .toList();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -319,8 +337,8 @@ public class ConceptStructuringService {
             p.firstGreeting(), p.introNarration(),
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
-        return new StructuredConcept(parsed.appearanceTags(), current.personaTags(), sceneTags,
-            effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts());
+        return new StructuredConcept(parsed.appearanceTags(), current.personaTags(), current.moodTags(),
+            sceneTags, effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts());
     }
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
