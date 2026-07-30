@@ -15,6 +15,8 @@ import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.heroine.ChatRoomHeroine;
 import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
+import com.spring.aichat.domain.user.User;
+import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.dto.chat.AiJsonOutputV2;
 import com.spring.aichat.dto.chat.SendChatResponse.SceneResponse;
@@ -86,6 +88,7 @@ public class ChatStreamServiceV2 {
 
     // ── V1과 공유하는 인프라 ──
     private final ChatRoomRepository chatRoomRepository;
+    private final UserRepository userRepository;
     private final ChatLogMongoRepository chatLogRepository;
     private final ChatLogPersister chatLogPersister;
     private final TransactionTemplate txTemplate;
@@ -125,8 +128,8 @@ public class ChatStreamServiceV2 {
     private record JpaPreResult(ChatRoom room, Long userId, long logCount,
                                 String username, int energyCost) {}
 
-    private record RollbackContext(Long userId, String username, int energyCost,
-                                   String savedUserLogId) {}
+    record RollbackContext(Long userId, String username, int energyCost,
+                           String savedUserLogId) {}
 
     /**
      * V2 LLM 응답 파싱 결과.
@@ -1269,28 +1272,28 @@ public class ChatStreamServiceV2 {
         } catch (Exception ignored) {}
     }
 
-    private void compensateEnergy(Long userId, int amount, String username) {
+    void compensateEnergy(Long userId, int amount, String username) {
         try {
             txTemplate.execute(status -> {
-                chatRoomRepository.findById(userId).ifPresent(r -> r.getUser().refundEnergy(amount));
+                User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new NotFoundException("User not found"));
+                user.refundEnergy(amount);
+                userRepository.save(user);
                 return null;
             });
-            cacheService.evictUserProfile(username);
         } catch (Exception e) {
             log.error("⚠️ [V2-COMP] energy refund failed | userId={}", userId, e);
         }
+        cacheService.evictUserProfile(username);
     }
 
-    private void compensateFullRollback(RollbackContext ctx) {
-        try {
-            if (ctx.savedUserLogId() != null) {
-                try { chatLogRepository.deleteById(ctx.savedUserLogId()); }
-                catch (Exception e) { log.warn("[V2-ROLLBACK] log delete failed: {}", e.getMessage()); }
-            }
-            cacheService.evictUserProfile(ctx.username());
-        } catch (Exception e) {
-            log.error("⚠️ [V2-ROLLBACK] failed | userId={}", ctx.userId(), e);
+    void compensateFullRollback(RollbackContext ctx) {
+        if (ctx.savedUserLogId() != null) {
+            try { chatLogRepository.deleteById(ctx.savedUserLogId()); }
+            catch (Exception e) { log.warn("[V2-ROLLBACK] log delete failed: {}", e.getMessage()); }
         }
+        // 오프닝 경로는 energyCost=0 → refundEnergy 내부 가드로 no-op (프로필 캐시 evict는 항상 수행).
+        compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
     }
 
     /**
