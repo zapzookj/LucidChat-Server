@@ -112,6 +112,9 @@ public class ChatStreamServiceV2 {
     private final RelationPromotionService promotionService;
     // [2026-07-30 P2 정적-우선 배선] location_change → 시드 장소 배경 브리지
     private final com.spring.aichat.domain.world.WorldLocationRepository worldLocationRepository;
+    // [2026-07-31 에픽 A] UGC 월드 STORY — 접근 재검증(월드 재잠금) + 정적 배경(대표 배경 직서빙)
+    private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
+    private final com.spring.aichat.domain.ugc.UgcWorldLocationRepository ugcWorldLocationRepository;
 
     private static final int RAG_SKIP_THRESHOLD = 6;
 
@@ -161,7 +164,11 @@ public class ChatStreamServiceV2 {
                 sendSseError(emitter, "INVALID_MODE", "V2 STORY 전용 엔드포인트입니다.");
                 return;
             }
+            // [에픽 A] UGC 접근 재검증 — 철회/재잠금된 캐릭터·월드의 기존 방 차단 (V1 blockIfUgcInaccessible의 V2판)
+            if (blockIfUgcStoryInaccessible(roomForCheck, emitter)) return;
+            // [에픽 A] UGC 월드 방(world==null)은 시크릿 불허 확정 — null 가드 겸 정책
             boolean isSecretCheck = roomForCheck.isSecretModeActive()
+                && roomForCheck.getWorld() != null
                 && roomForCheck.getWorld().isSecretAllowed()
                 && secretModeService.canAccessSecretMode(roomForCheck.getUser());
 
@@ -301,6 +308,8 @@ public class ChatStreamServiceV2 {
                 sendSseError(emitter, "INVALID_MODE", "V2 STORY 전용 엔드포인트입니다.");
                 return;
             }
+            // [에픽 A] UGC 접근 재검증 — 오프닝 경로도 동일 차단(우회 방지)
+            if (blockIfUgcStoryInaccessible(room, emitter)) return;
 
             // 멱등 가드 — 이미 로그가 있으면 오프닝/대화가 존재 → 재생성 금지, 빈 완료
             long existingLogs = chatLogRepository.countByRoomId(roomId);
@@ -1025,7 +1034,12 @@ public class ChatStreamServiceV2 {
      */
     private LocationTransition processStaticLocationBackground(ChatRoom room, ParsedV2Result parsed) {
         String locationKey = latestLocationChangeKey(parsed.aiOutput());
-        if (locationKey == null || room.getWorld() == null) return null;
+        if (locationKey == null) return null;
+        // [에픽 A] UGC 월드 방 — 장소 대표 배경(빌더 확정본) 직서빙
+        if (room.isUgcWorldStory()) {
+            return processUgcStaticLocationBackground(room, locationKey);
+        }
+        if (room.getWorld() == null) return null;
         com.spring.aichat.domain.enums.WorldId worldId = room.getWorld().getId();
 
         com.spring.aichat.domain.world.WorldLocation loc = worldLocationRepository
@@ -1130,8 +1144,76 @@ public class ChatStreamServiceV2 {
 
     private boolean resolveSecretMode(ChatRoom room) {
         if (!room.isSecretModeActive()) return false;
-        if (room.getWorld() != null && !room.getWorld().isSecretAllowed()) return false;
+        // [에픽 A] UGC 월드 방(world==null)은 시크릿 불허 확정 — 게이트 소실 방지 널가드 겸 정책
+        if (room.getWorld() == null) return false;
+        if (!room.getWorld().isSecretAllowed()) return false;
         return secretModeService.canAccessSecretMode(room.getUser());
+    }
+
+    /**
+     * [2026-07-31 에픽 A] UGC 월드 STORY 접근 재검증 — V1 {@code blockIfUgcInaccessible}의 V2판.
+     * 캐릭터 철회(PRIVATE 회귀)·월드 재잠금(수정 시 reviewStatus NONE 리셋) 이후의 기존 방
+     * 우회 접근을 매 SSE 진입에서 차단한다(메시지·오프닝 공용). 소유자 본인 방은 항상 통과.
+     *
+     * @return true면 차단됨(SSE 에러 전송 완료) — 호출측은 즉시 return
+     */
+    private boolean blockIfUgcStoryInaccessible(ChatRoom room, SseEmitter emitter) {
+        if (!room.isUgcWorldStory()) return false;
+        Long userId = room.getUser().getId();
+
+        com.spring.aichat.domain.ugc.UgcWorld world =
+            ugcWorldRepository.findById(room.getUgcWorldId()).orElse(null);
+        if (world == null) {
+            sendSseError(emitter, "WORLD_UNAVAILABLE", "이 세계관은 더 이상 이용할 수 없어요.");
+            return true;
+        }
+        if (!world.isOwnedBy(userId)
+            && world.getReviewStatus() != com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED) {
+            sendSseError(emitter, "WORLD_UNAVAILABLE", "이 세계관은 더 이상 이용할 수 없어요.");
+            return true;
+        }
+
+        boolean anyBlocked = heroineRepository.findByChatRoom_Id(room.getId()).stream()
+            .map(h -> h.getCharacter())
+            .filter(java.util.Objects::nonNull)
+            .anyMatch(c -> c.isUgc() && !c.isAccessibleBy(userId));
+        if (anyBlocked) {
+            sendSseError(emitter, "CHARACTER_UNAVAILABLE", "이 캐릭터는 더 이상 대화할 수 없어요.");
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * [2026-07-31 에픽 A] UGC 월드 방의 location_change 배경 — 장소 대표 배경 직서빙.
+     * 공식 정적 브리지와 달리 생성 경로가 없다(대표 배경은 빌더에서 확정 — 미보유/생성중 장소는 무시).
+     */
+    private LocationTransition processUgcStaticLocationBackground(ChatRoom room, String locationKey) {
+        com.spring.aichat.domain.ugc.UgcWorldLocation loc = ugcWorldLocationRepository
+            .findByUgcWorldIdAndLocationKey(room.getUgcWorldId(), locationKey).orElse(null);
+        if (loc == null || !loc.isActive()
+            || loc.getBackgroundUrl() == null || loc.getBackgroundUrl().isBlank()) {
+            return null;
+        }
+
+        String canonicalKey = "UGCW_" + room.getUgcWorldId() + "__" + loc.getLocationKey();
+        if (canonicalKey.equals(room.getCurrentDynamicCanonicalKey())) return null; // 동일 장소 재진입
+
+        LocationTransition transition = LocationTransition.cached(loc.getDisplayName(), loc.getBackgroundUrl());
+        try {
+            txTemplate.execute(status -> {
+                ChatRoom bgRoom = chatRoomRepository.findById(room.getId()).orElse(null);
+                if (bgRoom != null) {
+                    bgRoom.updateDynamicBackground(loc.getDisplayName(), canonicalKey, loc.getBackgroundUrl());
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("[V2-BG-UGC] persist failed (non-blocking): {}", e.getMessage());
+        }
+        cacheService.evictRoomInfo(room.getId());
+        log.info("[V2-BG-UGC] UGC 장소 배경 직서빙: roomId={} key={}", room.getId(), canonicalKey);
+        return transition;
     }
 
     private String persistAssistantLog(Long roomId, ParsedV2Result parsed) {

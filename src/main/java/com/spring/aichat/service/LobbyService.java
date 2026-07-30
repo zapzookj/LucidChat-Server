@@ -319,9 +319,16 @@ public class LobbyService {
      */
     private RoomSummaryResponse toV2StoryRoomSummary(ChatRoom room) {
         com.spring.aichat.domain.world.World w = room.getWorld();
-        // V2 방인데 world도 null이면 손상된 row — 기본값으로 fallback
         String worldName = w != null ? w.getDisplayName() : "(unknown world)";
         String worldThumb = w != null ? w.getThumbnailUrl() : null;
+        // [2026-07-31 에픽 A] UGC 월드 STORY 방 — UgcWorld 메타로 대체
+        if (w == null && room.getUgcWorldId() != null) {
+            var ugcWorld = ugcWorldRepository.findById(room.getUgcWorldId()).orElse(null);
+            if (ugcWorld != null) {
+                worldName = ugcWorld.getName();
+                worldThumb = ugcWorld.getThumbnailUrl();
+            }
+        }
         return new RoomSummaryResponse(
             room.getId(),
             null,                 // characterId — V2 방은 character 없음

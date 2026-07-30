@@ -25,6 +25,9 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
      */
     List<Character> findByWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(WorldId worldId);
 
+    /** [2026-07-31 에픽 A] UGC 월드 STORY 히로인 풀 — 접근권 필터는 서비스 계층(isAccessibleBy) 책임. */
+    List<Character> findByUgcWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(Long ugcWorldId);
+
     // ━━━ [UGC v1] ━━━
 
     /** 내 UGC 캐릭터 (스튜디오 '내 캐릭터' 섹션). */

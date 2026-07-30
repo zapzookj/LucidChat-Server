@@ -119,7 +119,8 @@ public class SceneRequestService {
      * (빈 리스트 = 배경 전용 씬 허용). UGC 접근 불가 캐릭터는 캐스트에서 제외(에픽 A 선제 방어).
      */
     private List<Character> resolveCast(ChatRoom room, Long userId) {
-        if (room.getChatMode() == ChatMode.STORY && room.getWorld() != null) {
+        // [에픽 A] 공식·UGC 월드 STORY 공용 — 캐스트는 프레즌스 기준이라 월드 종류 무관
+        if (room.getChatMode() == ChatMode.STORY) {
             List<Long> presentIds = presenceRepository
                 .findByChatRoom_IdAndCurrentLocationKey(room.getId(), room.getCurrentUserLocationKey())
                 .stream().map(CharacterPresence::getCharacterId).toList();
@@ -140,8 +141,10 @@ public class SceneRequestService {
     /** 수위 판정 — V1: 캐릭터 secretEligible 게이트(2-arg), V2: world.isSecretAllowed + 1-arg. */
     private boolean resolveSecretMode(ChatRoom room) {
         if (!room.isSecretModeActive()) return false;
-        if (room.getChatMode() == ChatMode.STORY && room.getWorld() != null) {
-            return room.getWorld().isSecretAllowed()
+        if (room.getChatMode() == ChatMode.STORY) {
+            // [에픽 A] UGC 월드 방(world==null)은 시크릿 불허 확정 — sfw 강제 유지
+            return room.getWorld() != null
+                && room.getWorld().isSecretAllowed()
                 && secretModeService.canAccessSecretMode(room.getUser());
         }
         return room.getCharacter() != null

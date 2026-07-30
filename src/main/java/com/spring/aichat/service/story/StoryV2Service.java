@@ -81,6 +81,10 @@ public class StoryV2Service {
     private final OffscreenNotificationService notificationService;
     private final RelationPromotionService promotionService;
     private final SecretModeService secretModeService;
+    // [2026-07-31 에픽 A] enum PK 브리지 — UGC 월드 STORY 개방
+    private final WorldViewService worldViewService;
+    private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
+    private final com.spring.aichat.config.UgcModeProperties ugcModeProperties;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [1] listWorlds — 로비 V2 World 섹션
@@ -130,6 +134,18 @@ public class StoryV2Service {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [2] getCreateContext — CreateFlow 진입 시 일괄 데이터
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [2026-07-31 에픽 A] 통합 진입 — 공식(enum name) / UGC({@code UGCW_{id}}) 문자열 ref 수용.
+     */
+    @Transactional(readOnly = true)
+    public CreateContextResponse getCreateContext(String worldRefRaw, User user) {
+        com.spring.aichat.domain.world.WorldRef ref = parseRef(worldRefRaw);
+        if (ref.isUgc()) {
+            return getUgcCreateContext(ref, user);
+        }
+        return getCreateContext(ref.officialId(), user);
+    }
 
     @Transactional(readOnly = true)
     public CreateContextResponse getCreateContext(WorldId worldId, User user) {
@@ -197,17 +213,119 @@ public class StoryV2Service {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2-b] [에픽 A] UGC 월드 — CreateFlow / 로비 카드
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * UGC 월드 CreateFlow — 페르소나 프리셋 없음(자유 텍스트만 — 격리 설계의 기능 축소 확정),
+     * 시작 장소는 월드의 전체 활성 장소. 히로인 풀은 접근 가능한(소유 또는 PUBLIC) 캐릭터만.
+     */
+    private CreateContextResponse getUgcCreateContext(com.spring.aichat.domain.world.WorldRef ref, User user) {
+        assertUgcStoryOpen();
+        WorldView view = worldViewService.resolve(ref);
+        worldViewService.assertUgcPlayable(view, user);
+
+        List<Character> heroines = ugcHeroinePool(ref.ugcWorldId(), user);
+        if (heroines.isEmpty()) {
+            throw new BadRequestException("이 세계관에서 스토리를 시작할 수 있는 캐릭터가 없어요.");
+        }
+
+        List<WorldHeroineCardResponse> heroineCards = heroines.stream()
+            .map(c -> new WorldHeroineCardResponse(
+                c.getId(), c.getName(), c.getThumbnailUrl(), c.getRole(),
+                c.getAge() != null ? c.getAge() : 0,
+                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80)))
+            .toList();
+
+        List<WorldLocationResponse> startLocations = view.locations().stream()
+            .map(l -> new WorldLocationResponse(l.key(), l.displayName(), l.description(), true, 0))
+            .toList();
+        if (startLocations.isEmpty()) {
+            throw new BusinessException(ErrorCode.WORLD_LOCATION_MISSING,
+                "UGC world " + ref.key() + " has no active location");
+        }
+
+        Optional<ChatRoom> existing = chatRoomRepository
+            .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), ref.ugcWorldId(), ChatMode.STORY);
+        WorldCardResponse worldCard = toUgcWorldCard(view, heroines.size(), existing.orElse(null));
+
+        return new CreateContextResponse(worldCard, heroineCards, List.of(), startLocations,
+            hasFreePersonaUnlock(user.getId()));
+    }
+
+    /**
+     * [에픽 A] 로비 — 유저가 스토리를 시작할 수 있는 UGC 월드 카드(내 월드 한정 v1 —
+     * 타인 월드는 캐릭터 프로필 경유 진입이 후속). 게이트 off면 빈 목록(프론트 섹션 자체 미노출).
+     */
+    @Transactional(readOnly = true)
+    public List<WorldCardResponse> listUgcStoryWorlds(User user) {
+        if (!ugcModeProperties.storyOn()) return List.of();
+
+        return ugcWorldRepository.findByOwnerUserIdOrderByIdDesc(user.getId()).stream()
+            .map(w -> {
+                List<Character> heroines = ugcHeroinePool(w.getId(), user);
+                if (heroines.isEmpty()) return null;
+                WorldView view = worldViewService.resolve(
+                    com.spring.aichat.domain.world.WorldRef.ofUgc(w.getId()));
+                ChatRoom existing = chatRoomRepository
+                    .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), w.getId(), ChatMode.STORY)
+                    .orElse(null);
+                return toUgcWorldCard(view, heroines.size(), existing);
+            })
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    }
+
+    private WorldCardResponse toUgcWorldCard(WorldView view, int heroineCount, ChatRoom existing) {
+        return new WorldCardResponse(
+            view.ref().key(),
+            view.displayName(),
+            view.tagline(),
+            view.tagline(),          // 카드 설명은 intro 재사용 — lore는 프롬프트 전용(장문·캡슐화 대상)
+            view.heroImageUrl(),
+            view.thumbnailUrl(),
+            view.moodKeywords(),
+            false,                   // UGC 월드 시크릿 불허(확정 정책)
+            heroineCount,
+            existing != null,
+            existing != null ? existing.getId() : null
+        );
+    }
+
+    /** UGC 히로인 풀 — storyAvailable·비숨김·유저 접근 가능(소유 또는 PUBLIC)만. */
+    private List<Character> ugcHeroinePool(Long ugcWorldId, User user) {
+        return characterRepository
+            .findByUgcWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(ugcWorldId).stream()
+            .filter(c -> c.isAccessibleBy(user.getId()))
+            .toList();
+    }
+
+    private void assertUgcStoryOpen() {
+        if (!ugcModeProperties.storyOn()) {
+            throw new BadRequestException("UGC 세계관 스토리 모드는 아직 준비 중이에요.");
+        }
+    }
+
+    private com.spring.aichat.domain.world.WorldRef parseRef(String raw) {
+        try {
+            return com.spring.aichat.domain.world.WorldRef.parse(raw);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid worldId: " + raw);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [3] createOrReuseRoom — 방 생성 (또는 overwrite 시 reset)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Transactional
     public CreateStoryV2Response createOrReuseRoom(User user, CreateStoryV2Request request) {
-        WorldId worldId;
-        try {
-            worldId = WorldId.valueOf(request.worldId());
-        } catch (Exception e) {
-            throw new BadRequestException("Invalid worldId: " + request.worldId());
+        // [에픽 A] UGC 월드 분기 — UGCW_ 접두 ref
+        com.spring.aichat.domain.world.WorldRef ref = parseRef(request.worldId());
+        if (ref.isUgc()) {
+            return createOrReuseUgcRoom(user, ref, request);
         }
+        WorldId worldId = ref.officialId();
 
         World world = worldRepository.findById(worldId)
             .orElseThrow(() -> new BusinessException(ErrorCode.WORLD_NOT_FOUND, "World not found"));
@@ -285,6 +403,127 @@ public class StoryV2Service {
             room.getId(), worldId, heroines.size(), startLocationKey);
 
         return new CreateStoryV2Response(room.getId(), worldId.name(), true, false);
+    }
+
+    /**
+     * [2026-07-31 에픽 A] UGC 월드 STORY 방 생성 — 공식 흐름의 미러.
+     * 접근: 월드 플레이 자격(소유 또는 APPROVED) + 히로인 접근권·storyAvailable·월드 소속.
+     * 페르소나는 자유 텍스트만(프리셋 지정 시 400). 배경은 장소 대표 배경 직시딩.
+     */
+    private CreateStoryV2Response createOrReuseUgcRoom(User user,
+                                                       com.spring.aichat.domain.world.WorldRef ref,
+                                                       CreateStoryV2Request request) {
+        assertUgcStoryOpen();
+        WorldView view = worldViewService.resolve(ref);
+        worldViewService.assertUgcPlayable(view, user);
+
+        // 히로인 검증 — 월드 소속·storyAvailable·접근권
+        List<Character> heroines = characterRepository.findAllById(request.heroineIds());
+        if (heroines.size() != request.heroineIds().size()) {
+            throw new BadRequestException("Some heroine IDs not found");
+        }
+        for (Character h : heroines) {
+            if (!ref.ugcWorldId().equals(h.getUgcWorldId())) {
+                throw new BadRequestException(
+                    "Heroine " + h.getId() + " does not belong to world " + ref.key());
+            }
+            if (!h.isStoryAvailable() || h.isHidden()) {
+                throw new BadRequestException("Inactive heroine: " + h.getId());
+            }
+            if (!h.isAccessibleBy(user.getId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "접근할 수 없는 캐릭터예요: " + h.getId());
+            }
+        }
+
+        // 시작 장소 — 요청 키 검증 or 첫 활성 장소
+        String startLocationKey = resolveUgcStartLocation(view, request.startLocationKey());
+
+        // 페르소나 — UGC 월드는 프리셋 없음(자유 텍스트만)
+        if (request.selectedPersonaPresetKey() != null && !request.selectedPersonaPresetKey().isBlank()) {
+            throw new BadRequestException("UGC 세계관은 페르소나 프리셋을 지원하지 않아요.");
+        }
+        String userPersona = null;
+        if (request.personaText() != null && !request.personaText().isBlank()) {
+            if (!hasFreePersonaUnlock(user.getId())) {
+                throw new BusinessException(ErrorCode.PREMIUM_REQUIRED, "Free persona requires unlock");
+            }
+            userPersona = request.personaText().trim();
+        }
+
+        String storyNickname = (request.nickname() != null && !request.nickname().isBlank())
+            ? request.nickname().trim()
+            : user.getNickname();
+
+        // 기존 방 체크 — 'UGC 월드당 1방'
+        Optional<ChatRoom> existing = chatRoomRepository
+            .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), ref.ugcWorldId(), ChatMode.STORY);
+
+        if (existing.isPresent()) {
+            ChatRoom room = existing.get();
+            if (!Boolean.TRUE.equals(request.overwriteExisting())) {
+                throw new BusinessException(ErrorCode.STORY_V2_ROOM_EXISTS,
+                    "Existing room found: roomId=" + room.getId());
+            }
+            log.info("🔄 [STORY-V2-UGC] Overwriting existing room: roomId={}", room.getId());
+            cascadeResetRoom(room, true);
+            room.updateUserPersona(userPersona);
+            room.updateStoryUserNickname(storyNickname);
+            room.restoreStartLocation(startLocationKey);
+            reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+            seedUgcStoryBackground(room, view, startLocationKey);
+            return new CreateStoryV2Response(room.getId(), ref.key(), false, true);
+        }
+
+        ChatRoom room = ChatRoom.createStoryV2Ugc(user, ref.ugcWorldId(), startLocationKey,
+            userPersona, storyNickname);
+        room = chatRoomRepository.save(room);
+        storyV2StateRepository.save(StoryV2State.create(room.getId()));
+        reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+        seedUgcStoryBackground(room, view, startLocationKey);
+
+        log.info("✨ [STORY-V2-UGC] Created new room: roomId={}, world={}, heroineCount={}, startLocation={}",
+            room.getId(), ref.key(), heroines.size(), startLocationKey);
+
+        return new CreateStoryV2Response(room.getId(), ref.key(), true, false);
+    }
+
+    private String resolveUgcStartLocation(WorldView view, String requestedKey) {
+        if (requestedKey != null && !requestedKey.isBlank()) {
+            if (view.location(requestedKey).isEmpty()) {
+                throw new BadRequestException("Invalid start location: " + requestedKey);
+            }
+            return requestedKey;
+        }
+        return view.locations().stream()
+            .findFirst()
+            .map(WorldView.LocationView::key)
+            .orElseThrow(() -> new BusinessException(ErrorCode.WORLD_LOCATION_MISSING,
+                "UGC world " + view.ref().key() + " has no active location"));
+    }
+
+    /**
+     * [에픽 A] UGC 월드 방 진입 배경 — 장소 대표 배경(빌더 확정본) 직시딩.
+     * 시작 장소에 배경이 없으면 배경 보유 첫 장소 폴백(LobbyService.seedUgcWorldBackground 관례).
+     */
+    private void seedUgcStoryBackground(ChatRoom room, WorldView view, String startLocationKey) {
+        try {
+            WorldView.LocationView start = view.location(startLocationKey).orElse(null);
+            if (start != null && start.backgroundUrl() != null && !start.backgroundUrl().isBlank()) {
+                room.updateDynamicBackground(start.displayName(),
+                    view.canonicalKey(start.key()), start.backgroundUrl());
+                return;
+            }
+            for (WorldView.LocationView loc : view.locations()) {
+                if (loc.backgroundUrl() != null && !loc.backgroundUrl().isBlank()) {
+                    room.updateDynamicBackground(loc.displayName(),
+                        view.canonicalKey(loc.key()), loc.backgroundUrl());
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("🏠 [STORY-V2-UGC] 배경 시딩 실패 (non-blocking): roomId={}, {}",
+                room.getId(), e.getMessage());
+        }
     }
 
     private void reconfigureHeroinesAndPresences(ChatRoom room, List<Character> heroines,
@@ -403,9 +642,17 @@ public class StoryV2Service {
 
         cascadeResetRoom(room, request.includePersona());
 
-        // 시작 장소 갱신
-        String startLocationKey = resolveStartLocation(room.getWorld().getId(), request.startLocationKey());
-        room.restoreStartLocation(startLocationKey);
+        // 시작 장소 갱신 — [에픽 A] UGC 방은 UGC 장소 풀 기준
+        String startLocationKey;
+        if (room.isUgcWorldStory()) {
+            WorldView view = worldViewService.resolveForRoom(room);
+            startLocationKey = resolveUgcStartLocation(view, request.startLocationKey());
+            room.restoreStartLocation(startLocationKey);
+            seedUgcStoryBackground(room, view, startLocationKey);
+        } else {
+            startLocationKey = resolveStartLocation(room.getWorld().getId(), request.startLocationKey());
+            room.restoreStartLocation(startLocationKey);
+        }
 
         // [Phase 7-V2 Pivot Fix] 캡처한 히로인으로 ChatRoomHeroine + CharacterPresence 재생성
         //   (overwrite 경로와 동일하게 reconfigureHeroinesAndPresences 사용)
@@ -478,12 +725,15 @@ public class StoryV2Service {
             throw new BadRequestException("Not a V2 STORY room");
         }
 
-        World world = room.getWorld();
-        WorldId worldId = world.getId();
+        // [에픽 A] 공식/UGC 공용 월드 뷰
+        WorldView worldView = worldViewService.resolveForRoom(room);
+        if (worldView == null) {
+            throw new BadRequestException("STORY room without world: " + roomId);
+        }
 
-        // 히로인 상태들
+        // 히로인 상태들 — UGC 월드는 secretAllowed=false 확정이라 시크릿 스탯 상시 차단
         List<ChatRoomHeroine> heroineRows = heroineRepository.findByChatRoom_Id(roomId);
-        boolean effectiveSecretMode = room.isSecretModeActive() && world.isSecretAllowed()
+        boolean effectiveSecretMode = room.isSecretModeActive() && worldView.secretAllowed()
             && secretModeService.canAccessSecretMode(user);
 
         List<HeroineStateResponse> heroineStates = heroineRows.stream()
@@ -492,9 +742,8 @@ public class StoryV2Service {
             .toList();
 
         // 캐릭터 위치들
-        Map<String, String> locationKeyToDisplay = worldLocationRepository
-            .findByWorldIdAndActiveTrueOrderByDisplayOrderAsc(worldId).stream()
-            .collect(Collectors.toMap(WorldLocation::getLocationKey, WorldLocation::getDisplayName));
+        Map<String, String> locationKeyToDisplay = worldView.locations().stream()
+            .collect(Collectors.toMap(WorldView.LocationView::key, WorldView.LocationView::displayName));
 
         List<CharacterPresence> presences = presenceRepository.findByChatRoom_Id(roomId);
         List<CharacterPresenceResponse> presenceResponses = presences.stream()
@@ -513,8 +762,8 @@ public class StoryV2Service {
 
         return new StoryRoomV2DetailResponse(
             room.getId(),
-            worldId.name(),
-            world.getDisplayName(),
+            worldView.ref().key(),
+            worldView.displayName(),
             room.getEffectivePersona(user),
             room.getEffectiveNickname(user),   // [Phase 7-V2 Pivot] 실효 닉네임
             room.getCurrentUserLocationKey(),

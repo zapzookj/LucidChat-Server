@@ -15,9 +15,6 @@ import com.spring.aichat.domain.memory.HeroineMemorySummaryRepository;
 import com.spring.aichat.domain.notification.OffscreenNotification;
 import com.spring.aichat.domain.notification.OffscreenNotificationRepository;
 import com.spring.aichat.domain.user.User;
-import com.spring.aichat.domain.world.World;
-import com.spring.aichat.domain.world.WorldLocation;
-import com.spring.aichat.domain.world.WorldLocationRepository;
 import com.spring.aichat.security.PromptInjectionGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -52,7 +49,8 @@ public class StoryDirectorPromptAssemblerV2 {
     private final CharacterPresenceRepository presenceRepository;
     private final RelationPromotionEligibilityRepository promotionRepository;
     private final OffscreenNotificationRepository notificationRepository;
-    private final WorldLocationRepository worldLocationRepository;
+    /** [2026-07-31 에픽 A] 공식/UGC 월드 단일 뷰 — enum PK 브리지. */
+    private final com.spring.aichat.service.story.WorldViewService worldViewService;
     private final HeroineMemorySummaryRepository heroineMemoryRepository;
     private final PromptInjectionGuard injectionGuard;
 
@@ -73,16 +71,16 @@ public class StoryDirectorPromptAssemblerV2 {
         if (!room.isStoryMode()) {
             throw new IllegalStateException("V2 assembler invoked on non-STORY room: id=" + room.getId());
         }
-        World world = room.getWorld();
-        if (world == null) {
+        // [에픽 A] 공식/UGC 공용 월드 뷰 — 장소 풀 포함
+        com.spring.aichat.service.story.WorldView worldView = worldViewService.resolveForRoom(room);
+        if (worldView == null) {
             throw new IllegalStateException("STORY room without world: id=" + room.getId());
         }
 
         // 일괄 fetch — 매 턴 호출되므로 쿼리 수 최소화
         List<ChatRoomHeroine> heroines = heroineRepository.findByChatRoom_Id(room.getId());
         List<CharacterPresence> presences = presenceRepository.findByChatRoom_Id(room.getId());
-        List<WorldLocation> worldLocations = worldLocationRepository
-            .findByWorldIdAndActiveTrueOrderByDisplayOrderAsc(world.getId());
+        List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations = worldView.locations();
         List<RelationPromotionEligibility> activePromotions = promotionRepository
             .findByChatRoomIdAndTriggeredFalse(room.getId());
         List<OffscreenNotification> pendingNotifications = notificationRepository
@@ -99,7 +97,7 @@ public class StoryDirectorPromptAssemblerV2 {
         // ═══ STATIC PART (캐싱 대상) ═══
         String staticPart = String.join("\n\n",
             buildSection1Role(effectiveSecretMode),
-            buildSection2World(world, worldLocations),
+            buildSection2World(worldView, worldLocations),
             buildSection4SpeakersDefinition(heroines, effectiveSecretMode),
             buildSection7Persona(room, user),
             buildSection9Principles(effectiveSecretMode),
@@ -220,15 +218,21 @@ public class StoryDirectorPromptAssemblerV2 {
     //  [2] WORLD — static
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildSection2World(World world, List<WorldLocation> locations) {
+    private String buildSection2World(com.spring.aichat.service.story.WorldView world,
+                                      List<com.spring.aichat.service.story.WorldView.LocationView> locations) {
         String keyLocationsBlock = locations.isEmpty()
             ? "(장소 데이터 없음)"
             : locations.stream()
             .map(l -> "- **%s** (%s)%s".formatted(
-                l.getLocationKey(),
-                l.getDisplayName(),
-                notBlank(l.getDescription()) ? ": " + l.getDescription() : ""))
+                l.key(),
+                l.displayName(),
+                notBlank(l.description()) ? ": " + l.description() : ""))
             .collect(Collectors.joining("\n"));
+
+        // [에픽 A] UGC lore는 유저 생성 텍스트 — 캡슐화로 프롬프트 구조 위장 차단(CharacterPromptAssembler 관례)
+        String setting = world.isUgc()
+            ? injectionGuard.encapsulate("WORLD_LORE", safe(world.description()))
+            : safe(world.description());
 
         return """
             # [2] WORLD: %s
@@ -247,11 +251,11 @@ public class StoryDirectorPromptAssemblerV2 {
             - `new_dynamic_location`은 위 목록에 *없는 완전히 새로운 장소*가 서사상 필요할 때만.
 
             **World Constraint**: 위 세계관의 시대·문화·정서적 결을 절대 깨지 말 것. 시대 부적합 요소(예: 중세 세계관의 스마트폰) 금지.""".formatted(
-            world.getDisplayName(),
-            world.getDisplayName(),
-            safe(world.getTagline()),
-            safe(world.getDescription()),
-            safe(world.getMoodKeywords()),
+            world.displayName(),
+            world.displayName(),
+            safe(world.tagline()),
+            setting,
+            safe(world.moodKeywords()),
             keyLocationsBlock);
     }
 
@@ -261,7 +265,8 @@ public class StoryDirectorPromptAssemblerV2 {
 
     private String buildSection3PresentScene(ChatRoom room, List<ChatRoomHeroine> heroines,
                                              Map<Long, CharacterPresence> presenceByCharId,
-                                             String userLocationKey, List<WorldLocation> worldLocations) {
+                                             String userLocationKey,
+                                             List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
         String locDisplay = resolveLocationDisplay(userLocationKey, worldLocations);
         String dayPartDisplay = room.getCurrentDayPart() != null
             ? room.getCurrentDayPart().displayName() : "?";
@@ -451,7 +456,8 @@ public class StoryDirectorPromptAssemblerV2 {
 
     private String buildSection6Offscreen(List<ChatRoomHeroine> heroines,
                                           Map<Long, CharacterPresence> presenceByCharId,
-                                          String userLocationKey, List<WorldLocation> worldLocations) {
+                                          String userLocationKey,
+                                          List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
         List<ChatRoomHeroine> offscreen = heroines.stream()
             .filter(h -> {
                 CharacterPresence p = presenceByCharId.get(h.getCharacter().getId());
@@ -812,11 +818,12 @@ public class StoryDirectorPromptAssemblerV2 {
         return notBlank(content) ? "\n\n%s\n%s".formatted(header, content) : "";
     }
 
-    private String resolveLocationDisplay(String locationKey, List<WorldLocation> worldLocations) {
+    private String resolveLocationDisplay(String locationKey,
+                                          List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
         if (locationKey == null) return "(위치 미상)";
         return worldLocations.stream()
-            .filter(l -> l.getLocationKey().equals(locationKey))
-            .map(WorldLocation::getDisplayName)
+            .filter(l -> l.key().equals(locationKey))
+            .map(com.spring.aichat.service.story.WorldView.LocationView::displayName)
             .findFirst()
             .orElse(locationKey);  // 동적 임시 장소 등 — key 자체를 표시
     }

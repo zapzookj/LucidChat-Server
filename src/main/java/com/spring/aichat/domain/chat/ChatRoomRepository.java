@@ -70,6 +70,10 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     boolean existsByUser_IdAndWorld_IdAndChatMode(Long userId, WorldId worldId, ChatMode chatMode);
 
+    /** [2026-07-31 에픽 A] UGC 월드 STORY 방 — 'UGC 월드당 1방'(uk_user_ugc_world_mode) 진입점. */
+    @EntityGraph(attributePaths = {"user"})
+    Optional<ChatRoom> findByUser_IdAndUgcWorldIdAndChatMode(Long userId, Long ugcWorldId, ChatMode chatMode);
+
     /**
      * [V2] World 기반 fetch 단일 조회 — ChatStreamService의 진입점.
      */

@@ -1,6 +1,5 @@
 package com.spring.aichat.controller;
 
-import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.story.StoryV2Requests.CreateStoryV2Request;
@@ -10,7 +9,6 @@ import com.spring.aichat.dto.story.StoryV2Responses.CreateContextResponse;
 import com.spring.aichat.dto.story.StoryV2Responses.CreateStoryV2Response;
 import com.spring.aichat.dto.story.StoryV2Responses.NotificationResponse;
 import com.spring.aichat.dto.story.StoryV2Responses.StoryRoomV2DetailResponse;
-import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.exception.RateLimitException;
 import com.spring.aichat.security.ApiRateLimiter;
@@ -78,9 +76,20 @@ public class StoryV2Controller {
         @PathVariable("worldIdStr") String worldIdStr,
         Authentication authentication
     ) {
-        WorldId worldId = parseWorldId(worldIdStr);
+        // [2026-07-31 에픽 A] 공식 enum name + UGC "UGCW_{id}" 문자열 ref 모두 수용 — 파싱은 서비스 계층
         User user = resolveUser(authentication);
-        return storyV2Service.getCreateContext(worldId, user);
+        return storyV2Service.getCreateContext(worldIdStr, user);
+    }
+
+    /**
+     * [2026-07-31 에픽 A] 유저가 STORY를 시작할 수 있는 UGC 월드 카드 목록 (내 월드 v1).
+     * 게이트(ugc.modes.story-enabled) off면 빈 배열 — 프론트는 섹션 자체를 숨긴다.
+     */
+    @GetMapping("/ugc-worlds")
+    public List<com.spring.aichat.dto.story.StoryV2Responses.WorldCardResponse> listUgcStoryWorlds(
+        Authentication authentication
+    ) {
+        return storyV2Service.listUgcStoryWorlds(resolveUser(authentication));
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -216,14 +225,6 @@ public class StoryV2Controller {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  헬퍼
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private WorldId parseWorldId(String s) {
-        try {
-            return WorldId.valueOf(s.trim().toUpperCase());
-        } catch (Exception e) {
-            throw new BadRequestException("Invalid worldId: " + s);
-        }
-    }
 
     private User resolveUser(Authentication authentication) {
         return userRepository.findByUsername(authentication.getName())

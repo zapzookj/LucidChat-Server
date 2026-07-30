@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * 임시 노출하기 위한 presigned GET 발급용 — 업로드는 기존 {@code S3Client} 경로.
  */
 @Configuration
-@EnableConfigurationProperties(UgcPipelineProperties.class)
+@EnableConfigurationProperties({UgcPipelineProperties.class, UgcModeProperties.class})
 public class UgcConfig {
 
     @Bean

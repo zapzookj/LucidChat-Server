@@ -60,12 +60,15 @@ import java.time.LocalDateTime;
         @UniqueConstraint(name = "uk_user_character_mode",
             columnNames = {"user_id", "character_id", "chat_mode"}),
         @UniqueConstraint(name = "uk_user_world_mode",
-            columnNames = {"user_id", "world_id", "chat_mode"})
+            columnNames = {"user_id", "world_id", "chat_mode"}),
+        @UniqueConstraint(name = "uk_user_ugc_world_mode",
+            columnNames = {"user_id", "ugc_world_id", "chat_mode"})
     },
     indexes = {
         @Index(name = "idx_room_user_active", columnList = "user_id, last_active_at"),
         @Index(name = "idx_room_character", columnList = "character_id"),
-        @Index(name = "idx_room_world", columnList = "world_id")
+        @Index(name = "idx_room_world", columnList = "world_id"),
+        @Index(name = "idx_room_ugc_world", columnList = "ugc_world_id")
     })
 public class ChatRoom {
 
@@ -99,6 +102,14 @@ public class ChatRoom {
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "world_id", nullable = true, referencedColumnName = "id")
     private World world;
+
+    /**
+     * [2026-07-31 에픽 A] UGC 월드 STORY 방 — {@code world}(enum FK)와 앱 레벨 XOR.
+     * Character의 worldId/ugcWorldId 병행 관례를 방 레벨로 확장(브리지 설계, V18).
+     * FK 미설정 Long 참조(V2 도메인 관례).
+     */
+    @Column(name = "ugc_world_id")
+    private Long ugcWorldId;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  공통 필드 — 두 모드 모두 사용
@@ -413,12 +424,43 @@ public class ChatRoom {
         return r;
     }
 
+    /**
+     * [2026-07-31 에픽 A] UGC 월드 STORY V2 생성자 — 브리지 설계.
+     * 공식 {@link #createStoryV2}와 동일 구조이되 world(enum FK) 대신 ugcWorldId를 갖는다.
+     * UGC 월드는 defaultBgm 메타가 없어 BGM은 DAILY 기본.
+     */
+    public static ChatRoom createStoryV2Ugc(User user, Long ugcWorldId,
+                                            String startLocationKey, String userPersona,
+                                            String storyUserNickname) {
+        if (ugcWorldId == null) {
+            throw new IllegalArgumentException("ugcWorldId is required for UGC STORY room");
+        }
+        ChatRoom r = new ChatRoom();
+        r.user = user;
+        r.world = null;
+        r.ugcWorldId = ugcWorldId;
+        r.chatMode = ChatMode.STORY;
+        r.lastActiveAt = LocalDateTime.now();
+        r.userPersona = userPersona;
+        r.storyUserNickname = storyUserNickname;
+        r.currentBgmMode = BgmMode.DAILY;
+
+        r.currentUserLocationKey = startLocationKey;
+        r.currentDay = 1;
+        r.currentDayPart = DayPart.defaultStart();
+        r.endingEligible = false;
+
+        return r;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  헬퍼 — 모드 판정 및 안전한 접근
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public boolean isStoryMode() { return this.chatMode == ChatMode.STORY; }
     public boolean isSandboxMode() { return this.chatMode == ChatMode.SANDBOX; }
+    /** [에픽 A] UGC 월드 무대의 STORY V2 방인가 (브리지 — world enum FK 대신 ugcWorldId). */
+    public boolean isUgcWorldStory() { return isStoryMode() && this.ugcWorldId != null; }
 
     /** SANDBOX 검증 — Story 모드에서 V1 필드 접근 시 명시적 에러. */
     private void requireSandbox() {

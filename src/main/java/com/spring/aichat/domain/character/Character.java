@@ -679,8 +679,12 @@ public class Character {
 
     /**
      * UGC 캐릭터 바인딩 (Stage 4).
-     * 불변식: source=UGC · visibility=PRIVATE(공개는 승인제) · secretEligible=false(승인 전 차단) ·
-     * storyAvailable=false · theaterAvailable=false (v1 SANDBOX 전용 — 루틴 데이터는 별도 생성하되 개방은 v1.1).
+     * 불변식: source=UGC · visibility=PRIVATE(공개는 승인제) · secretEligible=false(승인 전 차단).
+     *
+     * <p>[2026-07-31 에픽 A] STORY/THEATER 개방(격리 확정): <b>UGC 월드 연결 캐릭터만</b>
+     * story/theaterAvailable=true — 공식 월드 연결 UGC 캐릭터는 SANDBOX 유지(공식 STORY
+     * 캐스트가 월드 풀에서 자동 파생되므로, 공식 월드에 開放하면 타 유저 방에 자동 합류하는
+     * 캐스트 오염이 구조적으로 발생한다). 실개방은 서비스 게이트(ugc.modes.*)가 통제.
      */
     public static Character createUgc(UgcCharacterSpec spec) {
         Character c = new Character(spec.name(), spec.slug(), spec.baseSystemPrompt(), spec.llmModelName());
@@ -689,8 +693,8 @@ public class Character {
         c.visibility = CharacterVisibility.PRIVATE;
         c.secretEligible = false;
         c.secretReviewStatus = SecretReviewStatus.NONE;
-        c.storyAvailable = false;
-        c.theaterAvailable = false;
+        c.storyAvailable = spec.ugcWorldId() != null;
+        c.theaterAvailable = spec.ugcWorldId() != null;
         c.hidden = false;
 
         c.tagline = spec.tagline();
@@ -739,25 +743,37 @@ public class Character {
 
     // ── [세계관 빌더] 월드 연결/변경 (에셋 무관, 무료 — updateUgcTexts와 동일 정책) ──
 
-    /** 공식 세계관 연결 — UGC 월드 연결은 해제된다(XOR 유지). */
+    /**
+     * 공식 세계관 연결 — UGC 월드 연결은 해제된다(XOR 유지).
+     * [에픽 A 격리] 공식 월드 연결 UGC 캐릭터는 SANDBOX 전용 — STORY/THEATER 플래그 강제 해제.
+     */
     public void linkOfficialWorld(WorldId worldId) {
         requireUgc();
         this.worldId = worldId;
         this.ugcWorldId = null;
+        this.storyAvailable = false;
+        this.theaterAvailable = false;
     }
 
-    /** UGC 월드 연결 — 공식 연결은 해제된다(XOR 유지). 승인 게이트는 서비스 계층 책임. */
+    /**
+     * UGC 월드 연결 — 공식 연결은 해제된다(XOR 유지). 승인 게이트는 서비스 계층 책임.
+     * [에픽 A] UGC 월드 무대의 STORY/THEATER 개방 대상으로 마킹(실개방은 ugc.modes.* 게이트).
+     */
     public void linkUgcWorld(Long ugcWorldId) {
         requireUgc();
         this.ugcWorldId = ugcWorldId;
         this.worldId = null;
+        this.storyAvailable = true;
+        this.theaterAvailable = true;
     }
 
-    /** 세계관 연결 해제 ('나중에 연결' 회귀). */
+    /** 세계관 연결 해제 ('나중에 연결' 회귀) — 무대가 없으므로 STORY/THEATER도 해제. */
     public void unlinkWorld() {
         requireUgc();
         this.worldId = null;
         this.ugcWorldId = null;
+        this.storyAvailable = false;
+        this.theaterAvailable = false;
     }
 
     private static void requireWorldXor(WorldId worldId, Long ugcWorldId) {
