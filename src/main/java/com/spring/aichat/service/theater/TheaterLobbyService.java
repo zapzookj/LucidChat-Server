@@ -59,6 +59,10 @@ public class TheaterLobbyService {
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
     private final ObjectMapper objectMapper;
+    // [2026-07-31 에픽 A] enum PK 브리지 — UGC 월드 THEATER 개방
+    private final com.spring.aichat.service.story.WorldViewService worldViewService;
+    private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
+    private final com.spring.aichat.config.UgcModeProperties ugcModeProperties;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  초기 스탯 분배 정책 (구독 티어별)
@@ -124,6 +128,60 @@ public class TheaterLobbyService {
         return cards;
     }
 
+    /**
+     * [2026-07-31 에픽 A] 유저가 극장을 열 수 있는 UGC 월드 카드 (내 월드 v1).
+     * 게이트(ugc.modes.theater-enabled) off면 빈 배열 — 프론트는 섹션 자체를 숨긴다.
+     */
+    public List<WorldCard> getUgcWorldCards(String username) {
+        if (!ugcModeProperties.theaterOn()) return List.of();
+        User user = findUser(username);
+
+        List<WorldCard> cards = new ArrayList<>();
+        for (var ugcWorld : ugcWorldRepository.findByOwnerUserIdOrderByIdDesc(user.getId())) {
+            List<Character> heroines = characterRepository
+                .findByUgcWorldIdAndTheaterAvailableTrueAndHiddenFalseOrderByIdAsc(ugcWorld.getId()).stream()
+                .filter(c -> c.isAccessibleBy(user.getId()))
+                .toList();
+            if (heroines.isEmpty()) continue;
+
+            List<HeroineSummary> summaries = heroines.stream()
+                .map(c -> new HeroineSummary(c.getId(), c.getName(), c.getSlug(),
+                    c.getTagline(), c.getThumbnailUrl()))
+                .toList();
+            List<String> keywords = ugcWorld.getMoodTags() == null
+                ? List.of()
+                : Arrays.stream(ugcWorld.getMoodTags().split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).toList();
+
+            cards.add(new WorldCard(
+                "UGCW_" + ugcWorld.getId(),
+                ugcWorld.getName(),
+                ugcWorld.getIntro(),
+                ugcWorld.getIntro(),
+                ugcWorld.getThumbnailUrl(),
+                ugcWorld.getThumbnailUrl(),
+                keywords,
+                false,          // UGC 월드 시크릿 불허(확정 정책)
+                heroines.size(),
+                summaries
+            ));
+        }
+        return cards;
+    }
+
+    /** [에픽 A] 세션 월드 표시명 — 공식 enum / UGC 병행 컬럼 공용. */
+    private String resolveWorldDisplayName(TheaterState state) {
+        if (state.getWorldId() != null) {
+            return worldRepository.findById(state.getWorldId())
+                .map(World::getDisplayName).orElse(state.getWorldId().name());
+        }
+        if (state.getUgcWorldId() != null) {
+            return ugcWorldRepository.findById(state.getUgcWorldId())
+                .map(com.spring.aichat.domain.ugc.UgcWorld::getName).orElse(state.worldRefKey());
+        }
+        return "(unknown)";
+    }
+
     /** 단일 세계관 조회 (세부 페이지용) */
     public WorldCard getWorldCard(String worldIdStr) {
         WorldId wid = WorldId.fromStringOrNull(worldIdStr);
@@ -149,8 +207,7 @@ public class TheaterLobbyService {
             TheaterState state = theaterStateRepository.findByRoom_Id(room.getId()).orElse(null);
             if (state == null) continue;
 
-            World world = worldRepository.findById(state.getWorldId()).orElse(null);
-            String worldDisplayName = world != null ? world.getDisplayName() : state.getWorldId().name();
+            String worldDisplayName = resolveWorldDisplayName(state);
 
             TheaterHeroineAffection lead = heroineAffectionRepository
                 .findByRoomOrderByAffectionDesc(room.getId())
@@ -158,7 +215,7 @@ public class TheaterLobbyService {
 
             cards.add(new TheaterSessionCard(
                 room.getId(),
-                state.getWorldId().name(),
+                state.worldRefKey(),
                 worldDisplayName,
                 state.getAvatarName() != null ? state.getAvatarName() : user.getNickname(),
                 state.getCurrentAct().getNumber(),
@@ -231,13 +288,27 @@ public class TheaterLobbyService {
     public TheaterRoomInfo createSession(String username, CreateTheaterSessionRequest request) {
         User user = findUser(username);
 
-        // ─── 1. 세계관 검증 ───
-        WorldId worldId = WorldId.fromStringOrNull(request.worldId());
-        if (worldId == null) throw new BadRequestException("존재하지 않는 세계관입니다: " + request.worldId());
-
-        World world = worldRepository.findById(worldId)
-            .orElseThrow(() -> new NotFoundException("세계관 마스터 데이터가 없습니다."));
-        if (!world.isActive()) throw new BadRequestException("현재 이용할 수 없는 세계관입니다.");
+        // ─── 1. 세계관 검증 ─── [2026-07-31 에픽 A] 공식 enum name + UGCW_ ref 공용
+        com.spring.aichat.domain.world.WorldRef worldRef;
+        try {
+            worldRef = com.spring.aichat.domain.world.WorldRef.parse(request.worldId());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("존재하지 않는 세계관입니다: " + request.worldId());
+        }
+        String worldDisplayName;
+        if (worldRef.isUgc()) {
+            if (!ugcModeProperties.theaterOn()) {
+                throw new BadRequestException("UGC 세계관 극장 모드는 아직 준비 중이에요.");
+            }
+            com.spring.aichat.service.story.WorldView view = worldViewService.resolve(worldRef);
+            worldViewService.assertUgcPlayable(view, user);
+            worldDisplayName = view.displayName();
+        } else {
+            World world = worldRepository.findById(worldRef.officialId())
+                .orElseThrow(() -> new NotFoundException("세계관 마스터 데이터가 없습니다."));
+            if (!world.isActive()) throw new BadRequestException("현재 이용할 수 없는 세계관입니다.");
+            worldDisplayName = world.getDisplayName();
+        }
 
         // ─── 2. 히로인 검증 ───
         List<Long> heroineIds = request.heroineIds();
@@ -257,9 +328,17 @@ public class TheaterLobbyService {
             if (!c.isTheaterAvailable()) {
                 throw new BadRequestException("Theater를 지원하지 않는 히로인입니다: " + c.getName());
             }
-            if (c.getWorldId() != worldId) {
+            // [에픽 A] 소속 검증 — 공식 enum 또는 UGC 월드 id
+            boolean belongs = worldRef.isUgc()
+                ? worldRef.ugcWorldId().equals(c.getUgcWorldId())
+                : c.getWorldId() == worldRef.officialId();
+            if (!belongs) {
                 throw new BadRequestException(
-                    String.format("%s는 %s 세계관에 속하지 않습니다.", c.getName(), world.getDisplayName()));
+                    String.format("%s는 %s 세계관에 속하지 않습니다.", c.getName(), worldDisplayName));
+            }
+            // [에픽 A] UGC 캐릭터 접근권 — 철회(PRIVATE 회귀) 캐릭터 차단
+            if (c.isUgc() && !c.isAccessibleBy(user.getId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "접근할 수 없는 캐릭터예요: " + c.getName());
             }
         }
 
@@ -283,7 +362,7 @@ public class TheaterLobbyService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "TheaterState 일관성 오류: room=" + existing.get().getId()));
 
-            if (existingState.getWorldId() == worldId) {
+            if (existingState.matchesWorld(worldRef)) {
                 // [Phase 5.5 UX Polish · R4] 같은 세계관 + 같은 lead heroine 이라도
                 // 아카이브된 세션이면 resume이 정확한 의미. 활성으로 전환.
                 if (existingState.isArchived()) {
@@ -302,7 +381,7 @@ public class TheaterLobbyService {
                 }
 
                 log.info("🎭 [THEATER] Existing session returned | roomId={} | world={} | user={}",
-                    existing.get().getId(), worldId, username);
+                    existing.get().getId(), worldRef.key(), username);
                 return buildRoomInfo(existing.get(), existingState);
             }
             // 다른 세계관의 방 — 존재할 수 있음 (모델 C-2: 활성 1개 + 아카이브 N).
@@ -344,7 +423,7 @@ public class TheaterLobbyService {
         // ─── 8. TheaterState 생성 ───
         TheaterState.AvatarStatDistribution distribution = toDistribution(request.initialStats());
         TheaterState state = TheaterState.create(
-            room, worldId, avatarName, avatarJson, personaText, distribution
+            room, worldRef, avatarName, avatarJson, personaText, distribution
         );
         state = theaterStateRepository.save(state);
 
@@ -355,7 +434,7 @@ public class TheaterLobbyService {
         }
 
         log.info("🎭 [THEATER] New session created | roomId={} | world={} | heroines={} | user={}",
-            room.getId(), worldId, heroineIds, username);
+            room.getId(), worldRef.key(), heroineIds, username);
 
         return buildRoomInfo(room, state);
     }
@@ -608,8 +687,7 @@ public class TheaterLobbyService {
      * TheaterRoomInfo DTO 조립
      */
     private TheaterRoomInfo buildRoomInfo(ChatRoom room, TheaterState state) {
-        World world = worldRepository.findById(state.getWorldId()).orElse(null);
-        String worldDisplayName = world != null ? world.getDisplayName() : state.getWorldId().name();
+        String worldDisplayName = resolveWorldDisplayName(state);
 
         // 아바타 스냅샷
         Map<String, Integer> stats = new LinkedHashMap<>();
@@ -704,7 +782,7 @@ public class TheaterLobbyService {
 
         return new TheaterRoomInfo(
             room.getId(),
-            state.getWorldId().name(),
+            state.worldRefKey(),
             worldDisplayName,
             state.getAvatarName(),    // [Polish-v2] flat avatarName 추가
             avatar,

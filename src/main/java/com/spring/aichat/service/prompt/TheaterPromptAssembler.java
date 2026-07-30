@@ -9,7 +9,6 @@ import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.TheaterHeroineAffection;
 import com.spring.aichat.domain.theater.TheaterState;
-import com.spring.aichat.domain.world.World;
 import com.spring.aichat.dto.theater.AvatarProfile;
 import com.spring.aichat.security.PromptInjectionGuard;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +61,8 @@ public class TheaterPromptAssembler {
     public record AssemblyContext(
         ChatRoom room,
         TheaterState state,
-        World world,
+        /** [2026-07-31 에픽 A] 공식/UGC 공용 월드 뷰 — enum PK 브리지. */
+        com.spring.aichat.service.story.WorldView world,
         Character speakerHeroine,                        // 현재 배치의 고정 화자
         List<TheaterHeroineAffection> allAffections,     // 세션의 모든 히로인 호감도 스냅샷
         String rollingSummary,                           // 직전 배치의 요약
@@ -78,7 +78,8 @@ public class TheaterPromptAssembler {
          * R2/R3 인자가 없으면 null로 채움.
          */
         public AssemblyContext(
-            ChatRoom room, TheaterState state, World world, Character speakerHeroine,
+            ChatRoom room, TheaterState state,
+            com.spring.aichat.service.story.WorldView world, Character speakerHeroine,
             List<TheaterHeroineAffection> allAffections, String rollingSummary,
             String chapterPlanHint, String branchContext, Integer targetSceneCount,
             boolean effectiveSecretMode
@@ -151,13 +152,18 @@ public class TheaterPromptAssembler {
         StringBuilder sb = new StringBuilder();
         TheaterState state = ctx.state();
 
-        // ─── 1. 세계관 ───
+        // ─── 1. 세계관 ─── [에픽 A] UGC lore는 유저 생성 텍스트 — 캡슐화(구조 위장 차단)
         sb.append("# 📖 World\n");
-        sb.append("World: ").append(ctx.world().getDisplayName()).append("\n");
-        sb.append("Tagline: ").append(safeString(ctx.world().getTagline())).append("\n");
-        String worldDesc = safeString(ctx.world().getDescription());
-        if (!worldDesc.isBlank()) sb.append("Setting: ").append(worldDesc).append("\n");
-        String moodKeywords = safeString(ctx.world().getMoodKeywords());
+        sb.append("World: ").append(ctx.world().displayName()).append("\n");
+        sb.append("Tagline: ").append(safeString(ctx.world().tagline())).append("\n");
+        String worldDesc = safeString(ctx.world().description());
+        if (!worldDesc.isBlank()) {
+            String setting = ctx.world().isUgc()
+                ? injectionGuard.encapsulate("WORLD_LORE", worldDesc)
+                : worldDesc;
+            sb.append("Setting: ").append(setting).append("\n");
+        }
+        String moodKeywords = safeString(ctx.world().moodKeywords());
         if (!moodKeywords.isBlank()) sb.append("Mood Keywords: ").append(moodKeywords).append("\n");
         sb.append("\n");
 

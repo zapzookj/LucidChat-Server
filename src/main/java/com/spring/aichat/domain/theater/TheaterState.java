@@ -53,9 +53,14 @@ public class TheaterState {
     @JoinColumn(name = "room_id", nullable = false, unique = true)
     private ChatRoom room;
 
+    /** [2026-07-31 에픽 A] nullable로 완화 — UGC 월드 세션은 {@code ugcWorldId}가 대신 채워진다(XOR). */
     @Enumerated(EnumType.STRING)
-    @Column(name = "world_id", nullable = false, length = 50)
+    @Column(name = "world_id", length = 50)
     private WorldId worldId;
+
+    /** [2026-07-31 에픽 A] UGC 월드 세션 (worldId와 앱 레벨 XOR — V18, FK 미설정 관례). */
+    @Column(name = "ugc_world_id")
+    private Long ugcWorldId;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  서사 진행 상태
@@ -222,6 +227,35 @@ public class TheaterState {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Factory
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** [2026-07-31 에픽 A] 공식/UGC 공용 팩토리 — WorldRef 기준. */
+    public static TheaterState create(ChatRoom room, com.spring.aichat.domain.world.WorldRef ref,
+                                      String avatarName, String avatarProfileJson,
+                                      String avatarPersonaText, AvatarStatDistribution initialStats) {
+        TheaterState s = create(room, ref.officialId(), avatarName, avatarProfileJson,
+            avatarPersonaText, initialStats);
+        s.ugcWorldId = ref.ugcWorldId();
+        return s;
+    }
+
+    /** [에픽 A] 세션의 월드 참조 — 공식/UGC 공용. 양쪽 다 없으면(손상 row) null. */
+    public com.spring.aichat.domain.world.WorldRef getWorldRef() {
+        if (worldId != null) return com.spring.aichat.domain.world.WorldRef.ofOfficial(worldId);
+        if (ugcWorldId != null) return com.spring.aichat.domain.world.WorldRef.ofUgc(ugcWorldId);
+        return null;
+    }
+
+    /** [에픽 A] DTO용 월드 키 문자열 — enum name 또는 {@code UGCW_{id}}. 손상 row는 "(unknown)". */
+    public String worldRefKey() {
+        com.spring.aichat.domain.world.WorldRef ref = getWorldRef();
+        return ref != null ? ref.key() : "(unknown)";
+    }
+
+    /** [에픽 A] 세션이 해당 월드 참조와 일치하는가 — enum ==/null 비교의 공용 대체. */
+    public boolean matchesWorld(com.spring.aichat.domain.world.WorldRef ref) {
+        com.spring.aichat.domain.world.WorldRef mine = getWorldRef();
+        return mine != null && ref != null && mine.key().equals(ref.key());
+    }
 
     public static TheaterState create(ChatRoom room, WorldId worldId, String avatarName,
                                       String avatarProfileJson, String avatarPersonaText,

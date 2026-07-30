@@ -11,8 +11,6 @@ import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.theater.*;
-import com.spring.aichat.domain.world.World;
-import com.spring.aichat.domain.world.WorldRepository;
 import com.spring.aichat.dto.theater.LlmSceneBatchOutput;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
 import com.spring.aichat.exception.ExternalApiException;
@@ -43,7 +41,8 @@ public class TheaterBatchGenerator {
     private final TheaterPromptAssembler promptAssembler;
     private final TheaterBatchCacheService batchCache;
     private final TheaterDirectorEngine directorEngine;
-    private final WorldRepository worldRepository;
+    // [2026-07-31 에픽 A] enum PK 브리지 — 공식/UGC 월드 단일 뷰
+    private final com.spring.aichat.service.story.WorldViewService worldViewService;
     private final CharacterRepository characterRepository;
     private final TheaterHeroineAffectionRepository affectionRepository;
     private final TheaterSceneLogRepository sceneLogRepository;
@@ -124,8 +123,12 @@ public class TheaterBatchGenerator {
         ChatRoom room = params.room();
         TheaterState state = params.state();
 
-        World world = worldRepository.findById(state.getWorldId())
-            .orElseThrow(() -> new IllegalStateException("World not found: " + state.getWorldId()));
+        // [2026-07-31 에픽 A] 공식/UGC 공용 월드 뷰 — enum PK 브리지
+        com.spring.aichat.domain.world.WorldRef worldRef = state.getWorldRef();
+        if (worldRef == null) {
+            throw new IllegalStateException("Theater state without world: room=" + room.getId());
+        }
+        com.spring.aichat.service.story.WorldView world = worldViewService.resolve(worldRef);
 
         Character speaker = directorEngine.decideNextSpeakerHeroine(
             room, state, params.hintedSpeakerHeroineId());

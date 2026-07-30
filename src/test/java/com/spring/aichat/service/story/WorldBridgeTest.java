@@ -116,6 +116,41 @@ class WorldBridgeTest {
         assertFalse(c.isStoryAvailable(), "무대 없음 — 해제");
     }
 
+    // ━━━━━━━━━━ TheaterState — 병행 컬럼 (2단 THEATER) ━━━━━━━━━━
+
+    @Test
+    @DisplayName("TheaterState.create(WorldRef) — 공식/UGC 세션 병행 + matchesWorld 비교")
+    void theaterStateWorldRef() {
+        ChatRoom room = ChatRoom.createStoryV2Ugc(new User(), 1L, "KEY", null, null);
+
+        com.spring.aichat.domain.theater.TheaterState official =
+            com.spring.aichat.domain.theater.TheaterState.create(
+                room, WorldRef.ofOfficial(WorldId.MEDIEVAL_FANTASY), "아바타", null, "", null);
+        assertEquals(WorldId.MEDIEVAL_FANTASY, official.getWorldId());
+        assertNull(official.getUgcWorldId());
+        assertEquals("MEDIEVAL_FANTASY", official.worldRefKey());
+        assertTrue(official.matchesWorld(WorldRef.parse("MEDIEVAL_FANTASY")));
+        assertFalse(official.matchesWorld(WorldRef.parse("UGCW_42")));
+
+        com.spring.aichat.domain.theater.TheaterState ugc =
+            com.spring.aichat.domain.theater.TheaterState.create(
+                room, WorldRef.ofUgc(42L), "아바타", null, "", null);
+        assertNull(ugc.getWorldId());
+        assertEquals(42L, ugc.getUgcWorldId());
+        assertEquals("UGCW_42", ugc.worldRefKey());
+        assertTrue(ugc.matchesWorld(WorldRef.parse("UGCW_42")));
+    }
+
+    @Test
+    @DisplayName("isTheaterAvailable — UGC 월드 연결도 무대로 인정 (2단 개방)")
+    void theaterAvailableWithUgcWorld() {
+        Character ugcLinked = ugcChar(null, 42L);
+        assertTrue(ugcLinked.isTheaterAvailable(), "UGC 월드 무대 인정");
+
+        Character unlinked = ugcChar(null, null);
+        assertFalse(unlinked.isTheaterAvailable(), "무대 없음 — 불가");
+    }
+
     // ━━━━━━━━━━ WorldView — 수위·키 정책 ━━━━━━━━━━
 
     @Test

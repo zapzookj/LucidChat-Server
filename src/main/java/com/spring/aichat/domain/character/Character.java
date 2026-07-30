@@ -609,7 +609,9 @@ public class Character {
     }
 
     public boolean isTheaterAvailable() {
-        return theaterAvailable && worldId != null;
+        // [2026-07-31 에픽 A] 무대(공식 또는 UGC 월드)가 있어야 Theater 가능 —
+        // UGC는 UGC 월드 연결만 개방(격리 확정), 실개방은 ugc.modes.theater-enabled 게이트.
+        return theaterAvailable && (worldId != null || ugcWorldId != null);
     }
 
     public String getEffectiveTheaterIntroBeat() {

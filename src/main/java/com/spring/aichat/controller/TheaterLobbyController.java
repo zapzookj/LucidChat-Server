@@ -47,6 +47,15 @@ public class TheaterLobbyController {
         return theaterLobbyService.getWorldCard(worldId);
     }
 
+    /**
+     * [2026-07-31 에픽 A] 유저가 극장을 열 수 있는 UGC 월드 카드 (내 월드 v1).
+     * 게이트(ugc.modes.theater-enabled) off면 빈 배열.
+     */
+    @GetMapping("/lobby/ugc-worlds")
+    public List<WorldCard> getUgcWorlds(Authentication authentication) {
+        return theaterLobbyService.getUgcWorldCards(authentication.getName());
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Theater 세션 목록 (Continue)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
