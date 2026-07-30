@@ -452,9 +452,11 @@ public class ChatStreamService {
             // [Phase 6-Illust] illustration_scene_hint 영속화 (동적 장소 처리와 무관하게 매 응답마다)
             applyParsedToRoom(roomId, parsed);
 
-            // ── [2026-07-30 A-1 재피벗] 매턴 씬 일러 — 플래그 기본 off. 실패해도 채팅 흐름 불침해. ──
+            // ── [2026-07-30 A-1 재피벗] 매턴 씬 일러 — 인밴드 자동 경로. 실패해도 채팅 흐름 불침해.
+            //    [2026-07-31 에픽 B] 트리거 기본값 manual 전환으로 휴면 — trigger=auto일 때만 가동
+            //    (수동 경로는 SceneRequestService — 채팅 스트림과 직교). ──
             SendChatResponse.SceneIllustrationInfo sceneIllust = null;
-            if (sceneRenderService.ready()) {
+            if (sceneRenderService.autoReady()) {
                 try {
                     // [리뷰픽스 수위 게이트] 비시크릿 방은 sfw 강제 — 시크릿(성인인증+BM 통과)만 해제
                     com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView view = sceneRenderService.resolveForTurn(

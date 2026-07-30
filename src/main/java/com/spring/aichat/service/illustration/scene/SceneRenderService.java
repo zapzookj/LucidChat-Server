@@ -72,6 +72,14 @@ public class SceneRenderService {
         return props.ready() && comfyClient.configured();
     }
 
+    /**
+     * [2026-07-31 에픽 B] 인밴드 자동 경로 게이트 — 트리거 기본값이 manual로 바뀌면서
+     * 매턴 resolveForTurn 배선(V1 ChatStreamService)은 {@code trigger=auto}일 때만 살아난다.
+     */
+    public boolean autoReady() {
+        return ready() && props.isAutoTrigger();
+    }
+
     /** 프론트 폴링/네비게이션 응답용 뷰. */
     public record SceneView(Long id, int turnIndex, String status, String imageUrl) {
         static SceneView of(SceneIllustration s) {
@@ -125,6 +133,43 @@ public class SceneRenderService {
         return SceneView.of(pending);
     }
 
+    /**
+     * [2026-07-31 에픽 B] 인플라이트 뷰 — 방의 마지막 행이 아직 렌더 중이면 반환.
+     * 수동 요청의 과금 전 중복 가드(같은 방 동시 1렌더 원칙 — 프론트 버튼 비활성의 서버측 짝).
+     */
+    public SceneView inFlightView(Long roomId) {
+        return repository.findTopByChatRoomIdOrderByIdDesc(roomId)
+            .filter(s -> !s.isTerminal())
+            .map(SceneView::of)
+            .orElse(null);
+    }
+
+    /**
+     * [2026-07-31 에픽 B] 수동 요청 제출 — 씬 디렉터 스펙으로 즉시 렌더.
+     * 디덥 없음(유저가 명시적으로 과금 요청 — 같은 씬 재요청도 새 시드로 새 렌더).
+     * 과금·환불 정산은 행에 기록(requestedBy/energyCharged) — 실패 시 failRender가 환불.
+     *
+     * @throws IllegalStateException 렌더 풀 포화 — 호출측이 환불 후 사용자 에러로 변환
+     */
+    public SceneView submitManual(Long roomId, List<Character> cast,
+                                  AiJsonOutput.SceneIllustrationSpec spec, int turnIndex,
+                                  boolean sfw, Long requestedBy, int energyCharged) {
+        SceneRenderPlan plan = planRender(cast, spec, sfw);
+        SceneIllustration pending = repository.save(SceneIllustration.pendingManual(
+            roomId, turnIndex, plan.sceneHash(), plan.prompt().fullPrompt(),
+            requestedBy, energyCharged));
+        try {
+            sceneRenderExecutor.execute(() -> render(pending.getId(), plan.prompt(), roomId, turnIndex));
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // 환불은 failRender(refundableOnFail)가 수행 — 호출측에는 실패 사실만 전파
+            writeService.failRender(pending.getId(), "씬 렌더 풀 포화 — 렌더 유실");
+            throw new IllegalStateException("씬 렌더 풀 포화", e);
+        }
+        log.info("[SCENE-RENDER] 수동 제출: roomId={} turn={} illustrationId={} by={}",
+            roomId, turnIndex, pending.getId(), requestedBy);
+        return SceneView.of(pending);
+    }
+
     /** 프론트 폴링 — 방 스코프 검증은 컨트롤러(AuthGuard)가 담당. */
     public SceneView getView(Long roomId, Long illustrationId) {
         return repository.findById(illustrationId)
@@ -158,7 +203,12 @@ public class SceneRenderService {
      *            시크릿 방(SecretModeService 통과)만 false.
      */
     public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out, boolean sfw) {
-        AiJsonOutput.SceneIllustrationSpec spec = out == null ? null : out.sceneIllustration();
+        return planRender(roomCharacters, out == null ? null : out.sceneIllustration(), sfw);
+    }
+
+    /** [2026-07-31 에픽 B] 스펙 직접 수용 오버로드 — 씬 디렉터(수동 경로) 산출용. */
+    public SceneRenderPlan planRender(List<Character> roomCharacters,
+                                      AiJsonOutput.SceneIllustrationSpec spec, boolean sfw) {
         String location = spec == null ? "" : nz(spec.locationDescription());
         String action = spec == null ? "" : nz(spec.actionDescription());
 

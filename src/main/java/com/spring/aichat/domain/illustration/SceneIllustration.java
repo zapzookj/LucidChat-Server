@@ -62,6 +62,24 @@ public class SceneIllustration {
     @Column(name = "error_message", length = 500)
     private String errorMessage;
 
+    // ── [2026-07-31 에픽 B] 수동 트리거 과금·환불 추적 (V17) ──
+
+    /** AUTO(인밴드 휴면 경로) | MANUAL(유저 요청 + 전용 프롬프트 라이터). */
+    @Column(name = "trigger_source", nullable = false, length = 10)
+    private String triggerSource = "AUTO";
+
+    /** MANUAL 요청 유저 id — 실패 환불 대상 (FK 미설정, owner_user_id 관례). */
+    @Column(name = "requested_by")
+    private Long requestedBy;
+
+    /** 요청 시점 차감 에너지 — 실패 환불 정산 기준. AUTO/SKIPPED는 0. */
+    @Column(name = "energy_charged", nullable = false)
+    private int energyCharged = 0;
+
+    /** 환불 완료 여부 — failRender 환불의 멱등 가드. */
+    @Column(name = "energy_refunded", nullable = false)
+    private boolean energyRefunded = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -88,6 +106,19 @@ public class SceneIllustration {
         s.status = "PENDING";
         s.sceneHash = sceneHash;
         s.positivePrompt = positivePrompt;
+        return s;
+    }
+
+    /**
+     * [2026-07-31 에픽 B] 수동 요청 행 — 유저가 명시 요청·에너지 차감. 실패 시 failRender가
+     * energyCharged를 requestedBy에게 환불한다(energyRefunded 멱등 가드).
+     */
+    public static SceneIllustration pendingManual(Long chatRoomId, int turnIndex, String sceneHash,
+                                                  String positivePrompt, Long requestedBy, int energyCharged) {
+        SceneIllustration s = pending(chatRoomId, turnIndex, sceneHash, positivePrompt);
+        s.triggerSource = "MANUAL";
+        s.requestedBy = requestedBy;
+        s.energyCharged = energyCharged;
         return s;
     }
 
@@ -125,5 +156,15 @@ public class SceneIllustration {
 
     public boolean isTerminal() {
         return "COMPLETED".equals(status) || "FAILED".equals(status) || "SKIPPED".equals(status);
+    }
+
+    /** 실패 환불 대상인가 — MANUAL·차감액 존재·미환불일 때만(멱등). */
+    public boolean refundableOnFail() {
+        return "MANUAL".equals(triggerSource) && energyCharged > 0
+            && !energyRefunded && requestedBy != null;
+    }
+
+    public void markRefunded() {
+        this.energyRefunded = true;
     }
 }

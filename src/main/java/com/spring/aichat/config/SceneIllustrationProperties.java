@@ -18,6 +18,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   illustration:
  *     scene:
  *       enabled: ${SCENE_ILLUST_ENABLED:false}
+ *       trigger: ${SCENE_ILLUST_TRIGGER:manual}   # manual(유저 요청) | auto(인밴드 휴면)
+ *       energy-cost: 5
+ *       director:
+ *         model: ${SCENE_DIRECTOR_MODEL:}          # 미지정 시 openai.model 폴백
  *       runpod:
  *         api-key: ${SCENE_RUNPOD_API_KEY:}
  *         endpoint-id: ${SCENE_RUNPOD_ENDPOINT_ID:}
@@ -29,12 +33,49 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "illustration.scene")
 public record SceneIllustrationProperties(
     Boolean enabled,
+    String trigger,
+    Integer energyCost,
+    Director director,
     Runpod runpod,
     Generation generation
 ) {
     public SceneIllustrationProperties {
+        if (director == null) director = new Director(null, null, null);
         if (runpod == null) runpod = new Runpod(null, null);
         if (generation == null) generation = new Generation(null, null, null, null, null);
+    }
+
+    /** 테스트/하위 호환 편의 생성자 — 트리거·과금 노브 기본값(manual/5). */
+    public SceneIllustrationProperties(Boolean enabled, Runpod runpod, Generation generation) {
+        this(enabled, null, null, null, runpod, generation);
+    }
+
+    /**
+     * [2026-07-31 에픽 B] 트리거 모드 — 기본 {@code manual}(유저 요청 + 전용 프롬프트 라이터).
+     * {@code auto}는 기존 인밴드 매턴 경로(채팅 LLM이 scene_illustration 필드 출력)의 휴면 보존값 —
+     * 프리미엄/이벤트 연출 등 재활성 대비.
+     */
+    public boolean isAutoTrigger() {
+        return "auto".equalsIgnoreCase(trigger);
+    }
+
+    /** 수동 요청 1회 에너지 (종원 확정 2026-07-31: 5 — ModelsLab 캐릭터 일러 10의 절반). */
+    public int energyCostOrDefault() {
+        return energyCost != null ? energyCost : 5;
+    }
+
+    /**
+     * 전용 프롬프트 라이터(씬 디렉터) 노브 — 대화 맥락→L1 규약 스펙 구조화 LLM.
+     * 모델 미지정 시 {@code openai.model}(gemini-3-flash) 폴백으로 시작해 튜닝(종원 확정).
+     * 구조화 태스크 비사고 모델 규율(docs/09 §B-3) — 사고 모델 지정은 피할 것.
+     */
+    public record Director(String model, Integer maxTokens, Integer contextTurns) {
+        public String modelOrDefault(String fallback) {
+            return (model != null && !model.isBlank()) ? model : fallback;
+        }
+        public int maxTokensOrDefault() { return maxTokens != null ? maxTokens : 900; }
+        /** 라이터에게 주는 최근 대화 로그 수(USER/ASSISTANT 합산). */
+        public int contextTurnsOrDefault() { return contextTurns != null ? contextTurns : 14; }
     }
 
     /** 씬 렌더 트랙 활성 여부 — 기본 <b>비활성</b>(프로드 안전 기본값). */

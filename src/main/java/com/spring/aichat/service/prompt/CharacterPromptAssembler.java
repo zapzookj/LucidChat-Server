@@ -1002,7 +1002,9 @@ public class CharacterPromptAssembler {
      * 기존 시스템 프롬프트/모더레이션 정책이 그대로 지배한다.
      */
     private String sceneIllustrationBlock(Character character) {
-        if (!sceneIllustrationProps.isEnabled()) return "";
+        // [2026-07-31 에픽 B] 트리거 기본값 manual 전환 — 인밴드 필드 지시는 auto 모드에서만
+        // (수동 모드에선 채팅 LLM이 씬 필드를 아예 출력하지 않아 매턴 스키마 세금 제거).
+        if (!sceneIllustrationProps.isEnabled() || !sceneIllustrationProps.isAutoTrigger()) return "";
         return """
 
             ## 🎬 Scene Illustration (ADDITIONAL fields — output every turn)

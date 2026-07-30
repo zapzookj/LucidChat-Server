@@ -129,6 +129,14 @@ modelslab:
 illustration:
   scene:
     enabled: ${SCENE_ILLUST_ENABLED:false}
+    # [2026-07-31 에픽 B] 트리거: manual=유저 요청+전용 프롬프트 라이터(기본, 5에너지·실패 환불)
+    #                     auto=채팅 LLM 인밴드 매턴(휴면 보존 — 프리미엄/이벤트 재활성 대비)
+    trigger: ${SCENE_ILLUST_TRIGGER:manual}
+    energy-cost: 5
+    director:
+      # 씬 디렉터(대화 맥락→L1 규약 스펙) — 미지정 시 openai.model(gemini-3-flash) 폴백 후 튜닝.
+      # 구조화 태스크 비사고 모델 규율(docs/09 §B-3) — 사고 모델 지정 금지.
+      model: ${SCENE_DIRECTOR_MODEL:}
     runpod:
       api-key: ${SCENE_RUNPOD_API_KEY:}
       endpoint-id: ${SCENE_RUNPOD_ENDPOINT_ID:}

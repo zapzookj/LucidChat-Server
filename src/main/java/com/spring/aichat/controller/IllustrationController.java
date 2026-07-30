@@ -29,8 +29,28 @@ public class IllustrationController {
     private final IllustrationService illustrationService;
     private final BackgroundGenerationService backgroundGenerationService;
     private final com.spring.aichat.service.illustration.scene.SceneRenderService sceneRenderService;
+    private final com.spring.aichat.service.illustration.scene.SceneRequestService sceneRequestService;
 
     // ━━━ [2026-07-30 A-1 재피벗] 매턴 씬 일러 — 폴링 + 씬 네비게이션(A-2) ━━━
+
+    /**
+     * [2026-07-31 에픽 B] 씬 일러 수동 요청 — 유저 트리거 전용(종원 확정).
+     *
+     * <p>5에너지 차감 → 씬 디렉터(전용 LLM)가 대화 맥락으로 스펙 작성 → RunPod 렌더 제출.
+     * 실패 시 자동 환불. 방당 동시 1렌더(진행 중이면 409). V1(SANDBOX)/V2(STORY) 공용.
+     * 응답의 id로 기존 GET /scenes/{id}?roomId= 폴링.
+     */
+    @PostMapping("/scenes/request")
+    public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView> requestScene(
+        @RequestBody Map<String, Long> body,
+        Authentication authentication
+    ) {
+        Long roomId = body.get("roomId");
+        if (roomId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(sceneRequestService.requestManual(authentication.getName(), roomId));
+    }
 
     /** 씬 일러 단건 폴링 — final_result의 sceneIllustration.id로 PENDING/GENERATING 추적. */
     @org.springframework.security.access.prepost.PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
