@@ -40,6 +40,15 @@ public class IllustrationController {
      * 실패 시 자동 환불. 방당 동시 1렌더(진행 중이면 409). V1(SANDBOX)/V2(STORY) 공용.
      * 응답의 id로 기존 GET /scenes/{id}?roomId= 폴링.
      */
+    /**
+     * [리뷰픽스] 씬 일러 가용성 — 프론트 FAB 노출 게이트 + 표기 비용의 단일 소스.
+     * 기능 off(기본값)면 enabled=false → FAB 미노출(죽은 버튼 방지).
+     */
+    @GetMapping("/scenes/availability")
+    public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRequestService.SceneAvailability> sceneAvailability() {
+        return ResponseEntity.ok(sceneRequestService.availability());
+    }
+
     @PostMapping("/scenes/request")
     public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView> requestScene(
         @RequestBody Map<String, Long> body,

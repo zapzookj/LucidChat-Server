@@ -127,6 +127,34 @@ public class RedisCacheService {
     private static final String BG_INFLIGHT_LOCK_PREFIX = "bg:inflight:";
     private static final long BG_INFLIGHT_LOCK_TTL_SECONDS = 5L * 60L; // 5분
 
+    // [2026-07-31 에픽 B 리뷰픽스] 씬 수동 요청 방 단위 락 — 인플라이트 가드(행 조회)와
+    // 에너지 차감 사이의 TOCTOU 창(디렉터 LLM 수 초) 폐쇄. TTL 90s(디렉터+제출 상한).
+    private static final String SCENE_REQ_LOCK_PREFIX = "scene:req:";
+    private static final long SCENE_REQ_LOCK_TTL_SECONDS = 90L;
+
+    /**
+     * 씬 수동 요청 락 — 방당 동시 1요청. Redis 장애 시 true(개방 실패):
+     * 행 기반 인플라이트 가드가 2차 방어선이므로 가용성 우선(bg 락의 보수 방향과 의도적 반대).
+     */
+    public boolean tryAcquireSceneRequestLock(Long roomId) {
+        try {
+            Boolean ok = redisTemplate.opsForValue()
+                .setIfAbsent(SCENE_REQ_LOCK_PREFIX + roomId, "1", SCENE_REQ_LOCK_TTL_SECONDS, TimeUnit.SECONDS);
+            return Boolean.TRUE.equals(ok);
+        } catch (Exception e) {
+            log.warn("Redis scene request lock acquire failed (fail-open): {}", e.getMessage());
+            return true;
+        }
+    }
+
+    public void releaseSceneRequestLock(Long roomId) {
+        try {
+            redisTemplate.delete(SCENE_REQ_LOCK_PREFIX + roomId);
+        } catch (Exception e) {
+            log.warn("Redis scene request lock release failed (TTL 만료로 자연 해제): {}", e.getMessage());
+        }
+    }
+
     /**
      * BG generation 락 획득 시도.
      * @return true면 락 획득 (caller가 generation 진행), false면 다른 generation이 진행 중

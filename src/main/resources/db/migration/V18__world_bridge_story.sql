@@ -20,9 +20,10 @@ ALTER TABLE theater_states DROP CONSTRAINT IF EXISTS theater_states_world_id_che
 -- 공식 월드 연결 UGC 캐릭터는 SANDBOX 유지 — 공식 캐스트 자동 파생 오염 원천 차단).
 -- 루틴 자동생성(1단, 08e6ad2)이 이미 깔아둔 휴면 데이터가 이 백필로 소비 가능해진다.
 -- 서비스 게이트가 기본 off라 이 백필 자체는 아직 휴면이다.
+-- world_id IS NULL 가드: 앱 XOR 가드 위반 행(있어선 안 되나 DB 강제 아님)이 존재해도
+-- 공식 STORY 풀(findByWorldIdAndStoryAvailableTrue...)에 UGC 캐릭터가 오르는 오염을 원천 차단.
 UPDATE characters SET story_available = TRUE
- WHERE source = 'UGC' AND ugc_world_id IS NOT NULL AND story_available = FALSE;
--- THEATER도 동일 백필 — Character.isTheaterEnabled() 게이트(엔티티 개정 전까지 official 한정)와
--- 서비스 게이트가 이중으로 잠겨 있어 휴면. 2단(THEATER 개방)에서 엔티티 게이트가 열린다.
+ WHERE source = 'UGC' AND ugc_world_id IS NOT NULL AND world_id IS NULL AND story_available = FALSE;
+-- THEATER도 동일 백필 — 실개방은 서비스 게이트(ugc.modes.theater-enabled, 기본 off)가 통제한다.
 UPDATE characters SET theater_available = TRUE
- WHERE source = 'UGC' AND ugc_world_id IS NOT NULL AND theater_available = FALSE;
+ WHERE source = 'UGC' AND ugc_world_id IS NOT NULL AND world_id IS NULL AND theater_available = FALSE;

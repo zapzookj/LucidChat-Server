@@ -51,6 +51,15 @@ public class SceneRequestService {
     private final SecretModeService secretModeService;
     private final RedisCacheService cacheService;
     private final TransactionTemplate txTemplate;
+    // [에픽 A 리뷰픽스] UGC 월드 방 자격 재검증
+    private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
+
+    /** 프론트 기능 노출용 가용성 — FAB 렌더 여부와 표기 비용의 단일 소스(하드코딩 드리프트 방지). */
+    public record SceneAvailability(boolean enabled, int energyCost) {}
+
+    public SceneAvailability availability() {
+        return new SceneAvailability(renderService.ready(), props.energyCostOrDefault());
+    }
 
     public SceneRenderService.SceneView requestManual(String username, Long roomId) {
         if (!renderService.ready()) {
@@ -68,48 +77,86 @@ public class SceneRequestService {
         if (room.getChatMode() == ChatMode.THEATER) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "극장 모드는 씬 일러를 지원하지 않습니다.");
         }
+        // [에픽 A 리뷰픽스] UGC 월드 방 — 월드 재잠금/철회 재검증 (V2 SSE 가드와 동일 기준)
+        assertUgcWorldPlayable(room, user.getId());
 
         List<Character> cast = resolveCast(room, user.getId());
 
-        // ── 2. 인플라이트 가드 — 방당 동시 1렌더 (과금 전 차단) ──
-        SceneRenderService.SceneView inFlight = renderService.inFlightView(roomId);
-        if (inFlight != null) {
+        // ── 2. 방 단위 락 + 인플라이트 가드 — 방당 동시 1렌더 (과금 전 차단) ──
+        // [리뷰픽스 TOCTOU] 행 조회 가드만으로는 '가드 통과 → 디렉터 LLM(수 초) → 행 생성' 창에서
+        // 동시 요청이 전부 과금·제출됐다. Redis 락(TTL 90s)으로 창 폐쇄 — Redis 장애 시 개방
+        // 실패(fail-open)로 가용성 우선, 행 가드가 2차 방어선.
+        if (!cacheService.tryAcquireSceneRequestLock(roomId)) {
             throw new BusinessException(ErrorCode.CONFLICT, "이미 씬 일러를 생성하고 있어요.");
         }
-
-        boolean sfw = !resolveSecretMode(room);
-        int cost = props.energyCostOrDefault();
-        int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
-
-        // ── 3. 에너지 차감 (짧은 TX) — InsufficientEnergyException은 그대로 전파 ──
-        txTemplate.execute(status -> {
-            User u = userRepository.findById(user.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
-            u.consumeEnergy(cost);
-            return null;
-        });
-        cacheService.evictUserProfile(username);
-
-        // ── 4. 씬 디렉터 (no-TX LLM) + 렌더 제출 — 동기 실패는 즉시 환불 ──
         try {
-            List<ChatLogDocument> recentLogs = chatLogRepository
-                .findTop20ByRoomIdOrderByCreatedAtDesc(roomId).stream()
-                .limit(props.director().contextTurnsOrDefault())
-                .toList();
-            if (recentLogs.isEmpty()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "아직 그릴 장면이 없어요. 대화를 먼저 시작해 주세요.");
+            SceneRenderService.SceneView inFlight = renderService.inFlightView(roomId);
+            if (inFlight != null) {
+                throw new BusinessException(ErrorCode.CONFLICT, "이미 씬 일러를 생성하고 있어요.");
             }
-            AiJsonOutput.SceneIllustrationSpec spec =
-                directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw);
-            return renderService.submitManual(
-                roomId, cast, spec, turnIndex, sfw, user.getId(), cost);
-        } catch (BusinessException e) {
-            refund(user.getId(), cost, username);
-            throw e;
-        } catch (Exception e) {
-            refund(user.getId(), cost, username);
-            log.warn("[SCENE-REQUEST] 수동 요청 실패(환불 완료): roomId={} {}", roomId, e.getMessage());
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "씬 일러 생성에 실패했어요. 에너지는 환불됐어요.");
+
+            boolean sfw = !resolveSecretMode(room);
+            int cost = props.energyCostOrDefault();
+            int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
+
+            // ── 3. 에너지 차감 (짧은 TX) — InsufficientEnergyException은 그대로 전파 ──
+            txTemplate.execute(status -> {
+                User u = userRepository.findById(user.getId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
+                u.consumeEnergy(cost);
+                return null;
+            });
+            // [리뷰픽스] 캐시 무효화 실패는 표시 문제일 뿐 — 차감 커밋 후 예외로 렌더·환불이
+            // 모두 증발하지 않도록 스왈로우
+            try {
+                cacheService.evictUserProfile(username);
+            } catch (Exception e) {
+                log.warn("[SCENE-REQUEST] 프로필 캐시 무효화 실패 (무해): {}", e.getMessage());
+            }
+
+            // ── 4. 씬 디렉터 (no-TX LLM) + 렌더 제출 — 동기 실패는 즉시 환불 ──
+            try {
+                List<ChatLogDocument> recentLogs = chatLogRepository
+                    .findTop20ByRoomIdOrderByCreatedAtDesc(roomId).stream()
+                    .limit(props.director().contextTurnsOrDefault())
+                    .toList();
+                if (recentLogs.isEmpty()) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "아직 그릴 장면이 없어요. 대화를 먼저 시작해 주세요.");
+                }
+                AiJsonOutput.SceneIllustrationSpec spec =
+                    directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw);
+                return renderService.submitManual(
+                    roomId, cast, spec, turnIndex, sfw, user.getId(), cost);
+            } catch (SceneRenderService.RenderPoolSaturatedException e) {
+                // [리뷰픽스 이중 환불] failRender가 행 기반 멱등 환불을 이미 완료 — 여기서 재환불 금지
+                log.warn("[SCENE-REQUEST] 렌더 풀 포화(환불은 failRender가 완료): roomId={}", roomId);
+                throw new BusinessException(ErrorCode.CONFLICT,
+                    "지금은 씬 일러 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요. 에너지는 환불됐어요.");
+            } catch (BusinessException e) {
+                refund(user.getId(), cost, username);
+                throw e;
+            } catch (Exception e) {
+                refund(user.getId(), cost, username);
+                log.warn("[SCENE-REQUEST] 수동 요청 실패(환불 완료): roomId={} {}", roomId, e.getMessage());
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "씬 일러 생성에 실패했어요. 에너지는 환불됐어요.");
+            }
+        } finally {
+            cacheService.releaseSceneRequestLock(roomId);
+        }
+    }
+
+    /**
+     * [에픽 A 리뷰픽스] UGC 월드 STORY 방의 플레이 자격 재검증 — 소유자 무조건, 타인은
+     * 검수 APPROVED만(월드 수정 시 NONE 리셋 재잠금과 맞물림). ChatStreamServiceV2의
+     * blockIfUgcStoryInaccessible과 동일 기준 — 씬 요청이 그 가드의 우회로가 되지 않게 한다.
+     */
+    private void assertUgcWorldPlayable(ChatRoom room, Long userId) {
+        if (room.getUgcWorldId() == null) return;
+        com.spring.aichat.domain.ugc.UgcWorld world =
+            ugcWorldRepository.findById(room.getUgcWorldId()).orElse(null);
+        if (world == null || (!world.isOwnedBy(userId)
+            && world.getReviewStatus() != com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "이 세계관은 더 이상 이용할 수 없어요.");
         }
     }
 
@@ -119,8 +166,11 @@ public class SceneRequestService {
      * (빈 리스트 = 배경 전용 씬 허용). UGC 접근 불가 캐릭터는 캐스트에서 제외(에픽 A 선제 방어).
      */
     private List<Character> resolveCast(ChatRoom room, Long userId) {
-        // [에픽 A] 공식·UGC 월드 STORY 공용 — 캐스트는 프레즌스 기준이라 월드 종류 무관
-        if (room.getChatMode() == ChatMode.STORY) {
+        // [에픽 A] 공식·UGC 월드 STORY 공용 — 캐스트는 프레즌스 기준이라 월드 종류 무관.
+        // [리뷰픽스] 레거시 V1 STORY(캐릭터형 — world·ugcWorld 모두 없음)는 프레즌스가 없어
+        // 빈 캐스트 과금 렌더가 되므로 V1 캐릭터 분기로 폴스루.
+        if (room.getChatMode() == ChatMode.STORY
+            && (room.getWorld() != null || room.getUgcWorldId() != null)) {
             List<Long> presentIds = presenceRepository
                 .findByChatRoom_IdAndCurrentLocationKey(room.getId(), room.getCurrentUserLocationKey())
                 .stream().map(CharacterPresence::getCharacterId).toList();

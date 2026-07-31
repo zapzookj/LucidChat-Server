@@ -130,6 +130,27 @@ public class TheaterBatchGenerator {
         }
         com.spring.aichat.service.story.WorldView world = worldViewService.resolve(worldRef);
 
+        // [에픽 A 리뷰픽스] UGC 세션 접근 재검증 — 월드 재잠금(수정 시 NONE 리셋)·캐릭터 철회 후
+        // 진행 중 극이 계속 서빙되던 우회로 차단. requestNextBatch·prefetch가 모두 이 관문을 지난다
+        // (V2 STORY의 blockIfUgcStoryInaccessible과 동일 기준).
+        if (worldRef.isUgc()) {
+            Long ownerId = room.getUser().getId();
+            com.spring.aichat.domain.ugc.UgcWorld ugcWorld = world.ugc();
+            if (!ugcWorld.isOwnedBy(ownerId)
+                && ugcWorld.getReviewStatus() != com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED) {
+                throw new com.spring.aichat.exception.BusinessException(
+                    com.spring.aichat.exception.ErrorCode.FORBIDDEN, "이 세계관은 더 이상 이용할 수 없어요.");
+            }
+            boolean anyBlocked = affectionRepository.findByRoom_Id(room.getId()).stream()
+                .map(TheaterHeroineAffection::getCharacter)
+                .filter(java.util.Objects::nonNull)
+                .anyMatch(c -> c.isUgc() && !c.isAccessibleBy(ownerId));
+            if (anyBlocked) {
+                throw new com.spring.aichat.exception.BusinessException(
+                    com.spring.aichat.exception.ErrorCode.FORBIDDEN, "이 캐릭터는 더 이상 극에 출연할 수 없어요.");
+            }
+        }
+
         Character speaker = directorEngine.decideNextSpeakerHeroine(
             room, state, params.hintedSpeakerHeroineId());
 

@@ -241,8 +241,8 @@ public class StoryV2Service {
             .map(l -> new WorldLocationResponse(l.key(), l.displayName(), l.description(), true, 0))
             .toList();
         if (startLocations.isEmpty()) {
-            throw new BusinessException(ErrorCode.WORLD_LOCATION_MISSING,
-                "UGC world " + ref.key() + " has no active location");
+            // [리뷰픽스] 유저 유발 상태(장소 전삭제 월드)는 400 — WORLD_LOCATION_MISSING(500성) 오분류 방지
+            throw new BadRequestException("이 세계관에는 시작할 장소가 없어요. 스튜디오에서 장소를 추가해 주세요.");
         }
 
         Optional<ChatRoom> existing = chatRoomRepository
@@ -303,6 +303,26 @@ public class StoryV2Service {
     private void assertUgcStoryOpen() {
         if (!ugcModeProperties.storyOn()) {
             throw new BadRequestException("UGC 세계관 스토리 모드는 아직 준비 중이에요.");
+        }
+    }
+
+    /**
+     * [리뷰픽스] UGC 방 접근 재검증 — SSE 가드(blockIfUgcStoryInaccessible)의 REST 대칭.
+     * 월드 재잠금(수정 시 NONE 리셋)·캐릭터 철회 이후 상세/리셋 경로의 우회 접근 차단.
+     */
+    private void assertUgcRoomAccessible(ChatRoom room, User user) {
+        if (!room.isUgcWorldStory()) return;
+        var ugcWorld = ugcWorldRepository.findById(room.getUgcWorldId()).orElse(null);
+        if (ugcWorld == null || (!ugcWorld.isOwnedBy(user.getId())
+            && ugcWorld.getReviewStatus() != com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "이 세계관은 더 이상 이용할 수 없어요.");
+        }
+        boolean anyBlocked = heroineRepository.findByChatRoom_Id(room.getId()).stream()
+            .map(ChatRoomHeroine::getCharacter)
+            .filter(java.util.Objects::nonNull)
+            .anyMatch(c -> c.isUgc() && !c.isAccessibleBy(user.getId()));
+        if (anyBlocked) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "이 캐릭터는 더 이상 대화할 수 없어요.");
         }
     }
 
@@ -476,7 +496,14 @@ public class StoryV2Service {
 
         ChatRoom room = ChatRoom.createStoryV2Ugc(user, ref.ugcWorldId(), startLocationKey,
             userPersona, storyNickname);
-        room = chatRoomRepository.save(room);
+        try {
+            room = chatRoomRepository.saveAndFlush(room);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // [리뷰픽스] 동시 생성 레이스 — uk_user_ugc_world_mode 위반을 500이 아닌 409로
+            // (기존 방 조회와 save 사이 창에서 다른 요청이 먼저 생성한 경우)
+            throw new BusinessException(ErrorCode.STORY_V2_ROOM_EXISTS,
+                "Existing room found (concurrent create): world=" + ref.key());
+        }
         storyV2StateRepository.save(StoryV2State.create(room.getId()));
         reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
         seedUgcStoryBackground(room, view, startLocationKey);
@@ -497,8 +524,8 @@ public class StoryV2Service {
         return view.locations().stream()
             .findFirst()
             .map(WorldView.LocationView::key)
-            .orElseThrow(() -> new BusinessException(ErrorCode.WORLD_LOCATION_MISSING,
-                "UGC world " + view.ref().key() + " has no active location"));
+            .orElseThrow(() -> new BadRequestException(
+                "이 세계관에는 시작할 장소가 없어요. 스튜디오에서 장소를 추가해 주세요."));
     }
 
     /**
@@ -640,6 +667,9 @@ public class StoryV2Service {
         // LAZY 프록시를 삭제 전에 강제 초기화 (삭제 후 안전 접근 보장)
         heroines.forEach(c -> { c.getId(); c.getName(); });
 
+        // [리뷰픽스] UGC 방 접근 재검증 — 철회/재잠금된 방의 리셋(미검수 수정본 재주입) 차단
+        assertUgcRoomAccessible(room, user);
+
         cascadeResetRoom(room, request.includePersona());
 
         // 시작 장소 갱신 — [에픽 A] UGC 방은 UGC 장소 풀 기준
@@ -730,6 +760,8 @@ public class StoryV2Service {
         if (worldView == null) {
             throw new BadRequestException("STORY room without world: " + roomId);
         }
+        // [리뷰픽스] UGC 방 접근 재검증 — 철회/재잠금된 방 상세 열람 차단(SSE 가드와 대칭)
+        assertUgcRoomAccessible(room, user);
 
         // 히로인 상태들 — UGC 월드는 secretAllowed=false 확정이라 시크릿 스탯 상시 차단
         List<ChatRoomHeroine> heroineRows = heroineRepository.findByChatRoom_Id(roomId);

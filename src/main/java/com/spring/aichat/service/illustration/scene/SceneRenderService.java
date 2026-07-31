@@ -134,14 +134,42 @@ public class SceneRenderService {
     }
 
     /**
+     * [리뷰픽스] 고아 판정 컷오프 — 렌더 최장 수명은 폴링 12분 + 마진. 이보다 오래된 비종결 행은
+     * 서버 재시작/크래시로 render() 스레드를 잃은 고아다(정상 경로는 반드시 12분 내 종결).
+     */
+    private static final long STALE_IN_FLIGHT_MINUTES = 20;
+
+    /**
      * [2026-07-31 에픽 B] 인플라이트 뷰 — 방의 마지막 행이 아직 렌더 중이면 반환.
      * 수동 요청의 과금 전 중복 가드(같은 방 동시 1렌더 원칙 — 프론트 버튼 비활성의 서버측 짝).
+     *
+     * <p>[리뷰픽스] 고아 행 지연 스윕: 컷오프를 넘긴 비종결 행은 여기서 실패 종결시킨다
+     * (failRender가 MANUAL 행의 에너지를 원요청자에게 환불). 스케줄러 없이도 다음 요청이
+     * 방을 자연 복구 — 서버 재시작으로 방이 영구 409에 갇히던 문제의 해소.
      */
     public SceneView inFlightView(Long roomId) {
-        return repository.findTopByChatRoomIdOrderByIdDesc(roomId)
+        SceneIllustration latest = repository.findTopByChatRoomIdOrderByIdDesc(roomId)
             .filter(s -> !s.isTerminal())
-            .map(SceneView::of)
             .orElse(null);
+        if (latest == null) return null;
+        if (latest.getUpdatedAt() != null && latest.getUpdatedAt()
+            .isBefore(java.time.LocalDateTime.now().minusMinutes(STALE_IN_FLIGHT_MINUTES))) {
+            log.warn("[SCENE-RENDER] 고아 비종결 행 지연 스윕: roomId={} illustrationId={} status={}",
+                roomId, latest.getId(), latest.getStatus());
+            writeService.failRender(latest.getId(), "서버 재시작 등으로 유실된 렌더 — 자동 정리(환불)");
+            return null;
+        }
+        return SceneView.of(latest);
+    }
+
+    /**
+     * [리뷰픽스] 렌더 풀 포화 신호 — <b>환불은 이미 failRender가 완료한 상태</b>임을 타입으로 전달.
+     * 호출측(SceneRequestService)은 이 예외에서 절대 재환불하지 않는다(이중 환불 결함의 재발 방지 계약).
+     */
+    public static class RenderPoolSaturatedException extends RuntimeException {
+        public RenderPoolSaturatedException(Throwable cause) {
+            super("씬 렌더 풀 포화", cause);
+        }
     }
 
     /**
@@ -149,7 +177,7 @@ public class SceneRenderService {
      * 디덥 없음(유저가 명시적으로 과금 요청 — 같은 씬 재요청도 새 시드로 새 렌더).
      * 과금·환불 정산은 행에 기록(requestedBy/energyCharged) — 실패 시 failRender가 환불.
      *
-     * @throws IllegalStateException 렌더 풀 포화 — 호출측이 환불 후 사용자 에러로 변환
+     * @throws RenderPoolSaturatedException 렌더 풀 포화 — <b>환불 완료됨</b>, 호출측은 재환불 금지
      */
     public SceneView submitManual(Long roomId, List<Character> cast,
                                   AiJsonOutput.SceneIllustrationSpec spec, int turnIndex,
@@ -161,9 +189,9 @@ public class SceneRenderService {
         try {
             sceneRenderExecutor.execute(() -> render(pending.getId(), plan.prompt(), roomId, turnIndex));
         } catch (java.util.concurrent.RejectedExecutionException e) {
-            // 환불은 failRender(refundableOnFail)가 수행 — 호출측에는 실패 사실만 전파
+            // failRender가 행 기반 멱등 환불까지 수행 — 전용 예외로 '환불 완료' 사실을 전파
             writeService.failRender(pending.getId(), "씬 렌더 풀 포화 — 렌더 유실");
-            throw new IllegalStateException("씬 렌더 풀 포화", e);
+            throw new RenderPoolSaturatedException(e);
         }
         log.info("[SCENE-RENDER] 수동 제출: roomId={} turn={} illustrationId={} by={}",
             roomId, turnIndex, pending.getId(), requestedBy);

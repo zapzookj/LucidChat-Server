@@ -328,6 +328,10 @@ public class TheaterLobbyService {
             if (!c.isTheaterAvailable()) {
                 throw new BadRequestException("Theater를 지원하지 않는 히로인입니다: " + c.getName());
             }
+            // [리뷰픽스] 관리자 전역 숨김 — 풀 쿼리(hiddenFalse)는 걸러도 findAllById는 통과했다
+            if (c.isHidden()) {
+                throw new BadRequestException("현재 이용할 수 없는 히로인입니다: " + c.getName());
+            }
             // [에픽 A] 소속 검증 — 공식 enum 또는 UGC 월드 id
             boolean belongs = worldRef.isUgc()
                 ? worldRef.ugcWorldId().equals(c.getUgcWorldId())
