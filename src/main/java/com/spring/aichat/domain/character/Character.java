@@ -308,6 +308,23 @@ public class Character {
     @Column(name = "profile_quote", length = 200)
     private String profileQuote;
 
+    /**
+     * [2026-07-31 난이도] 공략 난이도 (V19) — 스탯 상승 배율+프롬프트 성격 지시 이중 게이트.
+     * null=NORMAL(레거시·기본). 공식은 시드, UGC는 프로필 편집(무료)으로 설정.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "difficulty", length = 20)
+    private com.spring.aichat.domain.enums.CharacterDifficulty difficulty;
+
+    /** 난이도 — null(레거시 행) 폴백 NORMAL. 소비처는 항상 이 게터를 쓸 것. */
+    public com.spring.aichat.domain.enums.CharacterDifficulty getDifficultyOrDefault() {
+        return difficulty != null ? difficulty : com.spring.aichat.domain.enums.CharacterDifficulty.NORMAL;
+    }
+
+    public void updateDifficulty(com.spring.aichat.domain.enums.CharacterDifficulty difficulty) {
+        this.difficulty = difficulty;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (V15 — 유저 비노출, 이미지 프롬프트 전용)
     //  UGC: Stage0 산출 저장 · 공식: 시드 입력. null이면 일러 조립기가 하드코딩 맵 폴백.
@@ -395,6 +412,11 @@ public class Character {
         if (seed.hobby() != null) this.hobby = seed.hobby();
         if (seed.moodTags() != null) this.moodTags = seed.moodTags();
         if (seed.profileQuote() != null) this.profileQuote = seed.profileQuote();
+        // [2026-07-31 난이도] 시드 문자열 → enum (무효값은 무시 — 기존값 유지)
+        if (seed.difficulty() != null) {
+            var parsed = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(seed.difficulty());
+            if (parsed != null) this.difficulty = parsed;
+        }
 
         // [2026-07-30 A-4 동반 픽스] appearance/clothing/age가 시드 바인딩만 되고 여기서 미복사돼
         // YAML의 공식 외형 데이터가 DB에 영속된 적이 없던 누락 수정 (UGC는 createUgc로 정상이었음).

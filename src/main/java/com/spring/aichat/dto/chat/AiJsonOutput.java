@@ -159,6 +159,18 @@ public record AiJsonOutput(
         Integer playfulness, Integer trust,
         Integer lust, Integer corruption, Integer obsession
     ) {
+        /**
+         * [2026-07-31 난이도] 양수 델타 확률 반올림 배율 — 이중 게이트의 결정론 층.
+         * NORMAL/null이면 자기 자신 반환(무비용). 음수·null 델타는 그대로 통과.
+         */
+        public StatChanges scaledGains(com.spring.aichat.domain.enums.CharacterDifficulty d) {
+            if (d == null || d.gainMultiplier() == 1.0) return this;
+            return new StatChanges(
+                d.scaleGain(intimacy), d.scaleGain(affection), d.scaleGain(dependency),
+                d.scaleGain(playfulness), d.scaleGain(trust),
+                d.scaleGain(lust), d.scaleGain(corruption), d.scaleGain(obsession));
+        }
+
         public int safeIntimacy()    { return intimacy != null ? intimacy : 0; }
         public int safeAffection()   { return affection != null ? affection : 0; }
         public int safeDependency()  { return dependency != null ? dependency : 0; }

@@ -38,7 +38,9 @@ public final class StoryV2Responses {
         String profileImageUrl,
         String role,
         int age,
-        String tagline               // 짧은 한 줄 소개 (story-behavior-guide의 첫 줄 또는 personality 일부)
+        String tagline,              // 짧은 한 줄 소개 (story-behavior-guide의 첫 줄 또는 personality 일부)
+        /** [2026-07-31 난이도] 공략 난이도 — CreateFlow 히로인 선택 카드 표기. */
+        String difficulty
     ) {}
 
     public record PersonaPresetResponse(

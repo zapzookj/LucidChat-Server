@@ -1278,6 +1278,10 @@ public class ChatStreamService {
 
     private void applyStatChanges(ChatRoom room, AiJsonOutput.StatChanges sc, boolean isSecretMode) {
         if (sc == null) return;
+        // [2026-07-31 난이도] 이중 게이트 결정론 층 — 양수 델타 확률 반올림 배율(음수는 통과)
+        if (room.getCharacter() != null) {
+            sc = sc.scaledGains(room.getCharacter().getDifficultyOrDefault());
+        }
         room.applyNormalStatChanges(sc.safeIntimacy(), sc.safeAffection(),
             sc.safeDependency(), sc.safePlayfulness(), sc.safeTrust());
         if (isSecretMode) {

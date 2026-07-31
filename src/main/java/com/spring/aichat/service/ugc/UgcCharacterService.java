@@ -88,6 +88,9 @@ public class UgcCharacterService {
     public void updateTexts(String username, Long characterId, UgcDtos.UpdateTextsRequest req) {
         Character character = ownedUgc(username, characterId);
         character.updateUgcTexts(req.name(), req.tagline(), req.personality(), req.tone(), req.firstGreeting());
+        // [2026-07-31 난이도] 무료 편집 — 무효값·null은 유지(NORMAL도 명시값)
+        var difficulty = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(req.difficulty());
+        if (difficulty != null) character.updateDifficulty(difficulty);
     }
 
     // ── [세계관 빌더] 세계관 연결/변경 (에셋 무관 — 무료, 카드 메뉴 소급 연결) ──

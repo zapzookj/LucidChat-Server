@@ -319,6 +319,12 @@ public class CharacterPromptAssembler {
             RelationStatusPolicy.calculateBaseBpm(room.getStatAffection())
         ));
 
+        // ── [2026-07-31 난이도] 이중 게이트 서사 층 — 스탯 판정 톤 지시 (NORMAL은 무주입) ──
+        String difficultyDirective = character.getDifficultyOrDefault().promptDirective();
+        if (difficultyDirective != null) {
+            dynamicBuilder.append("\n").append(difficultyDirective).append("\n");
+        }
+
         // ── [스토리 전용] 씬 상태 + 승급 ──
         if (ChatModePolicy.supportsSceneDirection(mode)) {
             String defaultOutfit = character.getEffectiveDefaultOutfit();

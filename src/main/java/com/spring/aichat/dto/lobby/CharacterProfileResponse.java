@@ -40,5 +40,7 @@ public record CharacterProfileResponse(
     String thumbnailUrl,
     boolean ugc,
     /** UGC 캐릭터의 크리에이터 닉네임 (공식은 null). */
-    String creatorNickname
+    String creatorNickname,
+    /** [2026-07-31 난이도] 공략 난이도 — EASY/NORMAL/HARD/EXTREME (레거시 null은 NORMAL로 내려간다). */
+    String difficulty
 ) {}

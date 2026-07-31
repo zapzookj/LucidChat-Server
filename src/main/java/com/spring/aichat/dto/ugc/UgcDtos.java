@@ -53,7 +53,9 @@ public final class UgcDtos {
 
     /** 완성 화면 인라인 텍스트 수정 (null 필드는 유지). */
     public record UpdateTextsRequest(String name, String tagline, String personality,
-                                     String tone, String firstGreeting) {}
+                                     String tone, String firstGreeting,
+                                     /** [난이도] EASY/NORMAL/HARD/EXTREME — null·무효값=유지 */
+                                     String difficulty) {}
 
     // ── 응답 ──
 

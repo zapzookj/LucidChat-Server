@@ -29,6 +29,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "저택의 메이드"
+      difficulty: EASY      # [난이도] 다정·순종 헌신형 — 낮은 문턱
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/airi/thumbnail.png"
       description: "거대한 저택에서 자라난 전속 메이드. 누군가를 돌보고 봉사하는 일에 누구보다 익숙하지만, 정작 자기 자신을 위한 삶은 잘 모른다."
       story-available: true
@@ -191,6 +192,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "숲속의 천 년묵은 구미호"
+      difficulty: EXTREME   # [난이도] 인간을 단명종으로 보는 천년 관찰자 — 최고 난도 콘텐츠
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/yeonhwa/hanbok_neutral.png"
       description: "숲 가장 깊은 곳, 안개와 달빛 사이에 사는 천 년 묵은 구미호. 인간에게 호기심이 많지만, 동시에 자신을 두려워하는 인간들 때문에 외로움을 느낀다."
       story-available: true  # 스토리 모드 추후 지원
@@ -291,6 +293,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "표현이 서툰 츤데레 후배"
+      difficulty: HARD      # [난이도] 츤데레 — 감정에 솔직하지 못함
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/taeri/thumbnail.png"
       description: "동아리실 구석에서 헤드폰을 끼고 혼자 그림을 그리는 도도한 디자인과 후배."
       story-available: true
@@ -412,6 +415,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "세상이 무서운 하꼬 스트리머"
+      difficulty: NORMAL    # [난이도] 낯가림 심하나 열리면 의존 — 중간
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/luna/thumbnail.png"
       description: "새벽 편의점과 자기 방, 단 두 곳만이 세상의 전부인 하꼬 스트리머. 사람은 무섭지만, 누군가와 연결되고 싶은 마음만은 포기하지 못했다."
       story-available: true
@@ -527,6 +531,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "세상을 잘 모르는 순백의 성녀"
+      difficulty: EASY      # [난이도] 의심 없는 이상주의자 — 낮은 문턱
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/claire/thumbnail.png"
       description: "신의 축복을 내리기 위해 영지에 파견된 순백의 성녀. 모두가 우러러보지만, 정작 그녀가 원하는 건 '평범한 한 사람'으로 바라봐 주는 시선 하나."
       story-available: true
@@ -642,6 +647,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "장난이 너무 심한 문제아 영애"
+      difficulty: HARD      # [난이도] 상대를 놀리는 걸 즐김 — 쉽게 안 넘어옴
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/rosetta/thumbnail.png"
       description: "환영 마법으로 동기들을 골탕먹이는 마법 명문가의 영애. 자칭 아카데미의 천재이자 모두의 공주님"
       story-available: true
@@ -756,6 +762,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "거리감이 없는 밝고 활발한 소꿉친구"
+      difficulty: EASY      # [난이도] 소꿉친구 — 이미 가까운 관계
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/chaerin/thumbnail.png"
       description: "어릴 때부터 같은 동네에서 자란 소꿉친구. 털털하고 장난기 넘치는 성격이지만, 의외로 섬세하다."
       story-available: true
@@ -866,6 +873,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "세상 모든 걸 좋아하는 잠꾸러기 후배"
+      difficulty: NORMAL    # [난이도] 잘 믿지만 로맨스 진전은 느긋 — 중간
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/sierra/thumbnail.png"
       description: "꽃과 동물들을 좋아하는 아카데미의 후배생. 언제나 헤실헤실 웃고 다니며, 느긋하고 무해한 분위기를 풍긴다."
       story-available: true
@@ -975,6 +983,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "차가운 아카데미 조교"
+      difficulty: HARD      # [난이도] 감정 표현 적은 이성형 — 높은 문턱
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/edel/thumbnail.png"
       description: "항상 무표정한 얼굴로 연구실과 강의실 사이를 오가는 아카데미의 조교. 차갑고 무심해 보이지만, 의외로 학생들을 세심하게 관찰하고 있다."
       story-available: true
@@ -1083,6 +1092,7 @@ app:
 
       # ── 로비 표시용 ──
       tagline: "위엄만큼은 잃지 않은 용녀"
+      difficulty: NORMAL    # [난이도] 자존심 세지만 단순·감정이 드러남 — 중간
       thumbnail-url: "https://d3578f1gfp49r6.cloudfront.net/characters/seolah/thumbnail.png"
       description: "한때 영물로 숭배받던 용녀. 대부분의 힘을 잃고 작은 모습이 되었지만, 본인만큼은 여전히 위대한 존재라고 믿고 있다. 문제는 아무도 그렇게 생각하지 않는다는 것."
       story-available: true

@@ -104,6 +104,8 @@ public record CharacterSeedProperties(
         String moodTags,
         /** 프로필 카드 전용 한 줄 문장 (자기소개/명대사) — 미입력 시 firstGreeting 첫 문장 폴백 */
         String profileQuote,
+        /** [난이도] EASY/NORMAL/HARD/EXTREME — 미입력 시 기존값 유지(레거시 null=NORMAL) */
+        String difficulty,
 
         // ── [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (유저 비노출 — 이미지 프롬프트 전용) ──
         /** Danbooru 외형 태그 CSV (영문) — 미입력 시 일러 조립기 하드코딩 맵 폴백 */

@@ -128,7 +128,7 @@ modelslab:
 # UGC 빌더(ugc.runpod.*)와 별개 엔드포인트 — 배치 vs 저지연 head-of-line blocking 회피(docs/07 B-2).
 illustration:
   scene:
-    enabled: ${SCENE_ILLUST_ENABLED:false}
+    enabled: ${SCENE_ILLUST_ENABLED:true}
     # [2026-07-31 에픽 B] 트리거: manual=유저 요청+전용 프롬프트 라이터(기본, 5에너지·실패 환불)
     #                     auto=채팅 LLM 인밴드 매턴(휴면 보존 — 프리미엄/이벤트 재활성 대비)
     trigger: ${SCENE_ILLUST_TRIGGER:manual}
@@ -138,7 +138,7 @@ illustration:
       # 구조화 태스크 비사고 모델 규율(docs/09 §B-3) — 사고 모델 지정 금지.
       model: ${SCENE_DIRECTOR_MODEL:}
     runpod:
-      api-key: ${SCENE_RUNPOD_API_KEY:}
+      api-key: ${UGC_RUNPOD_API_KEY:}
       endpoint-id: ${SCENE_RUNPOD_ENDPOINT_ID:}
     generation:
       width: 1344     # 실측 확정(docs/09 A-1): 배경 포함 랜드스케이프, 30step/cfg4는 템플릿 동결
@@ -163,8 +163,8 @@ ugc:
   # [2026-07-31 에픽 A] UGC 월드 STORY/THEATER 개방 게이트 — 기본 off(스키마·플래그는 휴면 선반영).
   # 격리 확정: 개방 대상은 'UGC 캐릭터 + UGC 월드' 조합만 — 공식 월드 캐스트에는 절대 미합류.
   modes:
-    story-enabled: ${UGC_STORY_ENABLED:false}
-    theater-enabled: ${UGC_THEATER_ENABLED:false}
+    story-enabled: ${UGC_STORY_ENABLED:true}
+    theater-enabled: ${UGC_THEATER_ENABLED:true}
   # ⚠ stage0-model은 ugc 루트 키 — runpod 하위에 두면 조용히 무시된다 (2026-07-22 실측 수정)
   stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)
   # [2026-07-30 P0 PoC-5] VLM 이미지 프리필터 — 공개 신청 시점 자문 스캔(자동 차단 아님, 기본 비활성)

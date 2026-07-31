@@ -164,7 +164,8 @@ public class StoryV2Service {
                 c.getThumbnailUrl(),
                 c.getRole(),
                 c.getAge() != null ? c.getAge() : 0,
-                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80)
+                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80),
+                c.getDifficultyOrDefault().name()
             ))
             .toList();
 
@@ -234,7 +235,8 @@ public class StoryV2Service {
             .map(c -> new WorldHeroineCardResponse(
                 c.getId(), c.getName(), c.getThumbnailUrl(), c.getRole(),
                 c.getAge() != null ? c.getAge() : 0,
-                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80)))
+                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80),
+                c.getDifficultyOrDefault().name()))
             .toList();
 
         List<WorldLocationResponse> startLocations = view.locations().stream()

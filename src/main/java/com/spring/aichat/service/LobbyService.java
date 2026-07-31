@@ -186,7 +186,8 @@ public class LobbyService {
             firstSentence(c.getIntroNarration()),
             firstSentence(c.getFirstGreeting()),
             c.getDefaultImageUrl(), c.getThumbnailUrl(),
-            c.isUgc(), creatorNickname
+            c.isUgc(), creatorNickname,
+            c.getDifficultyOrDefault().name()   // [2026-07-31 난이도] 프로필 ★칩
         );
     }
 

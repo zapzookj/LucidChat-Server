@@ -827,7 +827,9 @@ public class ChatStreamServiceV2 {
                     entry.getKey(), room.getId());
                 continue;
             }
-            AiJsonOutput.StatChanges sc = entry.getValue();
+            // [2026-07-31 난이도] 히로인별 난이도 배율 — 이중 게이트 결정론 층
+            AiJsonOutput.StatChanges sc = entry.getValue()
+                .scaledGains(h.getCharacter().getDifficultyOrDefault());
             int beforeAff = h.getStatAffection(), beforePlay = h.getStatPlayfulness();
             h.applyNormalStatChanges(sc.safeIntimacy(), sc.safeAffection(),
                 sc.safeDependency(), sc.safePlayfulness(), sc.safeTrust());

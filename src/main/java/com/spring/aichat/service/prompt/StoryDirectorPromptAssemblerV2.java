@@ -325,6 +325,10 @@ public class StoryDirectorPromptAssemblerV2 {
         String tone = (secretMode && notBlank(c.getToneSecret()))
             ? c.getToneSecret() : c.getTone();
 
+        // [2026-07-31 난이도] 이중 게이트 서사 층 — 히로인별 스탯 판정 톤 지시 (NORMAL은 빈 문자열)
+        String difficultyDirective = c.getDifficultyOrDefault().promptDirective();
+        String difficultySection = difficultyDirective != null ? "\n\n" + difficultyDirective : "";
+
         // 옵셔널 섹션들 — 비어있으면 빈 문자열
         String backstorySection = optionalSection("### Extended Backstory", c.getBackstory());
         String coreValuesSection = optionalSection("### Core Values & Beliefs", c.getCoreValues());
@@ -344,7 +348,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - **Tone**: %s
 
             ### Background
-            %s%s%s%s%s%s%s""".formatted(
+            %s%s%s%s%s%s%s%s""".formatted(
             index, c.getName(), c.getId(),
             c.getId(),
             c.getName(),
@@ -358,7 +362,8 @@ public class StoryDirectorPromptAssemblerV2 {
             flawsSection,
             speechQuirksSection,
             behaviorGuideSection,
-            oocSection
+            oocSection,
+            difficultySection
         );
     }
 
