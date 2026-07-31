@@ -39,6 +39,9 @@ public record SceneIllustrationProperties(
     Runpod runpod,
     Generation generation
 ) {
+    // 생성자가 2개(정식+테스트 편의)라 바인딩 대상을 명시 — 미지정 시 Spring이 JavaBean
+    // 바인딩으로 폴백해 '기본 생성자 없음' 기동 실패 (2026-07-31 실측)
+    @org.springframework.boot.context.properties.bind.ConstructorBinding
     public SceneIllustrationProperties {
         if (director == null) director = new Director(null, null, null);
         if (runpod == null) runpod = new Runpod(null, null);
