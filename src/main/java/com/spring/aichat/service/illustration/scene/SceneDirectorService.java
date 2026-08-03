@@ -111,8 +111,11 @@ public class SceneDirectorService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String buildSystemPrompt(List<Character> cast, boolean sfw) {
+        // [2026-08-04 남캐] 성별 힌트 동봉 — 디렉터가 cast.gender를 정확히 산출하게
         String heroineNames = cast.isEmpty() ? "(none — background-only scene)"
-            : cast.stream().map(Character::getName).collect(Collectors.joining(", "));
+            : cast.stream()
+            .map(c -> c.getName() + (c.getGenderOrDefault().isMale() ? " (male)" : " (female)"))
+            .collect(Collectors.joining(", "));
         // 수위: 비시크릿은 안전 씬 지시(최종 강제는 ScenePromptAssembler sfw 게이트가 이중으로 담당)
         String rating = sfw
             ? "- This is a SAFE-FOR-WORK scene. No suggestive, revealing, or adult content of any kind."

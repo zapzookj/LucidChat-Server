@@ -165,6 +165,9 @@ ugc:
   modes:
     story-enabled: ${UGC_STORY_ENABLED:true}
     theater-enabled: ${UGC_THEATER_ENABLED:true}
+    # [2026-08-04 남캐] 남성 캐릭터 빌더 — 기본 off. 활성 전제: 워커 이미지에 male_type.safetensors
+    # 베이크(lucid-comfy-worker 3fb2dd0+ 리빌드 후 엔드포인트 교체) — 미베이크 상태로 켜면 렌더 실패.
+    male-builder-enabled: ${UGC_MALE_BUILDER_ENABLED:false}
   # ⚠ stage0-model은 ugc 루트 키 — runpod 하위에 두면 조용히 무시된다 (2026-07-22 실측 수정)
   stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)
   # [2026-07-30 P0 PoC-5] VLM 이미지 프리필터 — 공개 신청 시점 자문 스캔(자동 차단 아님, 기본 비활성)
@@ -192,6 +195,7 @@ ugc:
     # use-negative-prompt: false  # [튜닝] 네거티브 비우기 실험 노브 — 실측상 빈 쪽이 나은 관찰, A/B 후 전환
   generation:
     golden-batch-size: 2      # 2026-07-20 개편: 4→2 (스탠딩 후보 선택 단계 신설 — 황금샷은 썸네일·원화 확정용)
+    # male-lora-strength: 0.7 # [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 탐색 0.5~0.9, 미지정 시 0.7
     # refine-denoise: 0.4     # 품질 튜닝 노브(0.30~0.45) — 미지정 시 템플릿 검증값 유지
     # bg-emphasis-weight: 1.3 # [튜닝] WF-2 배경 보색 어텐션 가중치(1.1~1.5) — 누끼 경계 품질
   world:                      # [세계관 빌더] fal flux-2 전용 트랙 (RunPod/Qwen 불필요 — FAL_API_KEY만)

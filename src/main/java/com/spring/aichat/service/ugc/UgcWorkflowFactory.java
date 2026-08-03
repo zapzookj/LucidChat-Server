@@ -82,6 +82,10 @@ public class UgcWorkflowFactory {
         requireInput(wf3Template, WF3_PATH, "1", "image");
         requireInput(wf3Template, WF3_PATH, "23", "filename_prefix");
 
+        // [2026-08-04 남캐] Male LoRA 체인 앵커(detail LoRA 노드 2) 실존 검증 — 템플릿 드리프트 시 기동 실패
+        requireInput(wf1Template, WF1_PATH, DETAIL_LORA_NODE_ID, "lora_name");
+        requireInput(wf2Template, WF2_PATH, DETAIL_LORA_NODE_ID, "lora_name");
+
         log.info("[UGC] Workflow templates loaded: wf1/wf2/wf3 (치환 계약 검증 통과)");
     }
 
@@ -90,11 +94,22 @@ public class UgcWorkflowFactory {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix) {
-        return buildGoldenShot(positivePrompt, filenamePrefix, newSeed(), newSeed());
+        return buildGoldenShot(positivePrompt, filenamePrefix, false);
+    }
+
+    /** [2026-08-04 남캐] male이면 Male_Type LoRA를 그래프에 조건부 체인. */
+    public ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix, boolean male) {
+        return buildGoldenShot(positivePrompt, filenamePrefix, newSeed(), newSeed(), male);
     }
 
     ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix, long samplerSeed, long detailerSeed) {
+        return buildGoldenShot(positivePrompt, filenamePrefix, samplerSeed, detailerSeed, false);
+    }
+
+    ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix,
+                               long samplerSeed, long detailerSeed, boolean male) {
         ObjectNode wf = wf1Template.deepCopy();
+        if (male) injectMaleLora(wf);
         inputs(wf, "12").put("text", positivePrompt);
         inputs(wf, "11").put("seed", samplerSeed);
         inputs(wf, "17").put("seed", detailerSeed);
@@ -109,12 +124,26 @@ public class UgcWorkflowFactory {
 
     public ObjectNode buildRefine(String inputImageName, String positivePrompt,
                                   String faceWildcard, String filenamePrefix) {
-        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix, newSeed(), newSeed());
+        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix, false);
+    }
+
+    /** [2026-08-04 남캐] male이면 Male_Type LoRA를 그래프에 조건부 체인. */
+    public ObjectNode buildRefine(String inputImageName, String positivePrompt,
+                                  String faceWildcard, String filenamePrefix, boolean male) {
+        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix,
+            newSeed(), newSeed(), male);
     }
 
     ObjectNode buildRefine(String inputImageName, String positivePrompt, String faceWildcard,
                            String filenamePrefix, long samplerSeed, long detailerSeed) {
+        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix,
+            samplerSeed, detailerSeed, false);
+    }
+
+    ObjectNode buildRefine(String inputImageName, String positivePrompt, String faceWildcard,
+                           String filenamePrefix, long samplerSeed, long detailerSeed, boolean male) {
         ObjectNode wf = wf2Template.deepCopy();
+        if (male) injectMaleLora(wf);
         inputs(wf, "19").put("image", inputImageName);
         inputs(wf, "12").put("text", positivePrompt);
         inputs(wf, "11").put("seed", samplerSeed);
@@ -141,6 +170,53 @@ public class UgcWorkflowFactory {
         inputs(wf, "1").put("image", inputImageName);
         inputs(wf, "23").put("filename_prefix", filenamePrefix);
         return wf;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-08-04 남캐] Male_Type LoRA 조건부 체인 (wf1·wf2 공용)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 신규 LoraLoader 노드 id — 템플릿 노드 id 대역(1~23)과 충돌하지 않는 값. */
+    private static final String MALE_LORA_NODE_ID = "900";
+    private static final String DETAIL_LORA_NODE_ID = "2";
+    private static final String MALE_LORA_FILE = "male_type.safetensors";
+
+    /**
+     * detail LoRA(노드 2) 뒤에 Male_Type LoRA를 체인 — 노드 2의 model/clip 출력을 소비하던
+     * 모든 참조([2,0]/[2,1])를 신규 노드로 재배선한 뒤, 신규 노드가 노드 2를 입력으로 받는다.
+     * VAE([1,2]) 등 체크포인트 직결 참조는 불변. 여캐 경로는 이 메서드를 아예 타지 않는다.
+     * 강도는 {@code ugc.generation.male-lora-strength} 노브(PoC 튜닝 대상 — 종원 매트릭스 확정 전).
+     */
+    private void injectMaleLora(ObjectNode wf) {
+        if (wf.has(MALE_LORA_NODE_ID)) {
+            throw new IllegalStateException("[UGC] 노드 id 충돌 — 템플릿에 " + MALE_LORA_NODE_ID + "가 이미 존재");
+        }
+        // 1) [2,0]→[900,0] · [2,1]→[900,1] 전 참조 재배선
+        wf.properties().forEach(entry -> {
+            JsonNode inputsNode = entry.getValue().path("inputs");
+            if (!inputsNode.isObject()) return;
+            ObjectNode in = (ObjectNode) inputsNode;
+            in.properties().forEach(field -> {
+                JsonNode v = field.getValue();
+                if (v.isArray() && v.size() == 2 && DETAIL_LORA_NODE_ID.equals(v.get(0).asText())) {
+                    var arr = objectMapper.createArrayNode();
+                    arr.add(MALE_LORA_NODE_ID).add(v.get(1).asInt());
+                    in.set(field.getKey(), arr);
+                }
+            });
+        });
+        // 2) 신규 LoraLoader — detail LoRA를 입력으로 체인
+        ObjectNode inputs = objectMapper.createObjectNode();
+        inputs.put("lora_name", MALE_LORA_FILE);
+        inputs.put("strength_model", props.generation().maleLoraStrengthOrDefault());
+        inputs.put("strength_clip", 1.0);
+        inputs.set("model", objectMapper.createArrayNode().add(DETAIL_LORA_NODE_ID).add(0));
+        inputs.set("clip", objectMapper.createArrayNode().add(DETAIL_LORA_NODE_ID).add(1));
+        ObjectNode node = objectMapper.createObjectNode();
+        node.set("inputs", inputs);
+        node.put("class_type", "LoraLoader");
+        node.set("_meta", objectMapper.createObjectNode().put("title", "Male_Type LoRA (남캐 조건부)"));
+        wf.set(MALE_LORA_NODE_ID, node);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -325,6 +325,19 @@ public class Character {
         this.difficulty = difficulty;
     }
 
+    /** [2026-08-04 남캐] 성별 (V20) — null=FEMALE(레거시 전 캐릭터). 씬 렌더 캐스트·일러 앵커의 단일 기준. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 10)
+    private com.spring.aichat.domain.enums.CharacterGender gender;
+
+    public com.spring.aichat.domain.enums.CharacterGender getGenderOrDefault() {
+        return gender != null ? gender : com.spring.aichat.domain.enums.CharacterGender.FEMALE;
+    }
+
+    public void updateGender(com.spring.aichat.domain.enums.CharacterGender gender) {
+        this.gender = gender;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (V15 — 유저 비노출, 이미지 프롬프트 전용)
     //  UGC: Stage0 산출 저장 · 공식: 시드 입력. null이면 일러 조립기가 하드코딩 맵 폴백.
@@ -416,6 +429,11 @@ public class Character {
         if (seed.difficulty() != null) {
             var parsed = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(seed.difficulty());
             if (parsed != null) this.difficulty = parsed;
+        }
+        // [2026-08-04 남캐] 성별 시드 — 공식 남캐 편입 대비(잘 뽑힌 UGC의 공식 승격 경로)
+        if (seed.gender() != null) {
+            var parsedGender = com.spring.aichat.domain.enums.CharacterGender.fromStringOrNull(seed.gender());
+            if (parsedGender != null) this.gender = parsedGender;
         }
 
         // [2026-07-30 A-4 동반 픽스] appearance/clothing/age가 시드 바인딩만 되고 여기서 미복사돼

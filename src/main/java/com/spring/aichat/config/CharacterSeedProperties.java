@@ -106,6 +106,8 @@ public record CharacterSeedProperties(
         String profileQuote,
         /** [난이도] EASY/NORMAL/HARD/EXTREME — 미입력 시 기존값 유지(레거시 null=NORMAL) */
         String difficulty,
+        /** [남캐] FEMALE/MALE — 미입력 시 기존값 유지(레거시 null=FEMALE) */
+        String gender,
 
         // ── [2026-07-30 A-4/B-3] 실시간 일러 정체성 태그 (유저 비노출 — 이미지 프롬프트 전용) ──
         /** Danbooru 외형 태그 CSV (영문) — 미입력 시 일러 조립기 하드코딩 맵 폴백 */

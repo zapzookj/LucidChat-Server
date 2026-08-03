@@ -106,7 +106,7 @@ class UgcWorkflowFactoryTest {
     @DisplayName("WF-2: refine-denoise 노브 지정 시에만 denoise 오버라이드")
     void refine_denoiseKnobOverrides() {
         UgcPipelineProperties tuned = new UgcPipelineProperties(
-            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35, null), null, null, null);
+            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35, null, null), null, null, null);
         UgcWorkflowFactory tunedFactory = new UgcWorkflowFactory(new ObjectMapper(), tuned);
         tunedFactory.loadTemplates();
 
@@ -114,6 +114,34 @@ class UgcWorkflowFactoryTest {
         assertThat(wf.path("11").path("inputs").path("denoise").asDouble()).isEqualTo(0.35);
         // FaceDetailer denoise는 별개 값 — 노브의 영향을 받지 않는다
         assertThat(wf.path("17").path("inputs").path("denoise").asDouble()).isEqualTo(0.4);
+    }
+
+    @Test
+    @DisplayName("[남캐] male=true면 Male_Type LoRA(900)가 detail LoRA(2) 뒤에 체인되고 소비자 참조가 재배선된다")
+    void injectsMaleLoraChain() {
+        UgcPipelineProperties defaults = new UgcPipelineProperties(
+            null, null, null, null, null, null, null, null);
+        UgcWorkflowFactory maleFactory = new UgcWorkflowFactory(new ObjectMapper(), defaults);
+        maleFactory.loadTemplates();
+
+        ObjectNode wf = maleFactory.buildGoldenShot("1boy, test", "job_t_golden", 1L, 2L, true);
+
+        // 신규 노드 존재 + 체인 입력 + 기본 강도 노브
+        assertThat(wf.path("900").path("class_type").asText()).isEqualTo("LoraLoader");
+        assertThat(wf.path("900").path("inputs").path("lora_name").asText()).isEqualTo("male_type.safetensors");
+        assertThat(wf.path("900").path("inputs").path("strength_model").asDouble()).isEqualTo(0.7);
+        assertThat(wf.path("900").path("inputs").path("model").get(0).asText()).isEqualTo("2");
+        // 소비자 재배선 — KSampler model, CLIP encode clip, FaceDetailer model
+        assertThat(wf.path("11").path("inputs").path("model").get(0).asText()).isEqualTo("900");
+        assertThat(wf.path("12").path("inputs").path("clip").get(0).asText()).isEqualTo("900");
+        assertThat(wf.path("17").path("inputs").path("model").get(0).asText()).isEqualTo("900");
+        // 체크포인트 직결 참조(VAE [1,2])는 불변
+        assertThat(wf.path("8").path("inputs").path("vae").get(0).asText()).isEqualTo("1");
+
+        // 여캐 경로 무영향
+        ObjectNode femaleWf = maleFactory.buildGoldenShot("1girl, test", "job_t_golden", 1L, 2L, false);
+        assertThat(femaleWf.path("900").isMissingNode()).isTrue();
+        assertThat(femaleWf.path("11").path("inputs").path("model").get(0).asText()).isEqualTo("2");
     }
 
     @Test

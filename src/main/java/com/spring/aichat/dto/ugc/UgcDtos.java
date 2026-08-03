@@ -22,7 +22,9 @@ public final class UgcDtos {
      * 동시 지정은 400.
      */
     public record StartCreationRequest(String name, String concept, AppearanceHints appearance,
-                                       String officialWorldId, Long ugcWorldId) {}
+                                       String officialWorldId, Long ugcWorldId,
+                                       /** [남캐] FEMALE(기본)/MALE — MALE은 ugc.modes.male-builder-enabled 게이트 */
+                                       String gender) {}
 
     /** [세계관 빌더] 완성 캐릭터 세계관 연결/변경 (무료) — 둘 다 null이면 연결 해제. */
     public record WorldLinkRequest(String officialWorldId, Long ugcWorldId) {}

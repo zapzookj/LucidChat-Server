@@ -143,6 +143,22 @@ public class CharacterCreationJob {
     //  생성
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [2026-08-04 남캐] 위저드 명시 선택 성별 (V20) — null=FEMALE(레거시 잡).
+     * Stage0 가이드·이미지 앵커 태그·Male LoRA 주입·바인딩이 이 값을 단일 기준으로 소비.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 10)
+    private com.spring.aichat.domain.enums.CharacterGender gender;
+
+    public com.spring.aichat.domain.enums.CharacterGender getGenderOrDefault() {
+        return gender != null ? gender : com.spring.aichat.domain.enums.CharacterGender.FEMALE;
+    }
+
+    public void assignGender(com.spring.aichat.domain.enums.CharacterGender gender) {
+        this.gender = gender;
+    }
+
     public static CharacterCreationJob start(Long userId, String requestedName,
                                              String conceptInputRaw, int energyCharged) {
         CharacterCreationJob job = new CharacterCreationJob();

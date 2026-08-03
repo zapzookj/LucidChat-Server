@@ -256,14 +256,17 @@ public class SceneRenderService {
                 } else {
                     Character hero = c.ref() == null ? null : byName.get(c.ref().toLowerCase(Locale.ROOT));
                     String tags = hero != null ? hero.getAppearanceTags() : null;
-                    actors.add(new ScenePromptAssembler.SceneActor(tags, c.emotion(), c.pose(), false, male));
+                    // [2026-08-04 남캐] DB 성별이 권위 — LLM cast.gender는 미등록 ref 폴백만
+                    boolean actorMale = hero != null ? hero.getGenderOrDefault().isMale() : male;
+                    actors.add(new ScenePromptAssembler.SceneActor(tags, c.emotion(), c.pose(), false, actorMale));
                 }
             }
         } else {
-            // 폴백: cast 미제공 시 방 히로인 전원 등장(여성 기본)
+            // 폴백: cast 미제공 시 방 히로인 전원 등장 — 성별은 DB 기준([2026-08-04 남캐])
             for (Character hero : roomCharacters) {
                 castKey.append('|').append(hero.getName());
-                actors.add(new ScenePromptAssembler.SceneActor(hero.getAppearanceTags(), null, null, false, false));
+                actors.add(new ScenePromptAssembler.SceneActor(hero.getAppearanceTags(), null, null,
+                    false, hero.getGenderOrDefault().isMale()));
             }
         }
 

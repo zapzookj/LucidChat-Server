@@ -67,7 +67,7 @@ public class CharacterCreationController {
         guardRate(authentication);
         Long jobId = creationService.startCreation(
             authentication.getName(), request.name(), request.concept(), request.appearance(),
-            request.officialWorldId(), request.ugcWorldId());
+            request.officialWorldId(), request.ugcWorldId(), request.gender());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
             .body(new UgcDtos.StartCreationResponse(jobId));
     }

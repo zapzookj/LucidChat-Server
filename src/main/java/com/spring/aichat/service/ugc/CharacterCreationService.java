@@ -52,14 +52,37 @@ public class CharacterCreationService {
     private final UgcJobJson json;
     private final RedisCacheService cacheService;
     private final TransactionTemplate txTemplate;
+    // [2026-08-04 남캐] 남성 빌더 게이트
+    private final com.spring.aichat.config.UgcModeProperties ugcModeProperties;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  컨셉 제출 (위저드 화면 1)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /** [하위 호환] 성별 미지정 — FEMALE 기본. */
     public Long startCreation(String username, String requestedName, String conceptRaw,
                               UgcDtos.AppearanceHints appearanceHints,
                               String officialWorldIdRaw, Long requestedUgcWorldId) {
+        return startCreation(username, requestedName, conceptRaw, appearanceHints,
+            officialWorldIdRaw, requestedUgcWorldId, null);
+    }
+
+    public Long startCreation(String username, String requestedName, String conceptRaw,
+                              UgcDtos.AppearanceHints appearanceHints,
+                              String officialWorldIdRaw, Long requestedUgcWorldId,
+                              String genderRaw) {
+        // [2026-08-04 남캐] 위저드 명시 선택 — 무효 문자열은 400(오타가 조용히 여캐로 흐르는 것 방지)
+        com.spring.aichat.domain.enums.CharacterGender gender =
+            com.spring.aichat.domain.enums.CharacterGender.FEMALE;
+        if (genderRaw != null && !genderRaw.isBlank()) {
+            gender = com.spring.aichat.domain.enums.CharacterGender.fromStringOrNull(genderRaw);
+            if (gender == null) {
+                throw new BadRequestException("알 수 없는 성별입니다: " + genderRaw);
+            }
+        }
+        if (gender.isMale() && !ugcModeProperties.maleBuilderOn()) {
+            throw new BadRequestException("남성 캐릭터 빌더는 아직 준비 중이에요.");
+        }
         String userConcept = conceptRaw == null ? "" : conceptRaw.trim();
         if (userConcept.length() < CONCEPT_MIN_LENGTH || userConcept.length() > CONCEPT_MAX_LENGTH) {
             throw new BadRequestException(
@@ -92,6 +115,7 @@ public class CharacterCreationService {
         }
 
         WorldId finalOfficialWorldId = officialWorldId;
+        com.spring.aichat.domain.enums.CharacterGender finalGender = gender;
         Long jobId = txTemplate.execute(tx -> {
             User user = findUser(username);
             if (jobRepository.existsByUserIdAndStatusIn(user.getId(), ACTIVE_STATUSES)) {
@@ -108,6 +132,7 @@ public class CharacterCreationService {
 
             CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, cost);
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
+            job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
             job = jobRepository.save(job);
             return job.getId();
         });

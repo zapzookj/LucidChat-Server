@@ -88,8 +88,11 @@ public class UgcPipelineWorker {
 
         try {
             runWithRetries(jobId, "STAGE0", () -> {
+                // [2026-08-04 남캐] 성별 가이드 블록 병합 — 태그·자세·감정 연출의 산출 방향을
+                // Stage0에 강제(외형 힌트 [외형 지정] 블록과 동일 패턴, 스키마 무변경)
                 StructuredConcept concept = conceptStructuringService.structure(
-                    job.getConceptInputRaw(), job.getRequestedName());
+                    withGenderDirective(job.getConceptInputRaw(), job.getGenderOrDefault()),
+                    job.getRequestedName());
                 moderationService.assertStructuredConceptAllowed(concept, job.getConceptInputRaw(), job.getUserId());
 
                 String conceptJson = json.writeConcept(concept);
@@ -104,10 +107,33 @@ public class UgcPipelineWorker {
         }
     }
 
+    /**
+     * [2026-08-04 남캐] 잡 성별 조회 — 프롬프트 앵커(1boy)와 Male LoRA 주입의 공용 기준.
+     * 서브밋 경로 전부가 이 판정을 지나므로 리롤·감정·베이스 어느 경로도 성별이 어긋나지 않는다.
+     */
+    private boolean isMaleJob(Long jobId) {
+        return jobRepository.findById(jobId)
+            .map(j -> j.getGenderOrDefault().isMale())
+            .orElse(false);
+    }
+
+    /** [남캐] Stage0 성별 가이드 — 남성만 블록 부착(여성은 기존 프롬프트 경로 무변). */
+    private static String withGenderDirective(String concept, com.spring.aichat.domain.enums.CharacterGender gender) {
+        if (!gender.isMale()) return concept;
+        return concept + """
+
+
+            [캐릭터 성별: 남성 — 필수 반영]
+            - appearance_tags: 1boy, male focus 계열로 산출(1girl 계열 금지). 체형·이목구비는 남성 어휘(sharp jawline, broad shoulders 등).
+            - base_pose·emotionPrompts: 남성적 자세·표정 어휘로(예: arms crossed, hands in pockets, confident smirk, leaning against wall). 여성적 자세(girlish pose, head tilt with clasped hands 등) 금지.
+            - persona_tags: 남성 캐릭터 무드에 맞는 태그로.""";
+    }
+
     private void submitGoldenShots(Long jobId, StructuredConcept concept) {
+        boolean male = isMaleJob(jobId);
         String positive = promptAssembler.goldenShotPositive(
-            concept.appearanceTags(), concept.personaTags(), concept.sceneTags());
-        var workflow = workflowFactory.buildGoldenShot(positive, "job_" + jobId + "_golden");
+            concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male);
+        var workflow = workflowFactory.buildGoldenShot(positive, "job_" + jobId + "_golden", male);
         var submit = comfyClient.submit(workflow, null, webhookUrl(jobId, UgcStage.GOLDEN, null));
         recordExternalJob(jobId, UgcStage.GOLDEN.name(), submit.jobId());
         log.info("[UGC-WORKER] WF-1 submitted: jobId={}, runpod={}", jobId, submit.jobId());
@@ -288,12 +314,14 @@ public class UgcPipelineWorker {
         String suffix = emotion.name().toLowerCase()
             + (stage == UgcStage.BASE_REFINE ? "_" + webhookToken : "");
         String inputName = "job_" + jobId + "_" + suffix + "_in.png";
+        boolean male = isMaleJob(jobId);
         String positive = promptAssembler.refinePositive(
-            concept.appearanceTags(), concept.personaTags(), emotion, bgColor);
+            concept.appearanceTags(), concept.personaTags(), emotion, bgColor, male);
         // [2026-07-21 재구성] 감정 표정 포함 — 디테일 패스가 Qwen 표정을 중화하지 않도록
         String faceWildcard = promptAssembler.faceDetailWildcard(
             concept.appearanceTags(), concept.personaTags(), emotion);
-        var workflow = workflowFactory.buildRefine(inputName, positive, faceWildcard, "job_" + jobId + "_" + suffix);
+        var workflow = workflowFactory.buildRefine(inputName, positive, faceWildcard,
+            "job_" + jobId + "_" + suffix, male);
         var submit = comfyClient.submit(workflow,
             List.of(new UgcComfyClient.InputImage(inputName, Base64.getEncoder().encodeToString(bytes))),
             webhookUrl(jobId, stage, webhookToken));
@@ -509,7 +537,10 @@ public class UgcPipelineWorker {
             );
 
             Long characterId = txTemplate.execute(status -> {
-                Character character = characterRepository.save(Character.createUgc(spec));
+                Character character = Character.createUgc(spec);
+                // [2026-08-04 남캐] 위저드 선택 성별 영속 — 씬 렌더 캐스트·일러 앵커의 단일 기준
+                character.updateGender(job.getGenderOrDefault());
+                character = characterRepository.save(character);
                 CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElseThrow();
                 locked.toReady(character.getId());
                 return character.getId();

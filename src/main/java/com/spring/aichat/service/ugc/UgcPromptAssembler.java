@@ -166,8 +166,14 @@ public class UgcPromptAssembler {
      * (중복 태그는 1회만 — LLM이 1girl/solo를 포함해도 안전. 검증 원본 프롬프트도 성격 태그를 포함했다.)
      */
     public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags, List<String> sceneTags) {
-        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", 1girl, solo");
-        java.util.Set<String> seen = seedSeen();
+        return goldenShotPositive(appearanceTags, personaTags, sceneTags, false);
+    }
+
+    /** [2026-08-04 남캐] 성별 앵커 분기 — male이면 1boy + male focus(여캐 편향 억제 실측 태그). */
+    public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags,
+                                     List<String> sceneTags, boolean male) {
+        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(anchor(male));
+        java.util.Set<String> seen = seedSeen(male);
         appendTags(sb, appearanceTags, seen);
         appendTags(sb, personaTags, seen);
         appendTags(sb, sceneTags, seen);
@@ -180,8 +186,14 @@ public class UgcPromptAssembler {
      */
     public String refinePositive(List<String> appearanceTags, List<String> personaTags,
                                  EmotionTag emotion, String bgColor) {
-        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", 1girl, solo");
-        java.util.Set<String> seen = seedSeen();
+        return refinePositive(appearanceTags, personaTags, emotion, bgColor, false);
+    }
+
+    /** [2026-08-04 남캐] 성별 앵커 분기 버전. */
+    public String refinePositive(List<String> appearanceTags, List<String> personaTags,
+                                 EmotionTag emotion, String bgColor, boolean male) {
+        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(anchor(male));
+        java.util.Set<String> seen = seedSeen(male);
         appendTags(sb, appearanceTags, seen);
         appendTags(sb, personaTags, seen);
         sb.append(", ").append(WF2_POSE_TAGS);
@@ -240,10 +252,19 @@ public class UgcPromptAssembler {
         return sb.toString();
     }
 
+    /**
+     * [2026-08-04 남캐] 성별 앵커 — wai_illustrious의 여캐 편향 보정은 앵커 태그+male focus가 1차,
+     * Male_Type LoRA(워크플로 조건부 주입)가 2차. 'male focus'는 단독 1boy보다 화풍 안정 실측(PoC).
+     */
+    private static String anchor(boolean male) {
+        return male ? "1boy, male focus, solo" : "1girl, solo";
+    }
+
     /** 프리픽스에 이미 들어간 태그 — appendTags 중복 방지 초기 집합. */
-    private static java.util.Set<String> seedSeen() {
+    private static java.util.Set<String> seedSeen(boolean male) {
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
-        seen.add("1girl");
+        seen.add(male ? "1boy" : "1girl");
+        if (male) seen.add("male focus");
         seen.add("solo");
         for (String t : QUALITY_PREFIX.split(",")) {
             seen.add(t.trim().toLowerCase());

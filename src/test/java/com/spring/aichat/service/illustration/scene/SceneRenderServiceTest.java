@@ -49,6 +49,8 @@ class SceneRenderServiceTest {
     void armWrestlingSceneConvention() {
         Character mia = heroine("미아", "pink hair, twintails, blue eyes");
         Character jun = heroine("준", "short black hair, brown eyes");
+        // [2026-08-04 남캐] 성별은 DB가 권위 — LLM cast.gender는 미등록 ref 폴백만
+        jun.updateGender(com.spring.aichat.domain.enums.CharacterGender.MALE);
         Character yuna = heroine("유나", "silver hair, braid, ice blue eyes");
 
         AiJsonOutput o = out(false, new AiJsonOutput.SceneIllustrationSpec(

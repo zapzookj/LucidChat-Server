@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </pre>
  */
 @ConfigurationProperties(prefix = "ugc.modes")
-public record UgcModeProperties(Boolean storyEnabled, Boolean theaterEnabled) {
+public record UgcModeProperties(Boolean storyEnabled, Boolean theaterEnabled, Boolean maleBuilderEnabled) {
 
     public boolean storyOn() {
         return Boolean.TRUE.equals(storyEnabled);
@@ -25,5 +25,10 @@ public record UgcModeProperties(Boolean storyEnabled, Boolean theaterEnabled) {
 
     public boolean theaterOn() {
         return Boolean.TRUE.equals(theaterEnabled);
+    }
+
+    /** [2026-08-04 남캐] 남성 캐릭터 빌더 게이트 — 기본 off(파라미터 확정 전 로컬 튜닝 전용). */
+    public boolean maleBuilderOn() {
+        return Boolean.TRUE.equals(maleBuilderEnabled);
     }
 }
