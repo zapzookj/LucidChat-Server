@@ -59,7 +59,13 @@ public final class StoryV2Requests {
          *  - true:  기존 같은 World 방을 *완전 reset* 후 새 흐름 시작 (페르소나 포함)
          *  - false/null: 기존 방 있으면 409 Conflict 응답 (UI에서 confirm 받고 재호출)
          */
-        Boolean overwriteExisting
+        Boolean overwriteExisting,
+
+        /**
+         * [2026-08-04 페르소나] 페르소나 카드 선택 — 지정 시 본문·스탯·성별 스냅샷이 방에 복사되며
+         * personaText/preset보다 우선한다. null이면 기존 경로 그대로.
+         */
+        Long userPersonaId
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

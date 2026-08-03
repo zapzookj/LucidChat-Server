@@ -325,6 +325,12 @@ public class CharacterPromptAssembler {
             dynamicBuilder.append("\n").append(difficultyDirective).append("\n");
         }
 
+        // ── [2026-08-04 페르소나] Persona–Stat Hybrid — 카드 스탯 스냅샷 있는 방만 주입 ──
+        String personaStatBlock = PersonaStatPromptBlock.build(room.getPersonaStatsJson());
+        if (personaStatBlock != null) {
+            dynamicBuilder.append(personaStatBlock).append("\n");
+        }
+
         // ── [스토리 전용] 씬 상태 + 승급 ──
         if (ChatModePolicy.supportsSceneDirection(mode)) {
             String defaultOutfit = character.getEffectiveDefaultOutfit();

@@ -124,7 +124,8 @@ public class SceneRequestService {
                     throw new BusinessException(ErrorCode.BAD_REQUEST, "아직 그릴 장면이 없어요. 대화를 먼저 시작해 주세요.");
                 }
                 AiJsonOutput.SceneIllustrationSpec spec =
-                    directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw);
+                    directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw,
+                        room.isPersonaUserMale());   // [페르소나] 유저 성별 스냅샷 반영
                 return renderService.submitManual(
                     roomId, cast, spec, turnIndex, sfw, user.getId(), cost);
             } catch (SceneRenderService.RenderPoolSaturatedException e) {

@@ -61,8 +61,16 @@ public class SceneDirectorService {
     public AiJsonOutput.SceneIllustrationSpec composeSpec(List<ChatLogDocument> recentLogs,
                                                           List<Character> cast,
                                                           String locationText, boolean sfw) {
+        return composeSpec(recentLogs, cast, locationText, sfw, true);
+    }
+
+    /** [2026-08-04 페르소나] userMale — 방 페르소나 스냅샷 성별(기본 남성 폴백 유지). */
+    public AiJsonOutput.SceneIllustrationSpec composeSpec(List<ChatLogDocument> recentLogs,
+                                                          List<Character> cast,
+                                                          String locationText, boolean sfw,
+                                                          boolean userMale) {
         String model = props.director().modelOrDefault(fallbackModel);
-        String system = buildSystemPrompt(cast, sfw);
+        String system = buildSystemPrompt(cast, sfw, userMale);
         String user = buildContextBlock(recentLogs, locationText);
 
         String raw = openRouterClient.completeJson(
@@ -110,7 +118,7 @@ public class SceneDirectorService {
     //  프롬프트 — L1 다중인물 규약 전문 (docs/09 §A-1 디오라마 실측 확정)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildSystemPrompt(List<Character> cast, boolean sfw) {
+    private String buildSystemPrompt(List<Character> cast, boolean sfw, boolean userMale) {
         // [2026-08-04 남캐] 성별 힌트 동봉 — 디렉터가 cast.gender를 정확히 산출하게
         String heroineNames = cast.isEmpty() ? "(none — background-only scene)"
             : cast.stream()
@@ -147,8 +155,8 @@ public class SceneDirectorService {
             - HARD LIMIT: at most 2 people total on screen. NEVER 3 or more.
             - Default is heroine alone (cast size 1). Include "user" ONLY when physical interaction
               between user and heroine is the visual core of the moment.
-            - The user is faceless: never describe the user's face; prefer poses where the user's
-              face is naturally out of frame (pov, from behind, head out of frame).
+            - The user is %s. The user is faceless: never describe the user's face; prefer poses
+              where the user's face is naturally out of frame (pov, from behind, head out of frame).
             - Choose camera/angle freely per scene — no fixed rule.
 
             ## Tag craft
@@ -157,7 +165,7 @@ public class SceneDirectorService {
             - Framing tags (close-up, upper body...) only when 2 or fewer people are on screen.
             - Pick the single most illustration-worthy moment from the LATEST exchanges — the "now" of the scene.
             %s
-            """.formatted(heroineNames, rating);
+            """.formatted(heroineNames, userMale ? "male" : "female", rating);
     }
 
     private String buildContextBlock(List<ChatLogDocument> recentLogs, String locationText) {

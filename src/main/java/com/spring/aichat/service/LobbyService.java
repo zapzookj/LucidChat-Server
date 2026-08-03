@@ -42,6 +42,8 @@ public class LobbyService {
     private final RedisCacheService cacheService;
     private final UgcWorldLocationRepository ugcWorldLocationRepository; // [세계관 빌더] 방 생성 배경 시딩
     private final UgcWorldRepository ugcWorldRepository; // [프로필 뷰] 소속 월드 이름 해석
+    // [2026-08-04 페르소나] 카드 선택 → 신규 방 스냅샷
+    private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
 
     /**
      * 전체 캐릭터 목록 조회
@@ -128,7 +130,13 @@ public class LobbyService {
         ChatRoom room = chatRoomRepository
             .findByUser_IdAndCharacter_IdAndChatMode(user.getId(), character.getId(), chatMode)
             .orElseGet(() -> {
-                ChatRoom newRoom = chatRoomRepository.save(new ChatRoom(user, character, chatMode));
+                ChatRoom created = new ChatRoom(user, character, chatMode);
+                // [2026-08-04 페르소나] 카드 선택 — 신규 방에만 스냅샷(본문·스탯·성별) 적용
+                if (request.userPersonaId() != null) {
+                    var card = userPersonaService.requireOwned(user.getId(), request.userPersonaId());
+                    created.applyPersonaCard(card.getPersonaText(), card.statsJson(), card.getGenderOrDefault());
+                }
+                ChatRoom newRoom = chatRoomRepository.save(created);
                 // [세계관 빌더] UGC 월드 캐릭터 — 첫 장소 대표 배경을 초기 동적 배경으로 시딩
                 //   (UGC는 slug 정적 배경 에셋이 없어 dynamicBg가 유일한 실효 렌더 소스)
                 seedUgcWorldBackground(newRoom, character);

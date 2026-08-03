@@ -111,6 +111,30 @@ public class ChatRoom {
     @Column(name = "ugc_world_id")
     private Long ugcWorldId;
 
+    /**
+     * [2026-08-04 페르소나] 카드 스탯 스냅샷 JSON({"charm":n,...}, V21) — 생성 시점 복사(소급 불변).
+     * null이면 스탯 미사용(레거시·카드 미선택 방) — 프롬프트 Hybrid 블록 무주입.
+     */
+    @Column(name = "persona_stats_json", columnDefinition = "TEXT")
+    private String personaStatsJson;
+
+    /** [페르소나] 유저 성별 스냅샷 — 씬 렌더 유저 표현 기준(null=MALE 기존 폴백). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "persona_gender", length = 10)
+    private com.spring.aichat.domain.enums.CharacterGender personaGender;
+
+    /** [페르소나] 카드 스냅샷 일괄 적용 — 본문(기존 userPersona 배관 재사용)+스탯+성별. */
+    public void applyPersonaCard(String personaText, String statsJson,
+                                 com.spring.aichat.domain.enums.CharacterGender gender) {
+        this.userPersona = personaText;
+        this.personaStatsJson = statsJson;
+        this.personaGender = gender;
+    }
+
+    public boolean isPersonaUserMale() {
+        return personaGender == null || personaGender.isMale();
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  공통 필드 — 두 모드 모두 사용
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

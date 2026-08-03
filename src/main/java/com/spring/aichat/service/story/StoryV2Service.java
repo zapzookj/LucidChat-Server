@@ -85,6 +85,18 @@ public class StoryV2Service {
     private final WorldViewService worldViewService;
     private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
     private final com.spring.aichat.config.UgcModeProperties ugcModeProperties;
+    // [2026-08-04 페르소나] 카드 선택 → 방 스냅샷
+    private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
+
+    /**
+     * [페르소나] 카드 스냅샷 적용 — 지정 시 본문·스탯·성별이 방에 복사(카드 수정 소급 불변).
+     * 공식·UGC 생성/overwrite 4경로 공용.
+     */
+    private void applyPersonaCardIfAny(ChatRoom room, User user, Long personaCardId) {
+        if (personaCardId == null) return;
+        var card = userPersonaService.requireOwned(user.getId(), personaCardId);
+        room.applyPersonaCard(card.getPersonaText(), card.statsJson(), card.getGenderOrDefault());
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [1] listWorlds — 로비 V2 World 섹션
@@ -398,6 +410,7 @@ public class StoryV2Service {
             room.updateUserPersona(userPersona);
             room.updateStoryUserNickname(storyNickname);
             room.restoreStartLocation(startLocationKey);
+            applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
 
             // 히로인/위치 재구성
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
@@ -410,6 +423,7 @@ public class StoryV2Service {
 
         // 신규 생성
         ChatRoom room = ChatRoom.createStoryV2(user, world, startLocationKey, userPersona, storyNickname);
+        applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
         room = chatRoomRepository.save(room);
 
         // [D-5/E-2b] 서사 나침반 상태 초기화 — 빈 thread로 시작(백본 미리 심지 않음).
@@ -491,6 +505,7 @@ public class StoryV2Service {
             room.updateUserPersona(userPersona);
             room.updateStoryUserNickname(storyNickname);
             room.restoreStartLocation(startLocationKey);
+            applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
             seedUgcStoryBackground(room, view, startLocationKey);
             return new CreateStoryV2Response(room.getId(), ref.key(), false, true);
@@ -498,6 +513,7 @@ public class StoryV2Service {
 
         ChatRoom room = ChatRoom.createStoryV2Ugc(user, ref.ugcWorldId(), startLocationKey,
             userPersona, storyNickname);
+        applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
         try {
             room = chatRoomRepository.saveAndFlush(room);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
