@@ -341,7 +341,9 @@ public class CharacterCreationController {
             worldType,
             c.getWorldId() != null ? c.getWorldId().name() : null,
             c.getUgcWorldId(),
-            worldName
+            worldName,
+            c.getDifficultyOrDefault().name(),   // [난이도] 편집 폼 기존값
+            c.getGenderOrDefault().name()        // [남캐]
         );
     }
 

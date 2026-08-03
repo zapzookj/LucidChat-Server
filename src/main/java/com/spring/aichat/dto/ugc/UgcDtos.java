@@ -127,7 +127,11 @@ public final class UgcDtos {
         String worldType,   // "OFFICIAL" | "UGC" | null(미연결)
         String worldId,     // 공식 연결 시 WorldId enum name
         Long ugcWorldId,    // UGC 연결 시 월드 ID
-        String worldName    // 연결된 세계관 표시명
+        String worldName,   // 연결된 세계관 표시명
+        /** [난이도] 편집 폼 기존값 소스 — 없으면 저장 시 NORMAL 덮어쓰기 사고가 나므로 필수 노출. */
+        String difficulty,
+        /** [남캐] FEMALE/MALE — 카드 표기·필터용. */
+        String gender
     ) {}
 
     public record MineResponse(List<UgcCharacterView> characters, CreationJobView activeJob) {}
