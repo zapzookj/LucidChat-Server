@@ -43,3 +43,6 @@ hs_err_pid*.log
 replay_pid*.log
 src/main/java/com/spring/aichat.zip
 src/main/resources/application.zip
+
+# [남캐 PoC] 매트릭스 산출 이미지
+poc/out/
