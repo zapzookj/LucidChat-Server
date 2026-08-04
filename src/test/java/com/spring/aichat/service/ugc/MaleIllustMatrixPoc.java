@@ -57,7 +57,28 @@ class MaleIllustMatrixPoc {
     private static final String POSITIVE =
         "masterpiece, best quality, newest, absurdres, 1boy, male focus, solo, " + JOB13_TAGS;
 
-    private static final double[] STRENGTHS = {0.0, 0.5, 0.7, 0.9};
+    // ── Phase 2 (2026-08-04): 강도 0.9 고정 — 변수는 표정·시선·조명 태그셋 ──
+    // Phase 1 판정: LoRA OFF=여성 렌더(앵커 필수 확정), 0.5~0.9 전부 남성 고정·차이 미미.
+    // '애매함'의 정체 = 생기 부재(반개안·내리깐 시선·눈맞춤 없음·송장급 창백·한색 모노톤).
+    /** B: 생기 패치 — 죽은 눈 태그 제거 + 눈맞춤·미소·눈 하이라이트·따뜻한 조명. */
+    private static final String POSITIVE_VITALITY = POSITIVE
+        .replace("partially covered eyes, ", "")
+        .replace("narrow eyes, ", "")
+        .replace("sharp eyes, ", "")
+        .replace("thick eyebrows, ", "")
+        .replace("dim lighting, rim lighting", "warm lighting, soft rim lighting")
+        + ", looking at viewer, slight smile, bright eyes, detailed eyes, sparkling eyes, eye highlights";
+
+    /** C: 유혹 버전 — B + 여성향 시그니처 코드(나른한 미소·고개 기울임·손 연출). */
+    private static final String POSITIVE_SEDUCE = POSITIVE_VITALITY
+        + ", seductive smile, smirk, head tilt, hand in own hair, unbuttoned collar";
+
+    private static final String[][] TAG_SETS = {
+        {"setA_orig", POSITIVE},
+        {"setB_vital", POSITIVE_VITALITY},
+        {"setC_seduce", POSITIVE_SEDUCE},
+    };
+    private static final double STRENGTH = 0.9;
     private static final long[] SEEDS = {101_101_101L, 202_202_202L};
     private static final long DETAILER_SEED = 777_777_777L;
 
@@ -75,12 +96,11 @@ class MaleIllustMatrixPoc {
         Path outDir = Path.of("poc", "out");
         Files.createDirectories(outDir);
 
-        record Combo(String name, double strength, long seed) {}
+        record Combo(String name, String positive, double strength, long seed) {}
         List<Combo> combos = new ArrayList<>();
-        for (double s : STRENGTHS) {
+        for (String[] set : TAG_SETS) {
             for (long seed : SEEDS) {
-                combos.add(new Combo("lora%s_seed%d".formatted(
-                    s == 0.0 ? "OFF" : String.valueOf(s).replace('.', 'p'), seed % 1000), s, seed));
+                combos.add(new Combo(set[0] + "_seed" + (seed % 1000), set[1], STRENGTH, seed));
             }
         }
 
@@ -94,7 +114,7 @@ class MaleIllustMatrixPoc {
             UgcWorkflowFactory factory = new UgcWorkflowFactory(mapper, props);
             factory.loadTemplates();
             // strength 0 = male=false 빌드 → 그래프에 LoRA 미주입(프롬프트는 동일) — 순수 격리
-            ObjectNode wf = factory.buildGoldenShot(POSITIVE, "poc_" + c.name(),
+            ObjectNode wf = factory.buildGoldenShot(c.positive(), "poc_" + c.name(),
                 c.seed(), DETAILER_SEED, c.strength() > 0.0);
 
             ObjectNode input = mapper.createObjectNode();

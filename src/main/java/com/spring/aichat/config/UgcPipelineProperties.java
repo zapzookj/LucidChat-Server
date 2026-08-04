@@ -150,8 +150,11 @@ public record UgcPipelineProperties(
     /** 워크플로 치환 노브. 명세된 노브 외 파라미터는 템플릿 JSON(검증본)에 동결. */
     public record Generation(Integer goldenBatchSize, Double refineDenoise, Double bgEmphasisWeight,
                              Double maleLoraStrength, String maleNegative) {
-        /** [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 튜닝 노브(권장 탐색 0.5~0.9). */
-        public double maleLoraStrengthOrDefault() { return maleLoraStrength != null ? maleLoraStrength : 0.7; }
+        /**
+         * [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 매트릭스 확정 0.9
+         * (Phase 1 실측: OFF=여성 렌더·앵커 필수, 0.5~0.9 남성 고정, 0.9 골격 최안정·부작용 없음).
+         */
+        public double maleLoraStrengthOrDefault() { return maleLoraStrength != null ? maleLoraStrength : 0.9; }
 
         /**
          * [2026-08-04 방향 전환] 남성 잡 추가 네거티브 — <b>기본 off(빈 값)</b>.

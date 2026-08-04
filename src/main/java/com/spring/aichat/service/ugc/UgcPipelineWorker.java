@@ -135,6 +135,7 @@ public class UgcPipelineWorker {
             [아트 디렉션 — 남성 캐릭터]
             이 캐릭터는 남성이다 (appearance_tags는 1boy, male focus 기준 — 1girl 계열 금지).
             일러스트 태그 산출의 목표는 설정의 축어적 번역이 아니라 **디자인**이다: 이 컨셉이 여성향 서브컬처 장르에서 인기 있는 남성 캐릭터로 그려진다면 어떤 모습일지 상상하고, 그 완성형을 태그로 옮겨라. 설정의 정체성(강함·지위·분위기)은 그대로 살리되, 그것을 *어떤 외형 어휘로 표현할지*는 장르 독자에게 매력적인 쪽을 골라라. base_pose와 감정 연출(emotion_prompts)도 같은 관점으로.
+            대표 컷 연출(scene_tags): 황금샷은 이 캐릭터의 **대표 화보 컷**이다 — looking at viewer(눈맞춤)와 컨셉에 맞는 *생기 있는 시그니처 표정*(slight smile, smirk, confident gaze 등), 눈 하이라이트(detailed eyes, eye highlights)를 반드시 포함하라. 조명은 무드가 어두운 컨셉이어도 인물이 살아 보이는 포인트(warm lighting 또는 soft rim lighting)를 넣어라. 반개안·내리깐 시선·무표정 계열 태그만으로 얼굴을 구성하지 마라(표정이 죽으면 매력도 죽는다 — PoC 실측).
             단, 유저 컨셉이 특정 인상(중년의 관록, 거친 야성 등)을 명시적으로 요구하면 언제나 그 지시가 우선한다.""";
     }
 
