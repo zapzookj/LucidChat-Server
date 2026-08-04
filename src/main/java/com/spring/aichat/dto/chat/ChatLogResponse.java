@@ -25,6 +25,10 @@ import java.time.LocalDateTime;
  *
  * [Phase 5.5-Fix] scenesJson 필드 추가:
  * - ASSISTANT 메시지의 구조화된 씬 데이터 (재로딩 시 씬별 분리 복원용)
+ *
+ * [2026-08-04 폴리싱] ordinal 필드 추가:
+ * - 방 내 절대 서수(1-based, 오래된 순 — hidden 제외). 씬 일러 turnIndex와의 매핑 키로
+ *   히스토리 클릭→씬 점프(디오라마 A-2 잔여분)에 사용. 페이지네이션 산술을 서버가 담당.
  */
 public record ChatLogResponse(
     String logId,
@@ -39,8 +43,19 @@ public record ChatLogResponse(
     String innerThought,        // [Phase 5.5-IT] 해금된 경우만 텍스트, 아니면 null
     boolean thoughtUnlocked,    // [Phase 5.5-IT] 해금 완료 여부
     String scenesJson,          // [Phase 5.5-Fix] 구조화된 씬 배열 JSON (ASSISTANT만, 나머지 null)
-    String dialogueOptionsJson  // [Bug-Restore] 디렉터 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용
+    String dialogueOptionsJson, // [Bug-Restore] 디렉터 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용
+    long ordinal                // [2026-08-04] 방 내 절대 서수(1-based) — 0이면 미산출(레거시 경로)
 ) {
+    /** 하위 호환: ordinal 없는 생성자 (스트림 등 서수 무관 경로) */
+    public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
+                           EmotionTag emotionTag, LocalDateTime createdAt,
+                           String rating, String dislikeReason,
+                           boolean hasInnerThought, String innerThought, boolean thoughtUnlocked,
+                           String scenesJson, String dialogueOptionsJson) {
+        this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
+            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked,
+            scenesJson, dialogueOptionsJson, 0L);
+    }
     /** 하위 호환: dialogueOptionsJson 없는 생성자 */
     public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
                            EmotionTag emotionTag, LocalDateTime createdAt,

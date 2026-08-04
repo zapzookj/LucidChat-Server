@@ -24,7 +24,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -89,7 +91,17 @@ public class ChatController {
         @RequestParam(defaultValue = "50") int size
     ) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return chatLogRepository.findByRoomIdAndHiddenFalse(roomId, pageable).map(this::toDto);
+        Page<ChatLogDocument> logs = chatLogRepository.findByRoomIdAndHiddenFalse(roomId, pageable);
+        // [2026-08-04 폴리싱] 방 내 절대 서수(1-based, 오래된 순) 동봉 — DESC 정렬이므로
+        // ordinal = total - (page*size + i). 씬 일러 turnIndex 매핑 키(히스토리 클릭→씬 점프).
+        long total = logs.getTotalElements();
+        long offset = (long) page * size;
+        List<ChatLogResponse> content = new ArrayList<>();
+        List<ChatLogDocument> docs = logs.getContent();
+        for (int i = 0; i < docs.size(); i++) {
+            content.add(toDto(docs.get(i), total - offset - i));
+        }
+        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
     }
 
     @PostMapping("/rooms/{roomId}/init")
@@ -194,13 +206,13 @@ public class ChatController {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private ChatLogResponse toDto(ChatLogDocument doc) {
+    private ChatLogResponse toDto(ChatLogDocument doc, long ordinal) {
         String visibleInnerThought = doc.isThoughtUnlocked() ? doc.getInnerThought() : null;
         return new ChatLogResponse(
             doc.getId(), doc.getRole(), doc.getRawContent(), doc.getCleanContent(),
             doc.getEmotionTag(), doc.getCreatedAt(), doc.getRating(), doc.getDislikeReason(),
             doc.hasInnerThought(), visibleInnerThought, doc.isThoughtUnlocked(),
-            doc.getScenesJson(), doc.getDialogueOptionsJson());
+            doc.getScenesJson(), doc.getDialogueOptionsJson(), ordinal);
     }
 
     // ── DTO ──
