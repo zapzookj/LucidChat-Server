@@ -69,6 +69,44 @@ public class UgcJobJson {
         }
     }
 
+    // ── [2026-08-05 디자인 리롤] 황금샷 배치별 외형 스냅샷 ──
+    // 리롤이 디자인을 갈아치우는 구조에서 과거 배치 원화를 보존·선택 가능하게 하기 위해,
+    // 배치 제출 시점의 컨셉을 startIndex(그 배치 첫 키의 누적 인덱스)와 함께 기록한다.
+
+    /** 황금샷 배치 스냅샷 — startIndex = 이 배치 첫 이미지의 누적 키 인덱스. */
+    public record GoldenSnapshot(int startIndex, String conceptJson) {}
+
+    public List<GoldenSnapshot> readGoldenSnapshots(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {});
+        } catch (Exception e) {
+            throw new IllegalStateException("goldenSnapshots 파싱 실패", e);
+        }
+    }
+
+    public String writeGoldenSnapshots(List<GoldenSnapshot> snapshots) {
+        try {
+            return objectMapper.writeValueAsString(snapshots);
+        } catch (Exception e) {
+            throw new IllegalStateException("goldenSnapshots 직렬화 실패", e);
+        }
+    }
+
+    /**
+     * 선택 인덱스가 속한 배치의 스냅샷 해석 — startIndex ≤ index 중 최대. 같은 startIndex가
+     * 중복이면(재시도 재기록) 마지막 것을 취한다. 스냅샷 부재(레거시 잡)면 null.
+     */
+    public static GoldenSnapshot resolveSnapshot(List<GoldenSnapshot> snapshots, int index) {
+        GoldenSnapshot chosen = null;
+        for (GoldenSnapshot s : snapshots) {
+            if (s.startIndex() <= index && (chosen == null || s.startIndex() >= chosen.startIndex())) {
+                chosen = s;
+            }
+        }
+        return chosen;
+    }
+
     // ── 베이스 스탠딩 후보 배열 (2026-07-20 개편) ──
 
     public List<BaseCandidate> readBaseCandidates(String json) {

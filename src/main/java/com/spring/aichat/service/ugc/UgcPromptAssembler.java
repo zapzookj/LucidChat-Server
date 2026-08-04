@@ -255,6 +255,13 @@ public class UgcPromptAssembler {
     /**
      * [2026-08-04 남캐] 성별 앵커 — wai_illustrious의 여캐 편향 보정은 앵커 태그+male focus가 1차,
      * Male_Type LoRA(워크플로 조건부 주입)가 2차. 'male focus'는 단독 1boy보다 화풍 안정 실측(PoC).
+     *
+     * <p>[2026-08-04 Phase 4→5] "maleT" = Male_Type LoRA(civitai 1782159)의 트리거 워드.
+     * Phase 4에서 트리거+헤어 태그 최소화가 한국풍 헤어를 내는 것을 확인했으나, Phase 5에서
+     * <b>풀 트리거는 전반 렌더 품질을 깎고(마화 스타일 과적용 — 종원 판정 P0 우위), 헤어 형태는
+     * 트리거 없이 검증 핸들 태그(choppy/parted 계열)만으로 동일하게 나온다</b>를 확정(Q0/Q1).
+     * → 트리거 미주입이 확정 기본값. 마화 풍미가 필요하면 (maleT:0.6) 감쇠 주입이 검증된
+     * 취향 다이얼(Q2/Q3) — 노브 승격은 종원 결정 대기.
      */
     private static String anchor(boolean male) {
         return male ? "1boy, male focus, solo" : "1girl, solo";

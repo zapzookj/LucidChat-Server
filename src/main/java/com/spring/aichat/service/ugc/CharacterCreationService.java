@@ -14,6 +14,7 @@ import com.spring.aichat.dto.ugc.EmotionAssetState;
 import com.spring.aichat.dto.ugc.StructuredConcept;
 import com.spring.aichat.dto.ugc.UgcDtos;
 import com.spring.aichat.exception.BadRequestException;
+import com.spring.aichat.exception.InsufficientEnergyException;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.service.cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +30,10 @@ import java.util.Map;
  * [UGC v1] 캐릭터 생성 유저 액션 서비스 — 과금(TX-1)·소유권·상태 검증의 단일 지점.
  *
  * <p>패턴: 검증 → 과금(잔액 부족 시 차감 전 예외) → 상태 전이 → 커밋 후 워커 kickoff.
- * 과금 규칙(2026-07-17 확정): 기본 패키지 20 / 리롤 2 (실패 컷 재시도는 무과금).
- * 실패 정책: 파이프라인 귀책 FAILED = 전액 환불 / EXPIRED·중도 포기 = 무환불.
+ * 과금 규칙(2026-08-04 단계 과금 개편): 단계 진입 시 차감 6(시작)/4(스탠딩)/8(감정)/2(마무리) —
+ * 합 20 유지 / 리롤 2 (실패 컷 재시도는 무과금). 신규 잡은 billing_mode=STAGED,
+ * 레거시(null) 잡은 선차감 20이 이미 끝난 상태라 단계 차감 전부 스킵.
+ * 실패 정책: 파이프라인 귀책 FAILED = 누적 전액 환불 / EXPIRED·중도 포기 = 무환불(취소=정산).
  */
 @Slf4j
 @Service
@@ -126,11 +129,13 @@ public class CharacterCreationService {
                 ugcWorldRepository.findByIdAndOwnerUserId(requestedUgcWorldId, user.getId())
                     .orElseThrow(() -> new NotFoundException("세계관을 찾을 수 없습니다. worldId=" + requestedUgcWorldId));
             }
-            int cost = props.energy().basePackage();
+            // [2026-08-04 단계 과금] 선차감 20 → 시작 단계 6만 차감 (이후 단계 진입 시 각각 차감)
+            int cost = props.energy().stageStart();
             user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
             userRepository.save(user);
 
             CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, cost);
+            job.markStagedBilling(); // 신규 잡은 전부 단계 과금 — null=레거시 선차감 잡
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
             job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
             job = jobRepository.save(job);
@@ -148,7 +153,7 @@ public class CharacterCreationService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     public void selectGoldenShot(String username, Long jobId, int selectedIndex) {
-        txTemplate.executeWithoutResult(tx -> {
+        boolean charged = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.GACHA_WAIT);
 
@@ -156,8 +161,29 @@ public class CharacterCreationService {
             if (selectedIndex < 0 || selectedIndex >= keys.size()) {
                 throw new BadRequestException("잘못된 황금샷 선택입니다.");
             }
+            // [2026-08-05 디자인 리롤] 선택 배치의 외형 스냅샷 복원 — 리롤 누적본의 어느 배치를
+            // 골라도 태그·이미지 정합 유지. 최신 배치(현행 컨셉과 동일)면 무병합, 스냅샷 부재
+            // 레거시 잡도 무병합(현행 동작). withAppearanceFrom이 최신 프로필 편집분을 보존한다.
+            List<UgcJobJson.GoldenSnapshot> snaps = json.readGoldenSnapshots(
+                json.readScratch(job.getExternalJobsJson()).get(UgcPipelineWorker.GOLDEN_SNAPSHOTS_KEY));
+            UgcJobJson.GoldenSnapshot snap = UgcJobJson.resolveSnapshot(snaps, selectedIndex);
+            boolean isLatestBatch = snap == null || snaps.isEmpty()
+                || snap.startIndex() == snaps.get(snaps.size() - 1).startIndex();
+            if (snap != null && !isLatestBatch) {
+                StructuredConcept latest = json.readConcept(job.getStructuredConceptJson());
+                StructuredConcept merged = latest.withAppearanceFrom(json.readConcept(snap.conceptJson()));
+                job.applyStage0(json.writeConcept(merged), merged.bgColor());
+            }
+            // [2026-08-04 단계 과금] 스탠딩 진입 차감 — 부족 시 예외로 TX 롤백(GACHA_WAIT 유지, 잡 실패 금지)
+            int cost = props.energy().stageStanding();
+            boolean c = chargeStageEnergy(job, username, cost,
+                "스탠딩 진행에 에너지 " + cost + "가 필요해요. 충전 후 다시 시도해 주세요.");
             job.toBaseProcessing(keys.get(selectedIndex));
-        });
+            return c;
+        }));
+        if (charged) {
+            cacheService.evictUserProfile(username);
+        }
         worker.runBaseStage(jobId);
     }
 
@@ -167,7 +193,7 @@ public class CharacterCreationService {
 
     /** 스탠딩 후보 확정 — 스타 토폴로지 원점과 감정 파생 seed가 여기서 고정된다. */
     public void selectBaseStanding(String username, Long jobId, int selectedIndex) {
-        txTemplate.executeWithoutResult(tx -> {
+        boolean charged = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.BASE_WAIT);
 
@@ -179,10 +205,18 @@ public class CharacterCreationService {
             if (!chosen.is(BaseCandidate.READY)) {
                 throw new BadRequestException("아직 준비되지 않은 스탠딩입니다.");
             }
+            // [2026-08-04 단계 과금] 감정 진입 차감(원가 최대 구간) — 부족 시 TX 롤백(BASE_WAIT 유지)
+            int cost = props.energy().stageEmotions();
+            boolean c = chargeStageEnergy(job, username, cost,
+                "감정 컷 진행에 에너지 " + cost + "이 필요해요. 충전 후 다시 시도해 주세요.");
             job.toEmotionsProcessing(chosen.key());
             job.fixBaseEditSeed(chosen.seed());
             worker.initEmotionAssets(job, chosen.key());
-        });
+            return c;
+        }));
+        if (charged) {
+            cacheService.evictUserProfile(username);
+        }
         worker.runEmotionStage(jobId);
     }
 
@@ -308,15 +342,30 @@ public class CharacterCreationService {
     }
 
     /**
+     * [2026-08-04 디자인 리롤 — 종원 확정] 힌트 없는 리롤이 시드만 바꿔 "같은 디자인의 미묘한
+     * 변주"만 내던 문제(리롤 기대 효과 부재) 대응: 리롤은 항상 외형 재구조화를 거친다 —
+     * 힌트 있으면 그 지정을 최우선 반영, 없으면 디자인 다양화 지시로 컨셉 기준 새 디자인을 뽑는다.
+     */
+    private static final String DESIGN_REROLL_DIRECTIVE = """
+        이번 요청은 특정 부위 수정이 아니라 **전체 디자인 리롤**이다: [기존 외형 태그]와 확연히
+        다른 새 디자인을 제안하라 — 헤어 실루엣·기장, 의상 스타일, 액세서리 구성의 축을
+        적극적으로 바꿔 같은 컨셉의 다른 해석을 보여줘라. 단 [원래 컨셉 서술]이 명시한
+        지정(머리색·눈색 등)과 성별 정체성은 반드시 유지한다.""";
+
+    /**
      * 황금샷 배치 리롤. [2026-07-21] 외형 지정 동봉 가능 — 베이스 확정 전(GACHA_WAIT)이라
-     * 외형 재구조화가 안전한 유일 구간. 지정 시 워커가 외형 전용 재구조화 후 새 프롬프트로 제출.
+     * 외형 재구조화가 안전한 유일 구간. [2026-08-04] 힌트 미동봉 시에도 디자인 다양화
+     * 재구조화를 수행한다(시드만 리롤은 폐지). [2026-08-05 종원 승인] 기존 후보는 비우지 않고
+     * 누적한다 — 배치별 외형 스냅샷(GOLDEN_SNAPSHOTS_KEY)이 선택 시 정합을 복원하므로
+     * 구디자인 원화를 남겨두고 최종 비교·선택하는 UX가 안전해졌다.
      */
     public void rerollGoldenShots(String username, Long jobId, UgcDtos.AppearanceHints appearanceEdit) {
         String hintsBlock = appearanceHintsBlock(appearanceEdit);
         if (hintsBlock != null) {
-            // 하드 키워드 게이트 — 에너지 차감 전 (유저 손실 없음)
+            // 하드 키워드 게이트 — 에너지 차감 전 (유저 손실 없음). 내부 디자인 지시문은 게이트 불요.
             moderationService.assertRawConceptAllowed(hintsBlock);
         }
+        String effectiveBlock = hintsBlock != null ? hintsBlock : DESIGN_REROLL_DIRECTIVE;
 
         txTemplate.executeWithoutResult(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
@@ -328,15 +377,9 @@ public class CharacterCreationService {
             userRepository.save(user);
             job.chargeEnergy(cost);
             job.restartGoldenGeneration();
-            if (hintsBlock != null) {
-                Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
-                scratch.put(UgcPipelineWorker.APPEARANCE_EDIT_KEY, hintsBlock);
-                job.updateExternalJobs(json.writeScratch(scratch));
-                // [리뷰 픽스] 외형이 바뀌면 기존 후보는 스테일(구외형) — 선택 시 새 태그가 구외형
-                // 이미지에 주입되어 프로필-이미지 불일치 캐릭터가 만들어진다. 리롤 누적 정책은
-                // 동일 컨셉 리롤 전용이므로 외형 수정 리롤은 후보를 비우고 새로 누적한다.
-                job.updateGoldenShotKeys(json.writeKeys(List.of()));
-            }
+            Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+            scratch.put(UgcPipelineWorker.APPEARANCE_EDIT_KEY, effectiveBlock);
+            job.updateExternalJobs(json.writeScratch(scratch));
         });
         cacheService.evictUserProfile(username);
         worker.runGoldenReroll(jobId);
@@ -403,7 +446,7 @@ public class CharacterCreationService {
 
     /** 검수 확정 — 15컷 전부 READY여야 한다 (FAILED 컷은 무료 재시도 유도). */
     public void confirmReview(String username, Long jobId) {
-        txTemplate.executeWithoutResult(tx -> {
+        boolean charged = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.REVIEW_WAIT);
 
@@ -413,8 +456,16 @@ public class CharacterCreationService {
             if (!allReady) {
                 throw new BadRequestException("아직 완성되지 않은 컷이 있어요. 실패한 컷을 다시 시도해 주세요.");
             }
+            // [2026-08-04 단계 과금] 마무리(누끼·바인딩) 진입 차감 — 부족 시 TX 롤백(REVIEW_WAIT 유지)
+            int cost = props.energy().stageFinalize();
+            boolean c = chargeStageEnergy(job, username, cost,
+                "마무리 진행에 에너지 " + cost + "가 필요해요. 충전 후 다시 시도해 주세요.");
             job.toPostprocessing();
-        });
+            return c;
+        }));
+        if (charged) {
+            cacheService.evictUserProfile(username);
+        }
         worker.runCutoutStage(jobId);
     }
 
@@ -445,6 +496,26 @@ public class CharacterCreationService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * [2026-08-04 단계 과금] STAGED 잡 단계 진입 차감 — 잡 비관적 락 TX 내부 전용.
+     * 레거시(billing_mode null) 선차감 잡은 스킵. 부족 시 BadRequestException으로 진행만 차단
+     * (TX 롤백 — 잡 상태·차감 모두 원복, 잡 실패 금지). User @Version 낙관락 충돌은 기존
+     * consumeEnergy 경로 관례 그대로 전파. 반환: 실제 차감 여부(프로필 캐시 무효화 판단용).
+     */
+    private boolean chargeStageEnergy(CharacterCreationJob job, String username,
+                                      int cost, String insufficientMessage) {
+        if (!job.isStagedBilling()) return false; // 레거시 선차감 잡 — 이미 20 지불 완료
+        User user = findUser(username);
+        try {
+            user.consumeEnergy(cost); // 기존 차감 경로 재사용 — 부족 시 차감 전 예외
+        } catch (InsufficientEnergyException e) {
+            throw new BadRequestException(insufficientMessage);
+        }
+        userRepository.save(user);
+        job.chargeEnergy(cost); // 환불 정산 기준 누적 — failAndRefund가 전액 환불에 그대로 사용
+        return true;
+    }
 
     private CharacterCreationJob lockOwnedJob(String username, Long jobId) {
         User user = findUser(username);
