@@ -34,3 +34,9 @@ auth:
 fal:
   webhook-base-url: "http://localhost:8080"
   use-webhook: false  # 로컬은 폴링 사용
+
+ugc:
+  generation:
+    # [2026-08-04 남캐 Phase 3] H안 확정 네거티브 팩 — 야경 청보라 통계의 피부 송장톤 상쇄 (PoC 실측: 한색 시드에서도 웜톤 복원).
+    # ⚠ pale skin 네거티브는 서이한(혈색) 검증용 — 창백 컨셉(백서월 등) 교차 검증 시 이 항목만 빼고 재기동할 것.
+    male-negative: "blue theme, purple theme, greyscale, monochrome, pale skin"

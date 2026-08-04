@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * [2026-08-04 남캐 PoC] Male_Type LoRA 강도 격리 매트릭스 — 디오라마 §8-6 방법론의 남캐판.
+ * [2026-08-04 남캐 PoC] 서이한 태그 매트릭스 — 디오라마 §8-6 방법론의 남캐판.
  *
  * <p>클래스명이 *Test가 아니라 CI(--tests "*Test")에서 자동 제외된다. 실행:
  * <pre>
@@ -27,58 +27,142 @@ import java.util.List;
  * </pre>
  * env 미설정이면 스킵. 산출: {@code poc/out/*.png} (리포 루트 기준 — .gitignore 대상).
  *
- * <p>Phase 1 설계 — 변수는 LoRA 강도 하나만:
- * 고정 프롬프트(잡 13 '서이한' Stage0 실산출 태그 — 브리프가 이미 bishounen 계열을 뽑은 상태)
- * × LoRA {없음, 0.5, 0.7, 0.9} × seed 2종 = 8장. 프롬프트가 상수이므로 결과 차이는 전부
- * 스타일 층(LoRA) 기여로 귀속된다 — 'LoRA가 미형화를 돕는가 극화체로 당기는가'를 확정.
+ * <p>Phase 1(fd98398 리비전): LoRA 강도 격리 — OFF=여성 렌더(앵커 필수 확정), 0.9 확정.
+ * <p>Phase 2(c02e862 리비전): 표정·시선·조명 — 생기 부재 진단, 대표 컷 연출 지시로 브리프 반영.
+ *
+ * <p>Phase 3 설계 (2026-08-04, 종원 외형 불만 대응 — 헤어 촌스러움·회보라 피부·죽은 눈):
+ * danbooru 태그 실측(태그 덤프 + safebooru tags.json 교차)으로 기존 프롬프트의 유령 태그를 확인 —
+ * soft hair·layered hair(0건), bangs(deprecated), straight hair(형태 억제), narrow/sharp eyes(0건),
+ * bright/detailed eyes·eye highlights(0건), warm/rim lighting(0건), dim lighting·recording studio·
+ * vocal booth·studio microphone(미학습), three-quarter view(0건), slight smile(비실존 — light smile이 정본).
+ * 형태 신호가 "medium hair+straight hair"뿐이라 여성 bob 분포로 수렴한 것이 밋밋 단발의 직접 원인,
+ * pale skin+야경 청보라 통계가 송장톤의 원인, brown eyes 다크초콜릿 분포+저조도가 검은 눈의 원인.
+ *
+ * <p>세트(변인 격리, 비교 기준 = Phase 2 setB_vital):
+ * D=헤어만 교체 / E=생기(피부·눈·조명·씬 앵커)만 교체 / F=D+E 통합 / G=F+upper body(화보 프레이밍) /
+ * H=F+네거티브 팩(청보라 상쇄, maleNegative 노브 경유 — 프로덕션 주입 경로 그대로) — 각 × seed 2 = 10장.
  */
 class MaleIllustMatrixPoc {
 
-    /** 잡 13(서이한) Stage0 실산출 — appearance + persona + scene (프로덕션 조립 순서 동일). */
-    private static final String JOB13_TAGS = String.join(", ",
-        // appearance
-        "adult", "bishounen", "handsome", "black hair", "soft hair", "medium hair", "layered hair",
-        "straight hair", "bangs", "long bangs", "hair between eyes", "partially covered eyes",
-        "sidelocks", "brown eyes", "tareme", "narrow eyes", "sharp eyes", "thick eyebrows",
-        "straight eyebrows", "eyelashes", "pale skin", "slender", "slim", "narrow waist",
-        "narrow hips", "broad shoulders", "long legs", "tall male", "toned",
+    // ── 잡 13(서이한) Stage0 실산출의 블록 분해 — 문제 축만 교체, 나머지 동결 ──
+    private static final String HEAD = "adult, bishounen, handsome";
+
+    /** setB 상태의 헤어(유령 태그 포함 — E의 격리 대조군). */
+    private static final String HAIR_OLD = String.join(", ",
+        "black hair", "soft hair", "medium hair", "layered hair", "straight hair", "bangs",
+        "long bangs", "hair between eyes", "sidelocks");
+
+    /**
+     * 커튼뱅·가르마 K-pop 정석 — 전 태그 danbooru 실존 검증(parted bangs 305k·curtained hair 47k·
+     * wavy hair 146k). curtained hair는 parted bangs와만 정합(swept/crossed 혼용 금지),
+     * '앞머리가 눈을 살짝 덮는' 컨셉은 long bangs+hair between eyes로 유지.
+     */
+    private static final String HAIR_NEW = String.join(", ",
+        "black hair", "medium hair", "parted bangs", "curtained hair", "long bangs",
+        "hair between eyes", "sidelocks", "wavy hair");
+
+    private static final String EYES_OLD = "brown eyes, tareme, straight eyebrows, eyelashes";
+
+    /**
+     * 갈색 유지 + gradient eyes(12.8k)로 저조도 발색 보정. tareme는 1boy:1girl=13:87 여캐 편향이라
+     * 대표컷에서 제외(감정 컷에서 재검토), sparkling eyes(18k)는 유일한 실존 생기 태그.
+     */
+    private static final String EYES_NEW = "brown eyes, gradient eyes, sparkling eyes, eyelashes";
+
+    private static final String SKIN_OLD = "pale skin";
+    /** pale skin 제거=Illustrious 기본 라이트스킨 복귀('창백 미인' 인상 유지) + light blush(121k) 혈색. */
+    private static final String SKIN_NEW = "light blush";
+
+    private static final String BODY = String.join(", ",
+        "slender", "slim", "narrow waist", "narrow hips", "broad shoulders", "long legs",
+        "tall male", "toned");
+
+    private static final String CLOTHING = String.join(", ",
         "collared shirt", "white shirt", "dress shirt", "black jacket", "blazer", "open jacket",
         "necktie", "loosened necktie", "black pants", "belt", "black belt", "wristwatch",
         "earrings", "single earring", "ear piercing", "silver earrings", "necklace",
         "chain necklace", "black footwear", "dress shoes", "rolled-up sleeves", "shirt tucked in",
-        "in-ear monitor",
-        // persona
-        "perfectionist", "charismatic", "disciplined", "aloof", "secretly lonely", "gentle",
-        // scene (황금샷 연출)
+        "in-ear monitor");
+
+    private static final String PERSONA =
+        "perfectionist, charismatic, disciplined, aloof, secretly lonely, gentle";
+
+    /** setB 상태의 씬(유령 조명 포함 — D의 격리 대조군). */
+    private static final String SCENE_OLD = String.join(", ",
         "recording studio", "vocal booth", "studio microphone", "headphones", "night",
-        "city lights", "window", "dim lighting", "rim lighting", "cowboy shot",
+        "city lights", "window", "warm lighting", "soft rim lighting", "cowboy shot",
         "three-quarter view", "depth of field");
 
-    private static final String POSITIVE =
-        "masterpiece, best quality, newest, absurdres, 1boy, male focus, solo, " + JOB13_TAGS;
+    /**
+     * 심야 녹음실 무드 유지 + 실존 태그 재앵커: recording studio(193)·vocal booth·studio microphone(421)은
+     * 미학습이라 indoors(360k)+microphone(51k)으로 교체, 형용사 조명 대신 물리 광원 lamp(23k)가
+     * 텅스텐 웜 앰비언트를 만들고 backlighting(45k)이 창밖 야경 역광으로 윤곽 분리(sidelighting과 혼용 금지).
+     */
+    private static String sceneNew(String framing) {
+        return String.join(", ",
+            "indoors", "microphone", "headphones", "night", "city lights", "window",
+            "lamp", "backlighting", "light particles", framing, "depth of field");
+    }
 
-    // ── Phase 2 (2026-08-04): 강도 0.9 고정 — 변수는 표정·시선·조명 태그셋 ──
-    // Phase 1 판정: LoRA OFF=여성 렌더(앵커 필수 확정), 0.5~0.9 전부 남성 고정·차이 미미.
-    // '애매함'의 정체 = 생기 부재(반개안·내리깐 시선·눈맞춤 없음·송장급 창백·한색 모노톤).
-    /** B: 생기 패치 — 죽은 눈 태그 제거 + 눈맞춤·미소·눈 하이라이트·따뜻한 조명. */
-    private static final String POSITIVE_VITALITY = POSITIVE
-        .replace("partially covered eyes, ", "")
-        .replace("narrow eyes, ", "")
-        .replace("sharp eyes, ", "")
-        .replace("thick eyebrows, ", "")
-        .replace("dim lighting, rim lighting", "warm lighting, soft rim lighting")
-        + ", looking at viewer, slight smile, bright eyes, detailed eyes, sparkling eyes, eye highlights";
+    /** setB 상태의 표정 꼬리(유령 태그 포함 — 격리 대조군). */
+    private static final String EXPR_OLD =
+        "looking at viewer, slight smile, bright eyes, detailed eyes, sparkling eyes, eye highlights";
+    /** slight smile은 비실존 — light smile(107k)이 정본. 생기 태그는 EYES_NEW의 sparkling eyes가 담당. */
+    private static final String EXPR_NEW = "looking at viewer, light smile";
 
-    /** C: 유혹 버전 — B + 여성향 시그니처 코드(나른한 미소·고개 기울임·손 연출). */
-    private static final String POSITIVE_SEDUCE = POSITIVE_VITALITY
-        + ", seductive smile, smirk, head tilt, hand in own hair, unbuttoned collar";
+    /** 청보라 통계 상쇄 네거티브 팩(H 전용) — 전 태그 실존(blue theme 27k·greyscale 501k·monochrome 631k). */
+    private static final String NEG_PACK = "blue theme, purple theme, greyscale, monochrome, pale skin";
 
-    private static final String[][] TAG_SETS = {
-        {"setA_orig", POSITIVE},
-        {"setB_vital", POSITIVE_VITALITY},
-        {"setC_seduce", POSITIVE_SEDUCE},
+    private static String assemble(String hair, String eyes, String skin, String scene, String expr) {
+        return "masterpiece, best quality, newest, absurdres, 1boy, male focus, solo, "
+            + String.join(", ", HEAD, hair, eyes, skin, BODY, CLOTHING, PERSONA, scene, expr);
+    }
+
+    // ━━━━━━ Phase 4 (2026-08-04 밤): 헤어 정형화 + LoRA 트리거 매트릭스 ━━━━━━
+    // 리서치 확정: Male_Type LoRA(civitai 1782159, 마화 미남 스타일)의 트리거 "maleT"가
+    // 프롬프트에 전무 — strength_clip 1.0인데 발동 토큰이 없어 LoRA 반쪽 사용 상태.
+    // 한국식 헤어 전용 태그(comma hair·two block·dandy cut)는 danbooru 비실존 —
+    // 근접 핸들: choppy bangs(남캐 42%·시스루 댄디), parted bangs/hair(가르마).
+    // curtained hair는 위키 정의부터 90s 아치 커튼(촌스러움 원인 후보) → P5 대조군.
+    /** 잡 15 실산출 기반 고정 몸통 — 헤어 블록만 변인. */
+    private static final String P4_FIXED = String.join(", ",
+        "adult", "tall male", "slender", "slim", "toned", "broad shoulders", "narrow waist",
+        "bishounen", "brown eyes", "gradient eyes", "thick eyebrows", "light blush",
+        "collarbone", "adam's apple",
+        "black jacket", "track jacket", "open jacket", "long sleeves", "sleeves rolled up",
+        "white shirt", "t-shirt", "crew neck", "black pants", "skinny pants", "black belt",
+        "necklace", "chain necklace", "earrings", "hoop earrings", "wristwatch",
+        "perfectionist", "charismatic", "disciplined", "aloof", "gentle",
+        "indoors", "recording studio", "microphone", "pop filter", "headphones around neck",
+        "lamp", "sidelighting", "night", "depth of field", "blurry background",
+        "looking at viewer", "light smile", "cowboy shot", "standing", "hand in pocket");
+
+    private static String p4(String triggerToken, String hair) {
+        return "masterpiece, best quality, newest, absurdres, "
+            + (triggerToken == null ? "" : triggerToken + ", ")
+            + "1boy, male focus, solo, " + hair + ", " + P4_FIXED;
+    }
+
+    private static final String HAIR_MINIMAL = "black hair, short hair";
+    private static final String HAIR_CHOPPY = "black hair, short hair, choppy bangs, messy hair";
+    private static final String HAIR_PARTED = "black hair, short hair, parted bangs, parted hair, swept bangs";
+
+    // ━━━━━━ Phase 5 (2026-08-04 심야): 품질×한국풍 스위트스팟 ━━━━━━
+    // Phase 4 판정(종원): P2(maleT 풀)가 헤어는 한국풍인데 전반 품질은 P0(트리거 무)가 우위 —
+    // 원인 = 트리거로 LoRA 유효 영향력 급증(0.9는 트리거 없던 시절 확정값 → 과적용).
+    // 다이얼 3종 탐색: 트리거 어텐션 (maleT:0.6) / strength 0.7 재탐 / 무트리거+검증 헤어 핸들.
+    private record TagSetV2(String name, String positive, String negative, double strength) {}
+
+    // ━━━━━━ Phase 6 (2026-08-05): 눈썹 A/B — thick eyebrows = 짱구 눈썹 범인 확정 ━━━━━━
+    // 종원 관찰: 남캐마다 눈썹이 과하게 짙음. Stage0가 남캐 전 잡(13·15·16)에 thick eyebrows를
+    // 습관 산출 + 매트릭스 몸통 동결에도 포함 → 전 렌더 일관 출현. 태그 제거 A/B로 인과 확정.
+    private static final TagSetV2[] TAG_SETS = {
+        // E0: Phase 5 승자(Q1 무트리거+가르마) 그대로 — thick eyebrows 포함 (대조군)
+        new TagSetV2("e0_brow_thick", p4(null, HAIR_PARTED), NEG_PACK, 0.9),
+        // E1: 동일 구성에서 thick eyebrows만 제거 — 눈썹 무태그(모델 기본)
+        new TagSetV2("e1_brow_none",
+            p4(null, HAIR_PARTED).replace("thick eyebrows, ", ""), NEG_PACK, 0.9),
     };
-    private static final double STRENGTH = 0.9;
     private static final long[] SEEDS = {101_101_101L, 202_202_202L};
     private static final long DETAILER_SEED = 777_777_777L;
 
@@ -96,11 +180,12 @@ class MaleIllustMatrixPoc {
         Path outDir = Path.of("poc", "out");
         Files.createDirectories(outDir);
 
-        record Combo(String name, String positive, double strength, long seed) {}
+        record Combo(String name, String positive, String negative, double strength, long seed) {}
         List<Combo> combos = new ArrayList<>();
-        for (String[] set : TAG_SETS) {
+        for (TagSetV2 set : TAG_SETS) {
             for (long seed : SEEDS) {
-                combos.add(new Combo(set[0] + "_seed" + (seed % 1000), set[1], STRENGTH, seed));
+                combos.add(new Combo(set.name() + "_seed" + (seed % 1000),
+                    set.positive(), set.negative(), set.strength(), seed));
             }
         }
 
@@ -108,9 +193,10 @@ class MaleIllustMatrixPoc {
         record Submitted(Combo combo, String jobId) {}
         List<Submitted> submitted = new ArrayList<>();
         for (Combo c : combos) {
+            // maleNegative 노브로 네거티브 팩 주입 — 프로덕션 appendMaleNegative 경로 그대로
             UgcPipelineProperties props = new UgcPipelineProperties(null, null, null, null,
                 new UgcPipelineProperties.Generation(1, null, null,
-                    c.strength() == 0.0 ? null : c.strength(), null), null, null, null);
+                    c.strength() == 0.0 ? null : c.strength(), c.negative()), null, null, null);
             UgcWorkflowFactory factory = new UgcWorkflowFactory(mapper, props);
             factory.loadTemplates();
             // strength 0 = male=false 빌드 → 그래프에 LoRA 미주입(프롬프트는 동일) — 순수 격리
@@ -175,6 +261,7 @@ class MaleIllustMatrixPoc {
         if (!pending.isEmpty()) {
             System.out.println("[POC] ⏱ 타임아웃 미완 " + pending.size() + "건");
         }
-        System.out.println("[POC] 완료 — poc/out/ 에서 8장 비교 (loraOFF/0.5/0.7/0.9 × seed 2)");
+        System.out.println("[POC] 완료 — poc/out/ Phase 3 10장 비교 "
+            + "(setD헤어/setE생기/setF통합/setG상반신/setH네거 × seed 2, 기준=setB_vital)");
     }
 }
