@@ -53,7 +53,7 @@ public record UgcPipelineProperties(
         if (job == null) job = new Job(null, null, null, null);
         if (runpod == null) runpod = new Runpod(null, null, null, null);
         if (qwen == null) qwen = new Qwen(null, null, null, null);
-        if (generation == null) generation = new Generation(null, null, null, null);
+        if (generation == null) generation = new Generation(null, null, null, null, null);
         if (world == null) world = new World(null, null, null, null, null);
         if (vlmPrefilter == null) vlmPrefilter = new VlmPrefilter(null, null, null);
     }
@@ -149,9 +149,18 @@ public record UgcPipelineProperties(
 
     /** 워크플로 치환 노브. 명세된 노브 외 파라미터는 템플릿 JSON(검증본)에 동결. */
     public record Generation(Integer goldenBatchSize, Double refineDenoise, Double bgEmphasisWeight,
-                             Double maleLoraStrength) {
+                             Double maleLoraStrength, String maleNegative) {
         /** [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 튜닝 노브(권장 탐색 0.5~0.9). */
         public double maleLoraStrengthOrDefault() { return maleLoraStrength != null ? maleLoraStrength : 0.7; }
+
+        /**
+         * [2026-08-04 미형 튜닝] 남성 잡 전용 추가 네거티브 — 극화체 아저씨(bara) 클러스터의
+         * 결정론 차단(Stage0 가이드의 보장 층). 기본값은 잡 12 실측 유발 태그 기반.
+         */
+        public String maleNegativeOrDefault() {
+            return (maleNegative != null && !maleNegative.isBlank()) ? maleNegative
+                : "(mature male, old man, middle-aged, bara, large pectorals, thick eyebrows, realistic face:1.2)";
+        }
 
         /** [2026-07-20 개편] 황금샷 배치 4→2 (스탠딩 후보 선택 단계 신설로 역할 축소 — 썸네일·원화 확정용). */
         public int batchSize() { return goldenBatchSize != null ? goldenBatchSize : 2; }

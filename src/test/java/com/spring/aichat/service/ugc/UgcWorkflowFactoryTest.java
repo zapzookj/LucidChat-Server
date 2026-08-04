@@ -106,7 +106,7 @@ class UgcWorkflowFactoryTest {
     @DisplayName("WF-2: refine-denoise 노브 지정 시에만 denoise 오버라이드")
     void refine_denoiseKnobOverrides() {
         UgcPipelineProperties tuned = new UgcPipelineProperties(
-            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35, null, null), null, null, null);
+            null, null, null, null, new UgcPipelineProperties.Generation(null, 0.35, null, null, null), null, null, null);
         UgcWorkflowFactory tunedFactory = new UgcWorkflowFactory(new ObjectMapper(), tuned);
         tunedFactory.loadTemplates();
 
@@ -138,10 +138,14 @@ class UgcWorkflowFactoryTest {
         // 체크포인트 직결 참조(VAE [1,2])는 불변
         assertThat(wf.path("8").path("inputs").path("vae").get(0).asText()).isEqualTo("1");
 
+        // [미형 튜닝] 남성 네거티브 부착 — 극화체 아저씨 클러스터 결정론 차단
+        assertThat(wf.path("13").path("inputs").path("text").asText()).contains("mature male, old man");
+
         // 여캐 경로 무영향
         ObjectNode femaleWf = maleFactory.buildGoldenShot("1girl, test", "job_t_golden", 1L, 2L, false);
         assertThat(femaleWf.path("900").isMissingNode()).isTrue();
         assertThat(femaleWf.path("11").path("inputs").path("model").get(0).asText()).isEqualTo("2");
+        assertThat(femaleWf.path("13").path("inputs").path("text").asText()).doesNotContain("mature male");
     }
 
     @Test

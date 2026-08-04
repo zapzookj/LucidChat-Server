@@ -198,6 +198,7 @@ ugc:
   generation:
     golden-batch-size: 2      # 2026-07-20 개편: 4→2 (스탠딩 후보 선택 단계 신설 — 황금샷은 썸네일·원화 확정용)
     # male-lora-strength: 0.7 # [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 탐색 0.5~0.9, 미지정 시 0.7
+    # male-negative: "..."    # [미형 튜닝] 남성 잡 추가 네거티브 — 미지정 시 아저씨(bara) 클러스터 기본 차단
     # refine-denoise: 0.4     # 품질 튜닝 노브(0.30~0.45) — 미지정 시 템플릿 검증값 유지
     # bg-emphasis-weight: 1.3 # [튜닝] WF-2 배경 보색 어텐션 가중치(1.1~1.5) — 누끼 경계 품질
   world:                      # [세계관 빌더] fal flux-2 전용 트랙 (RunPod/Qwen 불필요 — FAL_API_KEY만)

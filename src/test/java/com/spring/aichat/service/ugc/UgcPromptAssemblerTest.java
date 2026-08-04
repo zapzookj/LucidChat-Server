@@ -73,7 +73,7 @@ class UgcPromptAssemblerTest {
         assertThat(positive).contains("(flat lighting:1.1)");
 
         UgcPromptAssembler tuned = new UgcPromptAssembler(new UgcPipelineProperties(
-            null, null, null, null, new UgcPipelineProperties.Generation(null, null, 1.45, null), null, null, null));
+            null, null, null, null, new UgcPipelineProperties.Generation(null, null, 1.45, null, null), null, null, null));
         assertThat(tuned.refinePositive(List.of(), List.of(), EmotionTag.NEUTRAL, "muted teal"))
             .contains("(muted teal background:1.45)");
     }

@@ -117,15 +117,24 @@ public class UgcPipelineWorker {
             .orElse(false);
     }
 
-    /** [남캐] Stage0 성별 가이드 — 남성만 블록 부착(여성은 기존 프롬프트 경로 무변). */
+    /**
+     * [남캐] Stage0 성별 가이드 — 남성만 블록 부착(여성은 기존 프롬프트 경로 무변).
+     *
+     * <p>[2026-08-04 미형 튜닝] 초기 가이드의 'sharp jawline, broad shoulders' 예시가 mature male·
+     * large pectorals 등 극화체 아저씨(bara) 클러스터 산출을 유발(잡 12 실측). 이 서비스의 남캐
+     * 기본 미학은 <b>여성향 미형(bishounen/미청년)</b>으로 확정 — 컨셉이 명시적으로 중년·야성을
+     * 요구할 때만 예외. 네거티브 결정론 차단은 UgcWorkflowFactory 남성 네거티브가 담당(이중 게이트).
+     */
     private static String withGenderDirective(String concept, com.spring.aichat.domain.enums.CharacterGender gender) {
         if (!gender.isMale()) return concept;
         return concept + """
 
 
             [캐릭터 성별: 남성 — 필수 반영]
-            - appearance_tags: 1boy, male focus 계열로 산출(1girl 계열 금지). 체형·이목구비는 남성 어휘(sharp jawline, broad shoulders 등).
-            - base_pose·emotionPrompts: 남성적 자세·표정 어휘로(예: arms crossed, hands in pockets, confident smirk, leaning against wall). 여성적 자세(girlish pose, head tilt with clasped hands 등) 금지.
+            - 미학 기준: 이 서비스의 남성 캐릭터는 기본적으로 **여성향 미형(bishounen·미청년)**이다. 컨셉이 명시적으로 중년·노년·거친 야성의 인상을 요구하지 않는 한, 얼굴은 젊고 수려하게 산출하라(설정상 지위가 높거나 강해도 외형은 미청년).
+            - appearance_tags 필수 포함: 1boy, male focus, bishounen, handsome, beautiful face 계열. (1girl 계열 금지)
+            - 체격·근육은 여성향 어휘로: toned, lean muscular, athletic build (O) / mature male, old man, bara, large pectorals, wide chest, thick eyebrows, strong arms 같은 극화체 클러스터 (X — 컨셉이 명시 요구할 때만).
+            - base_pose·emotionPrompts: 자신감 있되 우아한 남성 자세(leaning, hand in pocket, confident smirk 등). 여성적 자세(girlish pose) 금지, 과도한 마초 포즈(flexing)도 컨셉 명시 없으면 지양.
             - persona_tags: 남성 캐릭터 무드에 맞는 태그로.""";
     }
 

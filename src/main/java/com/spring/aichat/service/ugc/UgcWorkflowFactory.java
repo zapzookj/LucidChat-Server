@@ -85,6 +85,9 @@ public class UgcWorkflowFactory {
         // [2026-08-04 남캐] Male LoRA 체인 앵커(detail LoRA 노드 2) 실존 검증 — 템플릿 드리프트 시 기동 실패
         requireInput(wf1Template, WF1_PATH, DETAIL_LORA_NODE_ID, "lora_name");
         requireInput(wf2Template, WF2_PATH, DETAIL_LORA_NODE_ID, "lora_name");
+        // [2026-08-04 미형 튜닝] 남성 네거티브 부착 지점(노드 13) 실존 검증
+        requireInput(wf1Template, WF1_PATH, "13", "text");
+        requireInput(wf2Template, WF2_PATH, "13", "text");
 
         log.info("[UGC] Workflow templates loaded: wf1/wf2/wf3 (치환 계약 검증 통과)");
     }
@@ -109,7 +112,10 @@ public class UgcWorkflowFactory {
     ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix,
                                long samplerSeed, long detailerSeed, boolean male) {
         ObjectNode wf = wf1Template.deepCopy();
-        if (male) injectMaleLora(wf);
+        if (male) {
+            injectMaleLora(wf);
+            appendMaleNegative(wf);
+        }
         inputs(wf, "12").put("text", positivePrompt);
         inputs(wf, "11").put("seed", samplerSeed);
         inputs(wf, "17").put("seed", detailerSeed);
@@ -143,7 +149,10 @@ public class UgcWorkflowFactory {
     ObjectNode buildRefine(String inputImageName, String positivePrompt, String faceWildcard,
                            String filenamePrefix, long samplerSeed, long detailerSeed, boolean male) {
         ObjectNode wf = wf2Template.deepCopy();
-        if (male) injectMaleLora(wf);
+        if (male) {
+            injectMaleLora(wf);
+            appendMaleNegative(wf);
+        }
         inputs(wf, "19").put("image", inputImageName);
         inputs(wf, "12").put("text", positivePrompt);
         inputs(wf, "11").put("seed", samplerSeed);
@@ -180,6 +189,15 @@ public class UgcWorkflowFactory {
     private static final String MALE_LORA_NODE_ID = "900";
     private static final String DETAIL_LORA_NODE_ID = "2";
     private static final String MALE_LORA_FILE = "male_type.safetensors";
+
+    /**
+     * [2026-08-04 미형 튜닝] 남성 잡 네거티브 부착 — 템플릿 동결 네거티브 뒤에 극화체 아저씨
+     * 클러스터 차단 태그를 덧붙인다(여캐 경로 무변). Stage0 미형 가이드의 결정론 보장 층.
+     */
+    private void appendMaleNegative(ObjectNode wf) {
+        String base = wf.path("13").path("inputs").path("text").asText();
+        inputs(wf, "13").put("text", base + ", " + props.generation().maleNegativeOrDefault());
+    }
 
     /**
      * detail LoRA(노드 2) 뒤에 Male_Type LoRA를 체인 — 노드 2의 model/clip 출력을 소비하던
