@@ -154,12 +154,13 @@ public record UgcPipelineProperties(
         public double maleLoraStrengthOrDefault() { return maleLoraStrength != null ? maleLoraStrength : 0.7; }
 
         /**
-         * [2026-08-04 미형 튜닝] 남성 잡 전용 추가 네거티브 — 극화체 아저씨(bara) 클러스터의
-         * 결정론 차단(Stage0 가이드의 보장 층). 기본값은 잡 12 실측 유발 태그 기반.
+         * [2026-08-04 방향 전환] 남성 잡 추가 네거티브 — <b>기본 off(빈 값)</b>.
+         * 금지 목록의 결정론 차단은 명시적 아저씨/야성 컨셉의 표현력까지 잘라내는 부작용이 있어
+         * (종원 비판 수용), 미학 유도는 Stage0 아트 디렉션 브리프가 담당한다. 이 노브는 특정
+         * 태그가 반복적으로 새는 비상 상황의 수동 개입용으로만 보존.
          */
-        public String maleNegativeOrDefault() {
-            return (maleNegative != null && !maleNegative.isBlank()) ? maleNegative
-                : "(mature male, old man, middle-aged, bara, large pectorals, thick eyebrows, realistic face:1.2)";
+        public String maleNegativeOrNull() {
+            return (maleNegative != null && !maleNegative.isBlank()) ? maleNegative : null;
         }
 
         /** [2026-07-20 개편] 황금샷 배치 4→2 (스탠딩 후보 선택 단계 신설로 역할 축소 — 썸네일·원화 확정용). */

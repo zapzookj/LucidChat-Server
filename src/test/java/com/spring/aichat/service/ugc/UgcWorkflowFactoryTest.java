@@ -138,8 +138,16 @@ class UgcWorkflowFactoryTest {
         // 체크포인트 직결 참조(VAE [1,2])는 불변
         assertThat(wf.path("8").path("inputs").path("vae").get(0).asText()).isEqualTo("1");
 
-        // [미형 튜닝] 남성 네거티브 부착 — 극화체 아저씨 클러스터 결정론 차단
-        assertThat(wf.path("13").path("inputs").path("text").asText()).contains("mature male, old man");
+        // [방향 전환] 남성 네거티브는 기본 무부착(브리프가 미학 담당) — 노브 지정 시에만
+        assertThat(wf.path("13").path("inputs").path("text").asText()).doesNotContain("mature male");
+        UgcPipelineProperties knobbed = new UgcPipelineProperties(
+            null, null, null, null,
+            new UgcPipelineProperties.Generation(null, null, null, null, "(mature male:1.2)"),
+            null, null, null);
+        UgcWorkflowFactory knobbedFactory = new UgcWorkflowFactory(new ObjectMapper(), knobbed);
+        knobbedFactory.loadTemplates();
+        ObjectNode knobbedWf = knobbedFactory.buildGoldenShot("1boy, test", "x", 1L, 2L, true);
+        assertThat(knobbedWf.path("13").path("inputs").path("text").asText()).contains("(mature male:1.2)");
 
         // 여캐 경로 무영향
         ObjectNode femaleWf = maleFactory.buildGoldenShot("1girl, test", "job_t_golden", 1L, 2L, false);

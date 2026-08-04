@@ -118,24 +118,24 @@ public class UgcPipelineWorker {
     }
 
     /**
-     * [남캐] Stage0 성별 가이드 — 남성만 블록 부착(여성은 기존 프롬프트 경로 무변).
+     * [남캐] Stage0 아트 디렉션 브리프 — 남성만 부착(여성은 기존 경로 무변).
      *
-     * <p>[2026-08-04 미형 튜닝] 초기 가이드의 'sharp jawline, broad shoulders' 예시가 mature male·
-     * large pectorals 등 극화체 아저씨(bara) 클러스터 산출을 유발(잡 12 실측). 이 서비스의 남캐
-     * 기본 미학은 <b>여성향 미형(bishounen/미청년)</b>으로 확정 — 컨셉이 명시적으로 중년·야성을
-     * 요구할 때만 예외. 네거티브 결정론 차단은 UgcWorkflowFactory 남성 네거티브가 담당(이중 게이트).
+     * <p>[2026-08-04 방향 전환 — 종원 비판 수용] 규칙 누적(필수/금지 태그 목록)은 취향을 가르치지
+     * 못하고 분포만 잘라 표현력 단일화로 수렴한다(1차: 남성 어휘 규정 → bara 클러스터, 2차: 미형
+     * 명문화+금지 목록 → 표현 한정). 근본 원인은 Stage0의 태스크 정의('충실한 구조화 엔진')에
+     * <b>미학 목표가 부재</b>한 것 — 그래서 규칙 대신 <b>디자인 목표 한 줄</b>을 부여한다
+     * ('여성향 장르에서 인기 있을 모습으로 디자인'). 태그 선택은 모델의 장르 지식에 맡기고,
+     * 컨셉의 명시 지시는 언제나 우선(아저씨 컨셉도 온전히 가능 — 표현력 보존).
      */
     private static String withGenderDirective(String concept, com.spring.aichat.domain.enums.CharacterGender gender) {
         if (!gender.isMale()) return concept;
         return concept + """
 
 
-            [캐릭터 성별: 남성 — 필수 반영]
-            - 미학 기준: 이 서비스의 남성 캐릭터는 기본적으로 **여성향 미형(bishounen·미청년)**이다. 컨셉이 명시적으로 중년·노년·거친 야성의 인상을 요구하지 않는 한, 얼굴은 젊고 수려하게 산출하라(설정상 지위가 높거나 강해도 외형은 미청년).
-            - appearance_tags 필수 포함: 1boy, male focus, bishounen, handsome, beautiful face 계열. (1girl 계열 금지)
-            - 체격·근육은 여성향 어휘로: toned, lean muscular, athletic build (O) / mature male, old man, bara, large pectorals, wide chest, thick eyebrows, strong arms 같은 극화체 클러스터 (X — 컨셉이 명시 요구할 때만).
-            - base_pose·emotionPrompts: 자신감 있되 우아한 남성 자세(leaning, hand in pocket, confident smirk 등). 여성적 자세(girlish pose) 금지, 과도한 마초 포즈(flexing)도 컨셉 명시 없으면 지양.
-            - persona_tags: 남성 캐릭터 무드에 맞는 태그로.""";
+            [아트 디렉션 — 남성 캐릭터]
+            이 캐릭터는 남성이다 (appearance_tags는 1boy, male focus 기준 — 1girl 계열 금지).
+            일러스트 태그 산출의 목표는 설정의 축어적 번역이 아니라 **디자인**이다: 이 컨셉이 여성향 서브컬처 장르에서 인기 있는 남성 캐릭터로 그려진다면 어떤 모습일지 상상하고, 그 완성형을 태그로 옮겨라. 설정의 정체성(강함·지위·분위기)은 그대로 살리되, 그것을 *어떤 외형 어휘로 표현할지*는 장르 독자에게 매력적인 쪽을 골라라. base_pose와 감정 연출(emotion_prompts)도 같은 관점으로.
+            단, 유저 컨셉이 특정 인상(중년의 관록, 거친 야성 등)을 명시적으로 요구하면 언제나 그 지시가 우선한다.""";
     }
 
     private void submitGoldenShots(Long jobId, StructuredConcept concept) {

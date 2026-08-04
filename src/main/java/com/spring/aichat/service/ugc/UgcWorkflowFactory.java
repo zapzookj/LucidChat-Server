@@ -191,12 +191,14 @@ public class UgcWorkflowFactory {
     private static final String MALE_LORA_FILE = "male_type.safetensors";
 
     /**
-     * [2026-08-04 미형 튜닝] 남성 잡 네거티브 부착 — 템플릿 동결 네거티브 뒤에 극화체 아저씨
-     * 클러스터 차단 태그를 덧붙인다(여캐 경로 무변). Stage0 미형 가이드의 결정론 보장 층.
+     * [2026-08-04 방향 전환] 남성 잡 네거티브 부착 — 노브 지정 시에만(기본 무부착).
+     * 미학 유도는 Stage0 브리프 담당 — 이 경로는 비상용 수동 개입 전용.
      */
     private void appendMaleNegative(ObjectNode wf) {
+        String extra = props.generation().maleNegativeOrNull();
+        if (extra == null) return;
         String base = wf.path("13").path("inputs").path("text").asText();
-        inputs(wf, "13").put("text", base + ", " + props.generation().maleNegativeOrDefault());
+        inputs(wf, "13").put("text", base + ", " + extra);
     }
 
     /**
