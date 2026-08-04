@@ -129,7 +129,7 @@ class UgcWorkflowFactoryTest {
         // 신규 노드 존재 + 체인 입력 + 기본 강도 노브
         assertThat(wf.path("900").path("class_type").asText()).isEqualTo("LoraLoader");
         assertThat(wf.path("900").path("inputs").path("lora_name").asText()).isEqualTo("male_type.safetensors");
-        assertThat(wf.path("900").path("inputs").path("strength_model").asDouble()).isEqualTo(0.7);
+        assertThat(wf.path("900").path("inputs").path("strength_model").asDouble()).isEqualTo(0.9);
         assertThat(wf.path("900").path("inputs").path("model").get(0).asText()).isEqualTo("2");
         // 소비자 재배선 — KSampler model, CLIP encode clip, FaceDetailer model
         assertThat(wf.path("11").path("inputs").path("model").get(0).asText()).isEqualTo("900");
