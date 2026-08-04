@@ -155,9 +155,11 @@ public class SceneDirectorService {
             - HARD LIMIT: at most 2 people total on screen. NEVER 3 or more.
             - Default is heroine alone (cast size 1). Include "user" ONLY when physical interaction
               between user and heroine is the visual core of the moment.
-            - The user is %s. The user is faceless: never describe the user's face; prefer poses
-              where the user's face is naturally out of frame (pov, from behind, head out of frame).
-            - Choose camera/angle freely per scene — no fixed rule.
+            - The user is an ADULT %s — never a child or teenager. The user is faceless: never describe
+              the user's face; prefer poses where the user's face is naturally out of frame
+              (pov, from behind, head out of frame).
+            - Choose camera/angle freely per scene — no fixed rule. Exception: when "user" is in the
+              cast, PREFER pov (first-person) framing unless the moment clearly demands otherwise.
 
             ## Tag craft
             - For rare/complex actions, scaffold with common co-occurring tags

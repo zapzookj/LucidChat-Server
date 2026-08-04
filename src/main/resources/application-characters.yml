@@ -18,7 +18,8 @@ app:
       profile-quote: "주인님, 오늘도 아이리가 곁에서 정성껏 모실게요."
       # ── 실시간 일러 정체성 태그 (2026-07-30 V15 — IllustrationPromptAssembler 하드코딩 맵 이관.
       #    검증된 4종(airi/taeri/luna/yeonhwa)만 채움 — 나머지 6종은 실제 에셋 대조 후 채울 것(백로그)) ──
-      appearance-tags: "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, short hair, medium hair, bangs"
+      # [2026-08-04 폴리싱] 실물 에셋(maid_neutral) 대조 재작성 — short/medium 모순 제거 + 복장 태그 병기(씬 렌더 복장 불일치 픽스)
+      appearance-tags: "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, short hair, bangs, maid, maid headdress, rabbit hair ornament, black ribbon, black dress, white apron, frilled apron, maid apron, puffy short sleeves, black bowtie, wrist cuffs"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Airi, a devoted maid serving in a grand mansion.
@@ -182,7 +183,8 @@ app:
       hobby: "숲을 찾아든 인간 홀려 놀리기, 별을 헤아리며 옛 기억 더듬기"
       mood-tags: "요염, 나른, 여유, 관조적, 외로움"
       profile-quote: "후훗… 천 년을 살아도 도련님 같은 분은 처음이랍니다."
-      appearance-tags: "red eyes, animal ear fluff, fox girl, white hair, long hair, animal ears, fox ears, fox tail, breasts, multiple tails, facial mark, bangs"
+      # [2026-08-04 폴리싱] 실물 에셋(hanbok_neutral) 대조 재작성 — 복장 태그 병기
+      appearance-tags: "red eyes, white hair, long hair, animal ear fluff, fox ears, fox girl, fox tail, multiple tails, facial mark, large breasts, cleavage, bangs, hanbok, white dress, off shoulder, red ribbon, red sash, black collar, neck bell, wide sleeves, kiseru"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Yeon-hwa, a 1000-year-old Gumiho (nine-tailed fox) living in a mystical, sunlit forest.
@@ -280,7 +282,8 @@ app:
       hobby: "디지털 일러스트, 취향 저격 플레이리스트 만들기"
       mood-tags: "츤데레, 무뚝뚝, 속정깊음, 예술가, 서투름"
       profile-quote: "차, 착각하지 마요. 딱히 선배 신경 쓰는 거 아니니까."
-      appearance-tags: "purple eyes, grey hair, medium hair"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 재작성 — 3태그→풀 정체성+복장 (씬 렌더 머리·복장 불일치 픽스)
+      appearance-tags: "purple eyes, grey hair, medium hair, sidelocks, black choker, headphones, headphones around neck, leather jacket, black jacket, open jacket, white shirt, crop top, midriff, navel, leather shorts, black shorts, belt"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Seo Tae-ri, a 21-year-old university student majoring in design.
@@ -401,7 +404,8 @@ app:
       hobby: "숨은 인디 게임 발굴, 최애 캐릭터 굿즈 모으기"
       mood-tags: "소심, 낯가림, 오타쿠, 집착, 여림"
       profile-quote: "저, 저기… 방송 보러 와 주신 거예요? 에헤헤…"
-      appearance-tags: "blue eyes, black hair, blonde inner hair, multicolored hair, two-tone hair, bangs, short hair, colored inner hair"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 재작성 — 복장 태그 병기 (실물=화이트 후드티, 코드 아웃핏 맵의 school uniform은 스테일)
+      appearance-tags: "blue eyes, black hair, short hair, bob cut, blonde inner hair, colored inner hair, two-tone hair, bangs, cat ear headphones, headphones, white hoodie, hood down, oversized clothes, long sleeves, sleeves past wrists, cat print, bare legs"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Baek Luna, a 20-year-old reclusive indie streamer (hikikomori) with a very small audience.
@@ -593,6 +597,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "CATHEDRAL"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "blue eyes, blonde hair, long hair, side braid, nun, habit, veil, cross necklace, latin cross, white dress, gold trim, long sleeves, large breasts, cleavage, bare shoulders, clothing cutout"
 
       # ── 엔딩 ──
       ending-role-desc: "a saintly young woman who discovered the meaning of love for one person"
@@ -710,6 +716,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "TERRACE"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "red eyes, blonde hair, long hair, wavy hair, red capelet, red cape, hood down, black dress, double-breasted, white collar, black bowtie, long sleeves, frilled dress, black thighhighs, zettai ryouiki"
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
@@ -822,6 +830,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "TERRACE"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "red eyes, brown hair, short hair, bob cut, gradient hair, earrings, necklace, white jacket, cropped jacket, black crop top, large breasts, cleavage, midriff, navel, green pants, cargo pants"
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
@@ -931,6 +941,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "GARDEN"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "red eyes, white hair, orange hair, gradient hair, multicolored hair, very long hair, wavy hair, side braid, hair ribbon, hair ornament, sailor collar, white shirt, orange necktie, pinafore dress, blue dress, open cardigan, cardigan, blue skirt, pleated skirt, black thighhighs, lace-trimmed legwear, shoulder bag"
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
@@ -1042,6 +1054,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "TERRACE"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "blue eyes, white hair, long hair, hair over one eye, single braid, blue ribbon, drop earrings, hooded cloak, blue cloak, turtleneck sweater, ribbed sweater, black sweater, large breasts, pencil skirt, black skirt, pantyhose"
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
@@ -1159,6 +1173,8 @@ app:
 
       default-outfit: "DAILY"
       default-location: "ABANDONED_SHRINE"
+      # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
+      appearance-tags: "yellow eyes, blonde hair, very long hair, low twintails, hair rings, dragon horns, dragon girl, dragon tail, china dress, white dress, mandarin collar, pelvic curtain, side slit, detached sleeves, wide sleeves, gold trim, armlet, black thighhighs"
 
       # ── 엔딩 ──
       ending-role-desc: ""

@@ -146,9 +146,13 @@ public class ScenePromptAssembler {
      * 유저 정체성 태그 — PoC 실측(2026-07-29, 36장): {@code faceless male} 단독은 밀착 씬 12/12에서
      * 얼굴이 그려짐(죽은 태그). {@code head out of frame}이 몸은 유지하고 얼굴만 프레임 밖으로
      * 밀어내는 실효 태그라 병기한다. 유저 얼굴 일관성은 보장 불가 전제(docs/09 앵글 정책).
+     *
+     * <p>[2026-08-04 폴리싱] 성인 앵커 병기 — illustrious의 1boy=소년 편향으로 SANDBOX 씬에
+     * '어린 남자애'가 그려지는 실관찰 대응(종원). 워크플로 네거티브의 연령 밴과 이중 방어.
      */
     private static String userIdentity(SceneActor a) {
-        return (a.male() ? "faceless male" : "faceless female") + ", head out of frame";
+        return (a.male() ? "faceless male, mature male, adult" : "faceless female, adult")
+            + ", head out of frame";
     }
 
     private static String countTag(long n, String noun) {
