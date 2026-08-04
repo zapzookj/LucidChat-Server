@@ -78,6 +78,14 @@ public final class UgcDtos {
 
     public record RerollCosts(int goldenShot, int baseStanding, int emotion) {}
 
+    /**
+     * [2026-08-04 단계 과금] 단계 진입 단가 (합 20) — 위저드 진행 버튼의 차감 예고 표기용.
+     * start=시작(컨셉+황금샷) / standing=황금샷 선택 / emotions=스탠딩 확정 / finalize=검수 확정.
+     * (finalize는 자바 예약 메서드명이라 컴포넌트명만 우회 — JSON 키는 프런트 계약대로 "finalize")
+     */
+    public record StageCosts(int start, int standing, int emotions,
+                             @com.fasterxml.jackson.annotation.JsonProperty("finalize") int finalizeCost) {}
+
     /** 스탠딩 후보 뷰 — status: DERIVING/REFINING/READY/FAILED. */
     public record BaseCandidateView(int index, String status, String url) {}
 
@@ -103,6 +111,10 @@ public final class UgcDtos {
         ProfileView profile,
         int energySpent,
         RerollCosts rerollCosts,
+        /** [2026-08-04 단계 과금] 단계 진입 단가 — 항상 노출(레거시 잡 뷰에서도 값 자체는 제공). */
+        StageCosts stageCosts,
+        /** [2026-08-04 단계 과금] "STAGED"=단계 차감 잡 / null=레거시 선차감 잡. */
+        String billingMode,
         String failReason,
         Long characterId,
         LocalDateTime expiresAt

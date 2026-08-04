@@ -28,13 +28,13 @@ import java.util.Map;
  * [UGC v1] 스튜디오 위저드 API (§3.6 계약 + mine/explore + secret-request).
  *
  * <pre>
- * POST   /api/v1/ugc/characters                          컨셉 제출 → 202 + jobId (에너지 20 차감)
+ * POST   /api/v1/ugc/characters                          컨셉 제출 → 202 + jobId (에너지 6 차감 — 2026-08-04 단계 과금)
  * GET    /api/v1/ugc/characters/mine                     내 캐릭터 + 진행 잡
  * GET    /api/v1/ugc/characters/explore?cursor=&limit=   공개 UGC 탐색 피드
  * GET    /api/v1/ugc/characters/{jobId}                  잡 상태 (프런트 2~3초 폴링)
- * POST   /api/v1/ugc/characters/{jobId}/golden-shot      {selectedIndex} 선택 | {reroll:true} 리롤(2)
+ * POST   /api/v1/ugc/characters/{jobId}/golden-shot      {selectedIndex} 선택(스탠딩 진입 4 차감) | {reroll:true} 리롤(2)
  * POST   /api/v1/ugc/characters/{jobId}/emotions/{tag}/reroll   개별 리롤(2 · FAILED 컷은 무료)
- * POST   /api/v1/ugc/characters/{jobId}/confirm          검수 확정 → 누끼·바인딩
+ * POST   /api/v1/ugc/characters/{jobId}/confirm          검수 확정(마무리 2 차감) → 누끼·바인딩
  * DELETE /api/v1/ugc/characters/{jobId}                  중도 포기 (무환불)
  * POST   /api/v1/ugc/characters/{characterId}/publish-request   공개 신청/취소 {cancel}
  * POST   /api/v1/ugc/characters/{characterId}/secret-request    Secret 단독 심사 신청
@@ -169,6 +169,7 @@ public class CharacterCreationController {
         @PathVariable Long jobId,
         Authentication authentication
     ) {
+        guardRate(authentication); // [2026-08-04 단계 과금] 다른 뮤테이션과 동일 rate limit
         creationService.abandon(authentication.getName(), jobId);
         return ResponseEntity.ok().build();
     }
@@ -308,6 +309,10 @@ public class CharacterCreationController {
             job.getEnergyCharged(),
             new UgcDtos.RerollCosts(props.energy().goldenReroll(),
                 props.energy().baseReroll(), props.energy().emotionReroll()),
+            // [2026-08-04 단계 과금] 단계 진입 단가 + 과금 모드 (null=레거시 선차감 잡)
+            new UgcDtos.StageCosts(props.energy().stageStart(), props.energy().stageStanding(),
+                props.energy().stageEmotions(), props.energy().stageFinalize()),
+            job.getBillingMode(),
             job.getFailReason(),
             job.getCharacterId(),
             job.getExpiresAt()

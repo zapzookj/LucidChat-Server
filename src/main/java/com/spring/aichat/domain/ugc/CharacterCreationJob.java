@@ -90,9 +90,16 @@ public class CharacterCreationJob {
     @Column(name = "base_edit_seed")
     private Long baseEditSeed;
 
-    /** 누적 과금 에너지 (기본 패키지 + 리롤). 만료/실패 환불 정산 기준. */
+    /** 누적 과금 에너지 (단계 차감 + 리롤). 만료/실패 환불 정산 기준. */
     @Column(name = "energy_charged", nullable = false)
     private int energyCharged = 0;
+
+    /**
+     * [2026-08-04 단계 과금] 과금 모드 (V22) — {@value #BILLING_MODE_STAGED}=단계 진입 시 차감.
+     * null=레거시 선차감 잡(단계 차감 전부 스킵) — enum 대신 String(레거시 호환·값 추가 함정 회피).
+     */
+    @Column(name = "billing_mode", length = 16)
+    private String billingMode;
 
     /** 현재 스테이지 자동 재시도 카운트 (스테이지 진입 시 리셋). */
     @Column(name = "retry_count", nullable = false)
@@ -310,9 +317,23 @@ public class CharacterCreationJob {
         this.requestedUgcWorldId = requestedUgcWorldId;
     }
 
-    /** 리롤 등 추가 과금 누적. */
+    /** 리롤·단계 진입 등 추가 과금 누적. */
     public void chargeEnergy(int amount) {
         this.energyCharged += amount;
+    }
+
+    // ── [2026-08-04 단계 과금] ──
+
+    public static final String BILLING_MODE_STAGED = "STAGED";
+
+    /** 단계 차감 잡 여부 — false(null)=레거시 선차감 잡(단계 차감 전부 스킵). */
+    public boolean isStagedBilling() {
+        return BILLING_MODE_STAGED.equals(billingMode);
+    }
+
+    /** 신규 잡 단계 과금 마킹 — 생성 TX에서 1회 호출. */
+    public void markStagedBilling() {
+        this.billingMode = BILLING_MODE_STAGED;
     }
 
     public int incrementRetry() {

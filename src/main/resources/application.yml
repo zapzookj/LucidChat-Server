@@ -178,7 +178,13 @@ ugc:
     model: ${UGC_VLM_PREFILTER_MODEL:google/gemini-3-flash-preview}  # 비전 지원 비사고 모델
     max-images: 2   # 캐릭터당 검사 상한(썸네일+기본 스탠딩)
   energy:
-    base-package-cost: 20     # 기본 패키지: 황금샷 1배치 + 스탠딩 후보 + 감정 14종 + 누끼
+    base-package-cost: 20     # [레거시 표시·폴백용 존치] 선차감 시절 단일 패키지 — 2026-08-04 단계 과금 개편으로 신규 잡은 미사용
+    # [2026-08-04 단계 과금] 단계 진입 시 차감 (합 20 유지 — 선차감 총액과 동일).
+    # 배분은 실측 원가 비중 — 감정 스테이지가 원가 60%+, 누끼 5% 미만 (docs/03 §4)
+    stage-start-cost: 6       # 시작(컨셉 구조화 + 황금샷 1배치)
+    stage-standing-cost: 4    # 황금샷 선택 → 스탠딩 후보 파생 진입
+    stage-emotions-cost: 8    # 스탠딩 확정 → 감정 14종 파생 진입 (원가 최대 구간)
+    stage-finalize-cost: 2    # 검수 확정 → 누끼·바인딩 진입
     golden-reroll-cost: 2     # 황금샷 배치 리롤
     base-reroll-cost: 2      # 스탠딩 후보 배치 리롤 (2026-07-20 개편)
     emotion-reroll-cost: 2    # 감정 1컷 리롤
@@ -197,8 +203,8 @@ ugc:
     # use-negative-prompt: false  # [튜닝] 네거티브 비우기 실험 노브 — 실측상 빈 쪽이 나은 관찰, A/B 후 전환
   generation:
     golden-batch-size: 2      # 2026-07-20 개편: 4→2 (스탠딩 후보 선택 단계 신설 — 황금샷은 썸네일·원화 확정용)
-    # male-lora-strength: 0.7 # [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 탐색 0.5~0.9, 미지정 시 0.7
-    # male-negative: "..."    # [미형 튜닝] 남성 잡 추가 네거티브 — 미지정 시 아저씨(bara) 클러스터 기본 차단
+    # male-lora-strength: 0.9 # [2026-08-04 남캐] Male_Type LoRA strength_model — PoC 매트릭스 확정, 미지정 시 0.9
+    # male-negative: "..."    # [2026-08-04 방향 전환] 남성 잡 추가 네거티브 — 기본 off(비상 수동 개입 전용, 미학 유도는 Stage0 브리프 담당)
     # refine-denoise: 0.4     # 품질 튜닝 노브(0.30~0.45) — 미지정 시 템플릿 검증값 유지
     # bg-emphasis-weight: 1.3 # [튜닝] WF-2 배경 보색 어텐션 가중치(1.1~1.5) — 누끼 경계 품질
   world:                      # [세계관 빌더] fal flux-2 전용 트랙 (RunPod/Qwen 불필요 — FAL_API_KEY만)

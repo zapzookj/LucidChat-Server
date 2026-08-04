@@ -9,14 +9,19 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 레거시 {@link RunPodProperties}(runpod.* — Phase 6 격리 보존)와는 완전히 별개 네임스페이스이며,
  * UGC 트랙은 {@code ugc.runpod.*}만 사용한다.
  *
- * <p><b>확정 단가 (2026-07-17 종원)</b>: 기본 패키지 20 에너지(황금샷 1배치 + 베이스 + 감정 14종 + 누끼),
- * 리롤(황금샷 배치 / 감정 1컷) 각 2 에너지. 자동 재시도는 무과금, 유저 발의 리롤만 과금.
+ * <p><b>확정 단가 (2026-07-17 종원 · 2026-08-04 단계 과금 개편)</b>: 단계 진입 시 차감
+ * 6(시작)/4(스탠딩)/8(감정)/2(마무리) — 합 20 유지. 리롤(황금샷 배치 / 감정 1컷) 각 2 에너지.
+ * 자동 재시도는 무과금, 유저 발의 리롤만 과금. base-package-cost 20은 레거시 표시·폴백용 존치.
  *
  * <pre>
  * application.yml:
  *   ugc:
  *     energy:
  *       base-package-cost: 20
+ *       stage-start-cost: 6
+ *       stage-standing-cost: 4
+ *       stage-emotions-cost: 8
+ *       stage-finalize-cost: 2
  *       golden-reroll-cost: 2
  *       emotion-reroll-cost: 2
  *     job:
@@ -49,7 +54,7 @@ public record UgcPipelineProperties(
     VlmPrefilter vlmPrefilter
 ) {
     public UgcPipelineProperties {
-        if (energy == null) energy = new Energy(null, null, null, null);
+        if (energy == null) energy = new Energy(null, null, null, null, null, null, null, null);
         if (job == null) job = new Job(null, null, null, null);
         if (runpod == null) runpod = new Runpod(null, null, null, null);
         if (qwen == null) qwen = new Qwen(null, null, null, null);
@@ -78,14 +83,28 @@ public record UgcPipelineProperties(
         return (stage0Model != null && !stage0Model.isBlank()) ? stage0Model : null;
     }
 
-    /** 에너지 단가. null이면 확정 기본값(20/2/2/2). */
+    /** 에너지 단가. null이면 확정 기본값(20/2/2/2 · 단계 6/4/8/2). */
     public record Energy(Integer basePackageCost, Integer goldenRerollCost,
-                         Integer baseRerollCost, Integer emotionRerollCost) {
+                         Integer baseRerollCost, Integer emotionRerollCost,
+                         Integer stageStartCost, Integer stageStandingCost,
+                         Integer stageEmotionsCost, Integer stageFinalizeCost) {
+        /** [레거시 표시·폴백용 존치] 선차감 단일 패키지 — 2026-08-04 단계 과금 개편으로 신규 잡은 미사용. */
         public int basePackage() { return basePackageCost != null ? basePackageCost : 20; }
         public int goldenReroll() { return goldenRerollCost != null ? goldenRerollCost : 2; }
         /** [2026-07-20 개편] 스탠딩 후보 배치 리롤 (Qwen 2패스×2 + WF-2×2 재파생). */
         public int baseReroll() { return baseRerollCost != null ? baseRerollCost : 2; }
         public int emotionReroll() { return emotionRerollCost != null ? emotionRerollCost : 2; }
+
+        // [2026-08-04 단계 과금] 단계 진입 시 차감 — 합 20 유지(선차감 총액과 동일).
+        // 배분은 실측 원가 비중: 감정 스테이지가 원가 60%+, 누끼 5% 미만 (docs/03 §4).
+        /** 시작(컨셉 구조화 + 황금샷 1배치). */
+        public int stageStart() { return stageStartCost != null ? stageStartCost : 6; }
+        /** 황금샷 선택 → 스탠딩 후보 파생 진입. */
+        public int stageStanding() { return stageStandingCost != null ? stageStandingCost : 4; }
+        /** 스탠딩 확정 → 감정 14종 파생 진입 (원가 최대 구간). */
+        public int stageEmotions() { return stageEmotionsCost != null ? stageEmotionsCost : 8; }
+        /** 검수 확정 → 누끼·바인딩 진입. */
+        public int stageFinalize() { return stageFinalizeCost != null ? stageFinalizeCost : 2; }
     }
 
     /** 잡 수명·재시도 정책. */
