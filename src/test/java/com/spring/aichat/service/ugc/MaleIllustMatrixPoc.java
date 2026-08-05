@@ -153,15 +153,45 @@ class MaleIllustMatrixPoc {
     // 다이얼 3종 탐색: 트리거 어텐션 (maleT:0.6) / strength 0.7 재탐 / 무트리거+검증 헤어 핸들.
     private record TagSetV2(String name, String positive, String negative, double strength) {}
 
-    // ━━━━━━ Phase 6 (2026-08-05): 눈썹 A/B — thick eyebrows = 짱구 눈썹 범인 확정 ━━━━━━
-    // 종원 관찰: 남캐마다 눈썹이 과하게 짙음. Stage0가 남캐 전 잡(13·15·16)에 thick eyebrows를
-    // 습관 산출 + 매트릭스 몸통 동결에도 포함 → 전 렌더 일관 출현. 태그 제거 A/B로 인과 확정.
+    // ━━━━━━ Phase 7 (2026-08-05): 카일 vs 아셀 대조군 — 표정 강제·동질화 실측 ━━━━━━
+    // 종원 관찰 2건: ① 냉철(카일)·까칠(아셀) 컨셉도 전부 웃는 원화만 나옴(브리프의 표정 강제
+    // 의심) ② 복장·헤어는 다양한데 얼굴·체형이 비슷비슷(브리프 ④ 동일 체형 스택 강제 +
+    // LoRA 아키타입 수렴 의심). 축: 표정(미소/냉철/까칠) × 체형(표준 앵커/컨셉 개방) × 강도(0.9/0.7).
+    // k0 vs a0(동일 체형 스택·미소)가 동질화 증명 대조군.
+    private static final String SCENE_P7 = String.join(", ",
+        "indoors", "window", "sunlight", "upper body", "standing",
+        "looking at viewer", "depth of field");
+    private static final String BODY_STD = // 현행 브리프 ④ 앵커 스택 재현
+        "adult, tall male, slender, toned, broad shoulders, narrow waist, bishounen, light blush";
+    private static final String BODY_KNIGHT = // 카일 컨셉 개방: 단련된 검사
+        "adult, tall male, muscular, broad shoulders, narrow waist, bishounen, light blush";
+    private static final String BODY_WAIF = // 아셀 컨셉 개방: 마른 미소년
+        "adult, slender, narrow shoulders, bishounen, light blush";
+    private static final String KYLE = String.join(", ",
+        "grey hair", "short hair", "hair slicked back", "hair between eyes",
+        "grey eyes", "gradient eyes",
+        "military uniform", "black jacket", "high collar", "white gloves", "belt");
+    private static final String ASEL = String.join(", ",
+        "blonde hair", "short hair", "messy hair", "hair between eyes",
+        "red eyes", "gradient eyes",
+        "school uniform", "black jacket", "white shirt", "necktie");
+    private static final String COLD_KYLE = "expressionless, serious";
+    private static final String COLD_ASEL = "smug, half-closed eyes";
+
+    private static String p7(String identity, String body, String expr) {
+        return "masterpiece, best quality, newest, absurdres, 1boy, male focus, solo, "
+            + identity + ", " + body + ", " + SCENE_P7 + ", " + expr;
+    }
+
     private static final TagSetV2[] TAG_SETS = {
-        // E0: Phase 5 승자(Q1 무트리거+가르마) 그대로 — thick eyebrows 포함 (대조군)
-        new TagSetV2("e0_brow_thick", p4(null, HAIR_PARTED), NEG_PACK, 0.9),
-        // E1: 동일 구성에서 thick eyebrows만 제거 — 눈썹 무태그(모델 기본)
-        new TagSetV2("e1_brow_none",
-            p4(null, HAIR_PARTED).replace("thick eyebrows, ", ""), NEG_PACK, 0.9),
+        new TagSetV2("k0_kyle_smile", p7(KYLE, BODY_STD, "light smile"), NEG_PACK, 0.9),
+        new TagSetV2("k1_kyle_cold", p7(KYLE, BODY_STD, COLD_KYLE), NEG_PACK, 0.9),
+        new TagSetV2("k2_kyle_knight", p7(KYLE, BODY_KNIGHT, COLD_KYLE), NEG_PACK, 0.9),
+        new TagSetV2("k3_kyle_cold_s07", p7(KYLE, BODY_STD, COLD_KYLE), NEG_PACK, 0.7),
+        new TagSetV2("a0_asel_smile", p7(ASEL, BODY_STD, "light smile"), NEG_PACK, 0.9),
+        new TagSetV2("a1_asel_smug", p7(ASEL, BODY_STD, COLD_ASEL), NEG_PACK, 0.9),
+        new TagSetV2("a2_asel_waif", p7(ASEL, BODY_WAIF, COLD_ASEL), NEG_PACK, 0.9),
+        new TagSetV2("a3_asel_smug_s07", p7(ASEL, BODY_STD, COLD_ASEL), NEG_PACK, 0.7),
     };
     private static final long[] SEEDS = {101_101_101L, 202_202_202L};
     private static final long DETAILER_SEED = 777_777_777L;
