@@ -844,6 +844,7 @@ public class StoryV2Service {
             c.getSlug(),              // [Phase 7-V2 Pivot Fix] 스프라이트 에셋 키
             c.getDefaultOutfit(),     // [Bug-Sprite] 기본 복장
             c.getThumbnailUrl(),
+            c.getDefaultImageUrl(),   // [2026-08-06 UGC 스프라이트 CDN 픽스] assetDir 유도용
             h.getStatIntimacy(), h.getStatAffection(), h.getStatDependency(),
             h.getStatPlayfulness(), h.getStatTrust(),
             secretMode ? h.getStatLust() : null,

@@ -105,6 +105,9 @@ public final class StoryV2Responses {
         String slug,                    // [Phase 7-V2 Pivot Fix] 스프라이트 에셋 키 (CharacterDisplay용)
         String defaultOutfit,           // [Bug-Sprite] 기본 복장 — 캐릭터별 상이(airi=MAID, yeonhwa=HANBOK). CharacterDisplay outfit
         String profileImageUrl,
+        // [2026-08-06 UGC 스프라이트 CDN 픽스] 스탠딩 원본 절대 URL — UGC는 공식 CDN이 아닌 백엔드
+        // 에셋 CDN에 있어, 프론트가 이 URL에서 assetDir을 유도해야 403이 안 난다(V1 Fix-UGC-CDN 동일 계약).
+        String defaultImageUrl,
         int statIntimacy, int statAffection, int statDependency, int statPlayfulness, int statTrust,
         Integer statLust, Integer statCorruption, Integer statObsession,  // 시크릿 모드일 때만 노출
         RelationStatus statusLevel,
