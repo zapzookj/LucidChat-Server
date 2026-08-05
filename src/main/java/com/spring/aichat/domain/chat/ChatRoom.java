@@ -1050,6 +1050,11 @@ public class ChatRoom {
         this.currentDynamicBgUrl = null;
         if (includePersona) {
             this.userPersona = null;
+            // [2026-08-05 유령 스탯 픽스] 카드 스냅샷(V21)도 함께 클리어 — 텍스트만 지우면
+            // 카드 방을 프리셋/자유텍스트로 덮어써도 옛 카드의 스탯·성별이 남아 Hybrid 블록에
+            // 계속 주입되던 버그. 새 카드 선택 시엔 applyPersonaCard가 reset 후 재스냅샷한다.
+            this.personaStatsJson = null;
+            this.personaGender = null;
         }
 
         if (isSandboxMode()) {
