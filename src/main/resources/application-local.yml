@@ -35,6 +35,14 @@ fal:
   webhook-base-url: "http://localhost:8080"
   use-webhook: false  # 로컬은 폴링 사용
 
+# [2026-08-05 S3 격리 — 사고 재발 대응·종원 승인] 로컬은 전용 dev 버킷 사용.
+# 프로드(lucid-chat-assets-v2)와 잡 ID 기반 키(characters/ugc-{jobId}/)가 충돌해
+# 상호 덮어쓰기 사고 2회(07-30, 08-05 발견) — 로컬↔프로드 물리 격리가 근본 픽스.
+aws:
+  s3:
+    bucket-name: "lucid-chat-assets-dev"
+    assets-url: "https://lucid-chat-assets-dev.s3.ap-northeast-2.amazonaws.com"
+
 ugc:
   generation:
     # [2026-08-04 남캐 Phase 3] H안 확정 네거티브 팩 — 야경 청보라 통계의 피부 송장톤 상쇄 (PoC 실측: 한색 시드에서도 웜톤 복원).
