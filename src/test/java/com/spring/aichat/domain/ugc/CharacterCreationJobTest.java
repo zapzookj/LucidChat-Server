@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.ugc;
 
+import com.spring.aichat.domain.enums.CharacterDifficulty;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -33,5 +34,22 @@ class CharacterCreationJobTest {
         assertThat(job.isStagedBilling()).isFalse();
         assertThat(job.getBillingMode()).isNull();
         assertThat(job.getEnergyCharged()).isEqualTo(20);
+    }
+
+    // ── [2026-08-05 난이도] 위저드 난이도 지정 계약 ──
+
+    @Test
+    @DisplayName("난이도 지정 잡: assignRequestedDifficulty → 바인딩 주입 소스로 노출")
+    void requestedDifficultyAssigned() {
+        CharacterCreationJob job = CharacterCreationJob.start(1L, null, "컨셉", 6);
+        job.assignRequestedDifficulty(CharacterDifficulty.HARD);
+        assertThat(job.getRequestedDifficultyOrNull()).isEqualTo(CharacterDifficulty.HARD);
+    }
+
+    @Test
+    @DisplayName("난이도 미지정 잡: null 유지 — 바인딩 미설정 → 소비처 NORMAL 폴백 계약 보존")
+    void requestedDifficultyDefaultsToNull() {
+        CharacterCreationJob job = CharacterCreationJob.start(1L, null, "컨셉", 6);
+        assertThat(job.getRequestedDifficultyOrNull()).isNull();
     }
 }

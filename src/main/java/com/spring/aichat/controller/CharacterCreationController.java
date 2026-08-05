@@ -67,7 +67,7 @@ public class CharacterCreationController {
         guardRate(authentication);
         Long jobId = creationService.startCreation(
             authentication.getName(), request.name(), request.concept(), request.appearance(),
-            request.officialWorldId(), request.ugcWorldId(), request.gender());
+            request.officialWorldId(), request.ugcWorldId(), request.gender(), request.difficulty());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
             .body(new UgcDtos.StartCreationResponse(jobId));
     }
@@ -313,6 +313,11 @@ public class CharacterCreationController {
             new UgcDtos.StageCosts(props.energy().stageStart(), props.energy().stageStanding(),
                 props.energy().stageEmotions(), props.energy().stageFinalize()),
             job.getBillingMode(),
+            // [2026-08-05 세계관 CTA] 위저드 3택 요청 스냅샷 — 연결 선택 잡이면 프런트가 CTA 숨김
+            job.getRequestedWorldId() != null ? job.getRequestedWorldId().name() : null,
+            job.getRequestedUgcWorldId(),
+            // [2026-08-05 난이도] 위저드 지정값 — 복귀 재수화용(null=미지정)
+            job.getRequestedDifficultyOrNull() != null ? job.getRequestedDifficultyOrNull().name() : null,
             job.getFailReason(),
             job.getCharacterId(),
             job.getExpiresAt()

@@ -24,7 +24,9 @@ public final class UgcDtos {
     public record StartCreationRequest(String name, String concept, AppearanceHints appearance,
                                        String officialWorldId, Long ugcWorldId,
                                        /** [남캐] FEMALE(기본)/MALE — MALE은 ugc.modes.male-builder-enabled 게이트 */
-                                       String gender) {}
+                                       String gender,
+                                       /** [2026-08-05 난이도] EASY/NORMAL/HARD/EXTREME — null=미지정(NORMAL 폴백 계약) */
+                                       String difficulty) {}
 
     /** [세계관 빌더] 완성 캐릭터 세계관 연결/변경 (무료) — 둘 다 null이면 연결 해제. */
     public record WorldLinkRequest(String officialWorldId, Long ugcWorldId) {}
@@ -115,6 +117,12 @@ public final class UgcDtos {
         StageCosts stageCosts,
         /** [2026-08-04 단계 과금] "STAGED"=단계 차감 잡 / null=레거시 선차감 잡. */
         String billingMode,
+        /** [2026-08-05 세계관 CTA] 위저드 3택 요청 — 공식 WorldId enum name(연결 시 CTA 숨김) / null. */
+        String requestedWorldId,
+        /** [2026-08-05 세계관 CTA] 위저드 3택 요청 — UGC 월드 ID / null(둘 다 null=나중에 연결). */
+        Long requestedUgcWorldId,
+        /** [2026-08-05 난이도] 위저드 지정값 — 복귀 재수화용(null=미지정 → NORMAL 폴백). */
+        String difficulty,
         String failReason,
         Long characterId,
         LocalDateTime expiresAt

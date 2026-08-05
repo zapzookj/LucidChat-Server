@@ -166,6 +166,24 @@ public class CharacterCreationJob {
         this.gender = gender;
     }
 
+    /**
+     * [2026-08-05 난이도] 위저드 지정 공략 난이도 (V23) — null=미지정.
+     * 바인딩(Stage 4)에서 Character.updateDifficulty로 주입 — 미지정이면 미설정 유지
+     * (소비처 getDifficultyOrDefault의 null→NORMAL 폴백 계약 보존).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "requested_difficulty", length = 16)
+    private com.spring.aichat.domain.enums.CharacterDifficulty requestedDifficulty;
+
+    /** 난이도 요청값 — null=미지정(기본 폴백 없음: 바인딩이 '미설정 유지' 판정에 씀). */
+    public com.spring.aichat.domain.enums.CharacterDifficulty getRequestedDifficultyOrNull() {
+        return requestedDifficulty;
+    }
+
+    public void assignRequestedDifficulty(com.spring.aichat.domain.enums.CharacterDifficulty difficulty) {
+        this.requestedDifficulty = difficulty;
+    }
+
     public static CharacterCreationJob start(Long userId, String requestedName,
                                              String conceptInputRaw, int energyCharged) {
         CharacterCreationJob job = new CharacterCreationJob();

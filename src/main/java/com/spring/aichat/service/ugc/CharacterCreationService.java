@@ -70,10 +70,19 @@ public class CharacterCreationService {
             officialWorldIdRaw, requestedUgcWorldId, null);
     }
 
+    /** [하위 호환] 난이도 미지정 — null(바인딩 미설정 → NORMAL 폴백). */
     public Long startCreation(String username, String requestedName, String conceptRaw,
                               UgcDtos.AppearanceHints appearanceHints,
                               String officialWorldIdRaw, Long requestedUgcWorldId,
                               String genderRaw) {
+        return startCreation(username, requestedName, conceptRaw, appearanceHints,
+            officialWorldIdRaw, requestedUgcWorldId, genderRaw, null);
+    }
+
+    public Long startCreation(String username, String requestedName, String conceptRaw,
+                              UgcDtos.AppearanceHints appearanceHints,
+                              String officialWorldIdRaw, Long requestedUgcWorldId,
+                              String genderRaw, String difficultyRaw) {
         // [2026-08-04 남캐] 위저드 명시 선택 — 무효 문자열은 400(오타가 조용히 여캐로 흐르는 것 방지)
         com.spring.aichat.domain.enums.CharacterGender gender =
             com.spring.aichat.domain.enums.CharacterGender.FEMALE;
@@ -85,6 +94,14 @@ public class CharacterCreationService {
         }
         if (gender.isMale() && !ugcModeProperties.maleBuilderOn()) {
             throw new BadRequestException("남성 캐릭터 빌더는 아직 준비 중이에요.");
+        }
+        // [2026-08-05 난이도] 위저드 지정(선택) — 무효 문자열은 400(오타가 조용히 NORMAL로 흐르는 것 방지)
+        com.spring.aichat.domain.enums.CharacterDifficulty difficulty = null;
+        if (difficultyRaw != null && !difficultyRaw.isBlank()) {
+            difficulty = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(difficultyRaw);
+            if (difficulty == null) {
+                throw new BadRequestException("알 수 없는 난이도입니다: " + difficultyRaw);
+            }
         }
         String userConcept = conceptRaw == null ? "" : conceptRaw.trim();
         if (userConcept.length() < CONCEPT_MIN_LENGTH || userConcept.length() > CONCEPT_MAX_LENGTH) {
@@ -119,6 +136,7 @@ public class CharacterCreationService {
 
         WorldId finalOfficialWorldId = officialWorldId;
         com.spring.aichat.domain.enums.CharacterGender finalGender = gender;
+        com.spring.aichat.domain.enums.CharacterDifficulty finalDifficulty = difficulty;
         Long jobId = txTemplate.execute(tx -> {
             User user = findUser(username);
             if (jobRepository.existsByUserIdAndStatusIn(user.getId(), ACTIVE_STATUSES)) {
@@ -138,6 +156,7 @@ public class CharacterCreationService {
             job.markStagedBilling(); // 신규 잡은 전부 단계 과금 — null=레거시 선차감 잡
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
             job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
+            job.assignRequestedDifficulty(finalDifficulty);  // [난이도] null=미지정(바인딩 미설정 유지)
             job = jobRepository.save(job);
             return job.getId();
         });
