@@ -56,6 +56,16 @@ public class ContentModerationService {
     private final OpenAiModerationClient moderationClient;
 
     /**
+     * [2026-08-06 종원 확정 B안] 채팅 모더레이션 전체 게이트 — 기본 off.
+     * Step 2(OpenAI API)가 무력화 상태(OpenRouter 키로 호출 → 401 → failsafe 통과, 07-23 발견)에서
+     * Step 1 키워드 리스트가 유일 판정자로 남아 무협·전투 서사 어휘('몰살', '다죽이' 등)를
+     * 오탐 차단(프로드 실측). 런칭 전 보안 체크리스트(docs/06 §7)에서 Step 2 복구와 함께
+     * 재설계 후 재활성 — 재활성은 env CHAT_MODERATION_ENABLED=true.
+     */
+    @org.springframework.beans.factory.annotation.Value("${moderation.chat-enabled:false}")
+    private boolean chatModerationEnabled;
+
+    /**
      * 2-Step 콘텐츠 필터링 실행
      *
      * @param message 유저 입력 메시지
@@ -63,6 +73,10 @@ public class ContentModerationService {
      * @return ModerationVerdict (통과 or 차단)
      */
     public ModerationVerdict moderate(String message, boolean isSecretMode) {
+        // [2026-08-06 B안] 게이트 off — 전체 바이패스 (재설계 전까지)
+        if (!chatModerationEnabled) {
+            return ModerationVerdict.PASS;
+        }
         // 시크릿 모드 → 완전 바이패스
         if (isSecretMode) {
             return ModerationVerdict.PASS;

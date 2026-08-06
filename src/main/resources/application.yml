@@ -53,6 +53,12 @@ spring:
     baseline-on-migrate: true
     baseline-version: 9
 
+# [2026-08-06 종원 확정 B안] 채팅 2-Step 모더레이션 게이트 — 기본 off.
+# Step 2(OpenAI 모더레이션)가 401 failsafe 무력화 상태라 Step 1 키워드가 유일 판정자로
+# 서사 어휘('몰살' 등)를 오탐 차단(프로드 실측) → 런칭 전 재설계까지 전체 비활성.
+moderation:
+  chat-enabled: ${CHAT_MODERATION_ENABLED:false}
+
 # 외부 API 공통 설정
 nice:
   client-id: YOUR_NICE_CLIENT_ID
