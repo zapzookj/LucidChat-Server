@@ -80,8 +80,8 @@ public class TheaterSaveSlot {
     @Column(name = "lead_heroine_id")
     private Long leadHeroineId;
 
-    /** 전체 스냅샷 JSON */
-    @Column(name = "snapshot_json", nullable = false, columnDefinition = "LONGTEXT")
+    /** 전체 스냅샷 JSON (PG — LONGTEXT는 MySQL 전용이라 테이블 생성 자체가 실패했음, V24 참조) */
+    @Column(name = "snapshot_json", nullable = false, columnDefinition = "TEXT")
     private String snapshotJson;
 
     /** Quick Save 여부 */
