@@ -1321,6 +1321,12 @@ public class ChatStreamServiceV2 {
                 m.put("emotion", s.emotion() != null ? s.emotion().name() : null);
                 m.put("isSystem", blank);
                 m.put("isNpc", isNpc);
+                // [2026-08-07 리플레이] 씬 컨텍스트 보존(additive) — 과거 씬 재현 시 복장·장소·
+                // 시간 복원용. 레거시 로그(필드 없음)는 프론트가 현재값 폴백.
+                if (s.location() != null) m.put("location", s.location());
+                if (s.time() != null) m.put("time", s.time());
+                if (s.outfit() != null) m.put("outfit", s.outfit());
+                if (s.bgmMode() != null) m.put("bgmMode", s.bgmMode());
                 out.add(m);
             }
             return objectMapper.writeValueAsString(out);
