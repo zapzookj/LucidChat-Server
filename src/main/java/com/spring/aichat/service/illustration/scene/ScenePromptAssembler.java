@@ -42,6 +42,15 @@ public class ScenePromptAssembler {
         "nsfw, explicit, nude, nudity, topless, bottomless, sex, nipples, pussy, penis, cum";
 
     /**
+     * [2026-08-07 pov 픽스] 카메라 소품 밴 — pov가 danbooru 촬영 클러스터(holding camera/
+     * selfie/taking picture)로 해소되며 '카메라 든 유저'가 그려지던 실관찰 대응(종원).
+     * 워크플로 노드 13 하드 네거티브와 이중 방어(TIPO 증식 차단 몫).
+     */
+    private static final String CAMERA_BAN =
+        "holding camera, camera, taking picture, selfie, holding phone, cellphone, smartphone, "
+            + "video camera, viewfinder";
+
+    /**
      * 다중 모드 밴 — TIPO가 씬 레이어에 외형 정의 태그를 추가하면 블록 밖에서 오염이 재발하므로
      * 머리/눈 색·헤어스타일류를 차단(캐릭터 외형은 블록 전담). 튜닝 가능 상수.
      */
@@ -89,6 +98,29 @@ public class ScenePromptAssembler {
         String ratingTag = sfw ? "sfw" : "";
         String ratingBan = sfw ? ", " + SFW_BAN : "";
 
+        // ── [2026-08-07 pov 정규화 — 정책 레이어] ──
+        // pov는 프레이밍(시점=보는 눈)이지 인물 포즈가 아니다. LLM이 cast[].pose에 넣으면
+        // (1boy, …, pov:1.1) 가중 결합이 '카메라 든 남자'로 해소되는 실관찰 오작동.
+        // 정규화: pov 계열 토큰을 포즈→씬 레이어로 이동 + 유저(=카메라)를 화면 인물에서 제외.
+        // 태그 재작성이 아니라 sfw 게이트와 동급의 구조/정책 레이어 개입(무가공 원칙과 비충돌).
+        LinkedHashSet<String> povTokens = new LinkedHashSet<>();
+        String actionSansPov = extractPovTokens(action, povTokens);
+        List<SceneActor> effective = new ArrayList<>(actors.size());
+        for (SceneActor a : actors) {
+            String pose = extractPovTokens(cleanCsv(a.pose()), povTokens);
+            effective.add(new SceneActor(a.appearanceTags(), a.emotion(), pose, a.user(), a.male()));
+        }
+        if (!povTokens.isEmpty()) {
+            boolean removedMaleUser = effective.stream().anyMatch(a -> a.user() && a.male());
+            boolean removedFemaleUser = effective.stream().anyMatch(a -> a.user() && !a.male());
+            effective.removeIf(SceneActor::user);
+            // 유저 제외로 소실되는 시점 성별 신호는 male/female pov 태그로 보존
+            if (removedMaleUser) povTokens.add("male pov");
+            else if (removedFemaleUser) povTokens.add("female pov");
+            action = joinNonBlank(String.join(", ", povTokens), actionSansPov);
+        }
+        actors = effective;
+
         long girls = actors.stream().filter(a -> !a.male()).count();
         long boys = actors.stream().filter(SceneActor::male).count();
 
@@ -108,7 +140,8 @@ public class ScenePromptAssembler {
                 : cleanCsv(a.appearanceTags());
             String tags = joinNonBlank(QUALITY_PREFIX, ratingTag, counts, action, identity,
                 cleanCsv(a.emotion()), cleanCsv(a.pose()), location);
-            String ban = SINGLE_MODE_BAN + (a.male() ? ", 1girl" : ", 1boy") + ratingBan;
+            String ban = SINGLE_MODE_BAN + (a.male() ? ", 1girl" : ", 1boy")
+                + ", " + CAMERA_BAN + ratingBan;
             return new ScenePrompt(tags, List.of(), ban, true, tags);
         }
 
@@ -126,7 +159,8 @@ public class ScenePromptAssembler {
         }
 
         String full = sceneLayer + (blocks.isEmpty() ? "" : ", " + String.join(", ", blocks));
-        return new ScenePrompt(sceneLayer, blocks, MULTI_MODE_BAN + ratingBan, false, full);
+        return new ScenePrompt(sceneLayer, blocks, MULTI_MODE_BAN + ", " + CAMERA_BAN + ratingBan,
+            false, full);
     }
 
     private String buildActorBlock(SceneActor a) {
@@ -153,6 +187,27 @@ public class ScenePromptAssembler {
     private static String userIdentity(SceneActor a) {
         return (a.male() ? "faceless male, mature male, adult" : "faceless female, adult")
             + ", head out of frame";
+    }
+
+    /**
+     * [2026-08-07 pov 픽스] CSV에서 pov 계열 토큰("pov"/"male pov"/"pov hands"…)을 제거하고
+     * sink에 수집한다. 토큰 원문은 보존(무가공) — 위치만 씬 레이어로 옮긴다.
+     */
+    private static String extractPovTokens(String csv, LinkedHashSet<String> sink) {
+        if (csv == null || csv.isBlank()) return csv == null ? "" : csv;
+        List<String> kept = new ArrayList<>();
+        for (String t : csv.split(",")) {
+            String trimmed = t.trim();
+            if (trimmed.isEmpty()) continue;
+            if (isPovToken(trimmed)) sink.add(trimmed);
+            else kept.add(trimmed);
+        }
+        return String.join(", ", kept);
+    }
+
+    private static boolean isPovToken(String token) {
+        String s = token.toLowerCase(java.util.Locale.ROOT);
+        return s.equals("pov") || s.startsWith("pov ") || s.endsWith(" pov");
     }
 
     private static String countTag(long n, String noun) {

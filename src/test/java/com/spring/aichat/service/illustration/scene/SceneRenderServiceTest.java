@@ -108,6 +108,67 @@ class SceneRenderServiceTest {
         assertTrue(p.actorBlocks().get(1).contains("head out of frame"), p.actorBlocks().get(1));
     }
 
+    // ━━━━━━━━━━ [2026-08-07] pov 정규화 정책 레이어 ━━━━━━━━━━
+
+    @Test
+    @DisplayName("pov가 유저 pose로 오면 — 유저(=카메라) 제외, pov는 씬 레이어로 이동, male pov 보존")
+    void povInUserPose_normalizesToSceneLayer() {
+        Character mia = heroine("미아", "long grey hair, blue eyes");
+
+        AiJsonOutput o = out(false, new AiJsonOutput.SceneIllustrationSpec("bedroom, night", "hug",
+            List.of(
+                new AiJsonOutput.SceneCast("미아", "heroine", null, "blush", "arms around neck"),
+                new AiJsonOutput.SceneCast("user", "user", null, null, "pov, from behind"))));
+
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+
+        // 유저 제외 → 히로인 1인 풀-TIPO 모드로 강등, (1boy, …, pov:1.1) 결합 원천 차단
+        assertTrue(p.tipoFull(), "유저 제외 후 1인 모드: " + p.sceneTags());
+        assertTrue(p.sceneTags().contains("pov"), p.sceneTags());
+        assertTrue(p.sceneTags().contains("male pov"), "시점 성별 신호 보존: " + p.sceneTags());
+        assertFalse(p.sceneTags().contains("1boy"), "유저는 화면 밖: " + p.sceneTags());
+        assertFalse(p.sceneTags().contains("faceless male"), p.sceneTags());
+        assertTrue(p.sceneTags().contains("arms around neck"), "히로인 pose 무가공 보존: " + p.sceneTags());
+    }
+
+    @Test
+    @DisplayName("pov가 action에 있어도 — cast의 유저 제외 + 씬 레이어 선두 재배치")
+    void povInAction_excludesUserFromCast() {
+        Character mia = heroine("미아", "pink hair");
+
+        AiJsonOutput o = out(false, new AiJsonOutput.SceneIllustrationSpec("cafe interior",
+            "pov, holding hands",
+            List.of(
+                new AiJsonOutput.SceneCast("미아", "heroine", "female", "smile", "sitting"),
+                new AiJsonOutput.SceneCast("user", "user", "male", null, "sitting across"))));
+
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        assertTrue(p.tipoFull());
+        assertTrue(p.sceneTags().contains("pov"), p.sceneTags());
+        assertTrue(p.sceneTags().contains("male pov"), p.sceneTags());
+        assertTrue(p.sceneTags().contains("holding hands"), "비-pov 행위 태그 보존: " + p.sceneTags());
+        assertFalse(p.sceneTags().contains("1boy"), p.sceneTags());
+    }
+
+    @Test
+    @DisplayName("pov 부재 시 — 정규화 미개입(기존 경로 그대로), 카메라 밴은 상시 포함")
+    void noPov_unchangedAndCameraBanAlways() {
+        Character mia = heroine("미아", "long grey hair, blue eyes");
+
+        AiJsonOutput o = out(false, new AiJsonOutput.SceneIllustrationSpec("bedroom, night", "hug",
+            List.of(
+                new AiJsonOutput.SceneCast("미아", "heroine", null, "blush", "arms around neck"),
+                new AiJsonOutput.SceneCast("user", "user", null, null, "from behind"))));
+
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        assertFalse(p.tipoFull());
+        assertTrue(p.sceneTags().contains("1girl, 1boy"), p.sceneTags());
+        assertTrue(p.actorBlocks().get(1).startsWith("(1boy, faceless male"), p.actorBlocks().toString());
+        // 카메라 소품 밴 — pov 여부와 무관하게 TIPO 증식 차단
+        assertTrue(p.banTags().contains("holding camera"), p.banTags());
+        assertTrue(p.banTags().contains("selfie"), p.banTags());
+    }
+
     // ━━━━━━━━━━ TIPO 풀 모드 (1인/무인물 — PoC 경로) ━━━━━━━━━━
 
     @Test

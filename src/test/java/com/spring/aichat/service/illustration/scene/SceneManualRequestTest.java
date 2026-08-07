@@ -119,13 +119,17 @@ class SceneManualRequestTest {
             props("manual"), new ScenePromptAssembler(), null, null, null, null, null, null);
         Character mia = heroine("미아", "pink hair, twintails");
 
+        // [2026-08-07 pov 픽스] 유저 pose "pov"는 정규화 대상 — 씬 레이어 이동+유저 제외가 신계약
         AiJsonOutput.SceneIllustrationSpec spec = new AiJsonOutput.SceneIllustrationSpec(
             "cafe interior", "sitting, holding hands",
             List.of(new AiJsonOutput.SceneCast("미아", "heroine", "female", "smile", "sitting"),
                     new AiJsonOutput.SceneCast("user", "user", "male", "", "pov")));
 
         SceneRenderService.SceneRenderPlan plan = service.planRender(List.of(mia), spec, true);
-        assertTrue(plan.prompt().sceneTags().contains("1girl, 1boy"), plan.prompt().sceneTags());
+        assertTrue(plan.prompt().sceneTags().contains("1girl"), plan.prompt().sceneTags());
+        assertFalse(plan.prompt().sceneTags().contains("1boy"),
+            "pov 정규화 — 유저(=카메라)는 화면 밖: " + plan.prompt().sceneTags());
+        assertTrue(plan.prompt().sceneTags().contains("pov"), plan.prompt().sceneTags());
         assertTrue(plan.prompt().sceneTags().contains("sfw"), "비시크릿 sfw 게이트 유지");
         assertNotNull(plan.sceneHash());
     }

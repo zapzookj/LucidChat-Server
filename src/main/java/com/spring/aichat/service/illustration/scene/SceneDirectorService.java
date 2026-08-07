@@ -156,10 +156,14 @@ public class SceneDirectorService {
             - Default is heroine alone (cast size 1). Include "user" ONLY when physical interaction
               between user and heroine is the visual core of the moment.
             - The user is an ADULT %s — never a child or teenager. The user is faceless: never describe
-              the user's face; prefer poses where the user's face is naturally out of frame
-              (pov, from behind, head out of frame).
-            - Choose camera/angle freely per scene — no fixed rule. Exception: when "user" is in the
-              cast, PREFER pov (first-person) framing unless the moment clearly demands otherwise.
+              the user's face; give the user poses where the face is naturally out of frame
+              (from behind, head out of frame). NEVER give anyone camera or phone props.
+            - "pov" is a FRAMING tag, not a pose. For first-person framing (viewer = user), put "pov"
+              in action_description and DO NOT include "user" in cast — the viewer IS the camera and
+              must never be drawn as a person holding one.
+            - Choose camera/angle freely per scene — no fixed rule. Exception: for moments of physical
+              interaction with the user, PREFER pov framing (action_description "pov", user omitted
+              from cast) unless the moment clearly demands a third-person angle.
 
             ## Tag craft
             - For rare/complex actions, scaffold with common co-occurring tags

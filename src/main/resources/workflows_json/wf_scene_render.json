@@ -99,7 +99,7 @@
   },
   "13": {
     "inputs": {
-      "text": "bad quality,worst quality,worst detail,sketch,bad anatomy,bad hands,extra digits,fewer digits,watermark,text,signature,jpeg artifacts,blurry,child,male child,shota,aged down",
+      "text": "bad quality,worst quality,worst detail,sketch,bad anatomy,bad hands,extra digits,fewer digits,watermark,text,signature,jpeg artifacts,blurry,child,male child,shota,aged down,holding camera,camera,taking picture,selfie,holding phone,cellphone,smartphone,video camera,viewfinder",
       "clip": [
         "2",
         1
