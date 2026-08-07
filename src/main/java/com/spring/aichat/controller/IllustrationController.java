@@ -43,10 +43,17 @@ public class IllustrationController {
     /**
      * [리뷰픽스] 씬 일러 가용성 — 프론트 FAB 노출 게이트 + 표기 비용의 단일 소스.
      * 기능 off(기본값)면 enabled=false → FAB 미노출(죽은 버튼 방지).
+     *
+     * <p>[2026-08-07 씬당 1회] roomId 동봉 시 alreadyDrawn(현재 턴 소비 여부) 포함 —
+     * 방 스코프 정보라 소유권 가드 동반(형제 엔드포인트 관례). 미동봉(레거시)은 기능 게이트만.
      */
+    @org.springframework.security.access.prepost.PreAuthorize(
+        "#roomId == null or @authGuard.checkRoomOwnership(#roomId, principal.subject)")
     @GetMapping("/scenes/availability")
-    public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRequestService.SceneAvailability> sceneAvailability() {
-        return ResponseEntity.ok(sceneRequestService.availability());
+    public ResponseEntity<com.spring.aichat.service.illustration.scene.SceneRequestService.SceneAvailability> sceneAvailability(
+        @RequestParam(required = false) Long roomId
+    ) {
+        return ResponseEntity.ok(sceneRequestService.availability(roomId));
     }
 
     @PostMapping("/scenes/request")

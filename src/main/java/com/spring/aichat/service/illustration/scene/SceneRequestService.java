@@ -53,12 +53,35 @@ public class SceneRequestService {
     private final TransactionTemplate txTemplate;
     // [에픽 A 리뷰픽스] UGC 월드 방 자격 재검증
     private final com.spring.aichat.domain.ugc.UgcWorldRepository ugcWorldRepository;
+    // [2026-08-07 씬당 1회] 같은 턴 수동 재요청 차단 판정
+    private final com.spring.aichat.domain.illustration.SceneIllustrationRepository illustrationRepository;
 
-    /** 프론트 기능 노출용 가용성 — FAB 렌더 여부와 표기 비용의 단일 소스(하드코딩 드리프트 방지). */
-    public record SceneAvailability(boolean enabled, int energyCost) {}
+    /**
+     * 프론트 기능 노출용 가용성 — FAB 렌더 여부와 표기 비용의 단일 소스(하드코딩 드리프트 방지).
+     *
+     * @param alreadyDrawn [2026-08-07 씬당 1회] 현재 턴에서 이미 수동 씬을 소비했는가 —
+     *                     roomId 미제공 호출(레거시)은 null. 프론트 FAB 비활성 판정 소스.
+     */
+    public record SceneAvailability(boolean enabled, int energyCost, Boolean alreadyDrawn) {}
 
     public SceneAvailability availability() {
-        return new SceneAvailability(renderService.ready(), props.energyCostOrDefault());
+        return availability(null);
+    }
+
+    public SceneAvailability availability(Long roomId) {
+        boolean ready = renderService.ready();
+        Boolean alreadyDrawn = null;
+        if (ready && roomId != null) {
+            int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
+            alreadyDrawn = manualAlreadyDrawn(roomId, turnIndex);
+        }
+        return new SceneAvailability(ready, props.energyCostOrDefault(), alreadyDrawn);
+    }
+
+    /** [2026-08-07 씬당 1회] 같은 턴의 비-FAILED 수동 렌더 존재 — 서버 권위 판정의 단일 지점. */
+    private boolean manualAlreadyDrawn(Long roomId, int turnIndex) {
+        return illustrationRepository.existsByChatRoomIdAndTurnIndexAndTriggerSourceAndStatusNot(
+            roomId, turnIndex, "MANUAL", "FAILED");
     }
 
     public SceneRenderService.SceneView requestManual(String username, Long roomId) {
@@ -98,6 +121,14 @@ public class SceneRequestService {
             boolean sfw = !resolveSecretMode(room);
             int cost = props.energyCostOrDefault();
             int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
+
+            // ── [2026-08-07 씬당 1회] 같은 턴(새 로그 없음)의 수동 재요청 차단 — 차감 전 ──
+            // FAILED(자동 환불 완료)는 제외 — 실패 재시도 허용. 대화가 진행돼 로그가 쌓이면
+            // turnIndex가 달라져 자연 해제. 종원 확정: 한 장면당 1회 생성.
+            if (manualAlreadyDrawn(roomId, turnIndex)) {
+                throw new BusinessException(ErrorCode.CONFLICT,
+                    "이 장면은 이미 그렸어요. 대화를 이어간 뒤 다시 요청해 주세요.");
+            }
 
             // ── 3. 에너지 차감 (짧은 TX) — InsufficientEnergyException은 그대로 전파 ──
             txTemplate.execute(status -> {

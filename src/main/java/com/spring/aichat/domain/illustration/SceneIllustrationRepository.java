@@ -15,4 +15,12 @@ public interface SceneIllustrationRepository extends JpaRepository<SceneIllustra
 
     /** 씬 네비게이션(A-2) — 방의 턴별 씬 목록. */
     List<SceneIllustration> findByChatRoomIdOrderByIdAsc(Long chatRoomId);
+
+    /**
+     * [2026-08-07 씬당 1회] 같은 턴(turnIndex)에서 이미 소비된 수동 렌더 존재 여부 —
+     * FAILED(자동 환불 완료)만 제외해 실패 재시도는 허용. AUTO/SKIPPED 행이 유료 요청을
+     * 막지 않도록 triggerSource=MANUAL 한정.
+     */
+    boolean existsByChatRoomIdAndTurnIndexAndTriggerSourceAndStatusNot(
+        Long chatRoomId, int turnIndex, String triggerSource, String status);
 }
