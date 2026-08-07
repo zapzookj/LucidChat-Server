@@ -179,20 +179,32 @@ class MaleIllustMatrixPoc {
     private static final String COLD_ASEL = "smug, half-closed eyes";
 
     private static String p7(String identity, String body, String expr) {
-        return "masterpiece, best quality, newest, absurdres, 1boy, male focus, solo, "
+        return p8(null, identity, body, expr);
+    }
+
+    private static String p8(String token, String identity, String body, String expr) {
+        return "masterpiece, best quality, newest, absurdres, "
+            + (token == null ? "" : token + ", ")
+            + "1boy, male focus, solo, "
             + identity + ", " + body + ", " + SCENE_P7 + ", " + expr;
     }
 
-    private static final TagSetV2[] TAG_SETS = {
-        new TagSetV2("k0_kyle_smile", p7(KYLE, BODY_STD, "light smile"), NEG_PACK, 0.9),
-        new TagSetV2("k1_kyle_cold", p7(KYLE, BODY_STD, COLD_KYLE), NEG_PACK, 0.9),
-        new TagSetV2("k2_kyle_knight", p7(KYLE, BODY_KNIGHT, COLD_KYLE), NEG_PACK, 0.9),
-        new TagSetV2("k3_kyle_cold_s07", p7(KYLE, BODY_STD, COLD_KYLE), NEG_PACK, 0.7),
-        new TagSetV2("a0_asel_smile", p7(ASEL, BODY_STD, "light smile"), NEG_PACK, 0.9),
-        new TagSetV2("a1_asel_smug", p7(ASEL, BODY_STD, COLD_ASEL), NEG_PACK, 0.9),
-        new TagSetV2("a2_asel_waif", p7(ASEL, BODY_WAIF, COLD_ASEL), NEG_PACK, 0.9),
-        new TagSetV2("a3_asel_smug_s07", p7(ASEL, BODY_STD, COLD_ASEL), NEG_PACK, 0.7),
-    };
+    // ━━━━━━ Phase 8 (2026-08-06, 세션 마지막 PoC): male_typeA~E 아키타입 토큰 실측 ━━━━━━
+    // 제작자: "특정 캐릭터에 더 가깝게 맞추려면 male_typeA,B,C,D,E 사용" — 토큰별 아키타입
+    // 차이를 카일(냉철)·아셀(스머그) 고정 구성으로 격리 실측. 무토큰 대조군 = Phase 7 k1/a1
+    // 기존 렌더 재사용(동일 구성·동일 시드). 프로덕션은 Phase 5 판정으로 무트리거 확정 상태.
+    private static final TagSetV2[] TAG_SETS = buildPhase8();
+
+    private static TagSetV2[] buildPhase8() {
+        String[] tokens = {"male_typeA", "male_typeB", "male_typeC", "male_typeD", "male_typeE"};
+        java.util.List<TagSetV2> sets = new java.util.ArrayList<>();
+        for (String t : tokens) {
+            String suffix = t.substring(t.length() - 1); // A~E
+            sets.add(new TagSetV2("k_type" + suffix, p8(t, KYLE, BODY_STD, COLD_KYLE), NEG_PACK, 0.9));
+            sets.add(new TagSetV2("a_type" + suffix, p8(t, ASEL, BODY_STD, COLD_ASEL), NEG_PACK, 0.9));
+        }
+        return sets.toArray(new TagSetV2[0]);
+    }
     private static final long[] SEEDS = {101_101_101L, 202_202_202L};
     private static final long DETAILER_SEED = 777_777_777L;
 
