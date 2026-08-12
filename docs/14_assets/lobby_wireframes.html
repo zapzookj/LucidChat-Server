@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로비 재구성 — 와이어프레임 3안</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0b0b12; color: #e8e8f0; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; line-height: 1.6; padding: 32px 20px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 6px; letter-spacing: -0.5px; }
+  .sub { color: #8a8aa0; font-size: 13px; margin-bottom: 36px; }
+  h2 { font-size: 19px; margin: 48px 0 6px; padding-top: 24px; border-top: 1px solid #26263a; letter-spacing: -0.3px; }
+  h2 .tag { font-size: 11px; vertical-align: middle; margin-left: 8px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .tag.now { background: #3a2a2a; color: #ff9a9a; }
+  .tag.a { background: #1e2a4a; color: #8ab4ff; }
+  .tag.b { background: #2a1e4a; color: #b49aff; }
+  .tag.c { background: #1e3a2a; color: #7ae0a8; }
+  .desc { color: #a0a0b8; font-size: 13.5px; margin-bottom: 18px; max-width: 860px; }
+  .desc b { color: #d8d8ea; }
+
+  /* ── 폰 프레임(목업 캔버스) ── */
+  .row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .frame { width: 320px; flex-shrink: 0; }
+  .frame .screen { width: 320px; height: 560px; background: linear-gradient(160deg, #12121f 0%, #0d0d18 60%, #131322 100%); border: 1px solid #2e2e46; border-radius: 18px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .frame .cap { text-align: center; font-size: 12px; color: #9a9ab4; margin-top: 10px; }
+  .frame .cap b { color: #fff; }
+  .note { font-size: 11.5px; color: #7a7a94; margin-top: 4px; text-align: center; }
+
+  /* 공용 목업 요소 */
+  .m-topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-size: 11px; color: #b8b8d0; }
+  .m-logo { font-weight: 800; letter-spacing: 2px; font-size: 12px; color: #fff; }
+  .m-energy { background: #ffffff14; border: 1px solid #ffffff1f; border-radius: 99px; padding: 2px 10px; color: #ffd98a; }
+  .m-menu-v { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+  .m-menu-v .item { text-align: center; }
+  .m-menu-v .item .k { font-size: 20px; font-weight: 800; letter-spacing: 3px; color: #fff; }
+  .m-menu-v .item .e { font-size: 8px; letter-spacing: 3px; color: #ffffff33; text-transform: uppercase; }
+  .m-menu-v .item.dis .k { color: #ffffff2e; }
+  .m-menu-v .item.dis .e { color: #ffffff14; }
+  .biglogo { text-align: center; margin: 26px 0 4px; }
+  .biglogo .t { font-size: 22px; font-weight: 900; letter-spacing: 4px; background: linear-gradient(90deg, #cfc4ff, #8ab4ff); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 30px #7a6aff33; }
+  .biglogo .s { font-size: 8px; letter-spacing: 5px; color: #ffffff30; text-transform: uppercase; }
+
+  .m-tabs { display: flex; gap: 4px; padding: 8px 12px 0; }
+  .m-tabs .t { flex: 1; text-align: center; font-size: 11px; padding: 7px 0; border-radius: 9px 9px 0 0; color: #8a8aa4; background: #ffffff08; }
+  .m-tabs .t.on { color: #fff; background: #ffffff14; font-weight: 700; border-bottom: 2px solid #9382ff; }
+
+  .m-banner { margin: 10px 12px; border-radius: 12px; padding: 10px 12px; background: linear-gradient(90deg, #2a2347, #1c1c30); border: 1px solid #4a3f7a55; display: flex; justify-content: space-between; align-items: center; }
+  .m-banner .l .a { font-size: 9px; color: #b49aff; letter-spacing: 1px; }
+  .m-banner .l .b { font-size: 12.5px; font-weight: 700; color: #fff; }
+  .m-banner .go { font-size: 10px; background: #9382ff; color: #14142a; font-weight: 800; padding: 5px 10px; border-radius: 99px; }
+
+  .m-sec { font-size: 10.5px; color: #9a9ab4; padding: 8px 14px 4px; display: flex; justify-content: space-between; }
+  .m-sec .more { color: #6a6a88; }
+  .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px; }
+  .m-grid.g3 { grid-template-columns: 1fr 1fr 1fr; }
+  .char { border-radius: 11px; overflow: hidden; border: 1px solid #ffffff12; background: #191926; position: relative; }
+  .char .art { height: 84px; display: flex; align-items: flex-end; justify-content: center; font-size: 30px; }
+  .char.big .art { height: 110px; font-size: 40px; }
+  .char .meta { padding: 6px 8px 7px; }
+  .char .nm { font-size: 11.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 4px; }
+  .char .tg { font-size: 9px; color: #8a8aa4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 7.5px; font-weight: 800; padding: 1px 5px; border-radius: 99px; letter-spacing: 0.5px; }
+  .bd-easy { background: #1e3a2a; color: #7ae0a8; } .bd-normal { background: #1e2a4a; color: #8ab4ff; }
+  .bd-hard { background: #3a2f1e; color: #ffd98a; } .bd-extreme { background: #3a1e2a; color: #ff8aa8; }
+  .bd-ugc { background: #2a1e4a; color: #c9a9ff; } .bd-m { background: #16324a; color: #7ac8ff; }
+  .a1 { background: linear-gradient(160deg, #4a3a6a, #221a35); } .a2 { background: linear-gradient(160deg, #6a3a4a, #2a1520); }
+  .a3 { background: linear-gradient(160deg, #3a5a6a, #15242a); } .a4 { background: linear-gradient(160deg, #6a5a3a, #2a2215); }
+  .a5 { background: linear-gradient(160deg, #3a6a4a, #152a1c); } .a6 { background: linear-gradient(160deg, #55406e, #1f1830); }
+
+  .m-carousel { display: flex; gap: 8px; padding: 0 12px; overflow: hidden; }
+  .m-carousel .char { min-width: 92px; }
+  .m-bottom { margin-top: auto; padding: 10px 14px 14px; display: flex; gap: 6px; }
+  .m-bottom .bb { flex: 1; text-align: center; font-size: 10px; color: #a8a8c0; background: #ffffff0a; border: 1px solid #ffffff10; border-radius: 10px; padding: 8px 0; }
+  .m-bottom .bb.hot { background: #9382ff22; border-color: #9382ff55; color: #cfc4ff; font-weight: 700; }
+
+  .onb-title { text-align: center; margin: 34px 0 6px; font-size: 16px; font-weight: 800; color: #fff; }
+  .onb-sub { text-align: center; font-size: 10.5px; color: #8a8aa4; margin-bottom: 16px; }
+  .onb-cards { display: flex; gap: 8px; padding: 0 14px; }
+  .onb-cards .char { flex: 1; }
+  .onb-skip { text-align: center; margin-top: 18px; font-size: 10px; color: #5a5a74; text-decoration: underline; }
+  .onb-cta { margin: 16px 14px 0; text-align: center; font-size: 12px; font-weight: 800; color: #14142a; background: linear-gradient(90deg, #b49aff, #8ab4ff); border-radius: 12px; padding: 11px 0; }
+
+  .pin { position: absolute; background: #ff5a7a; color: #fff; font-size: 9px; font-weight: 800; width: 16px; height: 16px; border-radius: 99px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #ff5a7a33; z-index: 5; }
+  .pins { font-size: 12px; color: #b0b0c8; margin-top: 12px; }
+  .pins li { margin-bottom: 5px; list-style: none; }
+  .pins .n { display: inline-flex; background: #ff5a7a; color: #fff; font-size: 9px; font-weight: 800; width: 15px; height: 15px; border-radius: 99px; align-items: center; justify-content: center; margin-right: 6px; }
+
+  table { border-collapse: collapse; width: 100%; margin-top: 18px; font-size: 12.5px; }
+  th, td { border: 1px solid #26263a; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #16162a; color: #c8c8e0; font-size: 12px; }
+  td b { color: #fff; }
+  .good { color: #7ae0a8; } .bad { color: #ff8aa8; } .mid { color: #ffd98a; }
+  .verdict { margin-top: 26px; background: #14142a; border: 1px solid #2e2e50; border-left: 3px solid #9382ff; border-radius: 10px; padding: 16px 20px; font-size: 13.5px; max-width: 900px; }
+  .verdict b { color: #cfc4ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>로비 재구성 — 와이어프레임 3안</h1>
+  <div class="sub">2026-08-07 · 확정 반영: 기억의 끈+페르소나+수집품 → '보관함' 통합 · 모든 안은 모바일 기준(데스크톱은 그리드 확장)</div>
+
+  <!-- ═══ 현행 ═══ -->
+  <h2>현행 구조 <span class="tag now">진단</span></h2>
+  <p class="desc">게임 타이틀 스크린 문법 — 분위기는 완성돼 있으나 <b>상품(캐릭터)이 화면에 없다</b>. 신규 유저 기준 첫 대화까지 5~7클릭.</p>
+  <div class="row">
+    <div class="frame">
+      <div class="screen">
+        <div class="m-topbar"><span class="m-logo">LUCID</span><span class="m-energy">⚡ 30</span></div>
+        <div class="biglogo"><div class="t">LUCID CHAT</div><div class="s">Lucid Station</div></div>
+        <div class="m-menu-v">
+          <div class="item"><div class="k">새로운 만남</div><div class="e">New Encounter</div><span class="pin" style="position:static;display:inline-flex;margin-top:2px;">1</span></div>
+          <div class="item"><div class="k">세계관</div><div class="e">Worlds</div><span class="pin" style="position:static;display:inline-flex;margin-top:2px;">2</span></div>
+          <div class="item"><div class="k">스튜디오</div><div class="e">Studio</div></div>
+          <div class="item dis"><div class="k">기억의 끈</div><div class="e">Continue</div><span class="pin" style="position:static;display:inline-flex;margin-top:2px;">3</span></div>
+          <div class="item"><div class="k">페르소나</div><div class="e">Persona</div></div>
+          <div class="item"><div class="k">수집품</div><div class="e">Archives</div><span class="pin" style="position:static;display:inline-flex;margin-top:2px;">3</span></div>
+        </div>
+      </div>
+      <div class="cap"><b>현행</b> — 추상 명사 6개, 캐릭터 0명</div>
+    </div>
+    <ul class="pins" style="max-width:520px;">
+      <li><span class="n">1</span>클릭하면 곧바로 모드 3택(자유/스토리/극장) — 신규 유저에겐 모드 개념이 없음. <b>첫 결정이 가장 어려운 결정.</b></li>
+      <li><span class="n">2</span>'세계관'은 UGC 스토리 진입 핫픽스로 임시 신설된 입구 — '새로운 만남'과 콘텐츠가 겹침. 같은 콘텐츠에 입구 3개(만남/세계관/스튜디오 탐색).</li>
+      <li><span class="n">3</span>신규 유저에겐 죽은 메뉴 2개 — 기억의 끈(비활성), 수집품(빈 갤러리). 극장은 허브 입구 자체가 없음(직접 URL).</li>
+    </ul>
+  </div>
+
+  <!-- ═══ A안 ═══ -->
+  <h2>A안 — 플랫폼형 전환 <span class="tag a">캐릭터 피드</span></h2>
+  <p class="desc">첫 화면 = <b>캐릭터가 곧 메뉴</b>. 카드 탭 → 프로필(immersive) → 바로 대화. 상단 탭 4개가 IA 전부. UGC(PUBLIC)가 공식과 같은 매대에 서므로 <b>UGC 생태계가 처음으로 전면 노출</b>된다. 우려였던 '자각몽 감성'은 우측 변형(A′)처럼 스킨으로 보존 가능 — 구조와 감성은 별개다.</p>
+  <div class="row">
+    <div class="frame">
+      <div class="screen">
+        <div class="m-topbar"><span class="m-logo">LUCID</span><span class="m-energy">⚡ 30</span></div>
+        <div class="m-tabs"><div class="t on">홈</div><div class="t">세계관</div><div class="t">스튜디오</div><div class="t">보관함</div></div>
+        <div class="m-banner"><div class="l"><div class="a">이어하기</div><div class="b">연화 · "어젯밤 이야기, 마저 들려줘"</div></div><div class="go">▶</div></div>
+        <div class="m-sec"><span>지금 만날 수 있는 인연</span><span class="more">전체 ›</span></div>
+        <div class="m-grid">
+          <div class="char"><div class="art a1">🌙</div><div class="meta"><div class="nm">클레어 <span class="badge bd-normal">보통</span></div><div class="tg">달빛 아래의 첫 만남</div></div></div>
+          <div class="char"><div class="art a2">🦊</div><div class="meta"><div class="nm">연화 <span class="badge bd-hard">어려움</span></div><div class="tg">달의 여우가 그대를…</div></div></div>
+          <div class="char"><div class="art a3">📚</div><div class="meta"><div class="nm">아이리 <span class="badge bd-easy">쉬움</span></div><div class="tg">도서관의 조용한 온기</div></div></div>
+          <div class="char"><div class="art a6">🗡️</div><div class="meta"><div class="nm">서이한 <span class="badge bd-ugc">UGC</span><span class="badge bd-m">남</span></div><div class="tg">냉혹한 검의 그림자</div></div></div>
+        </div>
+        <div class="m-sec"><span>세계관에서 시작하기</span><span class="more">스토리 · 극장 ›</span></div>
+        <div class="m-carousel">
+          <div class="char"><div class="art a4" style="height:52px;font-size:20px;">🏰</div><div class="meta"><div class="nm" style="font-size:10px;">중세 판타지</div></div></div>
+          <div class="char"><div class="art a5" style="height:52px;font-size:20px;">🎓</div><div class="meta"><div class="nm" style="font-size:10px;">아카데미</div></div></div>
+          <div class="char"><div class="art a3" style="height:52px;font-size:20px;">🏙️</div><div class="meta"><div class="nm" style="font-size:10px;">현대 한국</div></div></div>
+        </div>
+      </div>
+      <div class="cap"><b>A안</b> — 홈 피드 (콘텐츠가 전면)</div>
+      <div class="note">카드 탭 → 프로필 → "대화 시작" = 신규 3클릭</div>
+    </div>
+    <div class="frame">
+      <div class="screen" style="background: radial-gradient(120% 90% at 50% 0%, #241d45 0%, #0d0d18 55%);">
+        <div class="m-topbar"><span class="m-logo" style="letter-spacing:3px;">✦ LUCID STATION</span><span class="m-energy">⚡ 30</span></div>
+        <div class="m-banner" style="background:linear-gradient(90deg,#241d4577,#1c1c3044);"><div class="l"><div class="a">꿈에서 이어서</div><div class="b">연화와의 아홉 번째 밤</div></div><div class="go">▶</div></div>
+        <div class="m-sec"><span style="letter-spacing:2px;color:#b49aff88;">오늘 정거장에 온 인연들</span></div>
+        <div class="m-grid">
+          <div class="char"><div class="art a1">🌙</div><div class="meta"><div class="nm">클레어 <span class="badge bd-normal">보통</span></div><div class="tg">달빛 아래의 첫 만남</div></div></div>
+          <div class="char"><div class="art a2">🦊</div><div class="meta"><div class="nm">연화 <span class="badge bd-hard">어려움</span></div><div class="tg">달의 여우가 그대를…</div></div></div>
+          <div class="char"><div class="art a6">🗡️</div><div class="meta"><div class="nm">서이한 <span class="badge bd-ugc">UGC</span></div><div class="tg">냉혹한 검의 그림자</div></div></div>
+          <div class="char"><div class="art a3">📚</div><div class="meta"><div class="nm">아이리 <span class="badge bd-easy">쉬움</span></div><div class="tg">도서관의 조용한 온기</div></div></div>
+        </div>
+        <div class="m-bottom"><div class="bb hot">✦ 정거장</div><div class="bb">세계관</div><div class="bb">스튜디오</div><div class="bb">보관함</div></div>
+      </div>
+      <div class="cap"><b>A′ 변형</b> — 같은 구조 + 루시드 감성 스킨</div>
+      <div class="note">몽환 배경·카피 톤·별빛 모티프로 감성 보존, 탭은 하단 이동</div>
+    </div>
+    <ul class="pins" style="max-width:420px;">
+      <li><span class="n" style="background:#8ab4ff;color:#14142a;">+</span>발견성 최강 — UGC 크리에이터 생태계의 매대가 생김(장기 방향과 정합).</li>
+      <li><span class="n" style="background:#8ab4ff;color:#14142a;">+</span>'세계관' 임시 입구·극장 고아 문제가 탭 구조로 자연 해소.</li>
+      <li><span class="n">−</span>프론트 재작업 규모 최대(LobbyPage 전면 재구성 + 정렬/추천 로직 신규).</li>
+      <li><span class="n">−</span>순수 타이틀 감성은 A′로도 100% 보존은 안 됨 — 트레이드오프.</li>
+    </ul>
+  </div>
+
+  <!-- ═══ B안 ═══ -->
+  <h2>B안 — 하이브리드 <span class="tag b">타이틀 유지 + 콘텐츠 주입</span></h2>
+  <p class="desc">현행 허브의 뼈대를 유지하되 <b>메뉴 6→3 압축</b> + 하단에 '오늘의 캐릭터' 캐러셀과 이어하기 배너를 주입. 기존 유저에게 이질감이 가장 적고 구현이 가볍다. 단, 캐릭터 노출이 '한 줄'에 그쳐 발견성 개선은 제한적.</p>
+  <div class="row">
+    <div class="frame">
+      <div class="screen">
+        <div class="m-topbar"><span class="m-logo">LUCID</span><span class="m-energy">⚡ 30</span></div>
+        <div class="biglogo"><div class="t">LUCID CHAT</div><div class="s">Lucid Station</div></div>
+        <div class="m-menu-v" style="gap:16px;flex:0 1 auto;margin:14px 0 6px;">
+          <div class="item"><div class="k" style="font-size:18px;">새로운 만남</div><div class="e">모드 · 세계관 · 캐릭터</div></div>
+          <div class="item"><div class="k" style="font-size:18px;">스튜디오</div><div class="e">Studio</div></div>
+          <div class="item"><div class="k" style="font-size:18px;">보관함</div><div class="e">기억의 끈 · 페르소나 · 수집품</div></div>
+        </div>
+        <div class="m-banner"><div class="l"><div class="a">이어하기</div><div class="b">연화 · 마지막 대화 3시간 전</div></div><div class="go">▶</div></div>
+        <div class="m-sec"><span>오늘의 인연</span><span class="more">더 보기 ›</span></div>
+        <div class="m-carousel">
+          <div class="char"><div class="art a1" style="height:64px;">🌙</div><div class="meta"><div class="nm" style="font-size:10px;">클레어</div></div></div>
+          <div class="char"><div class="art a2" style="height:64px;">🦊</div><div class="meta"><div class="nm" style="font-size:10px;">연화</div></div></div>
+          <div class="char"><div class="art a6" style="height:64px;">🗡️</div><div class="meta"><div class="nm" style="font-size:10px;">서이한</div></div></div>
+          <div class="char"><div class="art a3" style="height:64px;">📚</div><div class="meta"><div class="nm" style="font-size:10px;">아이리</div></div></div>
+        </div>
+      </div>
+      <div class="cap"><b>B안</b> — 허브 유지 + 캐러셀 주입</div>
+      <div class="note">'세계관'은 새로운 만남에 흡수 · 보관함 통합(확정 반영)</div>
+    </div>
+    <ul class="pins" style="max-width:480px;">
+      <li><span class="n" style="background:#b49aff;color:#14142a;">+</span>기존 유저 학습 비용 0에 가깝고, 구현 규모 최소(허브 1화면 수정).</li>
+      <li><span class="n" style="background:#b49aff;color:#14142a;">+</span>타이틀 감성 온전 보존.</li>
+      <li><span class="n">−</span>캐러셀 한 줄로는 UGC 매대 역할을 못 함 — 발견성 개선이 제한적.</li>
+      <li><span class="n">−</span>'새로운 만남' 내부의 모드 3택 문제는 그대로 남음(온보딩 C로만 보완 가능).</li>
+    </ul>
+  </div>
+
+  <!-- ═══ C안 ═══ -->
+  <h2>C안 — 신규 온보딩 분리 <span class="tag c">첫 만남</span></h2>
+  <p class="desc">방 0개 신규 유저에게만 허브 대신 <b>'첫 만남' 화면</b>을 강제 — 성향이 다른 추천 캐릭터 중 택1 → 즉시 자유 대화 시작(모드 개념은 나중에 만나게). <b>A·B 어느 쪽과도 조합 가능</b>한 독립 모듈이며 기존 유저 UX 불변이라 가장 저위험.</p>
+  <div class="row">
+    <div class="frame">
+      <div class="screen">
+        <div class="m-topbar"><span class="m-logo">LUCID</span><span></span></div>
+        <div class="onb-title">누구와 첫 꿈을 꿀까요?</div>
+        <div class="onb-sub">자각몽 정거장에서, 세 인연이 당신을 기다립니다</div>
+        <div class="onb-cards">
+          <div class="char big"><div class="art a3">📚</div><div class="meta"><div class="nm" style="font-size:10.5px;">아이리</div><div class="tg">다정한 온기</div><span class="badge bd-easy">쉬움</span></div></div>
+          <div class="char big" style="border-color:#9382ff;box-shadow:0 0 14px #9382ff44;"><div class="art a1">🌙</div><div class="meta"><div class="nm" style="font-size:10.5px;">클레어</div><div class="tg">신비한 달빛</div><span class="badge bd-normal">보통</span></div></div>
+          <div class="char big"><div class="art a2">🦊</div><div class="meta"><div class="nm" style="font-size:10.5px;">연화</div><div class="tg">도도한 불꽃</div><span class="badge bd-hard">어려움</span></div></div>
+        </div>
+        <div class="onb-cta">클레어와 대화 시작하기</div>
+        <div class="onb-skip">먼저 둘러볼게요</div>
+      </div>
+      <div class="cap"><b>C안</b> — 첫 진입 전용 (2클릭 → 첫 대화)</div>
+      <div class="note">'둘러볼게요' 스킵 링크로 강제감 완화 (탐색형 유저 이탈 방지)</div>
+    </div>
+    <ul class="pins" style="max-width:480px;">
+      <li><span class="n" style="background:#7ae0a8;color:#14142a;">+</span>time-to-first-chat 5~7클릭 → <b>2클릭</b>. 첫 결정을 '모드'가 아닌 '사람'으로.</li>
+      <li><span class="n" style="background:#7ae0a8;color:#14142a;">+</span>추천 3인을 성향(다정/신비/도도)·난이도로 분산 — 취향 신호도 얻는다.</li>
+      <li><span class="n">−</span>단독으론 재방문 유저의 로비 문제(현행 진단 1~3)를 해결하지 못함.</li>
+    </ul>
+  </div>
+
+  <!-- ═══ 비교 ═══ -->
+  <h2>비교 요약</h2>
+  <table>
+    <tr><th></th><th>현행</th><th>A안 플랫폼형 (A′ 스킨)</th><th>B안 하이브리드</th><th>C안 온보딩 (조합용)</th></tr>
+    <tr><td><b>신규 첫 대화까지</b></td><td class="bad">5~7클릭</td><td class="mid">3클릭</td><td class="mid">3~4클릭(캐러셀 경유)</td><td class="good">2클릭</td></tr>
+    <tr><td><b>발견성 / UGC 매대</b></td><td class="bad">없음</td><td class="good">전면 노출 (핵심 이득)</td><td class="mid">한 줄 캐러셀</td><td>—</td></tr>
+    <tr><td><b>타이틀 감성</b></td><td class="good">원형</td><td class="mid">A′ 스킨으로 부분 보존</td><td class="good">온전 보존</td><td class="good">무영향</td></tr>
+    <tr><td><b>기존 유저 이질감</b></td><td>—</td><td class="bad">큼 (재학습)</td><td class="good">거의 없음</td><td class="good">없음</td></tr>
+    <tr><td><b>구현 규모(프론트)</b></td><td>—</td><td class="bad">대 — 로비 전면 재구성+정렬·추천</td><td class="good">소 — 허브 1화면</td><td class="good">소 — 독립 화면 1개</td></tr>
+    <tr><td><b>기존 문제 해소</b></td><td>—</td><td class="good">입구 중복·극장 고아·죽은 메뉴 전부 해소</td><td class="mid">메뉴 압축만 해소</td><td class="mid">신규 여정만 해소</td></tr>
+  </table>
+
+  <div class="verdict">
+    <b>내 판단</b> — 종원의 진단("UGC까지 끝난 지금은 플랫폼형이 맞을지도")에 동의한다. 이 서비스의 다음 성장 동력은 UGC 생태계인데, 현행·B안에는 <b>UGC가 손님에게 보이는 매대가 없다</b>. 다만 풀 전환의 감성 손실과 재작업 리스크를 줄이기 위해 <b>A′(루시드 감성 스킨의 플랫폼 구조) + C(신규 온보딩)</b> 조합을 추천한다. 이행도 단계적으로 가능하다: <b>1단계</b> C 온보딩+보관함 통합(저위험, 즉시 효과) → <b>2단계</b> A′ 홈 피드 전환(새로운 만남·세계관·극장 입구 흡수). 1단계만으로도 신규 여정 문제는 잡히므로, 2단계는 1단계 반응을 보고 착수해도 된다.
+  </div>
+</div>
+</body>
+</html>
