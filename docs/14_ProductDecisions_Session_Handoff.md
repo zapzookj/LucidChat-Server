@@ -3,6 +3,8 @@
 > 선행: [`12_MaleBuilder_Polish_Deploy_Handoff.md`](12_MaleBuilder_Polish_Deploy_Handoff.md)(직전 정본) · [`13_BugSweep_Findings.md`](13_BugSweep_Findings.md)(전수 버그 스캔 — **branch `claude/wonderful-sanderson-4b10cf`에 있음**, 확정 104건·수정 미착수·종원 승인 대기)
 > **이 문서가 최신 정본.** 이 세션은 ①08-07 잔여 작업 전량 처리·배포와 ②#2~#6 제품 결정 확정으로 구성. 구현은 후속 세션(§E 블록 분할).
 
+> **구현 세션 필독**: 본문은 압축본이다 — 뉘앙스·주의사항은 [14_assets/impl_spec_details.md](14_assets/impl_spec_details.md)(상세 구현 스펙 부록)에 있다. 각 블록 착수 시 부록 §를 정독하고, 이해한 설계를 요약해 종원 컨펌 후 구현할 것.
+
 ---
 
 ## A. 08-07 처리·배포 완료분 (전량 프로드 라이브)
