@@ -65,3 +65,30 @@
 - 메인 워킹트리는 08-09 현재 feature/diorama 체크아웃 상태 — master 작업 시 브랜치 복귀 필요(이 문서는 임시 워크트리로 커밋됨).
 - 프로드: ECS rev 45(08-07 코드 배포·씬 일러 활성), Vercel 동기(리플레이 라이브 검증 완료 — SPA 하드 리프레시 필요했음). 로컬 IntelliJ 런 설정에 SCENE_RUNPOD_ENDPOINT_ID 존재.
 - 리뷰에서 수용한 트레이드오프: 씬당 1회 심의 '전송 시작' 발제(턴 실패 시 409 안내→재잠금 자가치유·무과금) — ChatPage/V2 주석 참조.
+
+## G. 레거시 문법 전수 감사 — 확정 처분 (2026-08-09, 종원 전부 승인)
+
+> #6의 본질(잊힌 미연시 문법 레거시 탐색)에 따른 3방향 감사(백엔드/프론트/시드) 결과 21건. 기결정(엔딩·업적·수집품·로비)은 제외. 워크플로 wf_e1193031-9f9.
+
+### 🔴 삭제 (블록 D 확장)
+1. **V1 승급 '시험' 이벤트** — 실패→강등이 무한 관계 시뮬과 정면 충돌, 코드 자체가 @Deprecated 예고. V2 이중 게이트 패턴(자격 활성+LLM 자율 발동)을 SANDBOX에 이식하고 시험·mood_score·디렉터 모드 결합 제거. 승급 세리머니 연출은 유지. (ChatRoom promotion* 6필드, ChatStreamService:853-965, buildPromotionBlock)
+2. **V1 STORY 모드 트랙** — 진입 전멸(로비 500+데드 체인), V2 완전 대체. ChatPage=SANDBOX 전용 선언, isStoryMode 분기·에너지 2배 계산 제거, 잔존 V1 STORY 방은 마이그레이션/읽기 전용.
+3. **로고 5회 클릭 베타 이스터에그** — P0 착취. 프론트 트리거+`/users/beta-activate` 백엔드 세트 제거(또는 화이트리스트).
+4. **데드 코드 일괄** — LobbyTabShell·characters 카루셀+ModeSelectOverlay 체인·TheaterDoorway import·capabilities.js·사문 서비스 4종(NarratorService/NarratorPromptAssembler/SandboxPromptAssembler/AffectionAsyncListener)·죽은 시드 필드 3종(background/behavioral-anchors/tts-voice-id)·ChatModePolicy.getFixedBgm(@Deprecated)·엔딩 시드 필드(엔딩 오프로 사문).
+
+### ⚠ 게이트오프·축소 (블록 D 확장)
+5. **복장·장소 관계 해금** — 해금 게이트 오프, 복장은 '상황 연출 변수'로만 유지(씬 outfit·리플레이 영속과 정합). UGC 복장 1종이라 해금 문법이 공식 4캐릭 전용 no-op였음(플랫폼 비대칭). 해금 컬럼 6종·프롬프트 LOCK 규칙 정리, V1 장소 enum은 동적 배경으로 단계적 일원화.
+6. **레거시 캐릭터 일러 트랙**(ModelsLab CG) — 씬 일러로 일원화·동결·신규 노출 중단. 갤러리는 씬 일러 열람처로 개편(빈 갤러리 방치 금지). 승급 자동 CG 트리거는 #1과 함께 제거.
+7. **V1 디렉터 잔여** — INTERLUDE/TRANSITION/AWAY 소비 경로(생산자 소멸)·activeDirector* 필드 정리. '시간 넘기기'만 페이싱 도구로 존치.
+
+### 🔄 재해석 (대부분 블록 B — 인식 렌즈 개편에 흡수)
+8. BPM 게이지 — 렌즈의 감정 신호로 흡수 or 프롬프트 블록 드랍(토큰 회수), 렌즈 설계에서 결정.
+9. 바이오메트릭 스탯 HUD — 수치 게이지→서술형/렌즈형 표현 개편, 시크릿 스탯(음란·타락) 존속은 그때 결정.
+10. 8축 스탯 — 유지하되 소프트캡화(만렙=엔딩 결합은 기결정 해제), 동적 관계 태그는 렌즈 원료 승격.
+11. 속마음 1E 해금 — 유지+렌즈 수익 포인트로 승격('1회 영구 공개' 모델 재검토 포함).
+12. 인트로 '문' 영상 — UGC 전부 동일 폴백이라 플랫폼 스케일 충돌. 경량 페이드/로딩 연출로 교체(오프닝 레이턴시 마스킹 보존). (블록 A)
+13. 디렉터 3분기 카드 — 골격 유지, 고정 3톤→맥락 가변 제안 + energyCost 서버 판정(docs/13 P0 픽스 세트).
+14. TimeOfDay(3값)/DayPart(5단계) 이중 체계 — 통일.
+
+### ✅ 유지 확정 (미연시 유래지만 정합)
+씬 큐·타자기(정체성의 몸체 — 속도/즉시표시 옵션만 추가 권장) · 동적 BGM(BgmMode) · 제안형 선택지(dialogue_options) · RLHF 평가(UGC 랭킹·추천 신호로 확장 여지) · 극장 세이브 슬롯(극장 전용 문법 격리) · 시크릿 해금 플로우(규제 요건+핵심 BM — 성인인증 404 수리 전제) · charactersm.yml 성인 변형 시드는 시크릿 개편 때 재론.
