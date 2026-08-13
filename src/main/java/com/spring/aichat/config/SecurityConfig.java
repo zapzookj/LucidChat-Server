@@ -102,9 +102,12 @@ public class SecurityConfig {
         //   로그아웃된 토큰(BL:{jti}) 차단. 인증을 거치기 전이라 무효 토큰 부담 최소화.
         http.addFilterBefore(jwtBlacklistFilter, BearerTokenAuthenticationFilter.class);
 
-        // [블록 A 게스트] 비인증 공개 탐색 IP 레이트리밋 — Authorization 부재 GET만 대상이라
-        //   인증 트래픽엔 무비용. 위조 Bearer 우회는 BearerTokenAuthenticationFilter의 401이 막는다.
-        http.addFilterBefore(guestBrowseRateLimitFilter, BearerTokenAuthenticationFilter.class);
+        // [블록 A 게스트] 비인증 공개 탐색 IP 레이트리밋 — Bearer 인증 *뒤*에 배치.
+        //   판정을 헤더 문자열이 아닌 SecurityContext 인증 여부로 하기 위함이다:
+        //   유효 토큰=인증 컨텍스트 존재→면제, 무효 Bearer=401로 도달 불가,
+        //   비-Bearer 임의 헤더(Authorization: guest 등)=익명→리밋 적용.
+        //   (before 배치+헤더 존재 판정이던 초기 구현은 비-Bearer 헤더 한 줄로 전면 우회됐다 — 적대적 리뷰 P1.)
+        http.addFilterAfter(guestBrowseRateLimitFilter, BearerTokenAuthenticationFilter.class);
 
         // 예외 처리 (401 에러 시 JSON 응답)
         http.exceptionHandling(ex -> ex

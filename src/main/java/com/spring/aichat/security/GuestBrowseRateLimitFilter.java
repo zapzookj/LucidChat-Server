@@ -8,6 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -21,11 +24,17 @@ import java.util.List;
  * 요청을 IP 단위로 제한한다(스크래핑 방어 — docs/14 부록 §3 보안 3원칙 ③).
  *
  * <ul>
- *   <li>대상: {@link #GUEST_BROWSE_PREFIXES} 프리픽스의 GET 요청 중 Authorization 부재분만.
- *       위조 Bearer로 우회 불가 — permitAll 경로여도 유효하지 않은 Bearer는
- *       BearerTokenAuthenticationFilter가 401로 쳐낸다.</li>
- *   <li>한도: IP당 {@value #MAX_REQUESTS}회 / {@value #WINDOW_SECONDS}초 (fixed window).
- *       피드+프로필 탐색이 화면당 2~4콜이므로 정상 브라우징엔 넉넉하고 크롤러엔 유효한 수준.</li>
+ *   <li>대상: {@link #GUEST_BROWSE_PREFIXES} 프리픽스의 GET 요청 중 <b>실제 인증 컨텍스트가
+ *       없는(익명)</b> 요청만. 판정은 헤더 문자열이 아니라 {@link SecurityContextHolder}로 한다 —
+ *       이 필터는 {@code BearerTokenAuthenticationFilter} <b>뒤</b>에 배치되므로, 유효 토큰은
+ *       이미 인증 컨텍스트가 채워져 있고 무효 Bearer는 401로 이 필터에 도달조차 못 한다.
+ *       (구현 초기 결함: "Authorization 헤더 존재=면제"로 판정 → {@code Authorization: guest} 같은
+ *       비-Bearer 스킴은 Spring이 인증도 401도 하지 않고 익명 통과시키므로 정적 헤더 한 줄로
+ *       레이트리밋이 통째로 우회됐다. 적대적 리뷰 P1.)</li>
+ *   <li>한도: 일반 탐색 IP당 {@value #BROWSE_MAX}회 / {@value #WINDOW_SECONDS}초, 프로필 열거
+ *       경로는 별도 버킷 {@value #PROFILE_MAX}회 / {@value #WINDOW_SECONDS}초(순차 id 카탈로그
+ *       수집 방어). fixed-window 경계 더블링은 수용된 트레이드오프(sliding window는 공용
+ *       {@link ApiRateLimiter} 개편 필요 — 별도 과제).</li>
  *   <li>Redis 장애 시 fail-open — 기존 {@link ApiRateLimiter} 정책 그대로(가용성 우선).</li>
  * </ul>
  */
@@ -34,8 +43,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GuestBrowseRateLimitFilter extends OncePerRequestFilter {
 
-    private static final int MAX_REQUESTS = 120;
+    private static final int BROWSE_MAX = 120;
+    private static final int PROFILE_MAX = 40;   // 순차 id 프로필 열거 방어 — 일반 탐색보다 타이트
     private static final int WINDOW_SECONDS = 60;
+
+    /** 프로필 열거 경로 — /lobby/characters/{id}/profile. 별도 버킷·저한도. */
+    private static final String PROFILE_PATH_MARK = "/profile";
+    private static final String CHARACTERS_PREFIX = "/api/v1/lobby/characters/";
 
     /** SecurityConfig의 게스트 permitAll 목록과 반드시 동기 유지할 것. */
     private static final List<String> GUEST_BROWSE_PREFIXES = List.of(
@@ -52,17 +66,29 @@ public class GuestBrowseRateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if (!"GET".equalsIgnoreCase(request.getMethod())) return true;
-        String auth = request.getHeader("Authorization");
-        if (auth != null && !auth.isBlank()) return true; // 인증 요청 — 게스트 리밋 비대상
+        if (isAuthenticated()) return true; // 실제 인증 사용자 — 게스트 리밋 비대상(username-keyed 별도 리밋)
         String uri = request.getRequestURI();
         return GUEST_BROWSE_PREFIXES.stream().noneMatch(uri::startsWith);
+    }
+
+    /** SecurityContext에 익명이 아닌 인증 주체가 있는가(= 유효 토큰 통과). */
+    private static boolean isAuthenticated() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null
+            && auth.isAuthenticated()
+            && !(auth instanceof AnonymousAuthenticationToken);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String clientIp = ClientIpResolver.resolve(request);
-        if (apiRateLimiter.isRateLimited("guest_browse", clientIp, MAX_REQUESTS, WINDOW_SECONDS)) {
+        String uri = request.getRequestURI();
+        boolean profileEnum = uri.startsWith(CHARACTERS_PREFIX) && uri.endsWith(PROFILE_PATH_MARK);
+        String bucket = profileEnum ? "guest_profile" : "guest_browse";
+        int max = profileEnum ? PROFILE_MAX : BROWSE_MAX;
+
+        if (apiRateLimiter.isRateLimited(bucket, clientIp, max, WINDOW_SECONDS)) {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
