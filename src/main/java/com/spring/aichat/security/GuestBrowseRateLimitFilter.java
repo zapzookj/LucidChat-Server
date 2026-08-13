@@ -67,8 +67,8 @@ public class GuestBrowseRateLimitFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if (!"GET".equalsIgnoreCase(request.getMethod())) return true;
         if (isAuthenticated()) return true; // 실제 인증 사용자 — 게스트 리밋 비대상(username-keyed 별도 리밋)
-        String uri = request.getRequestURI();
-        return GUEST_BROWSE_PREFIXES.stream().noneMatch(uri::startsWith);
+        String path = decodedPath(request);
+        return GUEST_BROWSE_PREFIXES.stream().noneMatch(path::startsWith);
     }
 
     /** SecurityContext에 익명이 아닌 인증 주체가 있는가(= 유효 토큰 통과). */
@@ -79,11 +79,28 @@ public class GuestBrowseRateLimitFilter extends OncePerRequestFilter {
             && !(auth instanceof AnonymousAuthenticationToken);
     }
 
+    /**
+     * [적대적 리뷰 P1] 프리픽스 판정을 <b>디코딩</b> 경로로 한다.
+     * getRequestURI()는 raw(미디코딩)라 {@code /api/v1/%6Cobby/feed}(=%6C→'l')가 프리픽스 매칭을
+     * 비껴가 필터가 통째로 스킵됐다 — 그러나 permitAll 매처와 MVC 핸들러는 디코딩 경로로 매칭하므로
+     * 정상 서빙됐다(레이트리밋 무제한 우회). StrictHttpFirewall이 %2F·%25를 이미 차단하므로
+     * 단일 디코딩은 경로 구분자 주입 위험 없이 라우터와 동일한 경로 표현을 얻는다.
+     */
+    private static String decodedPath(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        if (uri.indexOf('%') < 0) return uri; // 인코딩 없음 — 디코딩 불필요
+        try {
+            return java.net.URLDecoder.decode(uri, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (RuntimeException e) {
+            return uri; // 디코딩 실패 시 raw로 폴백(보수적으로 리밋 대상 판정)
+        }
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String clientIp = ClientIpResolver.resolve(request);
-        String uri = request.getRequestURI();
+        String uri = decodedPath(request);
         boolean profileEnum = uri.startsWith(CHARACTERS_PREFIX) && uri.endsWith(PROFILE_PATH_MARK);
         String bucket = profileEnum ? "guest_profile" : "guest_browse";
         int max = profileEnum ? PROFILE_MAX : BROWSE_MAX;

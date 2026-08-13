@@ -242,6 +242,11 @@ public class LobbyService {
      * [블록 A 게스트] 비로그인 프로필 조회 — 소유자 판정 없이 공개분만(공식 전체 + PUBLIC UGC).
      * 그 외 404 은닉. 응답 DTO는 회원과 동일({@link CharacterProfileResponse}) — 시크릿 메타·
      * 프롬프트 원문이 원래 실리지 않는 DTO임을 검수 완료(2026-08-13).
+     *
+     * <p>[적대적 리뷰 P2] 단, greetingExcerpt·introTeaser·(profileQuote 미설정 시의) firstGreeting
+     * 폴백은 <b>프롬프트성 텍스트(firstGreeting/introNarration)의 첫 문장 발췌</b>다. docs/14 부록 §3이
+     * firstGreeting을 게스트 금지 필드로 명시하므로, 게스트에게는 이 파생 티저를 <b>제외</b>한다
+     * (회원은 종전대로 발췌 노출 — 로그인 유인 겸 계약 준수). 별도로 authored된 profileQuote는 공개 카피라 유지.
      */
     @Transactional(readOnly = true)
     public CharacterProfileResponse getCharacterProfileForGuest(Long characterId) {
@@ -249,10 +254,14 @@ public class LobbyService {
             .filter(ch -> !ch.isHidden())
             .filter(ch -> !ch.isUgc() || ch.getVisibility().isPubliclyVisible())
             .orElseThrow(() -> new NotFoundException("존재하지 않는 캐릭터입니다. characterId=" + characterId));
-        return toProfileResponse(c);
+        return toProfileResponse(c, true);
     }
 
     private CharacterProfileResponse toProfileResponse(Character c) {
+        return toProfileResponse(c, false);
+    }
+
+    private CharacterProfileResponse toProfileResponse(Character c, boolean guestScope) {
         String worldType = null;
         String worldName = null;
         if (c.getWorldId() != null) {
@@ -271,6 +280,14 @@ public class LobbyService {
                 .orElse(null);
         }
 
+        boolean hasQuote = c.getProfileQuote() != null && !c.getProfileQuote().isBlank();
+        // 게스트: firstGreeting 파생 발췌 제외(부록 §3). authored profileQuote만 유지, 없으면 null.
+        String profileQuote = hasQuote
+            ? c.getProfileQuote()
+            : (guestScope ? null : firstSentence(c.getFirstGreeting()));
+        String introTeaser = guestScope ? null : firstSentence(c.getIntroNarration());
+        String greetingExcerpt = guestScope ? null : firstSentence(c.getFirstGreeting());
+
         return new CharacterProfileResponse(
             c.getId(), c.getName(), c.getSlug(), c.getAge(),
             c.getEffectiveRole(), c.getTagline(),
@@ -278,11 +295,9 @@ public class LobbyService {
             worldType, worldName,
             c.getAppearance(), c.getClothing(),
             c.getHeight(), c.getLikes(), c.getDislikes(), c.getHobby(),
-            (c.getProfileQuote() != null && !c.getProfileQuote().isBlank())
-                ? c.getProfileQuote()
-                : firstSentence(c.getFirstGreeting()),
-            firstSentence(c.getIntroNarration()),
-            firstSentence(c.getFirstGreeting()),
+            profileQuote,
+            introTeaser,
+            greetingExcerpt,
             c.getDefaultImageUrl(), c.getThumbnailUrl(),
             c.isUgc(), creatorNickname,
             c.getDifficultyOrDefault().name()   // [2026-07-31 난이도] 프로필 ★칩

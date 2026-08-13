@@ -119,8 +119,10 @@ public class StoryV2Service {
             ));
 
         // 각 World의 히로인 수 집계 (단일 쿼리)
+        // [적대적 리뷰 P2] !isHidden() 추가 — CreateFlow 히로인 풀(findBy…HiddenFalse…)·게스트 카드와
+        //   카운트를 일치시킨다(hidden 캐릭터가 있으면 카드 숫자만 +1 부풀던 잔존 결함).
         Map<WorldId, Long> heroineCountByWorld = characterRepository.findAll().stream()
-            .filter(c -> c.getWorldId() != null && c.isStoryAvailable())
+            .filter(c -> c.getWorldId() != null && c.isStoryAvailable() && !c.isHidden())
             .collect(Collectors.groupingBy(Character::getWorldId, Collectors.counting()));
 
         return worlds.stream()

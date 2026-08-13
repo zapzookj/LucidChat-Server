@@ -82,6 +82,20 @@ class LobbyServiceGuestTest {
         assertThrows(NotFoundException.class, () -> lobbyService.getCharacterProfileForGuest(3L));
     }
 
+    @Test
+    @DisplayName("[리뷰 P2] 게스트 프로필은 firstGreeting/introNarration 파생 발췌를 노출하지 않는다")
+    void guestProfileStripsPromptDerivedTeasers() {
+        Character pub = ugc(5L, "미아", true, false, 9L); // firstGreeting='greeting', introNarration='intro'
+        when(characterRepository.findById(5L)).thenReturn(Optional.of(pub));
+        when(userRepository.findById(9L)).thenReturn(Optional.of(mock(User.class)));
+
+        var p = lobbyService.getCharacterProfileForGuest(5L);
+        assertNull(p.greetingExcerpt(), "firstGreeting 발췌는 게스트에 제외(부록 §3)");
+        assertNull(p.introTeaser(), "introNarration 발췌는 게스트에 제외");
+        // authored profileQuote('quote')는 공개 카피라 유지
+        assertEquals("quote", p.profileQuote());
+    }
+
     // ━━━━━━━━━━ 홈 피드 구성 ━━━━━━━━━━
 
     @Test
@@ -119,15 +133,43 @@ class LobbyServiceGuestTest {
         "hasexistingroom", "existingroomid", "isadult", "isadultverified",
         "reviewstatus", "reviewnote", "visibility");
 
+    /**
+     * 게스트에게 실제 직렬화되는 전체 DTO 표면 — LobbyPublicDtos(재귀) + 재사용/공유 DTO.
+     * [적대적 리뷰 P2] 계약 테스트가 LobbyPublicDtos만 스캔하면, 게스트 경로가 재사용하는
+     * CharacterProfileResponse·CharacterResponse·ExploreItem·(GuestTheaterWorldCard가 중첩하는)
+     * HeroineSummary에 금지 필드가 추가돼도 green으로 통과하는 사각지대가 생긴다.
+     */
+    private static final Set<Class<?>> GUEST_SERIALIZED_ROOTS = Set.of(
+        com.spring.aichat.dto.lobby.CharacterProfileResponse.class,   // GET /lobby/characters/{id}/profile (guest)
+        com.spring.aichat.dto.lobby.CharacterResponse.class,          // GET /lobby/characters
+        com.spring.aichat.dto.ugc.UgcDtos.ExploreItem.class,          // GET /ugc/characters/explore
+        com.spring.aichat.dto.theater.TheaterResponses.HeroineSummary.class); // GuestTheaterWorldCard.heroines
+
     @Test
-    @DisplayName("LobbyPublicDtos의 모든 레코드는 시크릿 메타·프롬프트성·유저 종속 필드를 갖지 않는다")
+    @DisplayName("게스트 직렬화 표면(LobbyPublicDtos 재귀 + 재사용 DTO) 전체가 금지 필드를 갖지 않는다")
     void guestDtosCarryNoForbiddenFields() {
+        java.util.Set<Class<?>> visited = new java.util.HashSet<>();
+        java.util.Deque<Class<?>> queue = new java.util.ArrayDeque<>();
         for (Class<?> nested : LobbyPublicDtos.class.getDeclaredClasses()) {
-            if (!nested.isRecord()) continue;
-            for (RecordComponent rc : nested.getRecordComponents()) {
+            if (nested.isRecord()) queue.add(nested);
+        }
+        queue.addAll(GUEST_SERIALIZED_ROOTS);
+
+        while (!queue.isEmpty()) {
+            Class<?> type = queue.poll();
+            if (type == null || !type.isRecord() || !visited.add(type)) continue;
+            for (RecordComponent rc : type.getRecordComponents()) {
                 String name = rc.getName().toLowerCase(Locale.ROOT);
                 assertFalse(FORBIDDEN_COMPONENTS.contains(name),
-                    nested.getSimpleName() + "." + rc.getName() + " — 게스트 스코프 계약 위반");
+                    type.getSimpleName() + "." + rc.getName() + " — 게스트 스코프 계약 위반");
+                // 중첩 레코드 재귀 (List<X> 등 제네릭 원소도 추적)
+                queue.add(rc.getType());
+                java.lang.reflect.Type gt = rc.getGenericType();
+                if (gt instanceof java.lang.reflect.ParameterizedType pt) {
+                    for (java.lang.reflect.Type arg : pt.getActualTypeArguments()) {
+                        if (arg instanceof Class<?> ac) queue.add(ac);
+                    }
+                }
             }
         }
     }

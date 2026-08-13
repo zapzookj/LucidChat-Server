@@ -94,6 +94,26 @@ class GuestBrowseRateLimitFilterTest {
     }
 
     @Test
+    @DisplayName("[P1 회귀] 퍼센트 인코딩 경로도 디코딩해 리밋 대상으로 판정한다 (%6Cobby→lobby)")
+    void percentEncodedPathIsDecoded() {
+        // raw URI가 프리픽스를 비껴가도 permitAll·핸들러는 디코딩 경로로 서빙하므로 우회 불가해야 함
+        assertFalse(filter.shouldNotFilter(get("/api/v1/%6Cobby/feed")));
+        assertFalse(filter.shouldNotFilter(get("/api/v1/lobby/characters/17/%70rofile")));
+    }
+
+    @Test
+    @DisplayName("[P1 회귀] 인코딩된 프로필 경로도 저한도 guest_profile 버킷으로 판정")
+    void percentEncodedProfileUsesProfileBucket() throws ServletException, IOException {
+        when(limiter.isRateLimited(anyString(), anyString(), anyInt(), anyInt())).thenReturn(false);
+        MockHttpServletRequest req = get("/api/v1/lobby/characters/17/%70rofile");
+        req.setRemoteAddr("203.0.113.9");
+
+        filter.doFilterInternal(req, new MockHttpServletResponse(), new MockFilterChain());
+
+        verify(limiter).isRateLimited(eq("guest_profile"), eq("203.0.113.9"), eq(40), eq(60));
+    }
+
+    @Test
     @DisplayName("프로필 열거 경로는 별도 저한도 버킷(guest_profile)을 쓴다")
     void profileEnumerationUsesTighterBucket() throws ServletException, IOException {
         when(limiter.isRateLimited(anyString(), anyString(), anyInt(), anyInt())).thenReturn(false);
