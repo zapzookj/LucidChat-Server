@@ -37,13 +37,23 @@ public class TheaterLobbyController {
     //  세계관 목록
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [블록 A 게스트] permitAll — 익명이면 시크릿 메타(secretAllowed) 없는
+     * 게스트 카드로 응답한다 (게스트=비성인 취급, docs/14 부록 §3).
+     */
     @GetMapping("/lobby/worlds")
-    public List<WorldCard> getWorlds() {
+    public List<?> getWorlds(Authentication authentication) {
+        if (authentication == null) {
+            return theaterLobbyService.getGuestWorldCards();
+        }
         return theaterLobbyService.getWorldCards();
     }
 
     @GetMapping("/lobby/worlds/{worldId}")
-    public WorldCard getWorld(@PathVariable String worldId) {
+    public Object getWorld(@PathVariable String worldId, Authentication authentication) {
+        if (authentication == null) {
+            return theaterLobbyService.getGuestWorldCard(worldId);
+        }
         return theaterLobbyService.getWorldCard(worldId);
     }
 

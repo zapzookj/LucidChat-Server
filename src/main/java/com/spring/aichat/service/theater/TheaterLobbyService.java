@@ -194,6 +194,26 @@ public class TheaterLobbyService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  1-b. [블록 A 게스트] 시크릿 메타 없는 게스트 카드 변형
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 게스트용 월드 카드 — secretAllowed(시크릿 수위 메타)를 필드 자체로 갖지 않는다. */
+    public List<com.spring.aichat.dto.lobby.LobbyPublicDtos.GuestTheaterWorldCard> getGuestWorldCards() {
+        return getWorldCards().stream().map(TheaterLobbyService::toGuestCard).toList();
+    }
+
+    public com.spring.aichat.dto.lobby.LobbyPublicDtos.GuestTheaterWorldCard getGuestWorldCard(String worldIdStr) {
+        return toGuestCard(getWorldCard(worldIdStr));
+    }
+
+    private static com.spring.aichat.dto.lobby.LobbyPublicDtos.GuestTheaterWorldCard toGuestCard(WorldCard card) {
+        return new com.spring.aichat.dto.lobby.LobbyPublicDtos.GuestTheaterWorldCard(
+            card.id(), card.displayName(), card.tagline(), card.description(),
+            card.heroImageUrl(), card.thumbnailUrl(), card.moodKeywords(),
+            card.heroineCount(), card.heroines());
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  2. 유저의 Theater 세션 목록
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

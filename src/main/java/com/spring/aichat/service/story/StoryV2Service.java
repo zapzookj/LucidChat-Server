@@ -18,6 +18,7 @@ import com.spring.aichat.domain.memory.MemorySummaryRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.domain.world.*;
+import com.spring.aichat.dto.lobby.LobbyPublicDtos;
 import com.spring.aichat.dto.story.StoryV2Requests.CreateStoryV2Request;
 import com.spring.aichat.dto.story.StoryV2Requests.ResetStoryRequest;
 import com.spring.aichat.dto.story.StoryV2Responses.*;
@@ -141,6 +142,107 @@ public class StoryV2Service {
                 );
             })
             .toList();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [1-b] [블록 A 게스트] 공개 월드 카드 — 시크릿 메타·유저 종속 필드 없는 스코프
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 게스트용 공식 월드 카드 — {@link #listWorlds(User)}의 비로그인 변형.
+     * secretAllowed(시크릿 수위 메타)·hasExistingRoom·existingRoomId를 <b>필드 자체로 갖지 않는</b>
+     * {@link LobbyPublicDtos.GuestWorldCard}로 반환한다 (게스트=비성인 취급, docs/14 부록 §3).
+     */
+    @Transactional(readOnly = true)
+    public List<LobbyPublicDtos.GuestWorldCard> listWorldsForGuest() {
+        List<World> worlds = worldRepository.findByActiveTrueOrderByDisplayOrderAsc();
+        if (worlds.isEmpty()) return List.of();
+
+        Map<WorldId, Long> heroineCountByWorld = characterRepository.findAll().stream()
+            .filter(c -> c.getWorldId() != null && c.isStoryAvailable() && !c.isHidden())
+            .collect(Collectors.groupingBy(Character::getWorldId, Collectors.counting()));
+
+        return worlds.stream()
+            .map(w -> new LobbyPublicDtos.GuestWorldCard(
+                w.getId().name(),
+                w.getDisplayName(),
+                w.getTagline(),
+                w.getDescription(),
+                w.getHeroImageUrl(),
+                w.getThumbnailUrl(),
+                w.getMoodKeywords(),
+                heroineCountByWorld.getOrDefault(w.getId(), 0L).intValue()
+            ))
+            .toList();
+    }
+
+    /**
+     * 게스트용 UGC 월드 카드 — 검수 APPROVED이고 PUBLIC 히로인이 있는 월드만.
+     * (플레이 자격 정책 {@code WorldViewService.assertUgcPlayable}와 동일 기준 — 목록에 보이는
+     * 월드는 로그인 후 실제로 시작 가능하다.) 게이트 off면 빈 목록.
+     */
+    @Transactional(readOnly = true)
+    public List<LobbyPublicDtos.GuestWorldCard> listPublicUgcWorldsForGuest() {
+        if (!ugcModeProperties.storyOn()) return List.of();
+
+        return ugcWorldRepository
+            .findByReviewStatusOrderByIdDesc(com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED).stream()
+            .map(w -> {
+                long publicHeroines = characterRepository
+                    .findByUgcWorldIdAndStoryAvailableTrueAndHiddenFalseOrderByIdAsc(w.getId()).stream()
+                    .filter(c -> c.getVisibility().isPubliclyVisible())
+                    .count();
+                if (publicHeroines == 0) return null;
+                return new LobbyPublicDtos.GuestWorldCard(
+                    com.spring.aichat.domain.world.WorldRef.ofUgc(w.getId()).key(),
+                    w.getName(),
+                    w.getIntro(),
+                    w.getIntro(),            // 카드 설명은 intro 재사용 — lore는 프롬프트 전용(게스트 비노출)
+                    w.getThumbnailUrl(),
+                    w.getThumbnailUrl(),
+                    w.getMoodTags(),
+                    (int) publicHeroines
+                );
+            })
+            .filter(java.util.Objects::nonNull)
+            .toList();
+    }
+
+    /**
+     * [블록 A] 회원용 세계관 탭 UGC 카드 — 내 월드(전체) + 타인의 APPROVED·플레이 가능 월드.
+     * 타인 월드 진입은 {@code assertUgcPlayable}(소유 또는 APPROVED)이 이미 허용하는 경로라
+     * 목록만 새로 연 것이다(docs/14 §B — '새로운 만남 UGC 합류'의 세계관 탭 편입).
+     */
+    @Transactional(readOnly = true)
+    public List<WorldCardResponse> listUgcWorldsCombined(User user) {
+        if (!ugcModeProperties.storyOn()) return List.of();
+
+        List<WorldCardResponse> own = listUgcStoryWorlds(user);
+        java.util.Set<String> ownKeys = own.stream()
+            .map(WorldCardResponse::worldId)
+            .collect(Collectors.toSet());
+
+        List<WorldCardResponse> publicOthers = ugcWorldRepository
+            .findByReviewStatusOrderByIdDesc(com.spring.aichat.domain.ugc.WorldReviewStatus.APPROVED).stream()
+            .filter(w -> !w.isOwnedBy(user.getId()))
+            .map(w -> {
+                List<Character> heroines = ugcHeroinePool(w.getId(), user);
+                if (heroines.isEmpty()) return null;
+                WorldView view = worldViewService.resolve(
+                    com.spring.aichat.domain.world.WorldRef.ofUgc(w.getId()));
+                ChatRoom existing = chatRoomRepository
+                    .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), w.getId(), ChatMode.STORY)
+                    .orElse(null);
+                return toUgcWorldCard(view, heroines.size(), existing);
+            })
+            .filter(java.util.Objects::nonNull)
+            .filter(card -> !ownKeys.contains(card.worldId()))
+            .toList();
+
+        List<WorldCardResponse> combined = new java.util.ArrayList<>(own.size() + publicOthers.size());
+        combined.addAll(own);
+        combined.addAll(publicOthers);
+        return combined;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

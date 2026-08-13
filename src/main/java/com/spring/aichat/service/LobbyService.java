@@ -13,6 +13,7 @@ import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.lobby.CharacterProfileResponse;
 import com.spring.aichat.dto.lobby.CharacterResponse;
 import com.spring.aichat.dto.lobby.CreateRoomRequest;
+import com.spring.aichat.dto.lobby.LobbyPublicDtos;
 import com.spring.aichat.dto.lobby.RoomSummaryResponse;
 import com.spring.aichat.exception.BadRequestException;
 import com.spring.aichat.exception.NotFoundException;
@@ -50,10 +51,13 @@ public class LobbyService {
      *
      * <p>[UGC v1] 공식 캐릭터만 — UGC는 스튜디오 탭(/ugc/characters/mine·explore) 전용.
      * PRIVATE UGC가 공용 로비에 노출되는 것을 여기서 차단한다.
+     * <p>[블록 A] hidden 필터 추가 — 관리자 숨김 캐릭터가 목록에 노출되던 결함 교정
+     * (프로필 조회는 이미 필터함). 게스트 개방의 선행 조건.
      */
     public List<CharacterResponse> getAllCharacters() {
         return characterRepository.findAll().stream()
             .filter(c -> !c.isUgc())
+            .filter(c -> !c.isHidden())
             .map(this::toCharacterResponse)
             .toList();
     }
@@ -69,9 +73,78 @@ public class LobbyService {
         }
         return characterRepository.findAll().stream()
             .filter(c -> !c.isUgc()) // [UGC v1] 공식 전용
+            .filter(c -> !c.isHidden()) // [블록 A] 숨김 캐릭터 노출 차단
             .filter(c -> c.getWorldId() != null && c.getWorldId().name().equals(worldId))
             .map(this::toCharacterResponse)
             .toList();
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [블록 A] 홈 피드 — 공식 + PUBLIC UGC 통합 (회원·게스트 공용)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 피드의 UGC 구간 상한 — 공식 큐레이션 뒤에 붙는 최신 PUBLIC UGC 수. */
+    private static final int FEED_UGC_LIMIT = 60;
+
+    /**
+     * 홈 탭 캐릭터 피드 — 공식(큐레이션 순 = 시드 id 순) 먼저, 이어서 PUBLIC UGC 최신순.
+     * (2026-08-13 종원 확정 정렬 — 인기 지표 도입 전까지의 기본값.)
+     *
+     * <p>게스트에게 그대로 직렬화되는 응답 — 필드 구성은 {@link LobbyPublicDtos.FeedItem}의
+     * 스코프 계약을 따른다(시크릿 메타·프롬프트성 필드 유입 금지).
+     */
+    @Transactional(readOnly = true)
+    public LobbyPublicDtos.FeedResponse getHomeFeed() {
+        List<Character> all = characterRepository.findAll();
+
+        List<Character> officials = all.stream()
+            .filter(c -> !c.isUgc())
+            .filter(c -> !c.isHidden())
+            .sorted(java.util.Comparator.comparing(Character::getId))
+            .toList();
+
+        List<Character> publicUgc = all.stream()
+            .filter(Character::isUgc)
+            .filter(c -> !c.isHidden())
+            .filter(c -> c.getVisibility().isPubliclyVisible())
+            .sorted(java.util.Comparator.comparing(Character::getId).reversed())
+            .limit(FEED_UGC_LIMIT)
+            .toList();
+
+        // 크리에이터 닉네임 배치 해석 (UgcCharacterService.explore 관례와 동일)
+        java.util.Set<Long> ownerIds = publicUgc.stream()
+            .map(Character::getOwnerUserId)
+            .filter(java.util.Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        java.util.Map<Long, String> nicknameByOwner = userRepository.findAllById(ownerIds).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                User::getId,
+                u -> (u.getNickname() != null && !u.getNickname().isBlank()) ? u.getNickname() : "크리에이터"));
+
+        List<LobbyPublicDtos.FeedItem> items = new java.util.ArrayList<>(officials.size() + publicUgc.size());
+        for (Character c : officials) {
+            items.add(toFeedItem(c, null));
+        }
+        for (Character c : publicUgc) {
+            items.add(toFeedItem(c, nicknameByOwner.getOrDefault(c.getOwnerUserId(), "크리에이터")));
+        }
+        return new LobbyPublicDtos.FeedResponse(items);
+    }
+
+    private LobbyPublicDtos.FeedItem toFeedItem(Character c, String creatorNickname) {
+        return new LobbyPublicDtos.FeedItem(
+            c.getId(),
+            c.getName(),
+            c.getSlug(),
+            c.getTagline(),
+            c.getThumbnailUrl(),
+            c.getDefaultImageUrl(),
+            c.getDifficultyOrDefault().name(),
+            c.getGenderOrDefault().name(),
+            c.isUgc(),
+            creatorNickname,
+            c.getWorldId() != null ? c.getWorldId().name() : null
+        );
     }
 
     /**
@@ -162,7 +235,24 @@ public class LobbyService {
             .filter(ch -> !ch.isHidden())
             .filter(ch -> ch.isAccessibleBy(user.getId()))
             .orElseThrow(() -> new NotFoundException("존재하지 않는 캐릭터입니다. characterId=" + characterId));
+        return toProfileResponse(c);
+    }
 
+    /**
+     * [블록 A 게스트] 비로그인 프로필 조회 — 소유자 판정 없이 공개분만(공식 전체 + PUBLIC UGC).
+     * 그 외 404 은닉. 응답 DTO는 회원과 동일({@link CharacterProfileResponse}) — 시크릿 메타·
+     * 프롬프트 원문이 원래 실리지 않는 DTO임을 검수 완료(2026-08-13).
+     */
+    @Transactional(readOnly = true)
+    public CharacterProfileResponse getCharacterProfileForGuest(Long characterId) {
+        Character c = characterRepository.findById(characterId)
+            .filter(ch -> !ch.isHidden())
+            .filter(ch -> !ch.isUgc() || ch.getVisibility().isPubliclyVisible())
+            .orElseThrow(() -> new NotFoundException("존재하지 않는 캐릭터입니다. characterId=" + characterId));
+        return toProfileResponse(c);
+    }
+
+    private CharacterProfileResponse toProfileResponse(Character c) {
         String worldType = null;
         String worldName = null;
         if (c.getWorldId() != null) {

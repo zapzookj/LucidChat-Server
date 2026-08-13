@@ -9,6 +9,9 @@ public interface UgcWorldRepository extends JpaRepository<UgcWorld, Long> {
 
     List<UgcWorld> findByOwnerUserIdOrderByIdDesc(Long ownerUserId);
 
+    /** [블록 A] 세계관 탭 공개 목록 — 검수 승인 월드 (게스트·타인 노출용). */
+    List<UgcWorld> findByReviewStatusOrderByIdDesc(WorldReviewStatus reviewStatus);
+
     /** 소유권 동시 검증 조회 — 타인 소유는 404 은닉(존재 비노출) 관례. */
     Optional<UgcWorld> findByIdAndOwnerUserId(Long id, Long ownerUserId);
 

@@ -1,10 +1,12 @@
 package com.spring.aichat.config;
 
+import com.spring.aichat.security.GuestBrowseRateLimitFilter;
 import com.spring.aichat.security.JwtBlacklistFilter;
 import com.spring.aichat.service.auth.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -37,6 +39,7 @@ public class SecurityConfig {
 
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final JwtBlacklistFilter jwtBlacklistFilter;
+    private final GuestBrowseRateLimitFilter guestBrowseRateLimitFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -62,6 +65,23 @@ public class SecurityConfig {
                 "/api/v1/webhook/**",
                 "/health"                // 헬스 체크 엔드포인트
             ).permitAll()
+            // [블록 A 게스트 브라우징] 탐색 공개 — *개별 검수 완료분만* 나열 (일괄 개방 금지,
+            //   docs/14 부록 §3). 각 항목은 (1) 응답 DTO에 시크릿 메타·프롬프트성 필드 부재,
+            //   (2) 컨트롤러의 익명(null Authentication) 분기, (3) GuestBrowseRateLimitFilter
+            //   IP 리밋 커버리지를 확인한 뒤에만 추가한다. 필터의 프리픽스 목록과 동기 유지.
+            //   주의: /api/v1/notices는 published 미검사 결함(docs/13 B-12)이 남아 있어
+            //   버그 픽스 세션 전까지 게스트 개방 보류.
+            .requestMatchers(HttpMethod.GET,
+                "/api/v1/lobby/characters",              // 캐릭터 목록 (hidden 필터 검수됨)
+                "/api/v1/lobby/characters/*/profile",    // 프로필 (게스트 분기 — PUBLIC만)
+                "/api/v1/lobby/feed",                    // 홈 피드 (게스트 안전 DTO)
+                "/api/v1/lobby/worlds",                  // 스토리 월드 (게스트 카드 — secretAllowed 제외)
+                "/api/v1/lobby/worlds/ugc",              // 승인 UGC 월드 (게스트 카드)
+                "/api/v1/theater/lobby/worlds",          // 극장 월드 (게스트 카드 — secretAllowed 제외)
+                "/api/v1/theater/lobby/worlds/*",
+                "/api/v1/ugc/characters/explore",        // UGC 탐색 (Authentication 미사용·DTO 검수됨)
+                "/api/v1/faq"                            // 게시된 FAQ만 반환 (publicList)
+            ).permitAll()
             // [Phase 6] 백오피스 — 별도 admin SPA에서 호출. ROLE_ADMIN 만 접근.
             //   authorityPrefix="" + role 클레임이 "ROLE_ADMIN" 문자열이라 hasRole("ADMIN")이 정확히 매칭됨.
             .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
@@ -81,6 +101,10 @@ public class SecurityConfig {
         // [Phase6/Tier3 / C-2] 토큰 블랙리스트 필터 — Bearer 인증 *이전*에 적용.
         //   로그아웃된 토큰(BL:{jti}) 차단. 인증을 거치기 전이라 무효 토큰 부담 최소화.
         http.addFilterBefore(jwtBlacklistFilter, BearerTokenAuthenticationFilter.class);
+
+        // [블록 A 게스트] 비인증 공개 탐색 IP 레이트리밋 — Authorization 부재 GET만 대상이라
+        //   인증 트래픽엔 무비용. 위조 Bearer 우회는 BearerTokenAuthenticationFilter의 401이 막는다.
+        http.addFilterBefore(guestBrowseRateLimitFilter, BearerTokenAuthenticationFilter.class);
 
         // 예외 처리 (401 에러 시 JSON 응답)
         http.exceptionHandling(ex -> ex

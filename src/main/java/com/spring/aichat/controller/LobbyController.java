@@ -5,8 +5,8 @@ import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.lobby.CharacterProfileResponse;
 import com.spring.aichat.dto.lobby.CharacterResponse;
 import com.spring.aichat.dto.lobby.CreateRoomRequest;
+import com.spring.aichat.dto.lobby.LobbyPublicDtos;
 import com.spring.aichat.dto.lobby.RoomSummaryResponse;
-import com.spring.aichat.dto.story.StoryV2Responses.WorldCardResponse;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.service.LobbyService;
 import com.spring.aichat.service.story.StoryV2Service;
@@ -50,12 +50,26 @@ public class LobbyController {
     }
 
     /**
+     * [블록 A] 홈 탭 캐릭터 피드 — 공식(큐레이션 순) + PUBLIC UGC(최신순), 배지 필드 포함.
+     * 게스트 공개(permitAll) — 응답은 {@code LobbyPublicDtos.FeedItem} 스코프 계약을 따른다.
+     */
+    @GetMapping("/feed")
+    public LobbyPublicDtos.FeedResponse getFeed() {
+        return lobbyService.getHomeFeed();
+    }
+
+    /**
      * [2026-07-22 프로필 뷰] 몰입형 캐릭터 프로필 — 카드 클릭 → 프로필 → 대화 플로우의 2단계.
      * 공개 캐릭터 전체 + 비공개는 소유자만 (그 외 404 은닉).
+     * <p>[블록 A 게스트] permitAll — 익명이면 Authentication이 null로 주입되므로
+     * 게스트 경로(공개분만)로 분기한다. null 가드 없이는 NPE 500 (전 컨트롤러 공통 함정).
      */
     @GetMapping("/characters/{characterId:\\d+}/profile")
     public CharacterProfileResponse getCharacterProfile(
         @PathVariable Long characterId, Authentication authentication) {
+        if (authentication == null) {
+            return lobbyService.getCharacterProfileForGuest(characterId);
+        }
         return lobbyService.getCharacterProfile(authentication.getName(), characterId);
     }
 
@@ -85,11 +99,35 @@ public class LobbyController {
     /**
      * [V2] 전체 World 목록 — Story V2 카드 그리드용.
      * <p>각 World 카드는 *유저의 기존 V2 방 존재 여부* + *히로인 수*를 함께 포함.
+     * <p>[블록 A 게스트] 익명이면 시크릿 메타(secretAllowed)·유저 종속 필드가 없는
+     * 게스트 카드({@code LobbyPublicDtos.GuestWorldCard})를 반환한다.
      */
     @GetMapping("/worlds")
-    public List<WorldCardResponse> getWorlds(Authentication authentication) {
+    public List<?> getWorlds(Authentication authentication) {
+        if (authentication == null) {
+            return storyV2Service.listWorldsForGuest();
+        }
         User user = userRepository.findByUsername(authentication.getName())
             .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
         return storyV2Service.listWorlds(user);
+    }
+
+    /**
+     * [블록 A] 세계관 탭 — UGC 월드 카드.
+     * <ul>
+     *   <li>회원: 내 월드(전체) + 타인의 승인(APPROVED)·플레이 가능 월드 (docs/14 §B —
+     *       '새로운 만남 UGC 합류'의 세계관 탭 편입)</li>
+     *   <li>게스트: 승인·플레이 가능 월드만, 게스트 카드로</li>
+     * </ul>
+     * UGC 스토리 게이트(ugc.modes.story-enabled) off면 빈 목록.
+     */
+    @GetMapping("/worlds/ugc")
+    public List<?> getUgcWorlds(Authentication authentication) {
+        if (authentication == null) {
+            return storyV2Service.listPublicUgcWorldsForGuest();
+        }
+        User user = userRepository.findByUsername(authentication.getName())
+            .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
+        return storyV2Service.listUgcWorldsCombined(user);
     }
 }
