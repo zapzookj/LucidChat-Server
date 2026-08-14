@@ -280,7 +280,8 @@ public class StoryV2Service {
                 c.getThumbnailUrl(),
                 c.getRole(),
                 c.getAge() != null ? c.getAge() : 0,
-                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80),
+                // 프롬프트 필드(storyBehaviorGuide·personality)는 UI 노출 금지 — 저작 전시 필드만
+                truncate(c.getTagline(), 80),
                 c.getDifficultyOrDefault().name()
             ))
             .toList();
@@ -351,7 +352,8 @@ public class StoryV2Service {
             .map(c -> new WorldHeroineCardResponse(
                 c.getId(), c.getName(), c.getThumbnailUrl(), c.getRole(),
                 c.getAge() != null ? c.getAge() : 0,
-                truncate(firstNonBlank(c.getStoryBehaviorGuide(), c.getPersonality()), 80),
+                // 프롬프트 필드(storyBehaviorGuide·personality)는 UI 노출 금지 — 저작 전시 필드만
+                truncate(c.getTagline(), 80),
                 c.getDifficultyOrDefault().name()))
             .toList();
 
@@ -987,13 +989,6 @@ public class StoryV2Service {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  유틸
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private String firstNonBlank(String... candidates) {
-        for (String s : candidates) {
-            if (s != null && !s.isBlank()) return s;
-        }
-        return "";
-    }
 
     private String truncate(String s, int maxLen) {
         if (s == null) return "";
