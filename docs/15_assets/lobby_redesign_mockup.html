@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUCID 로비 재설계 목업 — 블록 A (docs/15) · R2</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* ============================================================
+   DESIGN TOKENS — 구현 시 tailwind.config.js 로 이식 (정본)
+   타입 스케일(데스크톱): 26 / 22 / 19 / 17 / 15 / 12.5 / 11
+   타입 스케일(모바일):   19 / 15.5 / 14 / 13 / 12.5 / 11 / 10.5(하단탭 전용)
+   간격 리듬: 4 8 12 16 24 32 48 64
+   ============================================================ */
+:root{
+  /* surface */
+  --bg-0:#0b0b10;
+  --bg-glow:radial-gradient(1200px 500px at 50% -8%, rgba(139,110,247,.14), transparent 60%);
+  --card:rgba(255,255,255,.035);
+  --card-hover:rgba(255,255,255,.06);
+  --line:rgba(255,255,255,.09);
+  --line-strong:rgba(255,255,255,.16);
+  --line-accent:rgba(167,139,250,.45);
+  /* text — tx-2는 12.5px 이상에서만 사용(대비 규칙) */
+  --tx-0:#f2f2f7;
+  --tx-1:#b6b6c6;
+  --tx-2:#8b8ba3;
+  --tx-on-accent:#171326;
+  /* accent */
+  --vio:#a78bfa; --sky:#7dd3fc;
+  --grad:linear-gradient(135deg,#c4b5fd 0%,#7dd3fc 100%);
+  --grad-soft:linear-gradient(135deg,rgba(196,181,253,.14),rgba(125,211,252,.10));
+  /* semantic */
+  --easy:#34d399; --normal:#60a5fa; --hard:#fb923c; --extreme:#f87171;
+  --mode-free:#22d3ee; --mode-story:#fbbf24; --mode-theater:#818cf8;
+  /* spacing */
+  --sec-gap:48px; --head-gap:16px; --card-gap:16px;
+  /* type scale */
+  --fs-hero:26px; --fs-page:22px; --fs-title:19px; --fs-sec:17px;
+  --fs-card:15px; --fs-meta:12.5px; --fs-badge:11px;
+  /* radius */
+  --r-s:12px; --r-m:16px; --r-l:20px;
+  --container:1200px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --focus-ring:0 0 0 2px rgba(167,139,250,.55);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg-0);color:var(--tx-0);
+  font-family:"Pretendard Variable",Pretendard,"Noto Sans KR",system-ui,sans-serif;
+  font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+a{color:inherit}
+:is(a,button,[tabindex]):focus-visible{outline:none;box-shadow:var(--focus-ring)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ── 목업 주석 (제품 카피 아님을 명시하는 전용 스타일) ── */
+.mock-note{margin-top:16px;padding:10px 14px;border-radius:10px;
+  border:1px dashed rgba(250,204,21,.45);background:rgba(250,204,21,.06);
+  color:#e8d48b;font-size:var(--fs-meta);line-height:1.6}
+.mock-note::before{content:"목업 주석 · ";font-weight:700;color:#facc15}
+
+/* ============================================================
+   목업 컨트롤 바 (제품 아님 — 리뷰 도구)
+   ============================================================ */
+#ctrl{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:999;
+  display:flex;gap:6px;align-items:center;padding:8px 10px;border-radius:999px;
+  background:rgba(20,18,10,.92);border:1px solid rgba(250,204,21,.35);
+  box-shadow:0 8px 32px rgba(0,0,0,.55);backdrop-filter:blur(12px);flex-wrap:wrap;justify-content:center;max-width:96vw}
+#ctrl .lbl{font-size:10.5px;color:#facc15;letter-spacing:.08em;margin:0 4px 0 6px;font-weight:700}
+#ctrl button{font-size:12px;padding:6px 12px;border-radius:999px;color:#d8d8c8;transition:all .15s}
+#ctrl button:hover{background:rgba(250,204,21,.1)}
+#ctrl button.on{background:#facc15;color:#1a1608;font-weight:700}
+#ctrl .div{width:1px;height:18px;background:rgba(250,204,21,.25);margin:0 4px}
+
+/* ============================================================
+   공통 셸
+   ============================================================ */
+.screen{display:none;min-height:100vh;background:var(--bg-0)}
+.screen.on{display:block}
+.stage{position:relative;min-height:100vh;overflow:hidden}
+.stage::before{content:"";position:absolute;inset:0;background:var(--bg-glow);pointer-events:none}
+.stars{position:absolute;inset:0;pointer-events:none;opacity:.5}
+.stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:.35}
+.stars i:nth-child(1){top:8%;left:12%}.stars i:nth-child(2){top:14%;left:78%;opacity:.2}
+.stars i:nth-child(3){top:26%;left:32%;opacity:.25}.stars i:nth-child(4){top:6%;left:55%}
+.stars i:nth-child(5){top:19%;left:92%;opacity:.3}.stars i:nth-child(6){top:32%;left:65%;opacity:.15}
+.stars i:nth-child(7){top:11%;left:40%;opacity:.4;width:3px;height:3px}
+.wrap{position:relative;max-width:var(--container);margin:0 auto;padding:0 32px}
+
+/* 탑바 — ≥1024 상단 탭 / 768~1023 nav 일반 흐름 / <768 하단 탭(모바일 화면 참조) */
+.topbar{position:relative;z-index:5;height:64px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:16px;letter-spacing:.14em}
+.logo .spark{color:var(--vio);font-size:15px}
+.nav{display:flex;gap:4px;position:absolute;left:50%;transform:translateX(-50%)}
+.nav a{display:block;padding:8px 18px;border-radius:var(--r-s);
+  color:var(--tx-1);font-size:var(--fs-card);font-weight:600;text-decoration:none;position:relative;transition:color .15s}
+.nav a:hover{color:var(--tx-0)}
+.nav a.act{color:var(--tx-0)}
+.nav a.act::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:18px;height:2.5px;border-radius:2px;background:var(--grad)}
+.tb-right{display:flex;align-items:center;gap:10px}
+.energy{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line);font-size:var(--fs-meta);font-weight:600}
+.energy .bolt{color:#fbbf24}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#7c6bd6,#4a9cc9);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;border:1px solid var(--line-strong)}
+.btn-ghost{padding:8px 16px;border-radius:999px;font-size:var(--fs-meta);font-weight:600;color:var(--tx-1);border:1px solid var(--line);transition:all .15s}
+.btn-ghost:not(:disabled):hover{color:var(--tx-0);border-color:var(--line-strong)}
+.btn-grad{padding:9px 20px;border-radius:999px;font-size:var(--fs-meta);font-weight:700;
+  background:var(--grad);color:var(--tx-on-accent);transition:transform .15s var(--ease),box-shadow .15s}
+.btn-grad:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(167,139,250,.35)}
+
+@media (max-width:1023px){
+  .nav{position:static;transform:none}
+  .topbar{gap:12px}
+  .grid-worlds-home{grid-template-columns:repeat(2,1fr)!important}
+  .grid-worlds{grid-template-columns:1fr!important}
+}
+
+body.guest .member-only{display:none!important}
+body:not(.guest) .guest-only{display:none!important}
+
+/* 섹션 공통 */
+.content{position:relative;z-index:2;padding-bottom:96px}
+.sec{margin-top:var(--sec-gap)}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:var(--head-gap)}
+.sec-title{font-size:var(--fs-sec);font-weight:700;letter-spacing:-.01em}
+.sec-sub{font-size:var(--fs-meta);color:var(--tx-2);margin-top:3px;font-weight:400}
+.sec-link{font-size:var(--fs-meta);color:var(--tx-2);text-decoration:none;transition:color .15s;white-space:nowrap}
+.sec-link:hover{color:var(--vio)}
+
+/* 배지·칩 */
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:var(--fs-badge);font-weight:600;
+  padding:2.5px 8px;border-radius:999px;line-height:1.3}
+.badge.sm{padding:1px 7px;font-size:10.5px}  /* 인라인 텍스트 삽입 전용 소형 변형 */
+.bd-easy{color:var(--easy);background:rgba(52,211,153,.12)}
+.bd-normal{color:var(--normal);background:rgba(96,165,250,.12)}
+.bd-hard{color:var(--hard);background:rgba(251,146,60,.13)}
+.bd-extreme{color:var(--extreme);background:rgba(248,113,113,.13)}
+.bd-free{color:var(--mode-free);background:rgba(34,211,238,.1)}
+.bd-story{color:var(--mode-story);background:rgba(251,191,36,.1)}
+.bd-theater{color:var(--mode-theater);background:rgba(129,140,248,.12)}
+.credit{font-size:var(--fs-badge);color:var(--tx-2);display:flex;align-items:center;gap:4px;min-width:0}
+.credit::before{content:"✎";font-size:10px;opacity:.7;flex:none}
+.credit .nick{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ============================================================
+   홈 — 히어로(이어하기 / 첫 만남 유도 / 게스트 안내)
+   ============================================================ */
+.banner{margin-top:32px;display:flex;align-items:center;gap:20px;padding:20px 24px;
+  border-radius:var(--r-l);background:var(--grad-soft);border:1px solid rgba(167,139,250,.22);
+  transition:border-color .2s}
+.banner:hover{border-color:var(--line-accent)}
+.banner .face{width:56px;height:56px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:rgba(255,255,255,.85)}
+.banner .bx{flex:1;min-width:0}
+.banner .eyebrow{font-size:var(--fs-meta);color:var(--tx-1);letter-spacing:.02em;margin-bottom:3px}
+.banner .who{font-size:var(--fs-sec);font-weight:700}
+.banner .quote{font-size:var(--fs-meta);color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.banner .cta{flex:none}
+
+.gbanner{margin-top:32px;display:flex;align-items:center;gap:12px;
+  padding:16px 24px;border-radius:var(--r-l);background:var(--card);border:1px solid var(--line)}
+.gbanner .gi{font-size:16px;flex:none;opacity:.8}
+.gbanner p{font-size:var(--fs-meta);color:var(--tx-1)}
+.gbanner b{color:var(--tx-0)}
+
+.hello{margin-top:32px;font-size:var(--fs-page);font-weight:800;letter-spacing:-.02em}
+.hello .nick{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hello-sub{font-size:var(--fs-meta);color:var(--tx-2);margin-top:4px}
+
+/* ============================================================
+   캐릭터 카드
+   ============================================================ */
+.grid-feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:var(--card-gap)}
+.ccard{display:block;width:100%;text-align:left;border-radius:var(--r-m);background:var(--card);border:1px solid var(--line);overflow:hidden;
+  cursor:pointer;transition:transform .18s var(--ease),border-color .18s,background .18s}
+.ccard:not(:disabled):hover,.ccard:focus-visible{transform:translateY(-3px);border-color:var(--line-accent);background:var(--card-hover)}
+.art{aspect-ratio:3/4;position:relative;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.art .init{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:44px;font-weight:800;color:rgba(255,255,255,.28);letter-spacing:-.02em}
+.art .veil{position:absolute;inset:auto 0 0 0;height:46%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.45))}
+.cbody{display:block;padding:12px 14px 14px}
+.cname{display:block;font-size:var(--fs-card);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctag{display:block;font-size:var(--fs-meta);color:var(--tx-1);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmeta{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+
+/* 그라데이션 팔레트 (플레이스홀더 아트 — 실서비스는 3:4 썸네일) */
+.g-rose{background:linear-gradient(160deg,#4a1d33,#8a2f4d 55%,#c46a5a)}
+.g-amber{background:linear-gradient(160deg,#4a3320,#9c6b35 55%,#d9a05b)}
+.g-violet{background:linear-gradient(160deg,#2b2150,#5b3d99 55%,#8f6ec9)}
+.g-silver{background:linear-gradient(160deg,#232a38,#48576e 55%,#8298b5)}
+.g-teal{background:linear-gradient(160deg,#173a38,#2c6e63 55%,#5ba58f)}
+.g-ice{background:linear-gradient(160deg,#1c2f4a,#2f5d8a 55%,#6fa3c9)}
+.g-sun{background:linear-gradient(160deg,#4a2c17,#a3652b 55%,#e0a34e)}
+.g-navy{background:linear-gradient(160deg,#1a2340,#33427a 55%,#5f6fb5)}
+.g-forest{background:linear-gradient(160deg,#20351f,#48663a 55%,#7d9c62)}
+.g-plum{background:linear-gradient(160deg,#3a1f3d,#6e3a70 55%,#a86ba3)}
+
+/* 새로 나온 창작 캐릭터 — 가로 레일 */
+.rail-clip{position:relative}
+.rail{display:flex;gap:var(--card-gap);overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory;scrollbar-width:none;align-items:flex-start}
+.rail::-webkit-scrollbar{display:none}
+.rail .ccard{flex:0 0 164px;scroll-snap-align:start}
+.rail .credit .nick{max-width:76px}
+.rail-clip .fade{position:absolute;top:0;bottom:8px;width:56px;pointer-events:none;z-index:2;transition:opacity .2s}
+.rail-clip .fade.l{left:0;background:linear-gradient(90deg,var(--bg-0),transparent);opacity:0}
+.rail-clip .fade.r{right:0;background:linear-gradient(-90deg,var(--bg-0),transparent)}
+.rail-nav{display:flex;gap:6px}
+.rail-nav button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);color:var(--tx-1);
+  font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.rail-nav button:not(:disabled):hover{border-color:var(--line-strong);color:var(--tx-0)}
+.rail-nav button:disabled{opacity:.35}
+
+/* ============================================================
+   세계관 카드 (홈 프리뷰 소형 / 스토리 탭 대형)
+   ============================================================ */
+.grid-worlds-home{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--card-gap)}
+.wcard-s{display:block;width:100%;text-align:left;border-radius:var(--r-m);background:var(--card);border:1px solid var(--line);overflow:hidden;cursor:pointer;
+  transition:transform .18s var(--ease),border-color .18s}
+.wcard-s:not(:disabled):hover{transform:translateY(-3px);border-color:var(--line-accent)}
+.whero{aspect-ratio:16/8.5;position:relative;display:flex;align-items:flex-end;padding:14px}
+.whero::after{content:"";position:absolute;inset:auto 0 0 0;height:70%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.55))}
+.whero .wname{position:relative;z-index:1;font-size:var(--fs-card);font-weight:800;letter-spacing:-.01em;
+  max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wbody-s{display:block;padding:12px 14px 14px}
+.wtag{display:block;font-size:var(--fs-meta);color:var(--tx-1)}
+.wmeta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.chip{font-size:var(--fs-badge);color:var(--tx-2);padding:2.5px 9px;border-radius:999px;border:1px solid var(--line)}
+
+.w-arc{background:linear-gradient(150deg,#221a3f,#41306e 50%,#7c5fa8)}
+.w-luna{background:linear-gradient(150deg,#12233f,#274b73 50%,#4f86ad)}
+.w-seoul{background:linear-gradient(150deg,#301a2e,#5e2f52 50%,#a05a77)}
+.w-ephyr{background:linear-gradient(150deg,#1f2e1f,#3d5a36 50%,#6d9257)}
+
+/* 스토리 탭 — 대형 월드 카드 */
+.page-head{margin-top:32px}
+.page-title{font-size:var(--fs-page);font-weight:800;letter-spacing:-.02em}
+.page-desc{font-size:var(--fs-meta);color:var(--tx-1);margin-top:6px}
+.grid-worlds{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--card-gap);margin-top:32px}
+.wcard{border-radius:var(--r-l);background:var(--card);border:1px solid var(--line);overflow:hidden;
+  transition:border-color .18s;display:flex;flex-direction:column}
+.wcard:hover{border-color:var(--line-accent)}
+.wcard .whero{aspect-ratio:16/7;flex:none}
+.wcard .whero .wname{font-size:var(--fs-title)}
+.wbody{padding:18px 20px 20px;display:flex;flex-direction:column;flex:1}
+.wdesc{font-size:var(--fs-meta);color:var(--tx-1);margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.wpeople{display:flex;align-items:center;gap:8px;margin-top:14px}
+.faces{display:flex}
+.faces i{width:26px;height:26px;border-radius:50%;border:2px solid var(--bg-0);margin-left:-8px;
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:rgba(255,255,255,.85);font-style:normal}
+.faces i:first-child{margin-left:0}
+.wpeople span{font-size:var(--fs-meta);color:var(--tx-2)}
+.wcont{margin-top:12px;display:flex;align-items:center;gap:8px;font-size:var(--fs-meta);color:var(--mode-story)}
+.wcont::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--mode-story)}
+.wacts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:auto;padding-top:16px}
+.wact{border-radius:var(--r-s);padding:12px 14px;text-align:left;border:1px solid var(--line);
+  transition:all .15s;display:block}
+.wact .al{font-size:var(--fs-card);font-weight:700;display:flex;align-items:center;gap:6px}
+.wact .ad{font-size:var(--fs-meta);color:var(--tx-2);margin-top:3px}
+.wact.pri{background:var(--grad);border:none}
+.wact.pri .al{color:var(--tx-on-accent)}
+.wact.pri .ad{color:rgba(23,19,38,.8)}
+.wact.pri:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(167,139,250,.3)}
+.wact.sec:not(:disabled):hover{border-color:var(--line-strong);background:var(--card-hover)}
+
+/* ============================================================
+   스튜디오 (셸 임베드 실물)
+   ============================================================ */
+.studio-create{border:1px dashed var(--line-strong);border-radius:var(--r-m);background:transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  color:var(--tx-1);cursor:pointer;transition:all .15s;min-height:100%;padding:24px;text-align:center;width:100%}
+.studio-create:not(:disabled):hover{border-color:var(--line-accent);color:var(--tx-0)}
+.studio-create .plus{font-size:26px;color:var(--vio)}
+.studio-create .t{font-size:var(--fs-card);font-weight:700}
+.studio-create .d{font-size:var(--fs-meta);color:var(--tx-2)}
+.studio-world{display:flex;align-items:center;gap:20px;padding:20px 24px;border-radius:var(--r-l);
+  background:var(--card);border:1px solid var(--line);transition:border-color .15s}
+.studio-world:hover{border-color:var(--line-accent)}
+.studio-world .wi{width:56px;height:56px;border-radius:var(--r-s);flex:none}
+.studio-world .bx{flex:1;min-width:0}
+.studio-world .t{font-size:var(--fs-card);font-weight:700}
+.studio-world .d{font-size:var(--fs-meta);color:var(--tx-1);margin-top:2px}
+
+/* ============================================================
+   보관함 — 세그먼트 + 인탭 콘텐츠 (단일 표현 체계, /archive?tab= 동기화)
+   ============================================================ */
+.seg{display:flex;gap:4px;margin-top:24px;padding:4px;border-radius:999px;background:var(--card);
+  border:1px solid var(--line);width:fit-content}
+.seg button{padding:8px 20px;border-radius:999px;font-size:var(--fs-meta);font-weight:600;color:var(--tx-1);transition:all .15s}
+.seg button:hover{color:var(--tx-0)}
+.seg button.on{background:rgba(167,139,250,.16);color:var(--tx-0)}
+.seg-pane{display:none;margin-top:24px}
+.seg-pane.on{display:block}
+
+.rrow{display:flex;align-items:center;gap:16px;padding:14px 18px;border-radius:var(--r-m);width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);cursor:pointer;transition:all .15s;margin-bottom:12px}
+.rrow:not(:disabled):hover{border-color:var(--line-accent);background:var(--card-hover)}
+.rrow .face{width:44px;height:44px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;color:rgba(255,255,255,.85)}
+.rrow .rx{display:block;flex:1;min-width:0}
+.rrow .rn{font-size:var(--fs-card);font-weight:700;display:flex;align-items:center;gap:8px}
+.rrow .rq{display:block;font-size:var(--fs-meta);color:var(--tx-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.rrow .rt{font-size:var(--fs-meta);color:var(--tx-2);flex:none}
+
+.grid-persona{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--card-gap)}
+.pcard{border-radius:var(--r-m);border:1px solid var(--line);background:var(--card);padding:18px;transition:border-color .15s}
+.pcard:hover{border-color:var(--line-accent)}
+.pcard.cur{border-color:rgba(167,139,250,.4);background:var(--grad-soft)}
+.pcard .pl{font-size:var(--fs-badge);color:var(--vio);font-weight:700;letter-spacing:.05em;margin-bottom:8px}
+.pcard .pn{font-size:var(--fs-card);font-weight:700}
+.pcard .pd{font-size:var(--fs-meta);color:var(--tx-1);margin-top:4px}
+.pcard.lock{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  border-style:dashed;color:var(--tx-2);font-size:var(--fs-meta);min-height:118px;cursor:pointer}
+.pcard.lock:hover{color:var(--tx-1)}
+
+.grid-ach{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.acard{border-radius:var(--r-s);border:1px solid var(--line);background:var(--card);padding:16px 14px;text-align:center}
+.acard .ai{width:40px;height:40px;margin:0 auto 8px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--grad-soft);border:1px solid rgba(167,139,250,.25)}
+.acard .an{font-size:var(--fs-meta);font-weight:700}
+.acard .ad{font-size:var(--fs-badge);color:var(--tx-2);margin-top:2px}
+.acard.lock{opacity:.45}
+.acard.lock .ai{background:var(--card);border-color:var(--line);filter:grayscale(1)}
+
+.grid-illust{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.icard{aspect-ratio:4/3;border-radius:var(--r-s);position:relative;overflow:hidden;cursor:pointer;border:1px solid var(--line);transition:border-color .15s;padding:0}
+.icard:hover{border-color:var(--line-accent)}
+.icard span{position:absolute;left:10px;bottom:8px;font-size:var(--fs-meta);font-weight:600;color:rgba(255,255,255,.92);z-index:1}
+.icard::after{content:"";position:absolute;inset:auto 0 0 0;height:60%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.7))}
+
+/* ============================================================
+   첫 만남 (온보딩)
+   ============================================================ */
+.fm{max-width:880px;margin:0 auto;padding:64px 32px 120px;text-align:center;position:relative;z-index:2}
+.fm-step{font-size:var(--fs-meta);color:var(--tx-2);letter-spacing:.14em;font-weight:700}
+.fm-title{font-size:var(--fs-hero);font-weight:800;letter-spacing:-.02em;margin-top:12px}
+.fm-sub{font-size:var(--fs-card);color:var(--tx-1);margin-top:8px}
+.fm-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--card-gap);margin-top:48px}
+.fopt{border-radius:var(--r-m);border:1px solid var(--line);background:var(--card);padding:28px 20px;
+  cursor:pointer;transition:all .18s var(--ease)}
+.fopt:not(:disabled):hover{transform:translateY(-2px);border-color:var(--line-strong)}
+.fopt.sel{border-color:var(--line-accent);background:var(--grad-soft);box-shadow:0 0 32px rgba(167,139,250,.12)}
+.fopt .fi{font-size:26px;margin-bottom:10px}
+.fopt .fn{font-size:var(--fs-card);font-weight:700}
+.fopt .fd{font-size:var(--fs-meta);color:var(--tx-2);margin-top:4px}
+.fm-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--card-gap);margin-top:48px}
+.fmc{border-radius:var(--r-m);border:1px solid var(--line);background:var(--card);overflow:hidden;cursor:pointer;
+  transition:all .18s var(--ease);text-align:left;padding:0}
+.fmc:not(:disabled):hover{transform:translateY(-2px)}
+.fmc.sel{border-color:var(--line-accent);box-shadow:0 0 36px rgba(167,139,250,.16)}
+.fmc .art{aspect-ratio:3/4}
+.fmc .cbody{padding:14px 16px 16px}
+.fm-cap{font-size:var(--fs-meta);color:var(--tx-2);margin-top:16px}
+.fm-cta{margin-top:32px;width:100%;max-width:420px;padding:15px;border-radius:var(--r-m);
+  background:var(--grad);color:var(--tx-on-accent);font-size:var(--fs-card);font-weight:800;
+  transition:transform .15s,box-shadow .15s}
+.fm-cta:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(167,139,250,.4)}
+.fm-cta:disabled{transform:none;box-shadow:none}
+.fm-skip{display:block;margin:20px auto 0;font-size:var(--fs-meta);color:var(--tx-2);text-decoration:underline;text-underline-offset:3px}
+.fm-skip:hover{color:var(--tx-1)}
+
+/* ============================================================
+   모바일 프레임 — 축소 스케일은 .phone 스코프 규칙으로만 (인라인 금지)
+   ============================================================ */
+.mob-stage{padding:48px 32px 140px;position:relative;z-index:2}
+.mob-row{display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+.phone{width:375px;height:800px;border-radius:32px;border:1px solid var(--line-strong);
+  background:var(--bg-0);overflow:hidden;position:relative;flex:none;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+.phone .pcap{position:absolute;top:-30px;left:0;font-size:var(--fs-meta);color:var(--tx-2)}
+.pscroll{position:absolute;inset:0 0 64px 0;overflow-y:auto;padding:0 16px}
+.ptop{height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;
+  background:linear-gradient(180deg,var(--bg-0) 70%,transparent);z-index:3}
+.ptab{position:absolute;left:0;right:0;bottom:0;height:64px;display:flex;
+  background:rgba(11,11,16,.92);border-top:1px solid var(--line);backdrop-filter:blur(12px);z-index:4}
+.ptab a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:10.5px;color:var(--tx-2);text-decoration:none}
+.ptab a.act{color:var(--tx-0)}
+.ptab a.act .ic{color:var(--vio)}
+.ptab .ic{font-size:17px;line-height:1}
+.m-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.m-sec{margin-top:32px}
+/* 모바일 축소 스케일: 19 / 15.5 / 14 / 13 / 12.5 */
+.phone .logo{font-size:14px}
+.phone .energy{padding:4px 11px;font-size:12.5px}
+.phone .avatar{width:30px;height:30px;font-size:11px}
+.phone .hello{margin-top:20px;font-size:19px}
+.phone .page-head{margin-top:20px}
+.phone .page-title{font-size:19px}
+.phone .page-desc{font-size:12.5px}
+.phone .sec-title{font-size:15.5px}
+.phone .banner{margin-top:16px;padding:14px 16px;gap:12px}
+.phone .banner .face{width:44px;height:44px;font-size:16px}
+.phone .banner .who{font-size:14px}
+.phone .banner .quote{font-size:12.5px}
+.phone .banner .cta{padding:8px 14px;font-size:12.5px}
+.phone .grid-worlds-home{grid-template-columns:1fr!important;gap:12px}
+.phone .grid-worlds{grid-template-columns:1fr!important;gap:14px;margin-top:20px}
+.phone .rrow{padding:12px 14px}
+.phone .rrow .face{width:38px;height:38px;font-size:13px}
+.phone .rrow .rn{font-size:13px}
+.phone .wbody{padding:14px 16px 16px}
+.phone .wacts{grid-template-columns:1fr}
+.phone .seg{width:100%;justify-content:space-between}
+.phone .seg button{padding:7px 0;flex:1;font-size:12.5px}
+
+/* ============================================================
+   상태 디자인
+   ============================================================ */
+.states-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:32px}
+.state-box{border-radius:var(--r-l);border:1px solid var(--line);background:var(--card);padding:24px;min-height:300px}
+.state-cap{font-size:var(--fs-meta);color:var(--vio);font-weight:700;letter-spacing:.08em;margin-bottom:18px}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.sk{border-radius:8px;background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%);
+  background-size:200% 100%;animation:shimmer 1.6s infinite}
+.sk-card{border-radius:var(--r-m);overflow:hidden;border:1px solid var(--line)}
+.sk-art{aspect-ratio:3/4}
+.sk-hero{aspect-ratio:16/7}
+.sk-line{height:12px;margin:10px 12px 0}
+.sk-line.short{width:55%;margin-bottom:14px}
+.sk-row{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:var(--r-m);padding:12px 14px;margin-bottom:10px}
+.sk-row .sk.c{width:38px;height:38px;border-radius:50%;flex:none;margin:0}
+.sk-row .bx{flex:1}
+.sk-row .sk{height:10px;margin:0 0 8px}
+.sk-row .sk:last-child{margin:0;width:60%}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:230px;gap:6px}
+.empty .ei{width:56px;height:56px;border-radius:50%;background:var(--grad-soft);border:1px solid rgba(167,139,250,.25);
+  display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:8px}
+.empty .et{font-size:var(--fs-card);font-weight:700}
+.empty .ed{font-size:var(--fs-meta);color:var(--tx-2)}
+.empty .btn-grad{margin-top:14px}
+
+/* 상태 매트릭스 */
+.mtx{width:100%;border-collapse:collapse;font-size:var(--fs-meta);margin-top:16px}
+.mtx th{text-align:left;color:var(--tx-2);font-weight:600;font-size:var(--fs-meta);padding:8px 12px;border-bottom:1px solid var(--line-strong)}
+.mtx td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--tx-1)}
+.mtx td:first-child{color:var(--tx-0);font-weight:600;white-space:nowrap}
+
+/* ============================================================
+   설계 문서 화면
+   ============================================================ */
+.doc{max-width:920px;margin:0 auto;padding:56px 32px 140px;position:relative;z-index:2}
+.doc h1{font-size:var(--fs-page);font-weight:800;letter-spacing:-.02em}
+.doc .dsub{color:var(--tx-1);font-size:var(--fs-meta);margin-top:8px}
+.doc h2{font-size:var(--fs-sec);font-weight:700;margin:44px 0 14px;padding-top:24px;border-top:1px solid var(--line)}
+.doc table{width:100%;border-collapse:collapse;font-size:var(--fs-meta)}
+.doc th{text-align:left;color:var(--tx-2);font-weight:600;font-size:var(--fs-meta);padding:8px 12px;border-bottom:1px solid var(--line-strong)}
+.doc td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--tx-1)}
+.doc td b{color:var(--tx-0)}
+.doc td:first-child{color:var(--tx-0);font-weight:600;white-space:nowrap}
+.doc .why{color:var(--tx-2);font-size:var(--fs-meta)}
+.doc .rec{display:inline-block;font-size:var(--fs-badge);font-weight:700;color:var(--easy);background:rgba(52,211,153,.1);
+  padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:1px}
+.doc ul{margin:8px 0 0 18px;color:var(--tx-1);font-size:var(--fs-meta)}
+.doc li{margin-bottom:6px}
+.doc code{font-size:12px;background:rgba(255,255,255,.06);padding:1px 6px;border-radius:5px}
+.swatches{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.sw{width:120px;border-radius:10px;border:1px solid var(--line);overflow:hidden;font-size:var(--fs-badge)}
+.sw i{display:block;height:44px}
+.sw span{display:block;padding:6px 8px;color:var(--tx-2)}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 컨트롤 바 (리뷰 도구) ══════════════ -->
+<div id="ctrl">
+  <span class="lbl">화면</span>
+  <button data-s="home" class="on">홈</button>
+  <button data-s="story">스토리</button>
+  <button data-s="studio">스튜디오</button>
+  <button data-s="archive">보관함</button>
+  <button data-s="firstmeet">첫 만남</button>
+  <button data-s="mobile">모바일</button>
+  <button data-s="states">상태</button>
+  <button data-s="system">설계 문서</button>
+  <span class="div"></span>
+  <span class="lbl">시점</span>
+  <button id="tgl-member" class="on">멤버</button>
+  <button id="tgl-guest">게스트</button>
+  <span class="div"></span>
+  <span class="lbl">탭 라벨</span>
+  <button id="lbl-a" class="on">A 기능형</button>
+  <button id="lbl-b">B 감성형</button>
+</div>
+
+<!-- ══════════════ 화면 1 · 홈 ══════════════ -->
+<section class="screen on" id="s-home"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="logo"><span class="spark">✦</span>LUCID</div>
+      <nav class="nav">
+        <a class="act" href="#" data-tab="home" aria-current="page">홈</a>
+        <a href="#" data-tab="story">스토리</a>
+        <a href="#" data-tab="studio">스튜디오</a>
+        <a href="#" data-tab="archive">보관함</a>
+      </nav>
+      <div class="tb-right">
+        <div class="energy member-only"><span class="bolt">⚡</span>30</div>
+        <div class="avatar member-only">종</div>
+        <button class="btn-ghost guest-only">로그인</button>
+        <button class="btn-grad guest-only">시작하기</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="hello member-only">다시 만나서 반가워요, <span class="nick">종원</span>님</div>
+      <div class="hello-sub member-only">어젯밤 꿈의 다음 페이지가 준비되어 있어요</div>
+      <div class="hello guest-only">오늘 밤, 누구와 이야기해 볼까요</div>
+      <div class="hello-sub guest-only">가입 없이 자유롭게 둘러볼 수 있어요</div>
+
+      <!-- 이어하기 (멤버 · 대화 기록 있음 — 기록 없음 변형은 '상태' 화면 참조) -->
+      <div class="banner member-only">
+        <div class="face g-rose">연</div>
+        <div class="bx">
+          <div class="eyebrow">이어서 대화하기 · 3시간 전 · <span class="badge bd-free sm">자유 대화</span></div>
+          <div class="who">연화</div>
+          <div class="quote">“어젯밤 이야기, 마저 들려줄래? 그 뒷이야기가 계속 궁금했단 말이야.”</div>
+        </div>
+        <button class="btn-grad cta">이어하기</button>
+      </div>
+
+      <!-- 게스트 안내 — 게이트 규칙은 이 한 곳에서만 선언 -->
+      <div class="gbanner guest-only">
+        <span class="gi">🌙</span>
+        <p><b>로그인은 대화를 시작할 때만 필요해요.</b> 그 전까진 캐릭터 프로필까지 자유롭게 볼 수 있어요.</p>
+      </div>
+
+      <!-- 추천 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title member-only">추천 캐릭터</div>
+            <div class="sec-title guest-only">지금 만나볼 수 있는 캐릭터</div>
+            <div class="sec-sub member-only">취향에 맞춰 순서를 정했어요</div>
+            <div class="sec-sub guest-only">처음이라면 여기서 시작해 보세요</div>
+          </div>
+        </div>
+        <div class="grid-feed">
+          <button class="ccard"><span class="art g-rose"><span class="init">연</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">연화</span><span class="ctag">도도한 불꽃 — 쉽게 곁을 주지 않아요</span>
+            <span class="cmeta"><span class="badge bd-hard">어려움</span></span></span></button>
+          <button class="ccard"><span class="art g-amber"><span class="init">아</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">아이리</span><span class="ctag">다정한 온기 — 언제나 당신 편이에요</span>
+            <span class="cmeta"><span class="badge bd-easy">쉬움</span></span></span></button>
+          <button class="ccard"><span class="art g-violet"><span class="init">클</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">클레어</span><span class="ctag">신비한 달빛 — 속을 알 수 없는 미소</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span></span></span></button>
+          <button class="ccard"><span class="art g-silver"><span class="init">세</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">세라핀</span><span class="ctag">냉철한 백은 — 감정을 허락하지 않는</span>
+            <span class="cmeta"><span class="badge bd-extreme">극한</span></span></span></button>
+          <button class="ccard"><span class="art g-teal"><span class="init">유</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">유즈키</span><span class="ctag">장난기 어린 바람 — 오늘은 어디로?</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span></span></span></button>
+          <button class="ccard"><span class="art g-ice"><span class="init">미</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">미하</span><span class="ctag">조용한 서리 — 말수가 적지만 따뜻한</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span></span></span></button>
+          <button class="ccard"><span class="art g-sun"><span class="init">하</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">하린</span><span class="ctag">햇살 같은 미소 — 창작 세계의 인기인</span>
+            <span class="cmeta"><span class="badge bd-easy">쉬움</span><span class="credit"><span class="nick">달빛토끼</span></span></span></span></button>
+          <button class="ccard"><span class="art g-plum"><span class="init">리</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">리젤</span><span class="ctag">가시 돋친 장미 — 다가올수록 아픈</span>
+            <span class="cmeta"><span class="badge bd-hard">어려움</span><span class="credit"><span class="nick">coldbrew</span></span></span></span></button>
+          <button class="ccard"><span class="art g-navy"><span class="init">도</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">도윤</span><span class="ctag">과묵한 경호원 — 당신만은 지킨다</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">은하수</span></span></span></span></button>
+          <button class="ccard"><span class="art g-forest"><span class="init">세</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">세이</span><span class="ctag">숲의 은둔자 — 비밀을 품은 안내인</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">밤안개</span></span></span></span></button>
+        </div>
+      </div>
+
+      <!-- 새로 나온 창작 캐릭터 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">새로 나온 창작 캐릭터</div>
+            <div class="sec-sub">유저들이 직접 만든 캐릭터들이에요</div>
+          </div>
+          <div class="rail-nav"><button aria-label="이전">‹</button><button aria-label="다음">›</button></div>
+        </div>
+        <div class="rail-clip">
+          <div class="rail" id="rail-new">
+            <button class="ccard"><span class="art g-plum"><span class="init">무</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">무명</span><span class="ctag">이름 없는 여행자</span>
+              <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">종이비행기</span></span></span></span></button>
+            <button class="ccard"><span class="art g-sun"><span class="init">하</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">하린</span><span class="ctag">햇살 같은 미소</span>
+              <span class="cmeta"><span class="badge bd-easy">쉬움</span><span class="credit"><span class="nick">달빛토끼</span></span></span></span></button>
+            <button class="ccard"><span class="art g-navy"><span class="init">도</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">도윤</span><span class="ctag">과묵한 경호원</span>
+              <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">은하수</span></span></span></span></button>
+            <button class="ccard"><span class="art g-forest"><span class="init">세</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">세이</span><span class="ctag">숲의 은둔자</span>
+              <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">밤안개</span></span></span></span></button>
+            <button class="ccard"><span class="art g-ice"><span class="init">에</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">에스텔</span><span class="ctag">북극성의 관측자</span>
+              <span class="cmeta"><span class="badge bd-hard">어려움</span><span class="credit"><span class="nick">스텔라리움</span></span></span></span></button>
+            <button class="ccard"><span class="art g-rose"><span class="init">단</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">단이</span><span class="ctag">골목길 단골 카페 사장</span>
+              <span class="cmeta"><span class="badge bd-easy">쉬움</span><span class="credit"><span class="nick">라떼는말이야</span></span></span></span></button>
+            <button class="ccard"><span class="art g-teal"><span class="init">키</span><span class="veil"></span></span>
+              <span class="cbody"><span class="cname">키리에</span><span class="ctag">성가대의 이단아</span>
+              <span class="cmeta"><span class="badge bd-normal">보통</span><span class="credit"><span class="nick">한밤의합창</span></span></span></span></button>
+          </div>
+          <div class="fade l"></div><div class="fade r"></div>
+        </div>
+      </div>
+
+      <!-- 스토리 세계관 프리뷰 -->
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">스토리 세계관</div>
+            <div class="sec-sub">잘 짜인 세계에서 긴 호흡의 이야기를 — 직접 겪거나, 극장에서 지켜보거나</div>
+          </div>
+          <a class="sec-link" href="#" data-goto="story">스토리 전체 보기 ›</a>
+        </div>
+        <div class="grid-worlds-home">
+          <button class="wcard-s"><span class="whero w-arc"><span class="wname">아르카디아</span></span>
+            <span class="wbody-s" style="display:block"><span class="wtag">검과 마법의 대륙, 왕국의 운명이 당신 손에</span>
+            <span class="wmeta"><span class="chip">중세 판타지</span><span class="chip">캐릭터 3</span><span class="badge bd-theater">극장 가능</span></span></span></button>
+          <button class="wcard-s"><span class="whero w-luna"><span class="wname">루나 아카데미</span></span>
+            <span class="wbody-s" style="display:block"><span class="wtag">달빛 아래 마법학원, 비밀을 품은 동급생들</span>
+            <span class="wmeta"><span class="chip">학원 판타지</span><span class="chip">캐릭터 4</span><span class="badge bd-theater">극장 가능</span></span></span></button>
+          <button class="wcard-s"><span class="whero w-seoul"><span class="wname">서울, 오늘 밤</span></span>
+            <span class="wbody-s" style="display:block"><span class="wtag">퇴근길 골목에서 시작되는 현대 로맨스</span>
+            <span class="wmeta"><span class="chip">현대 로맨스</span><span class="chip">캐릭터 2</span></span></span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 2 · 스토리 ══════════════ -->
+<section class="screen" id="s-story"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="logo"><span class="spark">✦</span>LUCID</div>
+      <nav class="nav">
+        <a href="#" data-tab="home">홈</a>
+        <a class="act" href="#" data-tab="story" aria-current="page">스토리</a>
+        <a href="#" data-tab="studio">스튜디오</a>
+        <a href="#" data-tab="archive">보관함</a>
+      </nav>
+      <div class="tb-right">
+        <div class="energy member-only"><span class="bolt">⚡</span>30</div>
+        <div class="avatar member-only">종</div>
+        <button class="btn-ghost guest-only">로그인</button>
+        <button class="btn-grad guest-only">시작하기</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div class="page-title">스토리</div>
+        <div class="page-desc">완성된 세계로 들어가는 긴 호흡의 이야기예요. <b style="color:var(--tx-0)">직접 주인공이 되거나</b>, <b style="color:var(--tx-0)">극장에서 캐릭터들의 이야기를 지켜볼</b> 수 있어요.</div>
+      </div>
+
+      <div class="grid-worlds">
+        <div class="wcard">
+          <div class="whero w-arc"><div class="wname">아르카디아</div></div>
+          <div class="wbody">
+            <div class="wdesc">전쟁의 그림자가 드리운 검과 마법의 대륙. 왕국의 운명을 건 여정이 시작되는 곳.</div>
+            <div class="wpeople">
+              <div class="faces"><i class="g-rose">연</i><i class="g-violet">클</i><i class="g-silver">세</i></div>
+              <span>연화 · 클레어 · 세라핀</span>
+            </div>
+            <div class="wcont member-only">2장 진행 중 — 지난 장면에서 바로 이어져요</div>
+            <div class="wacts">
+              <button class="wact pri"><span class="al"><span class="member-only">이야기 이어하기</span><span class="guest-only">이야기 시작하기</span></span><span class="ad">주인공이 되어 직접 겪는 이야기</span></button>
+              <button class="wact sec"><span class="al">🎭 극장 관람</span><span class="ad">캐릭터들이 살아가는 모습을 지켜봐요</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="wcard">
+          <div class="whero w-luna"><div class="wname">루나 아카데미</div></div>
+          <div class="wbody">
+            <div class="wdesc">보름달이 뜨면 마법이 깨어나는 기숙학원. 각자의 비밀을 품은 동급생들과 보내는 한 학기.</div>
+            <div class="wpeople">
+              <div class="faces"><i class="g-amber">아</i><i class="g-teal">유</i><i class="g-ice">미</i><i class="g-plum">리</i></div>
+              <span>아이리 · 유즈키 · 미하 외 1명</span>
+            </div>
+            <div class="wacts">
+              <button class="wact pri"><span class="al">이야기 시작하기</span><span class="ad">주인공이 되어 직접 겪는 이야기</span></button>
+              <button class="wact sec"><span class="al">🎭 극장 관람</span><span class="ad">캐릭터들이 살아가는 모습을 지켜봐요</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="wcard">
+          <div class="whero w-seoul"><div class="wname">서울, 오늘 밤</div></div>
+          <div class="wbody">
+            <div class="wdesc">야근을 마친 밤 아홉 시, 늘 지나치던 골목의 작은 카페. 오늘따라 열어보고 싶어진 문.</div>
+            <div class="wpeople">
+              <div class="faces"><i class="g-rose">단</i><i class="g-navy">도</i></div>
+              <span>단이 · 도윤</span>
+            </div>
+            <div class="wacts">
+              <button class="wact pri"><span class="al">이야기 시작하기</span><span class="ad">주인공이 되어 직접 겪는 이야기</span></button>
+              <button class="wact sec" disabled><span class="al">🎭 극장 준비 중</span><span class="ad">곧 극장에서 만날 수 있어요</span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="wcard">
+          <div class="whero w-ephyr"><div class="wname">이피르의 숲</div></div>
+          <div class="wbody">
+            <div class="wdesc">인간의 발길이 닿지 않는 숲 깊은 곳, 정령들의 안내인이 건네는 초대.</div>
+            <div class="wpeople">
+              <div class="faces"><i class="g-forest">세</i></div>
+              <span>세이</span>
+              <span class="credit" style="margin-left:auto"><span class="nick">밤안개</span></span>
+            </div>
+            <div class="wacts">
+              <button class="wact pri"><span class="al">이야기 시작하기</span><span class="ad">주인공이 되어 직접 겪는 이야기</span></button>
+              <button class="wact sec"><span class="al">🎭 극장 관람</span><span class="ad">캐릭터들이 살아가는 모습을 지켜봐요</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 3 · 스튜디오 (셸 임베드 실물) ══════════════ -->
+<section class="screen" id="s-studio"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="logo"><span class="spark">✦</span>LUCID</div>
+      <nav class="nav">
+        <a href="#" data-tab="home">홈</a>
+        <a href="#" data-tab="story">스토리</a>
+        <a class="act" href="#" data-tab="studio" aria-current="page">스튜디오</a>
+        <a href="#" data-tab="archive">보관함</a>
+      </nav>
+      <div class="tb-right">
+        <div class="energy"><span class="bolt">⚡</span>30</div>
+        <div class="avatar">종</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div class="page-title">스튜디오</div>
+        <div class="page-desc">나만의 캐릭터와 세계를 만드는 공간이에요.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">내 캐릭터</div>
+            <div class="sec-sub">내가 만든 캐릭터들 — 공개하면 다른 유저도 만날 수 있어요</div>
+          </div>
+        </div>
+        <div class="grid-feed">
+          <button class="ccard"><span class="art g-sun"><span class="init">하</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">하린</span><span class="ctag">공개 · 대화 1,204회</span>
+            <span class="cmeta"><span class="badge bd-easy">쉬움</span></span></span></button>
+          <button class="ccard"><span class="art g-plum"><span class="init">가</span><span class="veil"></span></span>
+            <span class="cbody"><span class="cname">가온</span><span class="ctag">비공개 · 작성 중</span>
+            <span class="cmeta"><span class="badge bd-normal">보통</span></span></span></button>
+          <button class="studio-create"><span class="plus">＋</span><span class="t">새 캐릭터 만들기</span><span class="d">10분이면 나만의 캐릭터가 완성돼요</span></button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-head">
+          <div>
+            <div class="sec-title">세계관 만들기</div>
+            <div class="sec-sub">여러 캐릭터가 함께 살아가는 스토리 세계를 직접 설계해요</div>
+          </div>
+        </div>
+        <div class="studio-world">
+          <div class="wi w-ephyr"></div>
+          <div class="bx">
+            <div class="t">스토리 세계관 편집기</div>
+            <div class="d">장 구성·등장인물·규칙까지 — 전용 편집기가 전체 화면으로 열려요</div>
+          </div>
+          <button class="btn-grad">편집기 열기</button>
+        </div>
+      </div>
+
+      <p class="mock-note">스튜디오 내부 기능은 기존 컴포넌트를 재사용합니다. 이 화면에서 컨펌하는 것은 <b>셸 임베드</b>(공용 탑바 · 1200 컨테이너 · 토큰 정합, 잔존 자체 크롬 제거)와 섹션 구조뿐입니다. 게스트가 스튜디오 탭을 누르면 로그인 시트가 뜹니다(화면 진입 없음).</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 4 · 보관함 ══════════════ -->
+<section class="screen" id="s-archive"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="logo"><span class="spark">✦</span>LUCID</div>
+      <nav class="nav">
+        <a href="#" data-tab="home">홈</a>
+        <a href="#" data-tab="story">스토리</a>
+        <a href="#" data-tab="studio">스튜디오</a>
+        <a class="act" href="#" data-tab="archive" aria-current="page">보관함</a>
+      </nav>
+      <div class="tb-right">
+        <div class="energy member-only"><span class="bolt">⚡</span>30</div>
+        <div class="avatar member-only">종</div>
+        <button class="btn-ghost guest-only">로그인</button>
+        <button class="btn-grad guest-only">시작하기</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-head">
+        <div class="page-title">보관함</div>
+        <div class="page-desc">나눈 대화와 수집한 순간들, 내 페르소나까지 한곳에 모았어요.</div>
+      </div>
+
+      <div class="seg" id="seg" role="tablist" aria-label="보관함 분류">
+        <button class="on" data-p="talk" role="tab" aria-selected="true">대화 기록</button>
+        <button data-p="persona" role="tab" aria-selected="false">페르소나</button>
+        <button data-p="ach" role="tab" aria-selected="false">업적</button>
+        <button data-p="illust" role="tab" aria-selected="false">일러스트</button>
+      </div>
+
+      <div class="seg-pane on" id="p-talk" role="tabpanel">
+        <button class="rrow"><span class="face g-rose">연</span>
+          <span class="rx"><span class="rn">연화 <span class="badge bd-free">자유 대화</span></span>
+          <span class="rq">“어젯밤 이야기, 마저 들려줄래? 그 뒷이야기가 계속 궁금했단 말이야.”</span></span>
+          <span class="rt">3시간 전</span></button>
+        <button class="rrow"><span class="face w-arc">아</span>
+          <span class="rx"><span class="rn">아르카디아 <span class="badge bd-story">스토리 · 2장</span></span>
+          <span class="rq">국경의 밤 — 클레어가 무언가를 숨기고 있다.</span></span>
+          <span class="rt">어제</span></button>
+        <button class="rrow"><span class="face g-amber">아</span>
+          <span class="rx"><span class="rn">아이리 <span class="badge bd-free">자유 대화</span></span>
+          <span class="rq">“오늘도 수고했어요. 따뜻한 코코아 한 잔 어때요?”</span></span>
+          <span class="rt">3일 전</span></button>
+        <button class="rrow"><span class="face w-luna">루</span>
+          <span class="rx"><span class="rn">루나 아카데미 <span class="badge bd-theater">극장 · 관람 중</span></span>
+          <span class="rq">3막 — 보름달 축제의 밤, 유즈키의 계획이 시작된다.</span></span>
+          <span class="rt">12일 전</span></button>
+      </div>
+
+      <div class="seg-pane" id="p-persona" role="tabpanel">
+        <div class="grid-persona">
+          <div class="pcard cur"><div class="pl">현재 페르소나</div><div class="pn">종원</div>
+            <div class="pd">28세 · 남 · “호기심 많은 밤의 여행자”</div></div>
+          <div class="pcard"><div class="pl">저장된 페르소나</div><div class="pn">기사단의 후예</div>
+            <div class="pd">24세 · 남 · 아르카디아 전용 설정</div></div>
+          <button class="pcard lock">＋ 새 페르소나 만들기<br><span style="font-size:var(--fs-badge)">무료 슬롯 1개 남음</span></button>
+        </div>
+        <p class="mock-note">페르소나 편집·렌즈 스탯의 내용물은 블록 B에서 이 자리에 들어옵니다. 여기서 컨펌하는 것은 표현 패턴(인탭 세그먼트)과 카드 문법뿐입니다.</p>
+      </div>
+
+      <div class="seg-pane" id="p-ach" role="tabpanel">
+        <div class="grid-ach">
+          <div class="acard"><div class="ai">🌙</div><div class="an">첫 만남</div><div class="ad">첫 대화를 시작했어요</div></div>
+          <div class="acard"><div class="ai">🔥</div><div class="an">아홉 번째 밤</div><div class="ad">한 캐릭터와 9일 연속 대화</div></div>
+          <div class="acard"><div class="ai">🎭</div><div class="an">개막</div><div class="ad">첫 극장 관람</div></div>
+          <div class="acard lock"><div class="ai">🔒</div><div class="an">???</div><div class="ad">아직 잠겨 있어요</div></div>
+          <div class="acard lock"><div class="ai">🔒</div><div class="an">???</div><div class="ad">아직 잠겨 있어요</div></div>
+          <div class="acard lock"><div class="ai">🔒</div><div class="an">???</div><div class="ad">아직 잠겨 있어요</div></div>
+          <div class="acard lock"><div class="ai">🔒</div><div class="an">???</div><div class="ad">아직 잠겨 있어요</div></div>
+          <div class="acard lock"><div class="ai">🔒</div><div class="an">???</div><div class="ad">아직 잠겨 있어요</div></div>
+        </div>
+      </div>
+
+      <div class="seg-pane" id="p-illust" role="tabpanel">
+        <div class="grid-illust">
+          <button class="icard g-rose"><span>연화 — 첫 만남의 밤</span></button>
+          <button class="icard w-arc"><span>아르카디아 — 국경의 새벽</span></button>
+          <button class="icard g-violet"><span>클레어 — 달빛 서재</span></button>
+          <button class="icard w-luna"><span>루나 — 보름달 축제</span></button>
+          <button class="icard g-amber"><span>아이리 — 오후의 카페</span></button>
+          <button class="icard g-silver"><span>세라핀 — 백은의 검무</span></button>
+        </div>
+      </div>
+
+      <p class="mock-note">게스트가 보관함 탭을 누르면 로그인 시트가 뜹니다(화면 진입 없음 — 업적 API도 인증 필수). 세그먼트는 <b>/archive?tab=</b> 쿼리와 동기화하고 뒤로가기로 복원합니다.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 5 · 첫 만남 ══════════════ -->
+<section class="screen" id="s-firstmeet"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="wrap"><header class="topbar"><div class="logo"><span class="spark">✦</span>LUCID</div></header></div>
+
+  <!-- STEP 1 · 취향 (기본 선택 없음 — 선택 전 '다음' 비활성) -->
+  <div class="fm" id="fm1">
+    <div class="fm-step">첫 만남 · 1 / 2</div>
+    <div class="fm-title">어떤 캐릭터에게 끌리시나요?</div>
+    <div class="fm-sub">답에 맞춰 홈 화면을 꾸며드려요 — 언제든 설정에서 바꿀 수 있어요</div>
+    <div class="fm-opts">
+      <button class="fopt" data-pref="female"><span class="fi">🌸</span><span class="fn" style="display:block">여성 캐릭터</span><span class="fd" style="display:block">여성 캐릭터를 먼저 보여드려요</span></button>
+      <button class="fopt" data-pref="male"><span class="fi">🌊</span><span class="fn" style="display:block">남성 캐릭터</span><span class="fd" style="display:block">남성 캐릭터를 먼저 보여드려요</span></button>
+      <button class="fopt" data-pref="all"><span class="fi">✦</span><span class="fn" style="display:block">모두 좋아요</span><span class="fd" style="display:block">가리지 않고 골고루 보여드려요</span></button>
+    </div>
+    <button class="fm-cta" id="fm-cta1" disabled>다음</button>
+    <a class="fm-skip" href="#" data-goto="home">먼저 둘러볼게요</a>
+  </div>
+
+  <!-- STEP 2 · 택1 (후보는 1단계 선호로 결정 — JS 렌더) -->
+  <div class="fm" id="fm2" style="display:none">
+    <div class="fm-step">첫 만남 · 2 / 2</div>
+    <div class="fm-title">누구와 첫 이야기를 시작할까요?</div>
+    <div class="fm-sub">지금 고른 한 명과 바로 대화가 시작돼요 — 다른 캐릭터는 언제든 홈에서</div>
+    <div class="fm-cards" id="fm-cards"></div>
+    <div class="fm-cap">난이도는 캐릭터가 마음을 여는 속도예요</div>
+    <button class="fm-cta" id="fm-cta2">대화 시작하기</button>
+    <a class="fm-skip" href="#" data-goto="home">먼저 둘러볼게요</a>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 6 · 모바일 ══════════════ -->
+<section class="screen" id="s-mobile"><div class="stage">
+  <div class="stars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="mob-stage">
+    <div class="wrap" style="max-width:1320px">
+      <div class="page-title" style="text-align:center">모바일 파생 — 같은 토큰 · 같은 구조 · 하단 탭</div>
+      <div class="page-desc" style="text-align:center">데스크톱 설계를 그대로 좁힌 것: 그리드 열 수만 2열로, 탭은 하단 바로. 축소 스케일은 .phone 스코프 참조.</div>
+    </div>
+    <div class="mob-row">
+
+      <!-- 폰 1 · 홈 -->
+      <div class="phone"><div class="pcap">홈 (멤버)</div>
+        <div class="pscroll">
+          <div class="ptop"><div class="logo"><span class="spark">✦</span>LUCID</div>
+            <div class="tb-right"><div class="energy"><span class="bolt">⚡</span>30</div><div class="avatar">종</div></div></div>
+          <div class="hello">반가워요, <span class="nick">종원</span>님</div>
+          <div class="banner">
+            <div class="face g-rose">연</div>
+            <div class="bx"><div class="eyebrow">이어서 대화하기 · 3시간 전</div>
+              <div class="who">연화</div><div class="quote">“어젯밤 이야기, 마저 들려줄래?”</div></div>
+            <button class="btn-grad cta">이어하기</button>
+          </div>
+          <div class="m-sec">
+            <div class="sec-head"><div><div class="sec-title">추천 캐릭터</div><div class="sec-sub">취향에 맞춰 순서를 정했어요</div></div></div>
+            <div class="m-grid">
+              <button class="ccard"><span class="art g-rose"><span class="init">연</span><span class="veil"></span></span>
+                <span class="cbody"><span class="cname">연화</span><span class="ctag">도도한 불꽃</span>
+                <span class="cmeta"><span class="badge bd-hard">어려움</span></span></span></button>
+              <button class="ccard"><span class="art g-amber"><span class="init">아</span><span class="veil"></span></span>
+                <span class="cbody"><span class="cname">아이리</span><span class="ctag">다정한 온기</span>
+                <span class="cmeta"><span class="badge bd-easy">쉬움</span></span></span></button>
+              <button class="ccard"><span class="art g-violet"><span class="init">클</span><span class="veil"></span></span>
+                <span class="cbody"><span class="cname">클레어</span><span class="ctag">신비한 달빛</span>
+                <span class="cmeta"><span class="badge bd-normal">보통</span></span></span></button>
+              <button class="ccard"><span class="art g-sun"><span class="init">하</span><span class="veil"></span></span>
+                <span class="cbody"><span class="cname">하린</span><span class="ctag">햇살 같은 미소</span>
+                <span class="cmeta"><span class="badge bd-easy">쉬움</span><span class="credit"><span class="nick">달빛토끼</span></span></span></span></button>
+            </div>
+          </div>
+          <div class="m-sec" style="padding-bottom:24px">
+            <div class="sec-head"><div><div class="sec-title">스토리 세계관</div></div><a class="sec-link" href="#">전체 ›</a></div>
+            <div class="grid-worlds-home">
+              <button class="wcard-s"><span class="whero w-arc"><span class="wname">아르카디아</span></span>
+                <span class="wbody-s" style="display:block"><span class="wtag">검과 마법의 대륙</span>
+                <span class="wmeta"><span class="chip">중세 판타지</span><span class="badge bd-theater">극장 가능</span></span></span></button>
+            </div>
+          </div>
+        </div>
+        <nav class="ptab">
+          <a class="act" href="#"><span class="ic">⌂</span>홈</a>
+          <a href="#"><span class="ic">📖</span>스토리</a>
+          <a href="#"><span class="ic">✎</span>스튜디오</a>
+          <a href="#"><span class="ic">◈</span>보관함</a>
+        </nav>
+      </div>
+
+      <!-- 폰 2 · 스토리 -->
+      <div class="phone"><div class="pcap">스토리</div>
+        <div class="pscroll">
+          <div class="ptop"><div class="logo"><span class="spark">✦</span>LUCID</div>
+            <div class="energy"><span class="bolt">⚡</span>30</div></div>
+          <div class="page-head">
+            <div class="page-title">스토리</div>
+            <div class="page-desc">직접 주인공이 되거나, 극장에서 지켜보거나.</div>
+          </div>
+          <div class="grid-worlds">
+            <div class="wcard">
+              <div class="whero w-arc"><div class="wname">아르카디아</div></div>
+              <div class="wbody">
+                <div class="wdesc">전쟁의 그림자가 드리운 검과 마법의 대륙.</div>
+                <div class="wcont">2장 진행 중</div>
+                <div class="wacts">
+                  <button class="wact pri"><span class="al">이야기 이어하기</span><span class="ad">주인공이 되어 직접 겪어요</span></button>
+                  <button class="wact sec"><span class="al">🎭 극장 관람</span><span class="ad">지켜보는 이야기</span></button>
+                </div>
+              </div>
+            </div>
+            <div class="wcard">
+              <div class="whero w-luna"><div class="wname">루나 아카데미</div></div>
+              <div class="wbody">
+                <div class="wdesc">보름달이 뜨면 마법이 깨어나는 기숙학원.</div>
+                <div class="wacts">
+                  <button class="wact pri"><span class="al">이야기 시작하기</span><span class="ad">주인공이 되어 직접 겪어요</span></button>
+                  <button class="wact sec"><span class="al">🎭 극장 관람</span><span class="ad">지켜보는 이야기</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <nav class="ptab">
+          <a href="#"><span class="ic">⌂</span>홈</a>
+          <a class="act" href="#"><span class="ic">📖</span>스토리</a>
+          <a href="#"><span class="ic">✎</span>스튜디오</a>
+          <a href="#"><span class="ic">◈</span>보관함</a>
+        </nav>
+      </div>
+
+      <!-- 폰 3 · 보관함 -->
+      <div class="phone"><div class="pcap">보관함</div>
+        <div class="pscroll">
+          <div class="ptop"><div class="logo"><span class="spark">✦</span>LUCID</div>
+            <div class="energy"><span class="bolt">⚡</span>30</div></div>
+          <div class="page-head">
+            <div class="page-title">보관함</div>
+          </div>
+          <div class="seg">
+            <button class="on">대화</button><button>페르소나</button><button>업적</button><button>일러스트</button>
+          </div>
+          <div style="margin-top:16px">
+            <button class="rrow"><span class="face g-rose">연</span>
+              <span class="rx"><span class="rn">연화 <span class="badge bd-free">자유</span></span>
+              <span class="rq">“어젯밤 이야기, 마저 들려줄래?”</span></span>
+              <span class="rt">3시간</span></button>
+            <button class="rrow"><span class="face w-arc">아</span>
+              <span class="rx"><span class="rn">아르카디아 <span class="badge bd-story">스토리</span></span>
+              <span class="rq">국경의 밤 — 2장</span></span>
+              <span class="rt">어제</span></button>
+            <button class="rrow"><span class="face w-luna">루</span>
+              <span class="rx"><span class="rn">루나 아카데미 <span class="badge bd-theater">극장</span></span>
+              <span class="rq">3막 — 보름달 축제의 밤</span></span>
+              <span class="rt">12일</span></button>
+          </div>
+        </div>
+        <nav class="ptab">
+          <a href="#"><span class="ic">⌂</span>홈</a>
+          <a href="#"><span class="ic">📖</span>스토리</a>
+          <a href="#"><span class="ic">✎</span>스튜디오</a>
+          <a class="act" href="#"><span class="ic">◈</span>보관함</a>
+        </nav>
+      </div>
+
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 7 · 상태 디자인 ══════════════ -->
+<section class="screen" id="s-states"><div class="stage">
+  <div class="wrap">
+    <div class="page-head" style="margin-top:56px">
+      <div class="page-title">상태 디자인 — 로딩 · 빈 상태 · 오류</div>
+      <div class="page-desc">P6: 와이어프레임이 그리지 않는 것들을 실제로 설계합니다. 아래 매트릭스가 전 표면의 상태 정의입니다.</div>
+    </div>
+    <div class="states-grid">
+      <div class="state-box">
+        <div class="state-cap">LOADING — 스켈레톤 3골격</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="sk-card"><div class="sk sk-art"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div>
+          <div class="sk-card"><div class="sk sk-hero"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div>
+        </div>
+        <div class="sk-row"><div class="sk c"></div><div class="bx"><div class="sk"></div><div class="sk"></div></div></div>
+        <p style="font-size:var(--fs-meta);color:var(--tx-2);margin-top:8px">카드형(3:4) · 월드형(16:7) · 리스트형 — 콘텐츠와 동일 골격, 시머 1.6s, 스피너 금지</p>
+      </div>
+      <div class="state-box">
+        <div class="state-cap">EMPTY — 빈 상태 (패턴)</div>
+        <div class="empty">
+          <div class="ei">🌙</div>
+          <div class="et">아직 나눈 대화가 없어요</div>
+          <div class="ed">첫 이야기를 시작하면 여기에 기록돼요</div>
+          <button class="btn-grad">캐릭터 만나러 가기</button>
+        </div>
+      </div>
+      <div class="state-box">
+        <div class="state-cap">ERROR — 재시도 (패턴)</div>
+        <div class="empty">
+          <div class="ei" style="filter:grayscale(.5)">🌫</div>
+          <div class="et">잠시 연결이 흐려졌어요</div>
+          <div class="ed">네트워크를 확인하고 다시 시도해 주세요</div>
+          <button class="btn-ghost" style="margin-top:14px">다시 시도</button>
+        </div>
+        <p class="mock-note" style="margin-top:10px">요청 폭주 응답(429)도 동일 패턴 — 문구만 "지금은 찾는 분이 많아요, 잠시 후 다시 만나요"로. 섹션 단위 부분 실패 시 실패한 섹션만 이 패턴으로 바꾸고 나머지는 유지.</p>
+      </div>
+    </div>
+
+    <div class="states-grid" style="grid-template-columns:1fr 1fr">
+      <div class="state-box" style="min-height:auto">
+        <div class="state-cap">홈 히어로 — 이어할 대화가 없는 멤버</div>
+        <div class="banner" style="margin-top:0">
+          <div class="face" style="background:var(--grad-soft);border:1px solid rgba(167,139,250,.3)">✦</div>
+          <div class="bx">
+            <div class="eyebrow">첫 만남</div>
+            <div class="who">아직 나눈 이야기가 없어요</div>
+            <div class="quote">취향에 맞는 세 명을 추천해 드릴게요 — 3분이면 첫 대화가 시작돼요</div>
+          </div>
+          <button class="btn-grad cta">첫 만남 시작하기</button>
+        </div>
+        <p style="font-size:var(--fs-meta);color:var(--tx-2);margin-top:12px">온보딩을 스킵했거나 대화 기록이 0인 멤버 — 이어하기 배너와 같은 자리·같은 골격. 추천 섹션 서브카피는 이때 "지금 사랑받는 캐릭터예요"로 분기(취향 미응답 시 거짓 카피 방지).</p>
+      </div>
+      <div class="state-box" style="min-height:auto">
+        <div class="state-cap">세그먼트별 빈 상태 카피</div>
+        <table class="mtx" style="margin-top:0">
+          <tr><th>표면</th><th>제목</th><th>보조 + CTA</th></tr>
+          <tr><td>대화 기록</td><td>아직 나눈 대화가 없어요</td><td>첫 이야기를 시작하면 여기에 기록돼요 · [캐릭터 만나러 가기]</td></tr>
+          <tr><td>페르소나</td><td>나를 소개하는 첫 카드를 만들어 보세요</td><td>대화 속 내 모습이 페르소나를 따라가요 · [페르소나 만들기]</td></tr>
+          <tr><td>업적</td><td>첫 업적이 기다리고 있어요</td><td>대화를 시작하면 하나씩 열려요 · [캐릭터 만나러 가기]</td></tr>
+          <tr><td>일러스트</td><td>수집한 장면이 아직 없어요</td><td>이야기 속 특별한 순간이 그림으로 남아요 · [캐릭터 만나러 가기]</td></tr>
+          <tr><td>스토리(월드 0)</td><td>준비 중인 세계가 곧 열려요</td><td>먼저 홈에서 캐릭터와 자유 대화를 · [홈으로]</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="state-box" style="margin-top:24px;min-height:auto;margin-bottom:120px">
+      <div class="state-cap">표면 × 상태 매트릭스 (구현 계약)</div>
+      <table class="mtx">
+        <tr><th>표면</th><th>로딩</th><th>빈</th><th>오류</th></tr>
+        <tr><td>홈 히어로</td><td>배너 골격 시머</td><td>첫 만남 유도 배너(위 데모)</td><td>섹션 숨김(치명 아님)</td></tr>
+        <tr><td>홈 추천 그리드</td><td>카드형 ×10</td><td>발생 불가(공식 상시) — 방어: 섹션 숨김</td><td>섹션 단위 에러 패턴 + 재시도</td></tr>
+        <tr><td>신작 레일</td><td>카드형 ×5</td><td>섹션 숨김(신작 0)</td><td>섹션 숨김</td></tr>
+        <tr><td>스토리 세계관(홈)</td><td>월드형 ×3</td><td>섹션 숨김</td><td>섹션 숨김</td></tr>
+        <tr><td>스토리 탭</td><td>월드형 ×4</td><td>빈 상태(위 표)</td><td>전면 에러 패턴 + 재시도</td></tr>
+        <tr><td>보관함 4세그</td><td>리스트형/카드형</td><td>세그별 카피(위 표)</td><td>세그 영역 에러 패턴 + 재시도</td></tr>
+      </table>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════════ 화면 8 · 설계 문서 ══════════════ -->
+<section class="screen" id="s-system"><div class="doc">
+  <h1>설계 문서 — 결정과 근거 (R2 · 크리틱 반영판)</h1>
+  <p class="dsub">docs/15 원칙 P1~P6의 적용 방식, 열린 결정 5건에 대한 디자이너 권고, 구현 계약입니다. 목업 화면과 함께 봐주세요.</p>
+
+  <h2>1. 네이밍 — 탭 라벨 (열린 결정 ②)</h2>
+  <table>
+    <tr><th>기존</th><th>제안 A — 기능형 <span class="rec">권고</span></th><th>제안 B — 감성형</th><th>근거</th></tr>
+    <tr><td>정거장</td><td><b>홈</b></td><td>정거장</td><td class="why">첫 탭은 뜻을 해석할 필요가 0이어야 함. '정거장' 브랜드는 카피 레이어(인사말·배너)로 이동</td></tr>
+    <tr><td>세계관</td><td><b>스토리</b></td><td>세계관</td><td class="why">이 탭의 기능은 '스토리·극장 입구'인데 세계관이라는 이름이 그 연결을 숨김. 탭 이름이 곧 기능이 되도록</td></tr>
+    <tr><td>스튜디오</td><td><b>스튜디오</b></td><td>스튜디오</td><td class="why">창작 공간이라는 뜻이 한눈에 잡힘 — 유지</td></tr>
+    <tr><td>보관함</td><td><b>보관함</b></td><td>보관함</td><td class="why">기능어 — 유지. '기억의 끈'은 내부 섹션에서 '대화 기록'으로</td></tr>
+    <tr><td>인연</td><td colspan="2"><b>캐릭터</b> (정보 맥락 전부)</td><td class="why">P2 — 감성 표현은 서브카피·배너 문구에서만 1겹</td></tr>
+    <tr><td>히로인</td><td colspan="2"><b>캐릭터 N</b> (월드 칩·카운트)</td><td class="why">서브컬처 용어 + 남성 캐릭터 계수 오류 + 남캐 선호 유저 배제 신호. 성중립 전면 치환(BE 필드명 heroineCount는 유지, 표기만)</td></tr>
+    <tr><td>페르소나</td><td colspan="2"><b>페르소나</b> 유지, 내부 라벨 통일</td><td class="why">'프로필'은 캐릭터 프로필과 충돌. 동종 서비스 표준 용어라 학습 비용 낮음 — 대신 화면 안에서 '프로필/카드' 혼용 금지(현재/저장된 페르소나로 통일)</td></tr>
+  </table>
+  <ul>
+    <li>컨트롤 바의 <b>탭 라벨 A/B 토글</b>로 두 안을 실물 비교할 수 있습니다.</li>
+    <li>브랜드 보이스 1겹의 위치: 홈 인사말, 이어하기 대사 인용, 온보딩 카피, 빈 상태 문구. 내비게이션·버튼·섹션 제목은 전부 기능어.</li>
+    <li>난이도 배지의 정의("캐릭터가 마음을 여는 속도")는 온보딩 2단계 캡션 + 캐릭터 프로필 오버레이 툴팁, 두 곳에서 1회씩 노출.</li>
+  </ul>
+
+  <h2>2. 개인화 — 필터 제거와 취향 질문 (열린 결정 ①·⑤)</h2>
+  <table>
+    <tr><th>항목</th><th>결정</th><th>근거</th></tr>
+    <tr><td>필터 칩 4개</td><td><b>전면 제거.</b> 섹션이 축을 대신함 — '추천'(개인화 정렬) / '새로 나온 창작'(UGC 매대)</td><td class="why">P1 — 초심자에게 분류를 강요하지 않음. '남캐' 탭 소멸</td></tr>
+    <tr><td>UGC 표시</td><td>배지 대신 <b>제작자 크레딧</b> "✎ 닉네임"</td><td class="why">'UGC' 용어를 화면에서 제거. 크레딧은 창작 생태계 노출을 오히려 강화</td></tr>
+    <tr><td>취향 취득</td><td><b>유저 성별을 묻지 않고, 선호 캐릭터를 직접 묻는다</b> — 첫 만남 1단계. <b>기본 선택 없음 + 선택 전 '다음' 비활성</b></td><td class="why">성별→선호 추정은 가정이 낀다. 직접 물으면 가정 0 — 기본값을 깔면 그 가정이 복원되므로 기본값도 금지. 프로필 설정에서 변경 가능(블록 B 배선 공유)</td></tr>
+    <tr><td>온보딩 후보 규칙</td><td>선호별 3인 세트(난이도 분산 유지): 여성=여캐 3, 남성=남캐 3, 모두=혼합 3. <b>해당 성별 후보 부족 시 반대 성별로 백필</b></td><td class="why">컨트롤 바 없이도 1단계 선택이 2단계에 실반영(목업 동작 확인 가능). 남캐 로스터 확보 전에는 백필 규칙이 안전망</td></tr>
+    <tr><td>정렬 규칙 v1</td><td>선호 성별 매칭 우선 안정 정렬 — <b>프론트에서 FeedItem.gender로 수행(백엔드 무변경)</b>. 게스트·미응답은 중립(큐레이션 순)</td><td class="why">피드 응답에 gender가 이미 있음. 인기 지표 도입 시 서버 정렬로 승격(백로그)</td></tr>
+    <tr><td>카피 분기</td><td>추천 서브카피: 응답 멤버 "취향에 맞춰 순서를 정했어요" / 미응답 멤버 "지금 사랑받는 캐릭터예요" / 게스트 "처음이라면 여기서 시작해 보세요"(제목도 '지금 만나볼 수 있는 캐릭터')</td><td class="why">시스템이 하지 않는 일을 말하지 않는다 — 미응답·게스트에게 '취향 맞춤'·'인기'는 거짓 카피</td></tr>
+    <tr><td>온보딩 스킵</td><td>스킵 → 중립 정렬 홈. <b>재노출 없음</b>(홈 히어로의 '첫 만남 시작하기' 배너가 상시 재진입로)</td><td class="why">강제감 제거. 재진입로가 있으므로 반복 노출 불필요</td></tr>
+  </table>
+
+  <h2>3. 레이아웃 — 토큰 · 리듬 · 브레이크포인트 (P3)</h2>
+  <ul>
+    <li><b>전 화면 max-width 1200px 중앙 컨테이너</b>, 좌우 패딩 32px(모바일 16px). 캐러셀도 컨테이너 안에서만 흐르고 가장자리 페이드(스크롤 위치 연동) + 화살표(끝단 비활성).</li>
+    <li>간격 리듬: <code>4 8 12 16 24 32 48 64</code> — 섹션 48 / 헤더→콘텐츠 16 / 카드 갭 16. 리듬 외 값 금지.</li>
+    <li>타입 스케일(데스크톱): <code>26 hero · 22 page · 19 title · 17 sec · 15 card · 12.5 meta · 11 badge</code>. 모바일: <code>19 · 15.5 · 14 · 13 · 12.5 · 11</code>(하단탭 라벨만 10.5). 스케일 외 크기 금지 — 전부 토큰 참조.</li>
+    <li>대비 규칙: <b>tx-2(#8b8ba3)는 12.5px 이상에서만</b>, 그 미만 보조 텍스트는 tx-1. 그라데이션 CTA 위 보조 텍스트는 알파 0.8 이상.</li>
+    <li>피드 그리드 <code>auto-fill minmax(190px)</code> — 1200에서 5열, 좁아지면 4→3열. 월드 그리드는 개수&lt;열수일 때 카드 max-width 380px 고정(빈 트랙에 카드가 늘어붙지 않게).</li>
+  </ul>
+  <table style="margin-top:14px">
+    <tr><th>구간</th><th>내비게이션</th><th>그리드</th></tr>
+    <tr><td>≥ 1024</td><td>탑바 중앙 탭(절대배치 센터)</td><td>피드 4~5열 · 월드 대형 2열 · 월드 프리뷰 3열</td></tr>
+    <tr><td>768 ~ 1023</td><td>탭을 일반 flex 흐름으로(센터 고정 해제) — 로고·탭·우측 클러스터 한 줄</td><td>피드 3열 · 월드 대형 1열 · 프리뷰 2열</td></tr>
+    <tr><td>&lt; 768</td><td><b>하단 탭 바</b>(safe-area 패딩) — 탑바는 로고+에너지만</td><td>피드 2열 · 전부 1열 · 리스트형 유지</td></tr>
+  </table>
+  <div class="swatches">
+    <div class="sw"><i style="background:#0b0b10"></i><span>bg-0 #0b0b10</span></div>
+    <div class="sw"><i style="background:rgba(255,255,255,.035)"></i><span>card 3.5%</span></div>
+    <div class="sw"><i style="background:linear-gradient(135deg,#c4b5fd,#7dd3fc)"></i><span>accent grad</span></div>
+    <div class="sw"><i style="background:#8b8ba3"></i><span>tx-2 #8b8ba3</span></div>
+    <div class="sw"><i style="background:#34d399"></i><span>easy</span></div>
+    <div class="sw"><i style="background:#60a5fa"></i><span>normal</span></div>
+    <div class="sw"><i style="background:#fb923c"></i><span>hard</span></div>
+    <div class="sw"><i style="background:#f87171"></i><span>extreme</span></div>
+  </div>
+
+  <h2>4. 진입 플로우 · 게스트 게이트 (P4)</h2>
+  <ul>
+    <li><b>캐릭터 카드 → 프로필 → 대화 시작</b> 유지 (종원 OK 판정). 프로필 오버레이는 기존 CharacterProfileView 재사용, 스타일만 토큰 정합.</li>
+    <li>스토리·극장은 추상 명사로 먼저 제시하지 않음 — <b>월드 카드 안의 두 행동 버튼</b>이 각각 1줄 설명을 달고 나옴. 홈의 '스토리 세계관' 섹션이 스토리 탭의 예고편.</li>
+    <li><b>게스트 게이트 규칙(단일 선언)</b>: 탐색은 전부 열림(홈·스토리·프로필), <b>행동 시점에만</b> 로그인 시트(기존 GuestLoginGate 재사용). 버튼에 자물쇠·비활성 표시를 하지 않는다 — 탐색을 위축시키지 않기 위해. 규칙 안내는 게스트 배너 한 곳에서만.</li>
+    <li>게스트에게 멤버 상태(진행 중 표시·'이어하기' 라벨)는 렌더하지 않음 — 스토리 카드 버튼은 게스트에게 항상 '이야기 시작하기'.</li>
+    <li>보관함·스튜디오 탭은 게스트 클릭 시 로그인 시트(화면 진입 없음 — 업적 API도 인증 필수).</li>
+    <li>온보딩: 빈손 신규만 첫 만남(2단계). 게스트 딥링크 복원이 온보딩 대체(기존 postLogin 로직 보존).</li>
+  </ul>
+
+  <h2>5. 표현 일관성 (열린 결정 ③·④)</h2>
+  <table>
+    <tr><th>항목</th><th>결정</th><th>근거</th></tr>
+    <tr><td>보관함 패턴</td><td><b>인탭 세그먼트</b> 단일 체계 <span class="rec">권고</span> — 대화/페르소나/업적/일러스트 전부 같은 자리에서 전환. <b>/archive?tab= 동기화·뒤로가기 복원</b></td><td class="why">모달·드로어·별도 페이지 3종 혼재 제거. 극장 아카이브는 대화 기록에 병합</td></tr>
+    <tr><td>스튜디오</td><td><b>셸 임베드 확정</b> — 스튜디오 화면(목업 3번) 참조. 잔존 자체 크롬 완전 제거, 로비 컨테이너·토큰 채택. 월드 빌더 위저드만 풀스크린 유지</td><td class="why">4탭 중 1탭만 다른 공간이면 일관성 위반. 위저드는 몰입 과업이라 예외가 정당</td></tr>
+    <tr><td>모션</td><td>탭 전환 enter-only 페이드 1회(기존 픽스 유지) · 카드 호버 -3px + 보더 글로우 · 그 외 모션 금지</td><td class="why">P6 절제 — 이중 페이드 회귀 방지</td></tr>
+    <tr><td>장식 마커</td><td>의미 없는 장식 아이콘(카드 위 ✦ 등) 금지 — ✦는 로고 전용</td><td class="why">실사 썸네일 위에서 소실 + 의미 미정의 마커는 노이즈</td></tr>
+  </table>
+
+  <h2>6. 구현 계약 (시맨틱 · 상태 · 유틸)</h2>
+  <ul>
+    <li><b>모든 카드·행은 button 또는 href 있는 a</b> — div+tabindex 금지. 내비 활성 탭은 <code>aria-current="page"</code>, 보관함 세그먼트는 tablist/tab/tabpanel + aria-selected.</li>
+    <li>포커스 토큰: <code>:focus-visible → box-shadow 0 0 0 2px rgba(167,139,250,.55)</code> 전역 1규칙. disabled는 <code>opacity .4</code> + hover 무효(<code>:not(:disabled)</code> 가드).</li>
+    <li><b>조사 유틸 필수</b>: 동적 캐릭터명 + 와/과 — 한글 종성 판별 <code>(code-0xAC00)%28&gt;0 → '과', 아니면 '와'</code>. 비한글 종결 닉네임은 이름 생략형 폴백("이 캐릭터와 대화 시작하기").</li>
+    <li>텍스트 오버플로: 캐릭터명·월드명 1줄 ellipsis, 태그라인 1줄 ellipsis, 월드 설명 2줄 clamp, 레일 크레딧 닉네임 max-width ellipsis.</li>
+    <li>카드 아트는 <b>3:4 단일 비율</b>(온보딩 포함) — 썸네일 제작·크롭 기준 통일. 썸네일 부재 시 그라데이션+이니셜 폴백(이 목업의 플레이스홀더가 곧 폴백 디자인).</li>
+    <li>월드 카드 버튼 행은 <code>flex column + margin-top:auto</code>로 하단 고정 — 설명 길이와 무관하게 정렬 유지.</li>
+    <li>스켈레톤 3골격(카드형/월드형/리스트형)·빈 상태·에러·부분 실패 규칙은 '상태' 화면의 매트릭스를 정본으로.</li>
+  </ul>
+
+  <h2>7. 이 목업이 실물과 다른 점</h2>
+  <ul>
+    <li>캐릭터 아트는 그라데이션 플레이스홀더 — 실서비스는 3:4 썸네일. 단 <b>썸네일이 없어도 성립하는 카드</b>가 설계 목표(플레이스홀더 = 폴백 디자인).</li>
+    <li>프로필 오버레이·스튜디오 내부·설정·로그인 시트는 기존 컴포넌트 재사용이라 목업 생략(스타일 토큰 정합만 적용).</li>
+    <li>구현은 기존 스택 그대로: Tailwind 토큰화 + framer-motion 절제 사용, 게스트 API·딥링크 복원 재사용.</li>
+  </ul>
+</div></section>
+
+<script>
+/* ───── 컨트롤: 화면 전환 ───── */
+const scrBtns=document.querySelectorAll('#ctrl [data-s]');
+function goScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById('s-'+id).classList.add('on');
+  scrBtns.forEach(b=>b.classList.toggle('on',b.dataset.s===id));
+  window.scrollTo(0,0);
+}
+scrBtns.forEach(b=>b.onclick=()=>goScreen(b.dataset.s));
+document.querySelectorAll('[data-goto]').forEach(a=>a.onclick=e=>{e.preventDefault();goScreen(a.dataset.goto)});
+document.querySelectorAll('.nav a[data-tab]').forEach(a=>a.onclick=e=>{
+  e.preventDefault();
+  const t=a.dataset.tab;
+  if(['home','story','studio','archive'].includes(t)) goScreen(t);
+});
+
+/* ───── 멤버/게스트 ───── */
+const tm=document.getElementById('tgl-member'),tg=document.getElementById('tgl-guest');
+tm.onclick=()=>{document.body.classList.remove('guest');tm.classList.add('on');tg.classList.remove('on')};
+tg.onclick=()=>{document.body.classList.add('guest');tg.classList.add('on');tm.classList.remove('on')};
+
+/* ───── 탭 라벨 A/B ───── */
+const LBL={A:{home:'홈',story:'스토리',studio:'스튜디오',archive:'보관함'},
+           B:{home:'정거장',story:'세계관',studio:'스튜디오',archive:'보관함'}};
+const la=document.getElementById('lbl-a'),lb=document.getElementById('lbl-b');
+function setLbl(set){
+  document.querySelectorAll('.nav a[data-tab]').forEach(a=>{a.textContent=LBL[set][a.dataset.tab]});
+  la.classList.toggle('on',set==='A');lb.classList.toggle('on',set==='B');
+}
+la.onclick=()=>setLbl('A');lb.onclick=()=>setLbl('B');
+
+/* ───── 보관함 세그먼트 ───── */
+document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#seg button').forEach(x=>{x.classList.remove('on');x.setAttribute('aria-selected','false')});
+  b.classList.add('on');b.setAttribute('aria-selected','true');
+  document.querySelectorAll('#s-archive .seg-pane').forEach(p=>p.classList.remove('on'));
+  document.getElementById('p-'+b.dataset.p).classList.add('on');
+});
+
+/* ───── 첫 만남 ─────
+   조사 규칙: 한글 종성 판별 (code-0xAC00)%28>0 → '과', 아니면 '와'. 비한글 종결은 이름 생략형 폴백. */
+const FM_SETS={
+  female:[
+    {n:'아이리',g:'g-amber',i:'아',t:'다정한 온기 — 처음이라면 가장 편안한',d:['easy','쉬움']},
+    {n:'클레어',g:'g-violet',i:'클',t:'신비한 달빛 — 속을 알 수 없는 미소',d:['normal','보통']},
+    {n:'연화',g:'g-rose',i:'연',t:'도도한 불꽃 — 마음을 얻기 어려운',d:['hard','어려움']}],
+  male:[
+    {n:'카엘',g:'g-teal',i:'카',t:'다정한 화가 — 곁이 가장 편안한 사람',d:['easy','쉬움']},
+    {n:'도윤',g:'g-navy',i:'도',t:'과묵한 경호원 — 당신만은 지킨다',d:['normal','보통']},
+    {n:'시온',g:'g-silver',i:'시',t:'차가운 천재 — 쉽게 곁을 주지 않는',d:['hard','어려움']}],
+  all:[
+    {n:'아이리',g:'g-amber',i:'아',t:'다정한 온기 — 처음이라면 가장 편안한',d:['easy','쉬움']},
+    {n:'도윤',g:'g-navy',i:'도',t:'과묵한 경호원 — 당신만은 지킨다',d:['normal','보통']},
+    {n:'연화',g:'g-rose',i:'연',t:'도도한 불꽃 — 마음을 얻기 어려운',d:['hard','어려움']}]
+};
+let fmPref=null,fmPick=null;
+function josa(name){
+  const c=name.charCodeAt(name.length-1);
+  if(c<0xAC00||c>0xD7A3) return null;            // 비한글 → 폴백
+  return (c-0xAC00)%28>0?'과':'와';
+}
+function fmCta(){
+  const b=document.getElementById('fm-cta2');
+  if(!fmPick){b.textContent='대화 시작하기';return}
+  const j=josa(fmPick);
+  b.textContent=j?`${fmPick}${j} 대화 시작하기`:'이 캐릭터와 대화 시작하기';
+}
+function fmRender(){
+  const wrap=document.getElementById('fm-cards');
+  const set=FM_SETS[fmPref||'female'];
+  wrap.innerHTML=set.map((c,idx)=>`
+    <button class="fmc${idx===1?' sel':''}" data-name="${c.n}">
+      <span class="art ${c.g}"><span class="init">${c.i}</span><span class="veil"></span></span>
+      <span class="cbody"><span class="cname">${c.n}</span><span class="ctag">${c.t}</span>
+      <span class="cmeta"><span class="badge bd-${c.d[0]}">${c.d[1]}</span></span></span>
+    </button>`).join('');
+  fmPick=set[1].n;fmCta();
+  wrap.querySelectorAll('.fmc').forEach(c=>c.onclick=()=>{
+    wrap.querySelectorAll('.fmc').forEach(x=>x.classList.remove('sel'));
+    c.classList.add('sel');fmPick=c.dataset.name;fmCta();
+  });
+}
+function fmStep(n){
+  document.getElementById('fm1').style.display=n===1?'':'none';
+  document.getElementById('fm2').style.display=n===2?'':'none';
+  if(n===2)fmRender();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.fopt').forEach(o=>o.onclick=()=>{
+  document.querySelectorAll('.fopt').forEach(x=>x.classList.remove('sel'));
+  o.classList.add('sel');fmPref=o.dataset.pref;
+  document.getElementById('fm-cta1').disabled=false;
+});
+document.getElementById('fm-cta1').onclick=()=>fmStep(2);
+
+/* ───── 새 창작 레일: 화살표 + 가장자리 페이드 + 끝단 비활성 ───── */
+const rail=document.getElementById('rail-new');
+const railBtns=document.querySelectorAll('.rail-nav button');
+railBtns.forEach((b,i)=>b.onclick=()=>{
+  rail.scrollBy({left:(i===0?-1:1)*rail.clientWidth*.7,behavior:'smooth'})});
+const fadeL=document.querySelector('.rail-clip .fade.l'),fadeR=document.querySelector('.rail-clip .fade.r');
+function railFade(){
+  const max=rail.scrollWidth-rail.clientWidth;
+  const overflow=max>8;
+  railBtns.forEach(b=>b.style.display=overflow?'':'none');
+  fadeL.style.opacity=rail.scrollLeft>8?1:0;
+  fadeR.style.opacity=rail.scrollLeft<max-8?1:0;
+  railBtns[0].disabled=rail.scrollLeft<=8;
+  railBtns[1].disabled=rail.scrollLeft>=max-8;
+}
+rail.addEventListener('scroll',railFade,{passive:true});
+window.addEventListener('resize',railFade);
+railFade();
+</script>
+</body>
+</html>
