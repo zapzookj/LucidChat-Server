@@ -408,7 +408,9 @@ public class ChatStreamService {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
-                    final boolean secretMode = jpa.room().isSecretModeActive();
+                    // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
+                    //   (페르소나 나이 하향·패스 만료) 후에도 NSFW 트랙에 태운다. 매턴 재판정.
+                    final boolean secretMode = resolveSecretMode(jpa.room());
 
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(
@@ -828,7 +830,9 @@ public class ChatStreamService {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
-                    final boolean secretMode = jpa.room().isSecretModeActive();
+                    // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
+                    //   (페르소나 나이 하향·패스 만료) 후에도 NSFW 트랙에 태운다. 매턴 재판정.
+                    final boolean secretMode = resolveSecretMode(jpa.room());
 
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(
@@ -1687,7 +1691,9 @@ public class ChatStreamService {
                     String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
-                    final boolean secretMode = jpa.room().isSecretModeActive();
+                    // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
+                    //   (페르소나 나이 하향·패스 만료) 후에도 NSFW 트랙에 태운다. 매턴 재판정.
+                    final boolean secretMode = resolveSecretMode(jpa.room());
 
                     BackgroundGenerationService.BackgroundResult bgResult =
                         backgroundGenerationService.resolveBackground(

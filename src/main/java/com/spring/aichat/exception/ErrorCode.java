@@ -64,5 +64,12 @@ public enum ErrorCode {
     /**
      * 프리미엄 기능 (예: 자유 페르소나 BM) 미보유 → 402.
      */
-    PREMIUM_REQUIRED
+    PREMIUM_REQUIRED,
+
+    /**
+     * [블록 B 페르소나] 시크릿 활성 요구에 페르소나 프로필 나이가 미달(미설정 포함) → 403.
+     * 법적 성인인증(VERIFICATION_UNDERAGE)과 별개 — FE는 이 코드에 '나이를 수정할까요?'
+     * 프로필 수정 제안 모달을 연결한다(UX는 부드럽게, 로직은 하드하게 — docs/14 #4).
+     */
+    PERSONA_UNDERAGE
 }

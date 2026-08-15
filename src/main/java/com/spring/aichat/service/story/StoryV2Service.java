@@ -90,13 +90,14 @@ public class StoryV2Service {
     private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
 
     /**
-     * [페르소나] 카드 스냅샷 적용 — 지정 시 본문·스탯·성별이 방에 복사(카드 수정 소급 불변).
-     * 공식·UGC 생성/overwrite 4경로 공용.
+     * [블록 B 페르소나] 현재 활성 프로필 스냅샷 — 본문·렌즈·성별을 방에 복사(수정 소급 불변)
+     * + 스토리 닉네임을 프로필 이름으로 일원화. 공식·UGC 생성/overwrite/리셋 경로 공용.
+     * 피커 입력(userPersonaId/personaText/preset/nickname)은 더 이상 소비하지 않는다.
      */
-    private void applyPersonaCardIfAny(ChatRoom room, User user, Long personaCardId) {
-        if (personaCardId == null) return;
-        var card = userPersonaService.requireOwned(user.getId(), personaCardId);
-        room.applyPersonaCard(card.getPersonaText(), card.statsJson(), card.getGenderOrDefault());
+    private void applyProfileSnapshot(ChatRoom room, User user) {
+        var profile = userPersonaService.getOrCreateProfile(user);
+        room.applyPersonaCard(profile.personaTextOrNull(), profile.statsJson(), profile.getGenderOrDefault());
+        room.updateStoryUserNickname(profile.getName());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -491,14 +492,6 @@ public class StoryV2Service {
         // 시작 장소 검증 + 기본값
         String startLocationKey = resolveStartLocation(worldId, request.startLocationKey());
 
-        // 페르소나 검증
-        String userPersona = resolvePersona(user, worldId, request.personaText(), request.selectedPersonaPresetKey());
-
-        // [Phase 7-V2 Pivot] 닉네임 resolve — 입력값 우선, blank면 User.nickname 폴백
-        String storyNickname = (request.nickname() != null && !request.nickname().isBlank())
-            ? request.nickname().trim()
-            : user.getNickname();
-
         // 기존 방 체크
         Optional<ChatRoom> existing = chatRoomRepository
             .findByUser_IdAndWorld_IdAndChatMode(user.getId(), worldId, ChatMode.STORY);
@@ -510,13 +503,11 @@ public class StoryV2Service {
                 // 409 — UI에서 confirm 받고 재호출
                 throw new BusinessException(ErrorCode.STORY_V2_ROOM_EXISTS, "Existing room found: roomId=" + room.getId());
             }
-            // overwrite — 페르소나 포함 완전 reset 후 새 페르소나 적용
+            // overwrite — 페르소나 포함 완전 reset 후 현재 프로필 재적용
             log.info("🔄 [STORY-V2] Overwriting existing room: roomId={}", room.getId());
             cascadeResetRoom(room, true);
-            room.updateUserPersona(userPersona);
-            room.updateStoryUserNickname(storyNickname);
             room.restoreStartLocation(startLocationKey);
-            applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
+            applyProfileSnapshot(room, user);   // [블록 B] 현재 프로필 자동 적용
 
             // 히로인/위치 재구성
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
@@ -527,9 +518,9 @@ public class StoryV2Service {
             return new CreateStoryV2Response(room.getId(), worldId.name(), false, true);
         }
 
-        // 신규 생성
-        ChatRoom room = ChatRoom.createStoryV2(user, world, startLocationKey, userPersona, storyNickname);
-        applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
+        // 신규 생성 — 페르소나·닉네임은 applyProfileSnapshot이 현재 프로필로 세팅
+        ChatRoom room = ChatRoom.createStoryV2(user, world, startLocationKey, null, null);
+        applyProfileSnapshot(room, user);   // [블록 B] 현재 프로필 자동 적용
         room = chatRoomRepository.save(room);
 
         // [D-5/E-2b] 서사 나침반 상태 초기화 — 빈 thread로 시작(백본 미리 심지 않음).
@@ -580,22 +571,6 @@ public class StoryV2Service {
         // 시작 장소 — 요청 키 검증 or 첫 활성 장소
         String startLocationKey = resolveUgcStartLocation(view, request.startLocationKey());
 
-        // 페르소나 — UGC 월드는 프리셋 없음(자유 텍스트만)
-        if (request.selectedPersonaPresetKey() != null && !request.selectedPersonaPresetKey().isBlank()) {
-            throw new BadRequestException("UGC 세계관은 페르소나 프리셋을 지원하지 않아요.");
-        }
-        String userPersona = null;
-        if (request.personaText() != null && !request.personaText().isBlank()) {
-            if (!hasFreePersonaUnlock(user.getId())) {
-                throw new BusinessException(ErrorCode.PREMIUM_REQUIRED, "Free persona requires unlock");
-            }
-            userPersona = request.personaText().trim();
-        }
-
-        String storyNickname = (request.nickname() != null && !request.nickname().isBlank())
-            ? request.nickname().trim()
-            : user.getNickname();
-
         // 기존 방 체크 — 'UGC 월드당 1방'
         Optional<ChatRoom> existing = chatRoomRepository
             .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), ref.ugcWorldId(), ChatMode.STORY);
@@ -608,18 +583,16 @@ public class StoryV2Service {
             }
             log.info("🔄 [STORY-V2-UGC] Overwriting existing room: roomId={}", room.getId());
             cascadeResetRoom(room, true);
-            room.updateUserPersona(userPersona);
-            room.updateStoryUserNickname(storyNickname);
             room.restoreStartLocation(startLocationKey);
-            applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
+            applyProfileSnapshot(room, user);   // [블록 B] 현재 프로필 자동 적용
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
             seedUgcStoryBackground(room, view, startLocationKey);
             return new CreateStoryV2Response(room.getId(), ref.key(), false, true);
         }
 
         ChatRoom room = ChatRoom.createStoryV2Ugc(user, ref.ugcWorldId(), startLocationKey,
-            userPersona, storyNickname);
-        applyPersonaCardIfAny(room, user, request.userPersonaId());   // [페르소나] 카드 우선
+            null, null);
+        applyProfileSnapshot(room, user);   // [블록 B] 현재 프로필 자동 적용
         try {
             room = chatRoomRepository.saveAndFlush(room);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
@@ -741,30 +714,6 @@ public class StoryV2Service {
                 "World " + worldId + " has no startable location seeded"));
     }
 
-    private String resolvePersona(User user, WorldId worldId,
-                                  String personaText, String selectedPresetKey) {
-        // 사전 정의 페르소나 선택
-        if (selectedPresetKey != null && !selectedPresetKey.isBlank()) {
-            return personaPresetRepository
-                .findByWorldIdAndPresetKey(worldId, selectedPresetKey)
-                .map(UserPersonaPreset::getDescription)
-                .orElseThrow(() -> new BadRequestException(
-                    "Invalid persona preset: " + selectedPresetKey));
-        }
-
-        // 자유 페르소나 — BM 권한 필요
-        if (personaText != null && !personaText.isBlank()) {
-            if (!hasFreePersonaUnlock(user.getId())) {
-                throw new BusinessException(ErrorCode.PREMIUM_REQUIRED,
-                    "Free persona requires unlock");
-            }
-            return personaText.trim();
-        }
-
-        // 둘 다 미입력 — null 폴백 (ChatRoom.getEffectivePersona에서 user.profileDescription 사용)
-        return null;
-    }
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [4] resetStory — 스토리 초기화 (페르소나 옵션)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -806,6 +755,11 @@ public class StoryV2Service {
         } else {
             startLocationKey = resolveStartLocation(room.getWorld().getId(), request.startLocationKey());
             room.restoreStartLocation(startLocationKey);
+        }
+
+        // [블록 B 페르소나] '페르소나 초기화' = 현재 프로필 다시 적용 (개념 역전 후 의미 재정의)
+        if (request.includePersona()) {
+            applyProfileSnapshot(room, user);
         }
 
         // [Phase 7-V2 Pivot Fix] 캡처한 히로인으로 ChatRoomHeroine + CharacterPresence 재생성
@@ -971,18 +925,10 @@ public class StoryV2Service {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * [TODO — 운영 진입 전 연결]
-     * 자유 페르소나 BM 권한 체크. 현재 placeholder (true 반환).
-     *
-     * <p>연결 대상 후보:
-     * - {@code UserService.hasFreePersonaUnlock(userId)} — 신규 메서드
-     * - {@code SubscriptionService.hasFeature(userId, "FREE_PERSONA")}
-     * - 또는 {@code User} 엔티티에 {@code freePersonaUnlocked} boolean 필드 추가
-     *
-     * <p>현재 모든 유저가 자유 페르소나 가능 — 결제 시스템 연결 후 false로 디폴트.
+     * [블록 B BM 확정 — docs/14 #4] 자유 입력·스탯은 전면 무료(과금은 슬롯 수만).
+     * 이 플래그는 CreateContextResponse 하위호환용으로만 true 고정 유지 — 게이트로 쓰지 말 것.
      */
     private boolean hasFreePersonaUnlock(Long userId) {
-        // TODO: 결제 시스템 연결
         return true;
     }
 

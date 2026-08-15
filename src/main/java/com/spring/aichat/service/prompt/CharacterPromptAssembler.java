@@ -325,10 +325,10 @@ public class CharacterPromptAssembler {
             dynamicBuilder.append("\n").append(difficultyDirective).append("\n");
         }
 
-        // ── [2026-08-04 페르소나] Persona–Stat Hybrid — 카드 스탯 스냅샷 있는 방만 주입 ──
-        String personaStatBlock = PersonaStatPromptBlock.build(room.getPersonaStatsJson());
-        if (personaStatBlock != null) {
-            dynamicBuilder.append(personaStatBlock).append("\n");
+        // ── [블록 B 페르소나] 인식 렌즈 — 렌즈 스냅샷 있는 방만 주입(구 키 스냅샷은 무주입) ──
+        String personaLensBlock = PersonaLensPromptBlock.build(room.getPersonaStatsJson());
+        if (personaLensBlock != null) {
+            dynamicBuilder.append(personaLensBlock).append("\n");
         }
 
         // ── [스토리 전용] 씬 상태 + 승급 ──

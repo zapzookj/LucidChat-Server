@@ -149,23 +149,8 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("secretModeActive", enabled));
     }
 
-    /**
-     * 채팅방 전용 유저 페르소나 설정
-     *
-     * Body: { "persona": "대학교 3학년 미대생" }
-     * null/빈 문자열 전송 시 → 방 전용 페르소나 해제 (유저 기본값 폴백)
-     */
-    @PatchMapping("/rooms/{roomId}/persona")
-    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
-    public ResponseEntity<Map<String, Object>> updateRoomPersona(
-        @PathVariable Long roomId,
-        @RequestBody RoomPersonaRequest request
-    ) {
-        chatService.updateRoomPersona(roomId, request.persona());
-        return ResponseEntity.ok(Map.of(
-            "userPersona", request.persona() != null ? request.persona() : ""
-        ));
-    }
+    // [블록 B] PATCH /rooms/{id}/persona 제거 — 방 단위 자유텍스트 편집은 '중도 교체 불가'
+    // 원칙과 충돌하고 구 스탯 잔존 유령 버그의 원인이었다. 페르소나는 프로필 API로 일원화.
 
     // ━━━ [Phase 5.1] 유저 평가 (RLHF) ━━━
 

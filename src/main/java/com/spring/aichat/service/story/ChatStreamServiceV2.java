@@ -993,9 +993,10 @@ public class ChatStreamServiceV2 {
             transition = LocationTransition.cached(loc.name(), bg.imageUrl());
         } else {
             transition = LocationTransition.generating(loc.name(), bg.cacheHash());
+            // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유(resolveSecretMode) — raw 플래그 금지
             backgroundGenerationService.generateBackgroundAsync(
                 loc.name(), canonicalKey, loc.description(), timeOfDay, charContextId,
-                room.getWorld(), room.isSecretModeActive());
+                room.getWorld(), resolveSecretMode(room));
         }
 
         // 영속화
@@ -1070,9 +1071,10 @@ public class ChatStreamServiceV2 {
             transition = LocationTransition.cached(loc.getDisplayName(), bg.imageUrl());
         } else {
             transition = LocationTransition.generating(loc.getDisplayName(), bg.cacheHash());
+            // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유(resolveSecretMode) — raw 플래그 금지
             backgroundGenerationService.generateBackgroundAsync(
                 loc.getDisplayName(), canonicalKey, description, timeOfDay, 0L,
-                room.getWorld(), room.isSecretModeActive());
+                room.getWorld(), resolveSecretMode(room));
         }
 
         final String bgUrlToStore = bg.cacheHit() ? bg.imageUrl() : null;

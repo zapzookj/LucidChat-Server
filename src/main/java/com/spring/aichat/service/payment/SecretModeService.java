@@ -61,6 +61,8 @@ public class SecretModeService {
     private final UserSecretPassRepository secretPassRepository;   // [Fix 2] 24h 패스 RDB
     private final CharacterRepository characterRepository;
     private final RedisCacheService cacheService;
+    // [블록 B] 페르소나 나이 하드 게이트 — 활성 프로필 age 판정 소스
+    private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
 
     private static final String SECRET_PASS_PREFIX = "secret_pass:";
 
@@ -112,6 +114,12 @@ public class SecretModeService {
         if (!Boolean.TRUE.equals(user.getIsAdult())) {
             return false;
         }
+        // [블록 B 페르소나 — docs/14 #4 절대선] 라이브 활성 프로필 나이 19+ 하드 게이트.
+        // 모든 활성 경로(유저/방 토글)와 매턴 재판정(V1/V2 resolveSecretMode)이 이 관문을
+        // 지나므로, 활성 후 나이를 하향 수정하는 역방향도 다음 요청부터 자동 차단된다.
+        if (!isPersonaAdult(user.getId())) {
+            return false;
+        }
         if (hasMidnightPass(user.getId())) {
             return true;
         }
@@ -119,6 +127,11 @@ public class SecretModeService {
             return true;
         }
         return hasAnyActive24hPass(user.getId());
+    }
+
+    /** [블록 B] 페르소나 프로필 나이 19+ 여부 — 프로필 미존재·나이 미설정도 false(하드 게이트). */
+    public boolean isPersonaAdult(Long userId) {
+        return userPersonaService.isProfileAdult(userId);
     }
 
     /** [V2 · Q-10] 유저가 *어떤 캐릭터에라도* 영구 해금을 보유하면 true. */
@@ -294,29 +307,36 @@ public class SecretModeService {
      */
     public SecretModeStatus getStatus(User user) {
         if (!Boolean.TRUE.equals(user.getIsAdult())) {
-            return new SecretModeStatus(false, false, false, false, "NEED_ADULT_VERIFY");
+            return new SecretModeStatus(false, false, false, false, false, false, "NEED_ADULT_VERIFY");
         }
 
+        // [블록 B] 페르소나 나이 게이트 — 인증·구매보다 먼저 안내(FE 프로필 수정 제안 모달)
+        boolean personaAdult = isPersonaAdult(user.getId());
         boolean midnightPass = hasMidnightPass(user.getId());
         boolean anyPermanentUnlock = hasAnyPermanentUnlock(user.getId());
         boolean anyActive24hPass = hasAnyActive24hPass(user.getId());
-        boolean canAccess = midnightPass || anyPermanentUnlock || anyActive24hPass;
+        boolean entitled = midnightPass || anyPermanentUnlock || anyActive24hPass;
+        boolean canAccess = personaAdult && entitled;
 
-        String reason = canAccess ? "GRANTED" : "NEED_PURCHASE";
-        return new SecretModeStatus(true, midnightPass, anyPermanentUnlock, anyActive24hPass, reason);
+        String reason = !personaAdult ? "PERSONA_UNDERAGE"
+            : (entitled ? "GRANTED" : "NEED_PURCHASE");
+        return new SecretModeStatus(true, personaAdult, midnightPass, anyPermanentUnlock,
+            anyActive24hPass, canAccess, reason);
     }
 
+    /**
+     * [docs/13 C-3 픽스] {@code canAccess}를 명시 컴포넌트로 승격 — record 파생 메서드는
+     * Jackson이 직렬화하지 않아 FE(SecretModeFlow)가 undefined를 읽던 확정 버그.
+     */
     public record SecretModeStatus(
         boolean isAdult,
+        boolean personaAdult,    // [블록 B] 페르소나 프로필 19+ 여부
         boolean hasMidnightPass,
         boolean hasPermanentUnlock,
         boolean has24hPass,
+        boolean canAccess,
         String accessReason
-    ) {
-        public boolean canAccess() {
-            return isAdult && (hasMidnightPass || hasPermanentUnlock || has24hPass);
-        }
-    }
+    ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Internal

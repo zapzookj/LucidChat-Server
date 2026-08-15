@@ -32,6 +32,7 @@ public class GlobalExceptionHandler {
             case STORY_V2_ROOM_EXISTS -> 409;   // ★ confirm 모달 트리거 — 누락 시 500이 되어 UI 흐름 깨짐
             case WORLD_LOCATION_MISSING -> 500; // 서버 결함 (시드 누락)
             case PREMIUM_REQUIRED -> 402;
+            case PERSONA_UNDERAGE -> 403;   // [블록 B] FE 프로필 나이 수정 제안 모달 트리거
             default -> 500;
         };
 

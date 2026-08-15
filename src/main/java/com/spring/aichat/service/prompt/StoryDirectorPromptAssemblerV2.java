@@ -523,9 +523,9 @@ public class StoryDirectorPromptAssemblerV2 {
             - 유저의 대사 = 그들이 입에서 낸 실제 말.
             - 유저의 행동 = 그들이 의지로 한 행동.
             - 디렉터는 유저의 *내적 독백*을 임의로 생성하지 않는다. 단 유저 페르소나의 *외적 반응*은 묘사 가능.""".formatted(safeNickname, safePersona)
-            // [2026-08-04 페르소나] Persona–Stat Hybrid — 카드 스탯 스냅샷 있는 방만 부착
+            // [블록 B 페르소나] 인식 렌즈 — 렌즈 스냅샷 있는 방만 부착(구 키 스냅샷은 무주입)
             + java.util.Objects.requireNonNullElse(
-                PersonaStatPromptBlock.build(room.getPersonaStatsJson()), "");
+                PersonaLensPromptBlock.build(room.getPersonaStatsJson()), "");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

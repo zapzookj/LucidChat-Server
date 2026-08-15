@@ -154,61 +154,7 @@ public class UserController {
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [BETA] 베타 테스터 치트 — 프로덕션 전 삭제 예정
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 로비 로고 5회 클릭 시 호출.
-     * - 성인 인증 완료 처리
-     * - 루시드 미드나잇 패스 구독 활성화 (UserSubscription 레코드 + User.subscriptionTier)
-     * - paidEnergy 300 충전
-     * - user profile 캐시 무효화 (다음 /me 호출에서 신선한 값 반환)
-     *
-     * 이미 적용된 유저에게는 중복 적용하지 않고 안내만 반환.
-     *
-     * <h3>Polish · Beta Fix (시크릿 모드 디버깅)</h3>
-     * <p>이전 버전은 컨트롤러에서 직접 detached User 객체를 조작하고 SubscriptionService를
-     * 호출했는데, SubscriptionService가 새 트랜잭션을 열어 detached User를 통해 fresh fetch를
-     * 일으키는 바람에 메모리상 isAdult=true 변경이 손실됐다.
-     *
-     * <p>다른 구독 기능은 잘 동작했지만 시크릿 모드(isAdult 검증)만 거부되던 증상의 원인.
-     *
-     * <p>Fix: 모든 변경을 {@link UserService#activateBetaTester(String)}에 위임하여
-     * 단일 {@code @Transactional} 안에서 처리한다. 트랜잭션 commit 후에 getMyInfo()를
-     * 호출해야 신선한 값을 반환할 수 있으므로 컨트롤러 단에서 그 순서를 보장한다.
-     */
-    @PostMapping("/beta-activate")
-    public ResponseEntity<Map<String, Object>> betaActivate(Authentication authentication) {
-        String username = authentication.getName();
-        User user = findUser(username);
-
-        boolean alreadyActivated = user.isSubscriber()
-            && user.getSubscriptionTier() == com.spring.aichat.domain.enums.SubscriptionType.LUCID_MIDNIGHT_PASS
-            && Boolean.TRUE.equals(user.getIsAdult());
-
-        if (alreadyActivated) {
-            // 캐시는 혹시 모를 stale 상태 대비 evict (저비용 무해 작업)
-            cacheService.evictUserProfile(username);
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "이미 베타 테스터 혜택이 적용되어 있습니다!",
-                "alreadyActivated", true,
-                "user", userService.getMyInfo(username)
-            ));
-        }
-
-        // 활성화는 단일 트랜잭션으로 위임. 메서드 반환 시점에 트랜잭션 commit 완료.
-        userService.activateBetaTester(username);
-
-        // 트랜잭션 commit 직후 fresh UserResponse fetch (캐시 evict는 위에서 끝남).
-        UserResponse refreshed = userService.getMyInfo(username);
-
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "베타 테스터 혜택이 적용되었습니다!",
-            "alreadyActivated", false,
-            "user", refreshed
-        ));
-    }
+    // [블록 B 선행 픽스 — docs/13 B-2·docs/14 §G-3] beta-activate 엔드포인트 제거.
+    // NICE 없이 isAdult+미드나잇 구독을 부여하는 성인인증 우회로, 페르소나 나이 게이트까지
+    // 무력화하는 P0 착취면이었다. 프론트 트리거(로고 5회 클릭)와 세트로 제거.
 }

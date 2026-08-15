@@ -34,37 +34,25 @@ public final class StoryV2Requests {
         /** 시작 장소 키 (WorldLocation.locationKey 참조). null이면 World 기본값 */
         String startLocationKey,
 
-        /**
-         * [Phase 7-V2 Pivot] 이 스토리에서 사용할 유저 닉네임.
-         * CreateFlow에서 입력. null/blank면 User.nickname 폴백.
-         */
+        /** [블록 B에서 사장] 구 피커 닉네임 — 서버는 무시하고 프로필 이름을 쓴다(구 번들 호환용 잔존). */
         @Size(max = 20)
         String nickname,
 
-        /**
-         * 페르소나 본문 — 자유 텍스트 또는 preset 선택 후 description 그대로 전달.
-         * null 허용 (유저 기본 페르소나 폴백)
-         */
+        /** [블록 B에서 사장] 구 피커 자유 텍스트 — 서버는 무시하고 프로필 소개를 쓴다(구 번들 호환용 잔존). */
         @Size(max = 500)
         String personaText,
 
-        /**
-         * 사전 정의 페르소나를 선택한 경우 그 preset_key (UI 추적용, 선택 기록).
-         * 자유 페르소나 입력이면 null.
-         */
+        /** [블록 B에서 사장] 구 피커 프리셋 키 — 서버는 무시한다(구 번들 호환용 잔존). */
         String selectedPersonaPresetKey,
 
         /**
          * 활성 방 덮어쓰기 동의.
-         *  - true:  기존 같은 World 방을 *완전 reset* 후 새 흐름 시작 (페르소나 포함)
+         *  - true:  기존 같은 World 방을 *완전 reset* 후 새 흐름 시작 (현재 프로필 재적용)
          *  - false/null: 기존 방 있으면 409 Conflict 응답 (UI에서 confirm 받고 재호출)
          */
         Boolean overwriteExisting,
 
-        /**
-         * [2026-08-04 페르소나] 페르소나 카드 선택 — 지정 시 본문·스탯·성별 스냅샷이 방에 복사되며
-         * personaText/preset보다 우선한다. null이면 기존 경로 그대로.
-         */
+        /** [블록 B에서 사장] 구 카드 피커 — 서버는 무시하고 현재 프로필을 자동 적용한다(구 번들 호환용 잔존). */
         Long userPersonaId
     ) {}
 

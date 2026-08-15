@@ -112,11 +112,21 @@ public class UserService {
                     "characterId is required to enable secret mode");
             }
 
-            if (!secretModeService.canAccessSecretMode(user, characterId)) {
+            // [리뷰픽스] 캐릭터 비대상 차단은 유저 조치로 풀 수 없다 — 나이·구매 사유보다 먼저.
+            if (!secretModeService.isCharacterSecretEligible(characterId)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "이 캐릭터는 시크릿 모드를 지원하지 않아요.");
+            }
+            if (!secretModeService.canAccessSecretMode(user)) {
                 // 구체적 거절 사유 판별
                 if (!Boolean.TRUE.equals(user.getIsAdult())) {
                     throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
                         "Adult verification required for secret mode");
+                }
+                // [블록 B] 페르소나 나이 하드 게이트 — FE는 프로필 나이 수정 제안 모달로 연결
+                if (!secretModeService.isPersonaAdult(user.getId())) {
+                    throw new BusinessException(ErrorCode.PERSONA_UNDERAGE,
+                        "시크릿 모드는 성인 페르소나로만 이용할 수 있어요.");
                 }
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "Secret mode access denied: no valid pass for this character");
@@ -144,61 +154,8 @@ public class UserService {
         log.info("[BOOST] user={}, boostMode={}", username, enabled);
     }
 
-    /**
-     * [Polish · Beta Fix] 베타 테스터 혜택 단일 트랜잭션 활성화.
-     *
-     * <h3>이전 버그</h3>
-     * UserController.betaActivate가 트랜잭션 없이 다음 흐름으로 동작했음:
-     * <pre>
-     *   User user = findUser(...);            // detached
-     *   user.completeAdultVerification(...);  // detached.isAdult = true (메모리만)
-     *   subscriptionService.activateSubscription(user, ...);  // @Transactional 진입
-     *     ├─ UserSubscription.create(user, ...)
-     *     ├─ subscriptionRepository.save(subscription)
-     *     │     └─ ⚠️ JPA가 subscription.user(detached)를 발견 → 영속 컨텍스트로 끌어들이며
-     *     │        DB에서 user를 fresh fetch → 우리가 메모리에서 set한 isAdult=true 손실
-     *     ├─ user.activateSubscription(type)  ← 이 시점 user는 이미 fresh persistent
-     *     └─ userRepository.save(user)        ← isAdult 누락 상태로 commit
-     * </pre>
-     * 결과: DB에 subscriptionTier만 저장되고 isAdult는 false로 남음. 다른 구독 기능은
-     * 동작하지만 시크릿 모드(isAdult 검증)만 거부됐다.
-     *
-     * <h3>Fix</h3>
-     * 메서드 전체를 {@code @Transactional}로 감싸 단일 영속 컨텍스트에서 처리:
-     * <ul>
-     *   <li>{@code findUser()}로 영속 객체 획득 (detached가 아님)</li>
-     *   <li>{@code completeAdultVerification()} → dirty checking으로 자동 반영</li>
-     *   <li>{@code subscriptionService.activateSubscription()} 내부의 fresh fetch가
-     *       발생하더라도 같은 영속 객체를 받음 (PERSISTENCE_CONTEXT 동일)</li>
-     *   <li>{@code chargePaidEnergy(300)} → dirty checking</li>
-     *   <li>트랜잭션 commit 시점에 모든 변경 한 번에 flush</li>
-     * </ul>
-     */
-    @Transactional
-    public void activateBetaTester(String username) {
-        User user = findUser(username);
-
-        // 1) 성인 인증 처리 (이미 인증된 경우 skip)
-        if (!Boolean.TRUE.equals(user.getIsAdult())) {
-            user.completeAdultVerification("BETA_TESTER_" + user.getId());
-        }
-
-        // 2) 루시드 미드나잇 패스 활성화 — 같은 영속 컨텍스트 안에서 호출되므로
-        //    내부 fresh fetch가 발생해도 우리의 isAdult 변경 사항이 동일 객체에 반영되어 있음.
-        //    SubscriptionService.activateSubscription은 REQUIRED로 같은 트랜잭션을 사용한다.
-        subscriptionService.activateSubscription(
-            user,
-            SubscriptionType.LUCID_MIDNIGHT_PASS,
-            "BETA_TESTER_" + user.getId() + "_" + System.currentTimeMillis()
-        );
-
-        // 3) paidEnergy 300 충전 — dirty checking
-        user.chargePaidEnergy(300);
-
-        // 트랜잭션 commit은 메서드 종료 시 자동 수행. 명시적 save 불필요.
-        // SubscriptionService가 내부적으로 evictUserProfile을 호출하지만 안전을 위해 한 번 더.
-        cacheService.evictUserProfile(username);
-    }
+    // [블록 B 선행 픽스 — docs/13 B-2] activateBetaTester 제거 — 성인인증 우회 세트 삭제
+    // (UserController /beta-activate + FE 로고 5회 트리거와 함께).
 
     private User findUser(String username) {
         return userRepository.findByUsername(username)

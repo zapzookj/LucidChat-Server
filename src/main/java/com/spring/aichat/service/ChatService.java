@@ -198,15 +198,31 @@ public class ChatService {
 
         if (enabled) {
             User user = room.getUser();
-            Long characterId = room.getCharacter().getId();
 
-            if (!secretModeService.canAccessSecretMode(user, characterId)) {
+            // [리뷰픽스] 방 정책 차단(캐릭터 비대상·UGC/비허용 월드)은 유저가 어떤 조치로도 풀 수
+            // 없다 — 나이 수정·구매 안내(아래 사유 분기)보다 먼저 명확한 400으로 끊는다.
+            // [docs/13 확정 픽스] V2 STORY 방은 단일 character=null — 기존 무가드
+            // getCharacter().getId()가 NPE 500이었다. V2는 월드 시크릿 정책으로 판정.
+            boolean roomEligible = room.getCharacter() != null
+                ? secretModeService.isCharacterSecretEligible(room.getCharacter().getId())
+                : (room.getWorld() != null && room.getWorld().isSecretAllowed());
+            if (!roomEligible) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "이 이야기에서는 시크릿 모드를 사용할 수 없어요.");
+            }
+
+            if (!secretModeService.canAccessSecretMode(user)) {
                 if (!Boolean.TRUE.equals(user.getIsAdult())) {
                     throw new BusinessException(ErrorCode.VERIFICATION_UNDERAGE,
                         "성인 인증이 필요합니다.");
                 }
+                // [블록 B] 페르소나 나이 하드 게이트 — FE는 프로필 나이 수정 제안 모달로 연결
+                if (!secretModeService.isPersonaAdult(user.getId())) {
+                    throw new BusinessException(ErrorCode.PERSONA_UNDERAGE,
+                        "시크릿 모드는 성인 페르소나로만 이용할 수 있어요.");
+                }
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "이 캐릭터의 시크릿 모드 접근 권한이 없습니다.");
+                    "시크릿 모드 접근 권한이 없습니다.");
             }
 
             room.activateSecretMode();
@@ -218,27 +234,6 @@ public class ChatService {
 
         chatRoomRepository.save(room);
         cacheService.evictRoomInfo(roomId);
-    }
-
-    /**
-     * 채팅방 전용 유저 페르소나 설정
-     *
-     * persona가 null/blank이면 방 전용 페르소나 해제 (User.profileDescription 폴백)
-     */
-    @Transactional
-    public void updateRoomPersona(Long roomId, String persona) {
-        ChatRoom room = chatRoomRepository.findById(roomId)
-            .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-
-        String sanitized = (persona != null && !persona.isBlank())
-            ? injectionGuard.sanitizePersona(persona)
-            : null;
-
-        room.updateUserPersona(sanitized);
-        chatRoomRepository.save(room);
-        cacheService.evictRoomInfo(roomId);
-
-        log.info("[ROOM_PERSONA] Updated: roomId={}, hasPersona={}", roomId, sanitized != null);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
