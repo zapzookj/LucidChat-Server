@@ -24,10 +24,8 @@ import java.util.List;
 public record AiJsonOutput(
     String reasoning, List<Scene> scenes,
     @JsonProperty("affection_change") int affectionChange,
-    @JsonProperty("mood_score") Integer moodScore,
     @JsonProperty("easter_egg_trigger") String easterEggTrigger,
     @JsonProperty("stat_changes") StatChanges statChanges,
-    Integer bpm,
     @JsonProperty("inner_thought") String innerThought,
     @JsonProperty("topic_concluded") Boolean topicConcluded,
     @JsonProperty("event_status") String eventStatus,
@@ -51,32 +49,32 @@ public record AiJsonOutput(
 ) {
     // ── 하위 호환 생성자 체인 ──
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
-                        Integer moodScore, String easterEggTrigger,
-                        StatChanges statChanges, Integer bpm, String innerThought,
+                        String easterEggTrigger,
+                        StatChanges statChanges, String innerThought,
                         Boolean topicConcluded, String eventStatus) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            statChanges, bpm, innerThought, topicConcluded, eventStatus,
+        this(reasoning, scenes, affectionChange, easterEggTrigger,
+            statChanges, innerThought, topicConcluded, eventStatus,
             null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
-                        Integer moodScore, String easterEggTrigger,
-                        StatChanges statChanges, Integer bpm, String innerThought) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            statChanges, bpm, innerThought, null, null, null, null, null, null, null, null, null);
+                        String easterEggTrigger,
+                        StatChanges statChanges, String innerThought) {
+        this(reasoning, scenes, affectionChange, easterEggTrigger,
+            statChanges, innerThought, null, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
-                        Integer moodScore, String easterEggTrigger, StatChanges statChanges, Integer bpm) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            statChanges, bpm, null, null, null, null, null, null, null, null, null, null);
+                        String easterEggTrigger, StatChanges statChanges) {
+        this(reasoning, scenes, affectionChange, easterEggTrigger,
+            statChanges, null, null, null, null, null, null, null, null, null, null);
     }
     public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange,
-                        Integer moodScore, String easterEggTrigger) {
-        this(reasoning, scenes, affectionChange, moodScore, easterEggTrigger,
-            null, null, null, null, null, null, null, null, null, null, null, null);
+                        String easterEggTrigger) {
+        this(reasoning, scenes, affectionChange, easterEggTrigger,
+            null, null, null, null, null, null, null, null, null, null, null);
     }
-    public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange, Integer moodScore) {
-        this(reasoning, scenes, affectionChange, moodScore, null,
-            null, null, null, null, null, null, null, null, null, null, null, null);
+    public AiJsonOutput(String reasoning, List<Scene> scenes, int affectionChange) {
+        this(reasoning, scenes, affectionChange, null,
+            null, null, null, null, null, null, null, null, null, null, null);
     }
 
     public boolean isTopicConcluded() { return Boolean.TRUE.equals(topicConcluded); }
@@ -179,9 +177,5 @@ public record AiJsonOutput(
         public int safeLust()        { return lust != null ? lust : 0; }
         public int safeCorruption()  { return corruption != null ? corruption : 0; }
         public int safeObsession()   { return obsession != null ? obsession : 0; }
-        public int totalNormalStatDelta() {
-            return Math.abs(safeIntimacy()) + Math.abs(safeAffection())
-                + Math.abs(safeDependency()) + Math.abs(safePlayfulness()) + Math.abs(safeTrust());
-        }
     }
 }

@@ -32,16 +32,17 @@ public class DirectorPromptAssembler {
      * @param recentSummary   최근 대화 요약 (디렉터 컨텍스트용)
      * @param turnsSinceLastDirector  마지막 디렉터 개입 이후 경과 턴 수
      * @param topicConcluded  현재 topic_concluded 상태
+     * @param relationGated   [블록 D · §G-5] 복장·장소 관계 해금 적용 여부 (이 클래스는 new로도 생성돼 필드 주입 불가)
      */
     public String assembleDirectorPrompt(Character character, ChatRoom room, User user,
                                          String recentSummary, int turnsSinceLastDirector,
-                                         boolean topicConcluded) {
+                                         boolean topicConcluded, boolean relationGated) {
         boolean isSecretMode = user.getIsSecretMode();
         String characterName = character.getName();
         String userName = user.getNickname();
 
-        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
-        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode, relationGated));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode, relationGated));
 
         int maxStat = room.getMaxNormalStatValue();
         String dominantStat = room.getDominantStatName();
@@ -58,7 +59,6 @@ public class DirectorPromptAssembler {
             - Current Relation: %s (Dynamic Tag: %s)
             - Stats: Intimacy=%d | Affection=%d | Dependency=%d | Playfulness=%d | Trust=%d
             - Max Stat: %d | Dominant: %s
-            - BPM: %d
             - Turns since last director intervention: %d
             - topic_concluded (current): %s
             - Promotion distance: %d points to next stage
@@ -239,7 +239,6 @@ public class DirectorPromptAssembler {
             room.getStatIntimacy(), room.getStatAffection(),
             room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust(),
             maxStat, dominantStat,
-            room.getCurrentBpm(),
             turnsSinceLastDirector,
             topicConcluded ? "true" : "false",
             promotionDistance,

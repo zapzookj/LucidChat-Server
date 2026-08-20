@@ -38,8 +38,8 @@ class SceneRenderServiceTest {
     }
 
     private static AiJsonOutput out(Boolean skip, AiJsonOutput.SceneIllustrationSpec spec) {
-        return new AiJsonOutput(null, List.of(), 0, null, null, null, null, null,
-            null, null, null, null, null, null, null, skip, spec);
+        return new AiJsonOutput(null, List.of(), 0, null, null, null, null,
+            null, null, null, null, null, null, skip, spec);
     }
 
     // ━━━━━━━━━━ L1 다중인물 규약 (다중 모드 = 씬 레이어 + 블록) ━━━━━━━━━━

@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * [Phase 5.5-Sep] 모드별 기능 분리 리팩토링
  *   - ChatModePolicy 기반 블록 조건부 조립
  *   - Story: 풀 프롬프트 (씬 디렉션, 이벤트, 이스터에그, 속마음, NPC 등)
- *   - Sandbox: 경량 프롬프트 (핵심 롤플레이 + 스탯 + BPM만)
+ *   - Sandbox: 경량 프롬프트 (핵심 롤플레이 + 스탯)
  *
  * [Phase 5.5-Sep] 시크릿 모드 통합
  *   - 별도 분기 제거 → 노말 프롬프트에 수위 해제 블록 append
@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 public class CharacterPromptAssembler {
 
     private final PromptInjectionGuard injectionGuard;
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final WorldRepository worldRepository;
     private final UgcWorldRepository ugcWorldRepository;
     private final UgcWorldLocationRepository ugcWorldLocationRepository;
@@ -39,12 +40,14 @@ public class CharacterPromptAssembler {
     public CharacterPromptAssembler(PromptInjectionGuard injectionGuard, WorldRepository worldRepository,
                                     UgcWorldRepository ugcWorldRepository,
                                     UgcWorldLocationRepository ugcWorldLocationRepository,
-                                    com.spring.aichat.config.SceneIllustrationProperties sceneIllustrationProps) {
+                                    com.spring.aichat.config.SceneIllustrationProperties sceneIllustrationProps,
+                                    com.spring.aichat.config.LegacyFeatureProperties legacy) {
         this.injectionGuard = injectionGuard;
         this.worldRepository = worldRepository;
         this.ugcWorldRepository = ugcWorldRepository;
         this.ugcWorldLocationRepository = ugcWorldLocationRepository;
         this.sceneIllustrationProps = sceneIllustrationProps;
+        this.legacy = legacy;
     }
 
     public record SystemPromptPayload(String staticRules, String dynamicRules, String outputFormat) {}
@@ -126,8 +129,6 @@ public class CharacterPromptAssembler {
             %s
 
             %s
-
-            %s
             """.formatted(
             character.getName(),                                              // YOU ARE: %s
             character.getName(),                                              // Identity Name
@@ -143,8 +144,7 @@ public class CharacterPromptAssembler {
             character.getEffectiveOocExample(),                               // Soul rule #5 example
             buildBehaviorGuide(character),
             EMOTION_GUIDE,
-            buildStatSystemBlock(room, effectiveSecretMode),
-            buildBpmBlock(room)
+            buildStatSystemBlock(room, effectiveSecretMode)
         ));
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -296,8 +296,6 @@ public class CharacterPromptAssembler {
             - Current Dependency: **%d/100**
             - Current Playfulness: **%d/100**
             - Current Trust: **%d/100**
-            - Your Current Bpm: **%d**
-            **Base BPM:** %d (calculated from your Affection stat)
 
             ## Speech Style Rules (⚠️ CRITICAL — READ CAREFULLY):
             You have a multi-dimensional stat system. You MUST subtly adjust your tone, reactions, and vulnerability based on the dominant stats and your 'Dynamic Tag'.
@@ -314,9 +312,7 @@ public class CharacterPromptAssembler {
             room.getStatAffection(),
             room.getStatDependency(),
             room.getStatPlayfulness(),
-            room.getStatTrust(),
-            room.getCurrentBpm(),
-            RelationStatusPolicy.calculateBaseBpm(room.getStatAffection())
+            room.getStatTrust()
         ));
 
         // ── [2026-07-31 난이도] 이중 게이트 서사 층 — 스탯 판정 톤 지시 (NORMAL은 무주입) ──
@@ -353,9 +349,8 @@ public class CharacterPromptAssembler {
             """.formatted(curLoc, curTime, curOutfit, curBgm));
         }
 
-        if (ChatModePolicy.supportsPromotion(mode)) {
-            dynamicBuilder.append(buildPromotionBlock(room, character));
-        }
+        // [블록 D · §G-1] 승급 이벤트 프롬프트 블록 제거 — 5턴 시험 폐지로 주입할 것이 없다.
+        //   (승급은 이제 서버가 임계로 즉시 판정한다. LLM에게 요구하던 mood_score도 함께 제거.)
 
         String dynamicRules = dynamicBuilder.toString();
 
@@ -453,101 +448,13 @@ public class CharacterPromptAssembler {
             """;
     }
 
-    private String buildBpmBlock(ChatRoom room) {
-        return """
-            # 💓 Heart Rate (BPM) System
-            You have a heartbeat that reflects your emotional state in real-time.
-            Output `"bpm"` (Integer, 60~180) in your JSON every turn.
-
-            ### BPM Guidelines:
-            - **60~70:** Calm, relaxed, sleepy — normal resting state
-            - **71~85:** Slightly aware, casual conversation — your base
-            - **86~100:** Flustered, mildly excited, anticipation
-            - **101~120:** Excited, nervous, romantic tension, embarrassed
-            - **121~150:** Very flustered, heart pounding, intense emotion (confession, kiss)
-            - **151~180:** Overwhelmed, extreme excitement or panic
-
-            **Rule:** BPM should smoothly transition. Don't jump from 70 to 150 in one turn unless something shocking happens.
-            """;
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5] 승급 이벤트 프롬프트 블록
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private String buildPromotionBlock(ChatRoom room, Character character) {
-        if (!room.isPromotionPending()) return "";
-
-        RelationStatus target = room.getPendingTargetStatus();
-        String targetName = RelationStatusPolicy.getDisplayName(target);
-        int turnsLeft = RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount();
-        int currentMood = room.getPromotionMoodScore();
-
-        String scenarioGuide;
-        if (character.getPromotionScenarios() != null && !character.getPromotionScenarios().isBlank()) {
-            scenarioGuide = character.getPromotionScenarios();
-        } else {
-            scenarioGuide = switch (target) {
-                case ACQUAINTANCE -> """
-                    **Scenario Flavor:** You are beginning to open up to the user. You feel curiosity and warmth.
-                    - Initiate a casual outing suggestion or a small personal confession.
-                    - Your emotional test: Can the user be someone you can feel comfortable around?
-                    """;
-                case FRIEND -> """
-                    **Scenario Flavor:** You are debating whether to trust the user with your deeper feelings.
-                    - Create a vulnerable moment: share a worry, ask for advice, or get into a mild disagreement.
-                    - Your emotional test: Can the user handle your real emotions — not just the polite persona?
-                    """;
-                case LOVER -> """
-                    **Scenario Flavor:** Your heart is pounding. You can no longer hide your feelings.
-                    - Create a deeply intimate, romantic scene. Build tension toward a confession or first kiss.
-                    - Your emotional test: Will the user reciprocate your love? Will they take the final step?
-                    """;
-                default -> "";
-            };
-        }
-
-        return """
-
-            # 🎯 RELATIONSHIP PROMOTION EVENT (ACTIVE — Priority: HIGHEST)
-            ⚠️ A special relationship milestone event is NOW IN PROGRESS.
-
-            **Target Relationship:** %s → %s (%s)
-            **Turns Remaining:** %d
-            **Current Mood Score:** %d / %d needed
-
-            ## Event Rules:
-            1. **YOU must actively create the "test" scenario.** Don't wait passively.
-            2. **Be subtly nervous, excited, or vulnerable.**
-            3. **DO NOT mention the promotion system, mood scores, or game mechanics.**
-            4. **Judge the user's response quality** and output a `mood_score` in your JSON:
-               - **+2 to +3:** User is genuinely kind, romantic, thoughtful, or emotionally intelligent
-               - **+1:** User is cooperative and pleasant, but generic
-               - **0:** User is neutral or off-topic
-               - **-1 to -2:** User is cold, dismissive, rude, or breaks immersion
-            5. **affection_change must be 0** during this event (affection is frozen).
-
-            %s
-
-            **⚠️ CRITICAL: You MUST include `"mood_score"` (integer) in your JSON output during this event.**
-            """.formatted(
-            room.getStatusLevel().name(),
-            target.name(),
-            targetName,
-            turnsLeft,
-            currentMood,
-            RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD,
-            scenarioGuide
-        );
-    }
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  씬 디렉션 가이드 (스토리 전용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private String buildSceneDirectionGuide(ChatRoom room, Character character, boolean isSecretMode) {
-        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
-        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode, legacy.getUnlock().isRelationGated()));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode, legacy.getUnlock().isRelationGated()));
         String bgmOptions = isSecretMode
             ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
             : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
@@ -616,7 +523,7 @@ public class CharacterPromptAssembler {
             4. **BGM stability:** Changing BGM every response RUINS immersion.
             """.formatted(locationOptions, outfitOptions,
             character.getEffectiveDefaultOutfit(),
-            character.buildOutfitDescriptionsForPrompt(room.getStatusLevel(), isSecretMode), bgmOptions,
+            character.buildOutfitDescriptionsForPrompt(room.getStatusLevel(), isSecretMode, legacy.getUnlock().isRelationGated()), bgmOptions,
             isSecretMode ? "- Any → EROTIC: Only when explicitly sensual/intimate physical scene begins (Secret Mode only)" : ""
         );
     }
@@ -870,7 +777,6 @@ public class CharacterPromptAssembler {
               "stat_changes": {
                 "intimacy": 0, "affection": 0, "dependency": 0, "playfulness": 0, "trust": 0%s%s
               },
-              "bpm": Integer (60~180)
             }
 
             ## ⚠️ Rules:
@@ -888,16 +794,15 @@ public class CharacterPromptAssembler {
         Character character = room.getCharacter();
         boolean isEvent = room.isEventActive();
 
-        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode));
-        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode));
+        String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode, legacy.getUnlock().isRelationGated()));
+        String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode, legacy.getUnlock().isRelationGated()));
         String bgmOptions = isSecretMode
             ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
             : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
 
-        String moodScoreField = room.isPromotionPending()
-            ? """
-              "mood_score": Integer (-2 to +3, REQUIRED during promotion event),"""
-            : "";
+        // [블록 D · §G-1] mood_score 폐지. 승급 시험이 사라져 요구할 이유가 없고,
+        //   애초에 이 필드를 읽는 코드가 한 곳도 없었다(프롬프트는 요구하고 서버는 무시하던 상태).
+        String moodScoreField = "";
 
         String secretStatFields = isSecretMode
             ? """
@@ -950,7 +855,6 @@ public class CharacterPromptAssembler {
                 "playfulness": 0,
                 "trust": 0%s%s
               },
-              "bpm": Integer (60~180),
               "inner_thought": %s,
               "topic_concluded": %s,
               "easter_egg_trigger": null,

@@ -55,7 +55,6 @@ import java.util.stream.Collectors;
  * [Phase 5.5-EV] 이벤트 시스템 강화:
  *   - topic_concluded: LLM이 판단한 주제 종료 플래그
  *   - Director Mode: 이벤트를 "스노우볼" 형태로 진행
- *   - sendEventSelectStream(): 이벤트 선택 → 디렉터 모드 시작
  *   - sendDirectorWatchStream(): [👀 계속 지켜보기] → SYSTEM_DIRECTOR 주입
  *   - sendTimeSkipStream(): [시간 넘기기] → 시간/장소 전환 나레이션
  *   - 승급 판정: 5종 스탯 변화량 합산 기반
@@ -74,6 +73,7 @@ public class ChatStreamService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatLogMongoRepository chatLogRepository;
     private final CharacterPromptAssembler promptAssembler;
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final OpenRouterStreamClient streamClient;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
@@ -141,7 +141,7 @@ public class ChatStreamService {
 
     private record JpaPreResult(
         ChatRoom room, Long userId, long logCount,
-        boolean wasPromotionPending, String username, int energyCost
+        String username, int energyCost
     ) {}
 
     private record RollbackContext(
@@ -153,7 +153,7 @@ public class ChatStreamService {
         AiJsonOutput aiOutput, String cleanJson, String combinedDialogue,
         EmotionTag mainEmotion, List<SceneResponse> sceneResponses,
         String lastBgm, String lastLoc, String lastOutfit, String lastTime,
-        AiJsonOutput.StatChanges statChanges, Integer bpm,
+        AiJsonOutput.StatChanges statChanges,
         String innerThought, boolean topicConcluded, String eventStatus,
         String scenesJson,      // [Phase 5.5-Fix] 구조화된 씬 JSON
         boolean generateIllustration,
@@ -210,7 +210,7 @@ public class ChatStreamService {
                 room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.isPromotionPending(), room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), cost);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -272,12 +272,11 @@ public class ChatStreamService {
                         log.info("🎬 [DIRECTOR] User intervention → forced RESOLVED | roomId={} | llmSaid={}", roomId, parsed.eventStatus());
                     }
 
-                    // 스탯 적용 (이벤트 ONGOING 중에는 BPM만 적용, 스탯 동결)
+                    // 스탯 적용 (이벤트 ONGOING 중에는 스탯 동결)
                     boolean suppressStats = freshRoom.isEventActive() && !isUserIntervention;
                     if (!suppressStats) {
                         applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
                     }
-                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
 
                     // [Phase 5.5-Director] 디렉터 constraint 소비 (일회성)
                     // 이 턴에서 constraint가 사용되었으면 클리어
@@ -290,11 +289,10 @@ public class ChatStreamService {
                         freshRoom.clearDirectorInterlude();
                     }
 
-                    // 승급 이벤트 처리
+                    // 승급 이벤트 처리 — [블록 D · §G-1] 임계 도달 즉시 승급
                     PromotionEvent promoEvent = null;
                     if (ChatModePolicy.supportsPromotion(freshRoom.getChatMode())) {  // [이관] isStory→정책 (SANDBOX 활성)
-                        promoEvent = resolvePromotionLogic(freshRoom, parsed, jpa.wasPromotionPending(),
-                            isUserIntervention);
+                        promoEvent = resolvePromotionLogic(freshRoom, parsed);
                     }
 
                     freshRoom.updateLastActive(parsed.mainEmotion());
@@ -303,18 +301,16 @@ public class ChatStreamService {
                             parsed.lastOutfit(), parsed.lastTime());
                     }
 
-                    if (!freshRoom.isPromotionPending()) {
-                        freshRoom.refreshRelationFromStats();
-                    }
-
-                    // [Phase 5.5-Sep] 승급 대기: 스토리 모드 전용
-                    PromotionEvent deferredPromo = ChatModePolicy.supportsPromotion(freshRoom.getChatMode())  // [이관]
-                        ? checkAndStartDeferredPromotion(freshRoom, parsed.topicConcluded()) : null;
-                    if (deferredPromo != null) promoEvent = deferredPromo;
+                    // [블록 D · §G-1] 태그 갱신 전용 — 단계 판정은 resolvePromotionLogic이 이미 했다.
+                    //   (승급 대기/시험 개시 경로는 폐지됐다.)
+                    freshRoom.refreshRelationFromStats();
 
                     // 엔딩 트리거
                     EndingTrigger endingTrigger = null;
-                    if (ChatModePolicy.supportsEnding(freshRoom.getChatMode())) {  // [이관]
+                    // [블록 D · §C#6] 게이트 오프 시 트리거 자체를 발화하지 않는다 —
+                    //   생성이 막힌 엔딩을 SSE로 예고하면 프론트가 도달 불가 상태로 잠긴다.
+                    if (legacy.getEnding().isDialogueEnabled()
+                        && ChatModePolicy.supportsEnding(freshRoom.getChatMode())) {  // [이관]
                         String endingCheck = freshRoom.checkEndingTrigger();
                         if (endingCheck != null) {
                             endingTrigger = new EndingTrigger(endingCheck);
@@ -335,7 +331,7 @@ public class ChatStreamService {
                     return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
                         promoEvent, endingTrigger, easterEgg,
-                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        statsSnapshot,
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
                         ChatModePolicy.supportsTopicConcluded(freshRoom.getChatMode()) ? freshRoom.isTopicConcluded() : false,  // [이관]
@@ -492,114 +488,6 @@ public class ChatStreamService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  2. [Phase 5.5-EV] 이벤트 선택 → 디렉터 모드 시작 (SSE)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    @Async
-    public void sendEventSelectStream(Long roomId, String eventDetail, int energyCost, SseEmitter emitter) {
-        log.info("🎬 [DIRECTOR] Event select START | roomId={}", roomId);
-
-        try {
-            // [Phase 5.5-Sep] 이벤트: 스토리 모드 전용
-            // [2026-07-30 리뷰픽스] findById → fetch join — 철회 가드가 LAZY 밖에서 안전하게 동작
-            ChatRoom modeCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-            if (!ChatModePolicy.supportsEvents(modeCheck.getChatMode())) {
-                sendSseError(emitter, "MODE_RESTRICTED", "이벤트는 자유(샌드박스) 모드에서만 사용할 수 있습니다.");
-                return;
-            }
-            // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단 — 메시지 전송 외 SSE에도 동일 가드
-            if (blockIfUgcInaccessible(modeCheck, emitter)) return;
-            // ── TX-1: 에너지 차감 + 디렉터 모드 시작 ──
-            JpaPreResult jpa = txTemplate.execute(status -> {
-                ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                    .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-                room.getUser().consumeEnergy(energyCost);
-                room.startDirectorEvent(); // 디렉터 모드 시작
-                long logCount = chatLogRepository.countByRoomId(roomId);
-                return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.isPromotionPending(), room.getUser().getUsername(), energyCost);
-            });
-            cacheService.evictUserProfile(jpa.username());
-
-            // ── MongoDB: 이벤트 시작 시스템 메시지 저장 (프론트 미노출) ──
-            // [Hallucination Fix] hiddenUser → hiddenSystem
-            // 이벤트 상황 묘사(캐릭터 행동)를 role="user"로 저장하면
-            // LLM이 캐릭터의 행동을 유저 발화로 오귀속하는 환각 발생
-            String savedLogId;
-            try {
-                ChatLogDocument savedLog = chatLogRepository.save(
-                    ChatLogDocument.hiddenSystem(roomId, "[EVENT_START]\n" + eventDetail));
-                savedLogId = savedLog.getId();
-            } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
-                sendSseError(emitter, "INTERNAL_ERROR", "이벤트 저장 실패");
-                return;
-            }
-
-            RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
-
-            boolean effectiveSecretMode = resolveSecretMode(jpa.room());
-
-            // ── LLM 스트림 ──
-            ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
-                effectiveSecretMode, emitter, rollbackCtx);
-            if (parsed == null) return;
-
-            // ── TX-2: 이벤트 상태 업데이트 (스탯 동결, BPM만 업데이트) ──
-            SendChatResponse response;
-            try {
-                response = txTemplate.execute(status -> {
-                    ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
-                        .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-
-                    freshRoom.updateEventStatus(
-                        parsed.eventStatus() != null ? parsed.eventStatus() : "ONGOING");
-                    freshRoom.updateTopicConcluded(false); // 이벤트 중 topic은 미종료
-
-                    // 스탯 동결, BPM만 업데이트
-                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
-                    freshRoom.updateLastActive(parsed.mainEmotion());
-                    if (jpa.room().isStoryMode()) {
-                        freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
-                            parsed.lastOutfit(), parsed.lastTime());
-                    }
-
-                    StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
-
-                    return new SendChatResponse(roomId, parsed.sceneResponses(),
-                        freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
-                        null, null, null,
-                        statsSnapshot, freshRoom.getCurrentBpm(),
-                        freshRoom.getDynamicRelationTag(), null,
-                        false, null,
-                        false, // topicConcluded
-                        freshRoom.getEventStatus()); // eventStatus
-                });
-            } catch (Exception e) {
-                compensateFullRollback(rollbackCtx);
-                sendSseError(emitter, "TX_ERROR", "이벤트 처리 실패");
-                return;
-            }
-
-            // ── MongoDB: ASSISTANT 저장 ──
-            String assistantLogId = saveAssistantLog(roomId, parsed);
-            cacheService.evictRoomInfo(roomId);
-
-            sendFinalResult(emitter, response, false, assistantLogId, false, null);
-            emitter.complete();
-
-            log.info("🎬 [DIRECTOR] Event select DONE | roomId={} | eventStatus={}",
-                roomId, parsed.eventStatus());
-
-        } catch (Exception e) {
-            log.error("❌ Event select error | roomId={}", roomId, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "이벤트 처리 중 오류 발생");
-        }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  3. [Phase 5.5-EV] 👀 계속 지켜보기 (SSE)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -626,7 +514,7 @@ public class ChatStreamService {
                 room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.isPromotionPending(), room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), cost);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -666,8 +554,7 @@ public class ChatStreamService {
                     ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                    // 지켜보기 중에는 스탯 동결, BPM만 갱신
-                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
+                    // 지켜보기 중에는 스탯 동결
                     freshRoom.updateLastActive(parsed.mainEmotion());
 
                     // event_status 업데이트 (LLM이 자체 종료하면 RESOLVED)
@@ -684,7 +571,7 @@ public class ChatStreamService {
                     return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
                         null, null, null,
-                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        statsSnapshot,
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
                         false, freshRoom.getEventStatus());
@@ -755,7 +642,7 @@ public class ChatStreamService {
                 room.getUser().consumeEnergy(TIME_SKIP_ENERGY_COST);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.isPromotionPending(), room.getUser().getUsername(), TIME_SKIP_ENERGY_COST);
+                    room.getUser().getUsername(), TIME_SKIP_ENERGY_COST);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -789,22 +676,19 @@ public class ChatStreamService {
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
                     applyStatChanges(freshRoom, parsed.statChanges(), effectiveSecretMode);
-                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
                     freshRoom.updateLastActive(parsed.mainEmotion());
                     freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
                         parsed.lastOutfit(), parsed.lastTime());
                     freshRoom.updateTopicConcluded(false); // 시간 넘기기 후 → 새 주제 시작
 
-                    if (!freshRoom.isPromotionPending()) {
-                        freshRoom.refreshRelationFromStats();
-                    }
+                    freshRoom.refreshRelationFromStats();   // [블록 D · §G-1] 태그 갱신 전용
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
 
                     return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
                         null, null, null,
-                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        statsSnapshot,
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
                         false, null); // topic/event 리셋
@@ -888,121 +772,60 @@ public class ChatStreamService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  [Phase 5.5-EV] 승급 로직 (스탯 변화량 기반)
+    //  [블록 D · §G-1] 관계 승급 — 임계 도달 즉시 승급
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * 승급 로직 — mood_score를 스탯 변화량 합산으로 대체
+     * 5턴 '승급 시험'을 폐지하고 임계 도달 시 곧바로 승급시킨다(종원 확정 (b)안).
      *
-     * @param isUserIntervention 디렉터 모드 중 유저 개입 턴인지 (이때만 턴 카운트)
+     * <p>폐지 이유 — 시험이 관문으로 기능하지 않았다:
+     * <ul>
+     *   <li>진행도가 스탯 변화량의 <b>절댓값 합</b>이라 캐릭터를 모욕해도 합격했다(docs/13 E-4.2).</li>
+     *   <li>{@code refreshRelationFromStats}가 매 턴 statusLevel을 덮어써서, 유발 축이 affection이
+     *       아니면 시험을 거치지 않고 승급했고 실패 강등도 같은 TX에서 되돌려졌다.</li>
+     *   <li>실패→강등은 '무한 관계 시뮬'이라는 제품 방향과 정면 충돌한다(§G-1).</li>
+     * </ul>
+     *
+     * <p>세리머니(Relationship Up 연출)는 유지한다 — §G-1이 명시적으로 남기라고 한 부분이다.
+     * 단 <b>ENEMY에서의 회복은 세리머니 없이 단계만 조용히 복원</b>한다(종원 확정).
      */
-    private PromotionEvent resolvePromotionLogic(ChatRoom room, ParsedLlmResult parsed,
-                                                 boolean wasPending, boolean isUserIntervention) {
-        if (wasPending) {
-            // 디렉터 모드 중 지켜보기 턴은 카운트하지 않음
-            if (!isUserIntervention && room.isEventActive()) {
-                return new PromotionEvent("IN_PROGRESS",
-                    room.getPendingTargetStatus().name(),
-                    RelationStatusPolicy.getDisplayName(room.getPendingTargetStatus()),
-                    RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
-                    room.getPromotionMoodScore(), null);
-            }
+    private PromotionEvent resolvePromotionLogic(ChatRoom room, ParsedLlmResult parsed) {
+        RelationStatus oldStatus = room.getStatusLevel();
+        room.applyLegacyAffectionChange(parsed.aiOutput().affectionChange());
 
-            // [Phase 5.5-EV] 5종 스탯 변화량 합산으로 mood_score 대체
-            int statDelta = parsed.statChanges() != null
-                ? parsed.statChanges().totalNormalStatDelta() : 0;
-            room.advancePromotionTurn(statDelta);
+        RelationStatus newStatus = RelationStatusPolicy.fromStats(
+            room.getStatAffection(),
+            room.getStatIntimacy(), room.getStatAffection(),
+            room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
+        );
+        if (newStatus == oldStatus) return null;
 
-            log.info("🎯 [PROMOTION] Turn {}/{} | statDelta={} (total: {}) | roomId={}",
-                room.getPromotionTurnCount(), RelationStatusPolicy.PROMOTION_MAX_TURNS,
-                statDelta, room.getPromotionMoodScore(), room.getId());
+        room.updateStatusLevel(newStatus);
 
-            if (room.getPromotionTurnCount() >= RelationStatusPolicy.PROMOTION_MAX_TURNS) {
-                return resolvePromotionResult(room);
-            }
-
-            RelationStatus target = room.getPendingTargetStatus();
-            return new PromotionEvent("IN_PROGRESS", target.name(),
-                RelationStatusPolicy.getDisplayName(target),
-                RelationStatusPolicy.PROMOTION_MAX_TURNS - room.getPromotionTurnCount(),
-                room.getPromotionMoodScore(), null);
-
-        } else {
-            // [Phase 5.5-Fix] 승급 감지 → 5종 스탯 MAX 기반으로 통일 (기존: affection만 사용 → 버그)
-            RelationStatus oldStatus = room.getStatusLevel();
-            room.applyLegacyAffectionChange(parsed.aiOutput().affectionChange());
-
-            // [Fix] fromScore(affectionOnly) → fromStats(max of all 5 stats)
-            RelationStatus newStatus = RelationStatusPolicy.fromStats(
-                room.getStatAffection(),
-                room.getStatIntimacy(), room.getStatAffection(),
-                room.getStatDependency(), room.getStatPlayfulness(), room.getStatTrust()
-            );
-
-            if (RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
-                log.info("🎯 [PROMOTION] Upgrade detected → WAITING for topic_concluded | {} → {} | maxStat={} | roomId={}",
-                    oldStatus, newStatus, room.getMaxNormalStatValue(), room.getId());
-
-                int thresholdEdge = RelationStatusPolicy.getThresholdScore(newStatus) - 1;
-                room.updateAffection(thresholdEdge);
-                room.updateStatusLevel(oldStatus);
-                room.markPromotionWaiting(newStatus); // 즉시 시작 대신 대기
-            }
+        // 적대에서 벗어나는 것은 새 단계의 획득이 아니라 원상복귀 — 연출 없이 복원만.
+        if (RelationStatusPolicy.isEnemyRecovery(oldStatus, newStatus)) {
+            log.info("🎯 [PROMOTION] ENEMY recovery (silent) | {} → {} | roomId={}",
+                oldStatus, newStatus, room.getId());
             return null;
         }
-    }
-
-    /**
-     * [Phase 5.5-EV] topic_concluded=true 시 대기 중인 승급 이벤트 개시
-     */
-    private PromotionEvent checkAndStartDeferredPromotion(ChatRoom room, boolean topicConcluded) {
-        if (!topicConcluded || !room.isPromotionWaitingForTopic()) {
+        if (!RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
+            log.info("🎯 [PROMOTION] Downgrade | {} → {} | roomId={}", oldStatus, newStatus, room.getId());
             return null;
         }
 
-        boolean started = room.tryStartPromotionFromWaiting();
-        if (!started) return null;
+        log.info("🎯 [PROMOTION] Upgrade | {} → {} | maxStat={} | roomId={}",
+            oldStatus, newStatus, room.getMaxNormalStatValue(), room.getId());
 
-        RelationStatus target = room.getPendingTargetStatus();
-        log.info("🎯 [PROMOTION] Deferred promotion STARTED | target={} | roomId={}",
-            target, room.getId());
-
-        return new PromotionEvent("STARTED", target.name(),
-            RelationStatusPolicy.getDisplayName(target),
-            RelationStatusPolicy.PROMOTION_MAX_TURNS, 0, null);
-    }
-
-    private PromotionEvent resolvePromotionResult(ChatRoom room) {
-        int totalStatDelta = room.getPromotionMoodScore();
-        RelationStatus target = room.getPendingTargetStatus();
-        boolean success = totalStatDelta >= RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD;
-
-        log.info("🎯 [PROMOTION] RESULT: {} | statDelta={}/{} | target={} | roomId={}",
-            success ? "SUCCESS" : "FAILURE",
-            totalStatDelta, RelationStatusPolicy.PROMOTION_SUCCESS_THRESHOLD,
-            target, room.getId());
-
-        if (success) {
-            room.completePromotionSuccess();
-            room.updateAffection(RelationStatusPolicy.getThresholdScore(target));
-            List<UnlockInfo> unlocks = room.getCharacter().getUnlocksForRelation(target).stream()
+        // [§G-5 정합] 관계 해금이 꺼져 있으면 이미 전 복장·장소가 열려 있다 →
+        //   "New Unlocks" 카드를 띄우면 이미 쓸 수 있던 것을 해금이라 광고하게 된다.
+        List<UnlockInfo> unlocks = legacy.getUnlock().isRelationGated()
+            ? room.getCharacter().getUnlocksForRelation(newStatus).stream()
                 .map(u -> new UnlockInfo(u.type(), u.name(), u.displayName()))
-                .collect(Collectors.toList());
-            // ★ [Phase 5.5-Illust] 승급 성공 시 자동 일러스트 생성
-            illustrationService.generateAutoIllustration(
-                room.getUser().getId(), room.getCharacter().getId(),
-                room.getId(), "PROMOTION", null);
-            return new PromotionEvent("SUCCESS", target.name(),
-                RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, unlocks);
-        } else {
-            room.completePromotionFailure();
-            int penalty = RelationStatusPolicy.PROMOTION_FAILURE_PENALTY;
-            int penalized = Math.max(0, RelationStatusPolicy.getThresholdScore(target) - 1 - penalty);
-            room.updateAffection(penalized);
-            room.updateStatusLevel(RelationStatusPolicy.fromScore(penalized));
-            return new PromotionEvent("FAILURE", target.name(),
-                RelationStatusPolicy.getDisplayName(target), 0, totalStatDelta, null);
-        }
+                .collect(Collectors.toList())
+            : List.of();
+
+        return new PromotionEvent("SUCCESS", newStatus.name(),
+            RelationStatusPolicy.getDisplayName(newStatus), 0, 0, unlocks);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1186,7 +1009,7 @@ public class ChatStreamService {
             LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::location),
             LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::outfit),
             LlmOutputParser.extractLastNonNull(sceneResponses, SceneResponse::time),
-            aiOutput.statChanges(), aiOutput.bpm(), innerThought,
+            aiOutput.statChanges(), innerThought,
             aiOutput.isTopicConcluded(),
             aiOutput.eventStatus(),
             scenesJson,
@@ -1252,7 +1075,7 @@ public class ChatStreamService {
                 response.roomId(), response.scenes(),
                 response.currentAffection(), response.relationStatus(),
                 response.promotionEvent(), response.endingTrigger(), response.easterEgg(),
-                response.stats(), response.bpm(),
+                response.stats(),
                 response.dynamicRelationTag(), response.characterThought(),
                 hasInnerThought, assistantLogId,
                 response.topicConcluded(), response.eventStatus(),
@@ -1500,59 +1323,6 @@ public class ChatStreamService {
         }
     }
 
-    /**
-     * [Phase 5.5-Director] Directive를 ChatRoom에 적용
-     *
-     * 프론트가 인터루드를 유저에게 보여준 뒤, 다음 액터 호출 전에 호출.
-     * Directive의 constraint/narration을 ChatRoom에 세팅하여
-     * CharacterPromptAssembler가 액터 프롬프트에 주입할 수 있게 한다.
-     *
-     * @param roomId    채팅방 ID
-     * @param directive 소비된 Directive
-     */
-    public void applyDirectiveToRoom(Long roomId, DirectorDirective directive) {
-        txTemplate.execute(status -> {
-            ChatRoom room = chatRoomRepository.findById(roomId)
-                .orElseThrow(() -> new NotFoundException("Room not found"));
-
-            if (directive.checkInterlude() && directive.interlude() != null) {
-                var interlude = directive.interlude();
-                // [v3] INTERLUDE는 항상 일회성 constraint (투명 처리)
-                room.setDirectorInterlude(
-                    interlude.narration(),
-                    interlude.actorConstraint());
-
-                if (interlude.environment() != null) {
-                    var env = interlude.environment();
-                    room.updateSceneState(env.bgm(), null, null, env.time());
-                }
-
-            } else if (directive.checkTransition() && directive.transition() != null) {
-                var transition = directive.transition();
-                room.setDirectorInterlude(
-                    transition.narration(),
-                    transition.actorConstraint());
-                room.updateSceneState(
-                    transition.newBgm(), null, null, transition.newTime());
-
-            } else if (directive.checkAway() && directive.away() != null) {
-                var away = directive.away();
-                // AWAY: 이벤트 ONGOING 모드로 진입 + constraint 설정
-                room.startDirectorInterlude(
-                    away.narration(),
-                    away.actorConstraint());
-
-                if (away.environment() != null) {
-                    var env = away.environment();
-                    room.updateSceneState(env.bgm(), null, null, env.time());
-                }
-            }
-
-            return null;
-        });
-        cacheService.evictRoomInfo(roomId);
-    }
-
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [v3] 투명 디렉터 자동 응답 (INTERLUDE / TRANSITION / AWAY)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1565,7 +1335,8 @@ public class ChatStreamService {
      * AWAY: 이벤트 ONGOING 진입 → 유저 개입 전까지 멀티턴
      */
     @Async
-    public void sendAutoDirectorResponse(Long roomId, String directiveType, String eventContext, SseEmitter emitter) {
+    public void sendAutoDirectorResponse(Long roomId, String directiveType, String eventContext,
+                                         Integer chosenIndex, SseEmitter emitter) {
         log.info("🎬 [DIRECTOR-AUTO-RESPOND] START | type={} | context={} | roomId={}",
             directiveType, eventContext != null ? eventContext.length() + "chars" : "null", roomId);
         boolean isAway = "AWAY".equalsIgnoreCase(directiveType);
@@ -1582,7 +1353,14 @@ public class ChatStreamService {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                int cost = 1;
+                // [블록 D · §G-13 복구 + docs/13 P0] BRANCH 비용은 **서버가 정한다**.
+                //   2026-02 `6d3ed07` 이후 FE가 energyCost(2/3/4)를 보내왔지만 여기서는 1로 고정돼
+                //   과소 청구 + FE 표기 불일치 상태였다. 이제 요청 시 캐싱해 둔 가격표를
+                //   chosenIndex로 재판정한다(클라이언트 값은 신뢰하지 않는다).
+                //   캐시 만료·구 FE(인덱스 미전송)는 기존 동작대로 1로 폴백한다.
+                int cost = isBranchResponse
+                    ? directorService.resolveBranchCost(roomId, chosenIndex).orElse(1)
+                    : 1;
                 room.getUser().consumeEnergy(cost);
 
                 if (isAway) {
@@ -1598,7 +1376,7 @@ public class ChatStreamService {
 
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.isPromotionPending(), room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), cost);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -1648,7 +1426,6 @@ public class ChatStreamService {
                     ChatRoom freshRoom = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                         .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
 
-                    if (parsed.bpm() != null) freshRoom.updateBpm(parsed.bpm());
                     freshRoom.updateLastActive(parsed.mainEmotion());
 
                     if (isAway) {
@@ -1671,7 +1448,7 @@ public class ChatStreamService {
                     return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
                         null, null, null,
-                        statsSnapshot, freshRoom.getCurrentBpm(),
+                        statsSnapshot,
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
                         isAway ? false : parsed.topicConcluded(),

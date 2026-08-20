@@ -1,5 +1,8 @@
 package com.spring.aichat.controller;
 
+import com.spring.aichat.config.LegacyFeatureProperties;
+import com.spring.aichat.exception.BadRequestException;
+
 import com.spring.aichat.service.illustration.BackgroundGenerationService;
 import com.spring.aichat.service.illustration.IllustrationService;
 import com.spring.aichat.service.illustration.IllustrationService.*;
@@ -27,6 +30,7 @@ import java.util.Map;
 public class IllustrationController {
 
     private final IllustrationService illustrationService;
+    private final LegacyFeatureProperties legacy;
     private final BackgroundGenerationService backgroundGenerationService;
     private final com.spring.aichat.service.illustration.scene.SceneRenderService sceneRenderService;
     private final com.spring.aichat.service.illustration.scene.SceneRequestService sceneRequestService;
@@ -105,6 +109,11 @@ public class IllustrationController {
         Long roomId = body.get("roomId");
         if (roomId == null) {
             return ResponseEntity.badRequest().build();
+        }
+        // [블록 D · docs/14 §G-6] 레거시 캐릭터 일러(ModelsLab CG) 트랙 동결 — 씬 일러로 일원화.
+        //   차감 *전에* 막는다: 이 경로는 실패해도 환불 설비가 없어(docs/13 D-2.h) 10E가 그대로 소각된다.
+        if (!legacy.getIllustration().isLegacyCgEnabled()) {
+            throw new BadRequestException("캐릭터 일러스트 생성은 현재 제공되지 않습니다. 장면 일러스트를 이용해 주세요.");
         }
         Long characterId = body.get("characterId");  // V2에서만 사용. V1 호출은 null.
 

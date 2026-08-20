@@ -55,14 +55,13 @@ public record EndingResponse(
         Integer corruption,
         Integer obsession,
         // ── [Phase 5.5] 부가 정보 ──
-        String dynamicRelationTag,  // 동적 관계 태그
-        int finalBpm                // 최종 BPM
+        String dynamicRelationTag   // 동적 관계 태그
     ) {
         /** 레거시 호환 생성자 (기존 5-param) — 제거 예정 */
         public EndingStats(long totalMessages, long totalDays, int finalAffection,
                            String finalRelation, String firstMessageDate) {
             this(totalMessages, totalDays, finalAffection, finalRelation, firstMessageDate,
-                0, finalAffection, 0, 0, 0, null, null, null, null, 65);
+                0, finalAffection, 0, 0, 0, null, null, null, null);
         }
     }
 }

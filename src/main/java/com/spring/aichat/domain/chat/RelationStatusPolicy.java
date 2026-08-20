@@ -5,50 +5,13 @@ import com.spring.aichat.domain.enums.RelationStatus;
 /**
  * 호감도 점수에 따른 관계 레벨 정책
  *
- * [Phase 5.5]    다중 스탯 기반 동적 관계 판정 시스템
- * [Phase 5.5-EV] 승급 판정 기준 변경:
- *   - mood_score → 5종 스탯 변화량 합산 (totalStatDelta)
- *   - PROMOTION_SUCCESS_THRESHOLD: 매 턴 최소 평균 2의 스탯 변화 필요
- *     (5턴 × 평균 2 = 총 10 이상)
+ * [Phase 5.5]  다중 스탯 기반 동적 관계 판정 시스템
+ * [블록 D · §G-1] 승급 '시험'(5턴 · mood_score · 실패 강등) 폐지 — 임계 도달 시 즉시 승급.
+ *   관련 상수 3종(PROMOTION_MAX_TURNS / SUCCESS_THRESHOLD / FAILURE_PENALTY) 제거됨.
  */
 public final class RelationStatusPolicy {
 
     private RelationStatusPolicy() {}
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  승급 이벤트 상수
-    //
-    //  [Story V2 메모] V2 패치 시 STORY 모드는 RelationPromotionEligibility 시스템으로
-    //  관계 승급을 처리 — 백엔드 자격 활성 + LLM 자율 발동 이중 게이트. 본 상수들은
-    //  V1 STORY 자산이 *SANDBOX로 이관됨에 따라* Sandbox 전용으로 남음.
-    //  Sandbox 운영 PoC 후 폐기 또는 다듬기 결정 (RoadMap 참조).
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * 승급 이벤트 지속 턴 수 (유저 개입 턴만 카운트).
-     * @deprecated [Story V2] SANDBOX 전용. V2 STORY는 RelationPromotionEligibility 사용.
-     *             Sandbox 폐기 시점에 함께 제거 예정.
-     */
-    @Deprecated
-    public static final int PROMOTION_MAX_TURNS = 5;
-
-    /**
-     * [Phase 5.5-EV] 승급 성공에 필요한 최소 누적 스탯 변화량.
-     *
-     * 기존: mood_score 5점 (1~3점/턴)
-     * 변경: 5종 스탯 변화량 |합산| 누적 10 이상
-     *
-     * @deprecated [Story V2] SANDBOX 전용. Sandbox 폐기 시점에 함께 제거 예정.
-     */
-    @Deprecated
-    public static final int PROMOTION_SUCCESS_THRESHOLD = 10;
-
-    /**
-     * 승급 실패 시 호감도 감소량.
-     * @deprecated [Story V2] SANDBOX 전용. Sandbox 폐기 시점에 함께 제거 예정.
-     */
-    @Deprecated
-    public static final int PROMOTION_FAILURE_PENALTY = 5;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  스탯 이름 상수
@@ -90,8 +53,37 @@ public final class RelationStatusPolicy {
         };
     }
 
+    /**
+     * 관계 단계가 앞으로 나아갔는가.
+     *
+     * <p>[블록 D · §G-1 / docs/13 E-4.1] ordinal 비교를 임계 점수 비교로 교체했다.
+     * {@code RelationStatus}의 선언 순서가 {@code …LOVER(3), ENEMY(4)}라 ENEMY가 맨 뒤였고,
+     * 그 결과 {@code isUpgrade(ENEMY, LOVER) = (3 > 4) = false} — <b>ENEMY에서 어디로 회복해도
+     * '승급 아님'</b>이었다. 임계 점수(ENEMY=-1)로 비교하면 회복이 정상 인식된다.
+     */
     public static boolean isUpgrade(RelationStatus current, RelationStatus next) {
-        return next.ordinal() > current.ordinal() && next != RelationStatus.ENEMY;
+        return rank(next) > rank(current);
+    }
+
+    /**
+     * ENEMY에서 벗어나는 '회복' 전이인가.
+     *
+     * <p>종원 확정(2026-08-20): 회복은 단계만 조용히 복원하고 <b>세리머니를 띄우지 않는다.</b>
+     * 적대에서 빠져나오는 것은 새 관계 단계의 획득이 아니라 원상복귀이기 때문이다.
+     */
+    public static boolean isEnemyRecovery(RelationStatus current, RelationStatus next) {
+        return current == RelationStatus.ENEMY && next != RelationStatus.ENEMY;
+    }
+
+    /** 서열 — 선언 ordinal이 아니라 관계 진전 순서. ENEMY는 STRANGER보다 뒤다. */
+    private static int rank(RelationStatus s) {
+        return switch (s) {
+            case ENEMY        -> -1;
+            case STRANGER     -> 0;
+            case ACQUAINTANCE -> 1;
+            case FRIEND       -> 2;
+            case LOVER        -> 3;
+        };
     }
 
     public static String getDisplayName(RelationStatus status) {
@@ -147,14 +139,6 @@ public final class RelationStatusPolicy {
             };
             case ENEMY -> "경계하는 상대";
         };
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  BPM 계산
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public static int calculateBaseBpm(int statAffection) {
-        return 65 + (int)(statAffection * 0.4);
     }
 
     private static int maxOf(int a, int b, int c, int d, int e) {

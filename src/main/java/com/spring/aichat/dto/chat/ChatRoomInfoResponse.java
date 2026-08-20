@@ -31,7 +31,6 @@ public record ChatRoomInfoResponse(
     java.util.List<String> availableLocations,
     // ── [Phase 5.5] 입체적 상태창 ──
     SendChatResponse.StatsSnapshot stats,
-    int bpm,
     String dynamicRelationTag,
     String characterThought,
     // ── [Phase 5.5-EV] 이벤트 시스템 강화 ──

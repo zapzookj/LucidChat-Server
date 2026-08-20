@@ -59,6 +59,28 @@ spring:
 moderation:
   chat-enabled: ${CHAT_MODERATION_ENABLED:false}
 
+# [블록 D · docs/14 §C#6] 레거시 미연시 문법 게이트 — "코드 보존, 진입만 차단"이 원칙.
+#   삭제가 아니라 노브인 이유: 되살릴 여지를 남기고, 되살릴 때 데이터 정합이 이미 맞아 있어야 하기 때문.
+#   ⚠ 게이트는 반드시 **서버측**이다. 프론트 진입점만 지우면 API가 소유권 검사만으로 열린 채 남는다
+#      (beta-activate가 정확히 그 실수였다 — docs/14_assets §5).
+legacy:
+  ending:
+    # 자유(SANDBOX)·스토리(V2 STORY) 엔딩. 극장 엔딩(TheaterFinalityController)은
+    # §C#6에서 '유지' 확정이라 이 플래그의 사정권 밖이다.
+    dialogue-enabled: ${LEGACY_ENDING_DIALOGUE_ENABLED:false}
+  achievement:
+    # 업적 '지급·갤러리·해금 모달'만 차단한다. 이스터에그 *연출*은 §C#6에서 유지 확정 —
+    # EasterEggEvent는 계속 내려가고 achievement 필드만 null이 된다(FE는 이미 옵셔널 체이닝).
+    enabled: ${LEGACY_ACHIEVEMENT_ENABLED:false}
+  illustration:
+    # §G-6 레거시 캐릭터 일러(ModelsLab CG) 트랙 — 씬 일러로 일원화·동결.
+    # 지금도 FE에서 살아 있어 유저 10E가 환불 없이 소각 가능하다(docs/13 D-2.h).
+    legacy-cg-enabled: ${LEGACY_CG_ILLUSTRATION_ENABLED:false}
+  unlock:
+    # §G-5 복장·장소 '관계 단계별 해금'. 복장/장소 값 자체는 살아있는 연출 변수다 —
+    # 죽이는 건 LOCK 규칙뿐(impl_spec §5 명시). UGC 복장이 1종이라 공식 4캐릭 전용 no-op였다.
+    relation-gated: ${LEGACY_RELATION_UNLOCK_ENABLED:false}
+
 # 외부 API 공통 설정
 nice:
   client-id: YOUR_NICE_CLIENT_ID

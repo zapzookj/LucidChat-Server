@@ -346,8 +346,7 @@ public class EndingService {
             isSecretMode ? room.getStatCorruption() : null,
             isSecretMode ? room.getStatObsession() : null,
             // 부가 정보
-            room.getDynamicRelationTag(),
-            room.getCurrentBpm()
+            room.getDynamicRelationTag()
         );
     }
 

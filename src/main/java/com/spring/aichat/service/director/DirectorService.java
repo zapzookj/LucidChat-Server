@@ -35,6 +35,9 @@ import java.util.*;
 public class DirectorService {
 
     private final DirectorPromptAssembler directorPromptAssembler;
+
+
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
@@ -45,58 +48,7 @@ public class DirectorService {
     private static final String DIRECTIVE_KEY_PREFIX = "director:directive:";
     private static final String LAST_INTERVENTION_KEY_PREFIX = "director:last_turn:";
     private static final long DIRECTIVE_TTL_SECONDS = 600;
-    private static final int MIN_INTERVENTION_GAP = 3;
     private static final int RECENT_TURNS_FOR_DIRECTOR = 10;
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  1. 비동기 디렉터 판단 (자동 — Phase 6 도그푸딩 결과 폐기)
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * @deprecated [Phase 6 도그푸딩 #1] 자동 인터루드 폐기 (2026-05-09).
-     *             ChatStreamService.triggerPostProcessing 자동 트리거 제거됨.
-     *             수동 호출({@link #requestManualIntervention})만 사용한다.
-     *             향후 더 강한 가드 조건(유저 의지 감지)과 함께 부활 검토.
-     */
-    @Deprecated
-    @Async
-    public void evaluateAndCache(Long roomId, long currentTurnCount) {
-        long start = System.currentTimeMillis();
-
-        try {
-            ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId).orElse(null);
-            if (room == null) { log.warn("[DIRECTOR] Room not found: {}", roomId); return; }
-            if (!ChatModePolicy.supportsDirectorMode(room.getChatMode())) return;
-            if (room.isEventActive() || room.isPromotionPending() || room.isPromotionWaitingForTopic()) return;
-            if (room.isEndingReached()) return;
-
-            int turnsSince = getTurnsSinceLastIntervention(roomId, currentTurnCount);
-            if (turnsSince < MIN_INTERVENTION_GAP) return;
-            if (hasDirective(roomId)) return;
-
-            String recentSummary = buildRecentSummary(roomId, room.getCharacter().getName());
-            DirectorDirective directive = callDirectorLlm(
-                room.getCharacter(), room, room.getUser(),
-                recentSummary, turnsSince, room.isTopicConcluded(), null);
-
-            log.info("🎬 [DIRECTOR-AUTO] Decision: {} | beat={} | gap={} | roomId={} | took={}ms",
-                directive.decision(), directive.narrativeBeat(),
-                turnsSince, roomId, System.currentTimeMillis() - start);
-
-            if (directive.checkPass()) return;
-            if (!isDecisionAllowed(directive, room.isTopicConcluded())) {
-                log.warn("[DIRECTOR-AUTO] Decision {} rejected — topic={} | roomId={}",
-                    directive.decision(), room.isTopicConcluded(), roomId);
-                return;
-            }
-
-            cacheDirective(roomId, directive);
-            updateLastInterventionTurn(roomId, currentTurnCount);
-
-        } catch (Exception e) {
-            log.error("[DIRECTOR-AUTO] Evaluation failed | roomId={}", roomId, e);
-        }
-    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  2. Directive 조회/소비
@@ -121,14 +73,6 @@ public class DirectorService {
             log.warn("[DIRECTOR] Consume failed | roomId={}", roomId, e);
             return Optional.empty();
         }
-    }
-
-    public boolean hasDirective(Long roomId) {
-        return cacheService.getString(DIRECTIVE_KEY_PREFIX + roomId).isPresent();
-    }
-
-    public void discardDirective(Long roomId) {
-        cacheService.evict(DIRECTIVE_KEY_PREFIX + roomId);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -249,7 +193,8 @@ public class DirectorService {
                                               String recentSummary, int turnsSince,
                                               boolean topicConcluded, String additionalPrompt) {
         String systemPrompt = directorPromptAssembler.assembleDirectorPrompt(
-            character, room, user, recentSummary, turnsSince, topicConcluded);
+            character, room, user, recentSummary, turnsSince, topicConcluded,
+            legacy.getUnlock().isRelationGated());
 
         String userPrompt = "Analyze the conversation and decide your intervention. Output JSON only.";
         if (additionalPrompt != null && !additionalPrompt.isBlank()) {
@@ -291,6 +236,58 @@ public class DirectorService {
     private void cacheDirective(Long roomId, DirectorDirective directive) {
         cacheService.put(DIRECTIVE_KEY_PREFIX + roomId, directive,
             DIRECTIVE_TTL_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+        cacheBranchPricing(roomId, directive);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [블록 D · §G-13 복구 + docs/13 P0] BRANCH 서버 권위 과금
+    //
+    //  2026-02 `6d3ed07`부터 이벤트 선택 비용을 클라이언트가 요청 바디로 보내왔다.
+    //  현재 백엔드는 그 값을 무시하고 cost=1로 고정하고 있어(과소 청구) FE 표기와도 어긋난다.
+    //  옵션 원본은 consumeDirective가 evict하므로 선택 시점에는 남아 있지 않다 →
+    //  **가격표만 별도 키로 따로 보관**해 두고 chosenIndex로 재판정한다.
+    //  (기존 consume 의미를 건드리지 않는 것이 이 설계의 요점이다.)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final String BRANCH_PRICE_KEY_PREFIX = "director:branchprice:";
+
+    private void cacheBranchPricing(Long roomId, DirectorDirective directive) {
+        if (directive == null || !directive.checkBranch()
+            || directive.branch() == null || directive.branch().options() == null) return;
+        List<Integer> costs = directive.branch().options().stream()
+            .map(DirectorDirective.BranchOption::energyCost)
+            .toList();
+        cacheService.put(BRANCH_PRICE_KEY_PREFIX + roomId, costs,
+            DIRECTIVE_TTL_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    /**
+     * 선택한 분기의 서버측 비용을 반환하고 가격표를 소비(evict)한다.
+     *
+     * @return 서버가 제시했던 비용. 인덱스 범위 밖·캐시 만료·미BRANCH면 {@link Optional#empty()}
+     *         → 호출부는 레거시 기본값으로 폴백한다(관용 롤아웃).
+     */
+    public Optional<Integer> resolveBranchCost(Long roomId, Integer chosenIndex) {
+        if (chosenIndex == null || chosenIndex < 0) return Optional.empty();
+        String key = BRANCH_PRICE_KEY_PREFIX + roomId;
+        try {
+            Optional<List> cached = cacheService.get(key, List.class);
+            if (cached.isEmpty()) {
+                log.warn("🎬 [DIRECTOR] Branch pricing expired — falling back | roomId={}", roomId);
+                return Optional.empty();
+            }
+            List<?> costs = cached.get();
+            if (chosenIndex >= costs.size()) {
+                log.warn("🎬 [DIRECTOR] chosenIndex out of range: {} / {} | roomId={}",
+                    chosenIndex, costs.size(), roomId);
+                return Optional.empty();
+            }
+            cacheService.evict(key);
+            return Optional.of(((Number) costs.get(chosenIndex)).intValue());
+        } catch (Exception e) {
+            log.warn("🎬 [DIRECTOR] Branch cost resolve failed | roomId={}", roomId, e);
+            return Optional.empty();
+        }
     }
 
     private int getTurnsSinceLastIntervention(Long roomId, long currentTurnCount) {
@@ -302,17 +299,6 @@ public class DirectorService {
 
     private void updateLastInterventionTurn(Long roomId, long currentTurnCount) {
         cacheService.putString(LAST_INTERVENTION_KEY_PREFIX + roomId, String.valueOf(currentTurnCount));
-    }
-
-    private boolean isDecisionAllowed(DirectorDirective directive, boolean topicConcluded) {
-        if (directive.checkPass()) return true;
-        if (topicConcluded) {
-            // topic 종료 → BRANCH, TRANSITION, AWAY 허용
-            return directive.checkBranch() || directive.checkTransition() || directive.checkAway();
-        } else {
-            // topic 진행 중 → INTERLUDE만 허용
-            return directive.checkInterlude();
-        }
     }
 
     private String buildRecentSummary(Long roomId, String characterName) {

@@ -37,7 +37,6 @@ package com.spring.aichat.domain.enums;
  * │ Cinematic Intro         │     ✅     │     ✅      │   ✅    │
  * │ 5-Axis Heroine Stats    │ ✅ ChatRoom│     ✅      │   ❌    │ V2: ChatRoomHeroine 캐릭터별
  * │                         │  Heroine별 │             │         │
- * │ BPM Heartbeat           │     ✅     │     ✅      │   ❌    │
  * │ Dynamic Relation Tag    │     ✅     │     ✅      │   ❌    │
  * │ RAG Memory              │     ✅     │     ✅      │   ✅    │
  * │ Secret Mode             │     ✅     │     ✅      │   ✅    │
@@ -227,12 +226,8 @@ public final class ChatModePolicy {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Dialogue 그룹 공통 (BPM, 동적 관계, 5축 스탯)
+    //  Dialogue 그룹 공통 (동적 관계, 5축 스탯)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public static boolean supportsBpm(ChatMode mode) {
-        return mode.isDialogueMode();
-    }
 
     public static boolean supportsDynamicRelationTag(ChatMode mode) {
         return mode.isDialogueMode();
@@ -282,16 +277,6 @@ public final class ChatModePolicy {
      */
     public static boolean supportsBgmTransition(ChatMode mode) {
         return mode == ChatMode.STORY || mode == ChatMode.SANDBOX || mode == ChatMode.THEATER;
-    }
-
-    /**
-     * 고정 BGM (지원 안 하는 모드의 기본값).
-     * <p>이관 후 모든 모드가 동적 BGM 지원 → 항상 null 반환.
-     * <p>본 메서드는 *기존 V1 호출처와의 하위호환*을 위해 시그니처만 유지.
-     */
-    @Deprecated(forRemoval = true)
-    public static String getFixedBgm(ChatMode mode) {
-        return null;
     }
 
     /**

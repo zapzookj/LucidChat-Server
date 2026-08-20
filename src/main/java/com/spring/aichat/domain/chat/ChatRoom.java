@@ -44,7 +44,7 @@ import java.time.LocalDateTime;
  *   V1 자동 디렉터 인터루드 시스템 폐기 (도그푸딩 #1).
  *
  * <p>[V2 Story에서 캐릭터별로 이전된 V1 필드]
- * - 8축 스탯, statusLevel, dynamicRelationTag, characterThought, currentBpm, lastEmotion,
+ * - 8축 스탯, statusLevel, dynamicRelationTag, characterThought, lastEmotion,
  *   lastIllustrationHint → {@link com.spring.aichat.domain.heroine.ChatRoomHeroine}
  * - Sandbox 모드는 ChatRoom에 그대로 유지 (V1 호환).
  *
@@ -246,9 +246,6 @@ public class ChatRoom {
     @Column(name = "thought_updated_at_turn")
     private Integer thoughtUpdatedAtTurn;
 
-    @Column(name = "current_bpm")
-    private Integer currentBpm;
-
     @Column(name = "last_illustration_hint", columnDefinition = "TEXT")
     private String lastIllustrationHint;
 
@@ -260,29 +257,11 @@ public class ChatRoom {
     //  추후 PoC로 Sandbox에서의 작동/유저 반응 검증 후 폐기 또는 다듬기 결정.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Column(name = "promotion_pending", nullable = false)
-    private boolean promotionPending = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "pending_target_status", length = 30)
-    private RelationStatus pendingTargetStatus;
 
-    @Column(name = "promotion_mood_score", nullable = false)
-    private int promotionMoodScore = 0;
 
-    @Column(name = "promotion_turn_count", nullable = false)
-    private int promotionTurnCount = 0;
 
-    /**
-     * [V1 Phase 5.5-EV] 임계값 도달 후 topic_concluded 대기 상태.
-     * topic_concluded=true가 오면 실제 promotionPending으로 전환.
-     */
-    @Column(name = "promotion_waiting_for_topic", nullable = false)
-    private boolean promotionWaitingForTopic = false;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "promotion_waiting_target", length = 30)
-    private RelationStatus promotionWaitingTarget;
 
     // ── [Sandbox 전용] V1 이관 — 이벤트/디렉터 시스템 ──
 
@@ -373,7 +352,6 @@ public class ChatRoom {
         this.statPlayfulness = 0;  this.statTrust = 0;
         this.statLust = 0;  this.statCorruption = 0;  this.statObsession = 0;
         this.dynamicRelationTag = "낯선 사람";
-        this.currentBpm = 65;
         this.thoughtUpdatedAtTurn = 0;
     }
 
@@ -405,7 +383,6 @@ public class ChatRoom {
         r.statPlayfulness = 0;  r.statTrust = 0;
         r.statLust = 0;  r.statCorruption = 0;  r.statObsession = 0;
         r.dynamicRelationTag = "낯선 사람";
-        r.currentBpm = 65;
         r.thoughtUpdatedAtTurn = 0;
 
         return r;
@@ -644,11 +621,6 @@ public class ChatRoom {
         this.thoughtUpdatedAtTurn = currentTurnCount;
     }
 
-    public void updateBpm(int bpm) {
-        requireSandbox();
-        this.currentBpm = clamp(60, 180, bpm);
-    }
-
     /**
      * [V1 호환] 씬 상태 갱신 — String 파라미터 4종. LLM JSON 응답의 raw String을 그대로 받아 내부에서
      * enum 변환 + try/catch. AI가 잘못된 enum 문자열을 보내도 *부분 성공* 가능.
@@ -782,10 +754,17 @@ public class ChatRoom {
             this.statIntimacy, this.statAffection,
             this.statDependency, this.statPlayfulness, this.statTrust
         );
-        this.statusLevel = newStatus;
+        // [블록 D · §G-1] statusLevel 대입을 여기서 제거했다 — 단계 변경은 승급 경로로 일원화한다.
+        //
+        //   이 한 줄이 승급 시험을 장식으로 만들고 있었다. ChatStreamService가 매 턴 이 메서드를
+        //   호출하는데 promotionWaitingForTopic은 promotionPending이 아니라 가드를 통과했다:
+        //     · 대기 진입 턴 — 유발 축이 affection이 아니면 같은 TX에서 즉시 승급(게이트가 4축에서 뚫림)
+        //     · 시험 실패 턴 — 강등이 같은 TX에서 되돌려짐
+        //     · 시간 넘기기  — 승급 로직을 아예 타지 않고 단계만 상승
+        //   태그 갱신은 매 턴 필요하므로 남기고, 단계 판정만 뗀다.
         String dominant = getDominantStatName();
-        this.dynamicRelationTag = RelationStatusPolicy.buildDynamicRelationTag(newStatus, dominant);
-        return oldStatus != newStatus;
+        this.dynamicRelationTag = RelationStatusPolicy.buildDynamicRelationTag(this.statusLevel, dominant);
+        return oldStatus != newStatus;   // 판정 결과만 알린다(승급은 호출부가 결정)
     }
 
     /** [V1] 씬 상태(BGM/장소/복장/시간)만 캐릭터 기본값으로 복원. */
@@ -807,12 +786,6 @@ public class ChatRoom {
         resetAffection();
         resetSceneState();
         // promotion/event/director 메서드들은 모두 private clearXxx로 정의됨 → 직접 필드 리셋
-        this.promotionPending = false;
-        this.pendingTargetStatus = null;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
-        this.promotionWaitingForTopic = false;
-        this.promotionWaitingTarget = null;
         this.eventActive = false;
         this.eventStatus = null;
         clearDynamicBackground();
@@ -830,7 +803,6 @@ public class ChatRoom {
         this.dynamicRelationTag = "낯선 사람";
         this.characterThought = null;
         this.thoughtUpdatedAtTurn = 0;
-        this.currentBpm = 65;
         this.topicConcluded = false;
         this.lastDirectorTurn = 0;
         this.activeDirectorConstraint = null;
@@ -842,75 +814,6 @@ public class ChatRoom {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Sandbox 전용] V1 이관 — 관계 승급 이벤트 메서드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    /**
-     * [V1 Phase 5.5-EV] 승급 임계값 도달 시 호출 — topic_concluded 대기 상태 진입.
-     */
-    public void markPromotionWaiting(RelationStatus target) {
-        requireSandbox();
-        this.promotionWaitingForTopic = true;
-        this.promotionWaitingTarget = target;
-    }
-
-    /**
-     * [V1 Phase 5.5-EV] topic_concluded=true일 때 실제 승급 이벤트 개시.
-     * @return 승급이 시작되었으면 true
-     */
-    public boolean tryStartPromotionFromWaiting() {
-        requireSandbox();
-        if (!this.promotionWaitingForTopic || this.promotionWaitingTarget == null) {
-            return false;
-        }
-        // 대기 해제 → 실제 승급 이벤트 시작 (디렉터 모드)
-        RelationStatus target = this.promotionWaitingTarget;
-        clearPromotionWaiting();
-        startPromotion(target);
-        startDirectorEvent(); // 승급도 디렉터 모드로 진행
-        return true;
-    }
-
-    private void clearPromotionWaiting() {
-        this.promotionWaitingForTopic = false;
-        this.promotionWaitingTarget = null;
-    }
-
-    public void startPromotion(RelationStatus targetStatus) {
-        requireSandbox();
-        this.promotionPending = true;
-        this.pendingTargetStatus = targetStatus;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
-    }
-
-    /**
-     * [V1 Phase 5.5-EV] 승급 턴 진행 — mood_score를 5종 스탯 변화량 합산으로 대체.
-     * @param statDeltaSum 해당 턴의 5종 노말 스탯 변화량 절대값 합산
-     */
-    public void advancePromotionTurn(int statDeltaSum) {
-        requireSandbox();
-        this.promotionTurnCount++;
-        this.promotionMoodScore += statDeltaSum;
-    }
-
-    public void completePromotionSuccess() {
-        requireSandbox();
-        this.statusLevel = this.pendingTargetStatus;
-        clearPromotion();
-        clearDirectorEvent(); // 승급 완료 → 디렉터 모드 종료
-    }
-
-    public void completePromotionFailure() {
-        requireSandbox();
-        clearPromotion();
-        clearDirectorEvent();
-    }
-
-    private void clearPromotion() {
-        this.promotionPending = false;
-        this.pendingTargetStatus = null;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
-    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Sandbox 전용] V1 이관 — 이벤트 / 디렉터 인터루드 메서드
@@ -961,17 +864,6 @@ public class ChatRoom {
         this.activeDirectorConstraint = actorConstraint;
     }
 
-    /**
-     * 디렉터 인터루드의 관찰자 모드로 이벤트 시작.
-     * INTERLUDE + user_agency=OBSERVER인 경우 호출.
-     */
-    public void startDirectorInterlude(String narration, String actorConstraint) {
-        requireSandbox();
-        setDirectorInterlude(narration, actorConstraint);
-        this.eventActive = true;
-        this.eventStatus = "ONGOING";
-        this.topicConcluded = false;
-    }
 
     /**
      * 디렉터 constraint가 액터에 주입된 후 클리어.
@@ -1073,16 +965,9 @@ public class ChatRoom {
         this.dynamicRelationTag = "낯선 사람";
         this.characterThought = null;
         this.thoughtUpdatedAtTurn = 0;
-        this.currentBpm = 65;
         this.lastEmotion = EmotionTag.NEUTRAL;
         this.lastIllustrationHint = null;
         // promotion/event/director 시스템 초기화 (V1 이관 자산)
-        this.promotionPending = false;
-        this.pendingTargetStatus = null;
-        this.promotionMoodScore = 0;
-        this.promotionTurnCount = 0;
-        this.promotionWaitingForTopic = false;
-        this.promotionWaitingTarget = null;
         this.eventActive = false;
         this.eventStatus = null;
         this.lastDirectorTurn = 0;

@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     private final ChatRoomRepository chatRoomRepository;
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final ChatLogMongoRepository chatLogRepository;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
@@ -300,11 +301,10 @@ public class ChatService {
                     room.isEndingReached(),
                     room.getEndingType() != null ? room.getEndingType().name() : null,
                     room.getEndingTitle(),
-                    new java.util.ArrayList<>(character.getAllowedOutfits(room.getStatusLevel(), isSecret)),
-                    new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret)),
+                    new java.util.ArrayList<>(character.getAllowedOutfits(room.getStatusLevel(), isSecret, legacy.getUnlock().isRelationGated())),
+                    new java.util.ArrayList<>(character.getAllowedLocations(room.getStatusLevel(), isSecret, legacy.getUnlock().isRelationGated())),
                     // [Phase 5.5] 입체적 상태창
                     statsSnapshot,
-                    room.getCurrentBpm(),
                     room.getDynamicRelationTag(),
                     room.getCharacterThought(),
                     // [Phase 5.5-EV] 이벤트 시스템 강화

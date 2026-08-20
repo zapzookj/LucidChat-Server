@@ -405,7 +405,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - 현재 관계 단계: %s (%s)
             - 동적 관계 태그: %s
             - 호감도: %d/100, 친밀도: %d/100
-            - 현재 BPM: %d (기준 %d)
+            - 의존도: %d/100, 장난기: %d/100, 신뢰도: %d/100
 
             위 [4] HEROINES 섹션의 %s 깊은 정의를 *작가의 충실함*으로 살려서 응답하라. 그녀의 영혼은 유저의 호감을 위해 휘어지지 않는다.""".formatted(
             c.getName(), c.getId(),
@@ -413,7 +413,10 @@ public class StoryDirectorPromptAssemblerV2 {
             toKoreanRelation(speaker.getStatusLevel()),
             safe(speaker.getDynamicRelationTag()),
             speaker.getStatAffection(), speaker.getStatIntimacy(),
-            speaker.getCurrentBpm(), speaker.getBaseBpm(),
+            // [블록 D 동반] V2는 5축 중 2축만 주입해 왔다 — LLM이 자기가 움직인 dependency/playfulness/
+            //   trust의 현재값을 모르는 채 델타만 뱉었다. 상태창이 5축 전부를 서술로 보여주게 된 이상
+            //   화면과 대사가 어긋나므로 함께 주입한다. (시크릿 3축 재주입은 docs/16 §E 보류分이라 제외.)
+            speaker.getStatDependency(), speaker.getStatPlayfulness(), speaker.getStatTrust(),
             c.getName());
     }
 

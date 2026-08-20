@@ -112,8 +112,6 @@ public final class StoryV2Responses {
         Integer statLust, Integer statCorruption, Integer statObsession,  // 시크릿 모드일 때만 노출
         RelationStatus statusLevel,
         String dynamicRelationTag,
-        int currentBpm,
-        int baseBpm,
         String characterThought,        // 해금된 경우만
         boolean thoughtUnlocked,
         LocalDateTime lastSpokenAt

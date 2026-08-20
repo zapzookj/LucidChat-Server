@@ -515,9 +515,14 @@ public class Character {
         return set;
     }
 
-    public Set<String> getAllowedOutfits(RelationStatus status, boolean isSecret) {
+    /**
+     * @param relationGated [블록 D · §G-5] 관계 단계별 해금(LOCK) 적용 여부.
+     *   false면 전 복장 개방 — 복장 값 자체는 살아있는 연출 변수이고 죽이는 건 LOCK 규칙뿐이다
+     *   (impl_spec §5). UGC 복장이 1종이라 이 문법은 공식 4캐릭 전용 no-op였다.
+     */
+    public Set<String> getAllowedOutfits(RelationStatus status, boolean isSecret, boolean relationGated) {
         Set<String> all = getAllOutfits();
-        if (isSecret) return all;
+        if (isSecret || !relationGated) return all;
 
         Set<String> allowed = new LinkedHashSet<>(getBaseOutfitSet());
         if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
@@ -532,9 +537,10 @@ public class Character {
         return allowed;
     }
 
-    public Set<String> getAllowedLocations(RelationStatus status, boolean isSecret) {
+    /** @param relationGated [블록 D · §G-5] 관계 단계별 해금 적용 여부. false면 전 장소 개방. */
+    public Set<String> getAllowedLocations(RelationStatus status, boolean isSecret, boolean relationGated) {
         Set<String> all = getAllLocations();
-        if (isSecret) return all;
+        if (isSecret || !relationGated) return all;
 
         Set<String> allowed = new LinkedHashSet<>(getBaseLocationSet());
         if (status.ordinal() >= RelationStatus.ACQUAINTANCE.ordinal()) {
@@ -607,10 +613,10 @@ public class Character {
         return unlocks;
     }
 
-    public String buildOutfitDescriptionsForPrompt(RelationStatus status, boolean isSecret) {
+    public String buildOutfitDescriptionsForPrompt(RelationStatus status, boolean isSecret, boolean relationGated) {
         if (outfitDescriptions == null || outfitDescriptions.isBlank()) return "";
 
-        Set<String> allowed = getAllowedOutfits(status, isSecret);
+        Set<String> allowed = getAllowedOutfits(status, isSecret, relationGated);
         StringBuilder sb = new StringBuilder();
         for (String line : outfitDescriptions.split("\n")) {
             String trimmed = line.trim();

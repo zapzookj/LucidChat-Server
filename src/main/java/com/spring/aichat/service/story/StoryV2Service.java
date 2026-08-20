@@ -912,8 +912,6 @@ public class StoryV2Service {
             secretMode ? h.getStatObsession() : null,
             h.getStatusLevel(),
             h.getDynamicRelationTag(),
-            h.getCurrentBpm(),
-            h.getBaseBpm(),
             thoughtUnlocked ? h.getCharacterThought() : null,
             thoughtUnlocked,
             h.getLastSpokenAt()

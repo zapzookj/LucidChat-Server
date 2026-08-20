@@ -238,8 +238,8 @@ public class TheaterPromptAssembler {
 
         // [Polish-v2] 허용 location/outfit enum 세트 — LLM이 임의로 location을 만들어서 BackgroundDisplay가 폴백으로 가는 것 방지
         try {
-            Set<String> allowedLocations = heroine.getAllowedLocations(status, secret);
-            Set<String> allowedOutfits = heroine.getAllowedOutfits(status, secret);
+            Set<String> allowedLocations = heroine.getAllowedLocations(status, secret, /* relationGated */ true);
+            Set<String> allowedOutfits = heroine.getAllowedOutfits(status, secret, /* relationGated */ true);
             if (!allowedLocations.isEmpty()) {
                 sb.append("Allowed Location enum values: ")
                     .append(String.join(", ", allowedLocations)).append("\n");

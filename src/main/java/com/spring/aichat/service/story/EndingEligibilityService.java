@@ -41,6 +41,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EndingEligibilityService {
 
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final ChatRoomHeroineRepository heroineRepository;
 
     private static final int ENDING_HAPPY_THRESHOLD = 100;
@@ -58,6 +59,7 @@ public class EndingEligibilityService {
      */
     @Transactional
     public boolean checkAndActivateEligibility(ChatRoom room) {
+        if (!legacy.getEnding().isDialogueEnabled()) return false;   // [블록 D · docs/14 §C#6] 엔딩 게이트 오프
         if (!room.isStoryMode()) return false;
         if (room.isEndingEligible()) return false;  // 이미 활성
         if (room.isEndingReached()) return false;   // 이미 엔딩

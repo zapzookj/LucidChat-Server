@@ -19,7 +19,6 @@ import java.time.LocalDateTime;
  * <p>[저장 정보]
  * - 8축 스탯 (V1 ChatRoom에서 이전): normal 5축 + secret 3축
  * - 관계 단계, 동적 관계 태그
- * - BPM (실시간 + 기준)
  * - 속마음 (innerThought), 해금 여부
  * - 마지막 화자였을 때의 감정 태그
  * - 마지막 일러스트 hint (캐릭터 일러스트 생성 시 사용)
@@ -84,7 +83,7 @@ public class ChatRoomHeroine {
     @Column(name = "stat_obsession",   nullable = false)  private int statObsession   = 0;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  관계 / 동적 태그 / BPM
+    //  관계 / 동적 태그
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Enumerated(EnumType.STRING)
@@ -93,12 +92,6 @@ public class ChatRoomHeroine {
 
     @Column(name = "dynamic_relation_tag", length = 50)
     private String dynamicRelationTag;
-
-    @Column(name = "current_bpm", nullable = false)
-    private int currentBpm = 65;
-
-    @Column(name = "base_bpm", nullable = false)
-    private int baseBpm = 65;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  속마음 / 감정 / 일러스트 hint
@@ -221,18 +214,6 @@ public class ChatRoomHeroine {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  BPM
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    public void updateBpm(int bpm) {
-        this.currentBpm = Math.max(60, Math.min(180, bpm));
-    }
-
-    public void updateBaseBpm(int baseBpm) {
-        this.baseBpm = Math.max(60, Math.min(180, baseBpm));
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  화자 마킹 (라우팅 결정용)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -250,8 +231,6 @@ public class ChatRoomHeroine {
         this.statLust = 0;  this.statCorruption = 0;  this.statObsession = 0;
         this.statusLevel = RelationStatus.STRANGER;
         this.dynamicRelationTag = "낯선 사람";
-        this.currentBpm = 65;
-        this.baseBpm = 65;
         this.characterThought = null;
         this.thoughtUpdatedAtTurn = 0;
         this.lastEmotion = null;

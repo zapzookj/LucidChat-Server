@@ -648,8 +648,8 @@ public class TheaterBatchGenerator {
         String fallbackLocation = speaker.getEffectiveDefaultLocation();
         String fallbackOutfit = speaker.getEffectiveDefaultOutfit();
         try {
-            allowedLocations = speaker.getAllowedLocations(RelationStatus.STRANGER, false);
-            allowedOutfits = speaker.getAllowedOutfits(RelationStatus.STRANGER, false);
+            allowedLocations = speaker.getAllowedLocations(RelationStatus.STRANGER, false, /* relationGated */ true);
+            allowedOutfits = speaker.getAllowedOutfits(RelationStatus.STRANGER, false, /* relationGated */ true);
         } catch (Exception ignored) {
             // 세트 조회 실패 시 sanitize 스킵
         }

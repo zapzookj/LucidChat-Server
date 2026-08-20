@@ -1,5 +1,6 @@
 package com.spring.aichat.service;
 
+import com.spring.aichat.config.LegacyFeatureProperties;
 import com.spring.aichat.domain.achievement.Achievement;
 import com.spring.aichat.domain.achievement.AchievementRepository;
 import com.spring.aichat.domain.enums.EasterEggType;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
 public class AchievementService {
 
     private final AchievementRepository achievementRepository;
+    private final LegacyFeatureProperties legacy;
     private final UserRepository userRepository;
 
     // ── 전체 업적 정의 (미해금 힌트 표시용) ──
@@ -59,6 +61,10 @@ public class AchievementService {
      */
     @Transactional
     public UnlockNotification unlockEasterEgg(Long userId, EasterEggType eggType) {
+        // [블록 D · docs/14 §C#6] 업적 게이트 오프 — 지급만 건너뛴다.
+        //   이스터에그 *연출*은 유지 확정이므로 호출부(ChatStreamService.processEasterEgg)는
+        //   계속 EasterEggEvent를 내려보내고 achievement 필드만 null이 된다(FE는 옵셔널 체이닝).
+        if (!legacy.getAchievement().isEnabled()) return null;
         String code = eggType.name();
 
         if (achievementRepository.existsByUserIdAndCode(userId, code)) {
@@ -87,6 +93,7 @@ public class AchievementService {
      */
     @Transactional
     public UnlockNotification unlockEnding(Long userId, String endingType) {
+        if (!legacy.getAchievement().isEnabled()) return null;   // [블록 D · docs/14 §C#6]
         String code = endingType + "_ENDING";
 
         if (achievementRepository.existsByUserIdAndCode(userId, code)) {
@@ -112,6 +119,9 @@ public class AchievementService {
      */
     @Transactional(readOnly = true)
     public Gallery getGallery(Long userId) {
+        // [블록 D · docs/14 §C#6] 갤러리 게이트 오프 — 예외가 아니라 빈 갤러리를 준다.
+        //   보관함 탭이 이 응답을 렌더하므로 던지면 탭 전체가 깨진다.
+        if (!legacy.getAchievement().isEnabled()) return new Gallery(List.of(), List.of(), 0, 0);
         List<Achievement> userAchievements = achievementRepository.findByUserIdOrderByUnlockedAtDesc(userId);
 
         Set<String> unlockedCodes = userAchievements.stream()
@@ -141,6 +151,9 @@ public class AchievementService {
      */
     @Transactional
     public UnlockNotification unlockClientTriggered(Long userId, String easterEggCode) {
+        // [블록 D · docs/14 §C#6 + docs/13 B-7] 게이트 오프.
+        //   부수적으로 '조건 검증 없는 자가 해금' 착취면(방 ID + 코드 문자열만으로 즉시 해금)도 닫힌다.
+        if (!legacy.getAchievement().isEnabled()) return null;
         try {
             EasterEggType eggType = EasterEggType.valueOf(easterEggCode);
             if (eggType.isLlmTriggered()) {

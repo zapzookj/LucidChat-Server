@@ -185,9 +185,13 @@ public class LobbyService {
             throw new BadRequestException("올바르지 않은 채팅 모드입니다: " + request.chatMode());
         }
 
-        // 스토리 모드인데 해당 캐릭터가 스토리 미지원이면 차단
-        if (chatMode == ChatMode.STORY && !character.isStoryAvailable()) {
-            throw new BadRequestException("해당 캐릭터는 아직 스토리 모드를 지원하지 않습니다.");
+        // [블록 D · docs/14 §G-2 / docs/13 C-0] V1 STORY 트랙 폐지 — 이 경로의 STORY 생성은 불가능하다.
+        //   V2 피벗 때 STORY 생성이 ChatRoom.createStoryV2()로 옮겨졌는데 V1 로비의 진입 배선만 남아,
+        //   생성자가 던지는 IllegalArgumentException이 핸들러 부재로 500이 되고 있었다.
+        //   프론트 진입점은 로비 R2에서 이미 사라졌지만 API는 열린 채였다 — 여기서 서버가 닫는다.
+        //   임시방편이 아니라 최종 정책 표현이다: STORY 방은 POST /v2/story/rooms로만 만든다.
+        if (chatMode == ChatMode.STORY) {
+            throw new BadRequestException("스토리 모드는 세계관에서 시작해 주세요.");
         }
 
         // [UGC v1] 접근 규칙: PUBLIC은 전체, PRIVATE/PENDING_PUBLIC은 소유자만 (존재 은닉)

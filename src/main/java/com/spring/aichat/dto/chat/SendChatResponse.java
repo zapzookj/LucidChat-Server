@@ -16,7 +16,7 @@ public record SendChatResponse(
     Long roomId, List<SceneResponse> scenes,
     int currentAffection, String relationStatus,
     PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-    StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+    StatsSnapshot stats, String dynamicRelationTag, String characterThought,
     boolean hasInnerThought, String assistantLogId,
     boolean topicConcluded, String eventStatus,
 
@@ -33,62 +33,62 @@ public record SendChatResponse(
     // ── 하위 호환 생성자: 18-param (sceneIllustration 미지원) ──
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+                            StatsSnapshot stats, String dynamicRelationTag, String characterThought,
                             boolean hasInnerThought, String assistantLogId,
                             boolean topicConcluded, String eventStatus,
                             boolean generateIllustration, LocationTransition locationTransition,
                             List<String> dialogueOptions) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
-            stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
+            stats, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
             topicConcluded, eventStatus, generateIllustration, locationTransition, dialogueOptions, null);
     }
 
     // ── 하위 호환 생성자: 17-param (V1 path, dialogueOptions 미지원) ──
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+                            StatsSnapshot stats, String dynamicRelationTag, String characterThought,
                             boolean hasInnerThought, String assistantLogId,
                             boolean topicConcluded, String eventStatus,
                             boolean generateIllustration, LocationTransition locationTransition) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
-            stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
+            stats, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
             topicConcluded, eventStatus, generateIllustration, locationTransition, null, null);
     }
 
     // ── 15-param 호환 생성자 (이전 patch 전) ──
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+                            StatsSnapshot stats, String dynamicRelationTag, String characterThought,
                             boolean hasInnerThought, String assistantLogId,
                             boolean topicConcluded, String eventStatus) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
-            stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
+            stats, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId,
             topicConcluded, eventStatus, false, null, null);
     }
 
     // ── 이전 하위 호환 생성자들 (모두 dialogueOptions=null) ──
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus) {
-        this(roomId, scenes, currentAffection, relationStatus, null, null, null, null, 65, null, null, false, null, false, null, false, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, null, null, null, null, null, null, false, null, false, null, false, null, null);
     }
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus, PromotionEvent promotionEvent) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null, null, 65, null, null, false, null, false, null, false, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, null, null, null, null, null, false, null, false, null, false, null, null);
     }
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg) {
-        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg, null, 65, null, null, false, null, false, null, false, null, null);
+        this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg, null, null, null, false, null, false, null, false, null, null);
     }
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought) {
+                            StatsSnapshot stats, String dynamicRelationTag, String characterThought) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
-            stats, bpm, dynamicRelationTag, characterThought, false, null, false, null, false, null, null);
+            stats, dynamicRelationTag, characterThought, false, null, false, null, false, null, null);
     }
     public SendChatResponse(Long roomId, List<SceneResponse> scenes, int currentAffection, String relationStatus,
                             PromotionEvent promotionEvent, EndingTrigger endingTrigger, EasterEggEvent easterEgg,
-                            StatsSnapshot stats, int bpm, String dynamicRelationTag, String characterThought,
+                            StatsSnapshot stats, String dynamicRelationTag, String characterThought,
                             boolean hasInnerThought, String assistantLogId) {
         this(roomId, scenes, currentAffection, relationStatus, promotionEvent, endingTrigger, easterEgg,
-            stats, bpm, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId, false, null, false, null, null);
+            stats, dynamicRelationTag, characterThought, hasInnerThought, assistantLogId, false, null, false, null, null);
     }
 
     public record SceneResponse(
