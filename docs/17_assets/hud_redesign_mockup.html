@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>상태창 개편 목업 R2 — §G-8 BPM · §G-9 바이오메트릭 HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&family=Noto+Serif+KR:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* ── 챗 HUD '글래스 다크' 방언 (BiometricStatusPanel.jsx 실측) ── */
+  --panel-bg: linear-gradient(160deg, rgba(8,4,20,.82), rgba(15,8,30,.88));
+  --panel-blur: blur(28px) saturate(1.3);
+  --panel-border: rgba(255,255,255,.08);
+  --hair: rgba(255,255,255,.06);
+  --track: rgba(255,255,255,.09);
+
+  /* ── 텍스트 사다리 (10단계 → 4단계로 정리, 전부 AA 이상) ── */
+  --tx0: rgba(255,255,255,.94);   /* 제목·헤드라인 */
+  --tx1: rgba(255,255,255,.78);   /* 본문 서술 */
+  --tx2: rgba(255,255,255,.60);   /* 보조·라벨 */
+  --tx3: rgba(255,255,255,.46);   /* 최소 — 12px 이상에만 */
+
+  /* ── 타입 스케일 (7단, 로비 lb-* 리듬 계승) ── */
+  --t-hero:22px; --t-title:15px; --t-body:13px; --t-meta:12px; --t-label:11px; --t-micro:10.5px;
+
+  /* ── 간격 리듬: 4 8 12 16 24 32 ── */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+
+  --c-intimacy:#60a5fa; --c-affection:#f472b6; --c-dependency:#a78bfa;
+  --c-playfulness:#34d399; --c-trust:#fbbf24;
+  --c-lust:#ef4444; --c-corruption:#8b5cf6; --c-obsession:#ec4899;
+  --c-cold:#f87171;
+
+  --page-bg:#07060d; --ink:#f2f2f7; --ink1:#b9b9c9; --ink2:#9a9ab0;
+  --accent:#a78bfa; --ok:#34d399; --warn:#fb923c; --bad:#f87171;
+  --r-lg:16px; --r-md:12px; --r-sm:8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page-bg);color:var(--ink);
+  font-family:"Noto Sans KR",Pretendard,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px 96px}
+
+header.top{padding:48px 0 28px;border-bottom:1px solid var(--hair);margin-bottom:var(--s6)}
+h1{font-size:28px;font-weight:900;letter-spacing:-.02em;margin:0 0 10px}
+.sub{color:var(--ink1);font-size:14.5px;max-width:74ch;margin:0}
+.meta{margin-top:14px;display:flex;gap:var(--s2);flex-wrap:wrap}
+.chip{font-size:11.5px;padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:var(--ink1);background:rgba(255,255,255,.04)}
+.chip.hot{border-color:rgba(248,113,113,.4);color:#fca5a5;background:rgba(248,113,113,.1)}
+.chip.ok{border-color:rgba(52,211,153,.4);color:#6ee7b7;background:rgba(52,211,153,.1)}
+
+nav.jump{position:sticky;top:0;z-index:50;background:rgba(7,6,13,.94);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hair);margin:0 -20px var(--s6);padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap}
+nav.jump a{font-size:12.5px;color:var(--ink1);text-decoration:none;padding:5px 11px;border-radius:999px;border:1px solid transparent}
+nav.jump a:hover,nav.jump a:focus-visible{background:rgba(255,255,255,.08);border-color:var(--panel-border);color:var(--ink);outline:none}
+
+section{margin:0 0 56px;scroll-margin-top:64px}
+h2{font-size:21px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em}
+h2 .n{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:var(--s2)}
+.lede{color:var(--ink1);font-size:14px;margin:0 0 22px;max-width:84ch}
+h3{font-size:16px;font-weight:800;margin:28px 0 10px}
+h4{font-size:13.5px;font-weight:800;margin:18px 0 var(--s2);color:var(--ink1)}
+p{font-size:14px;color:var(--ink1)}
+strong{color:var(--ink);font-weight:700}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+  background:rgba(255,255,255,.08);padding:1.5px 5px;border-radius:4px;color:#ddd6fe}
+
+.card{background:rgba(255,255,255,.03);border:1px solid var(--panel-border);border-radius:var(--r-lg);padding:20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:var(--s3) 0}
+th,td{text-align:left;padding:9px var(--s3);border-bottom:1px solid var(--hair);vertical-align:top}
+th{color:var(--ink2);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em}
+td{color:var(--ink1)} td strong{color:var(--ink)}
+.tbl-wrap{overflow-x:auto}
+
+/* ── 컨트롤 ── */
+.controls{background:rgba(255,255,255,.04);border:1px solid var(--panel-border);border-radius:var(--r-lg);
+  padding:var(--s4) 18px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:18px 26px;align-items:flex-start}
+.ctl{display:flex;flex-direction:column;gap:7px;min-width:0}
+.ctl>label,.ctl>.lg{font-size:var(--t-micro);text-transform:uppercase;letter-spacing:.12em;color:var(--ink2);font-weight:800}
+.seg{display:flex;background:rgba(0,0,0,.45);border:1px solid var(--panel-border);border-radius:999px;padding:3px;gap:2px}
+.seg button{appearance:none;border:0;background:transparent;color:var(--ink2);font:inherit;font-size:12.5px;
+  font-weight:700;padding:5px 13px;border-radius:999px;cursor:pointer;white-space:nowrap;transition:.15s}
+.seg button:hover{color:var(--ink1)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.seg button[aria-pressed="true"]{background:rgba(167,139,250,.26);color:#ede9fe;box-shadow:inset 0 0 0 1px rgba(167,139,250,.45)}
+.ctl .hint{font-size:var(--t-micro);color:var(--ink2);line-height:1.5;max-width:34ch}
+.decisions{display:flex;flex-wrap:wrap;gap:14px 22px;width:100%;border-top:1px solid var(--hair);padding-top:var(--s4)}
+.decisions .ctl>label{color:var(--warn)}
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px 20px;width:100%;
+  border-top:1px solid var(--hair);padding-top:var(--s4)}
+.sl{display:flex;align-items:center;gap:10px}
+.sl label{font-size:var(--t-meta);width:52px;flex:none;color:var(--ink1);font-weight:600}
+.sl input{flex:1;min-width:0;accent-color:var(--accent)}
+.sl output{font-size:11.5px;width:36px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.sl.secret label{color:#fca5a5}
+
+/* ── 무대 ── */
+.stage{position:relative;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--panel-border);
+  min-height:640px;display:flex;align-items:stretch;
+  background:
+    radial-gradient(120% 90% at 74% 18%, rgba(120,80,190,.30), transparent 60%),
+    radial-gradient(90% 70% at 10% 90%, rgba(30,60,140,.24), transparent 62%),
+    linear-gradient(170deg,#120c22,#0a0714 60%,#080510)}
+.stage .note{position:absolute;right:var(--s4);bottom:14px;font-size:var(--t-label);color:rgba(255,255,255,.28);letter-spacing:.04em}
+/* 실제 모바일 뷰포트 정확 재현 — 375×667 */
+.stage.mobile{width:375px;max-width:100%;margin:0 auto;min-height:667px;height:667px}
+
+.panel{position:relative;margin:18px;width:330px;flex:none;display:flex;flex-direction:column;
+  border-radius:var(--r-lg);border:1px solid var(--panel-border);background:var(--panel-bg);
+  backdrop-filter:var(--panel-blur);overflow:hidden;max-height:calc(100% - 36px);
+  box-shadow:0 12px 60px rgba(0,0,0,.5), 0 0 80px var(--glow,rgba(148,163,184,.18)), inset 0 1px 0 rgba(255,255,255,.04)}
+@media(max-width:900px){ .panel{width:auto;flex:1} }
+.panel .toprule,.sheet .toprule{height:2px;background:linear-gradient(90deg,transparent,var(--acc,#94a3b8),transparent);opacity:.75;flex:none}
+.panel .body,.sheet .body{overflow-y:auto;padding-bottom:var(--s2);scrollbar-width:thin}
+.sec{padding:15px 18px;border-bottom:1px solid var(--hair)}
+.sec:last-child{border-bottom:0}
+.sectitle{display:flex;align-items:center;gap:7px;margin-bottom:11px}
+.sectitle .t{font-size:var(--t-label);text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:var(--tx2)}
+.sectitle .i{font-size:13px}
+
+.sheetwrap{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);border:0}
+.sheet{position:relative;border-radius:24px 24px 0 0;border-top:1px solid var(--panel-border);
+  background:linear-gradient(160deg,rgba(15,10,35,.98),rgba(30,15,55,.97) 50%,rgba(20,10,40,.98));
+  box-shadow:0 -20px 60px rgba(0,0,0,.55);max-height:78%;display:flex;flex-direction:column;overflow:hidden}
+.sheet .grabrow{display:flex;align-items:center;padding:8px 12px 2px;flex:none}
+.sheet .grab{width:38px;height:4px;border-radius:999px;background:rgba(255,255,255,.24);margin:0 auto}
+.sheet .close{position:absolute;right:10px;top:8px;appearance:none;border:0;background:rgba(255,255,255,.08);
+  color:var(--tx1);width:30px;height:30px;border-radius:999px;font-size:15px;cursor:pointer;line-height:1}
+.sheet .close:focus-visible{outline:2px solid var(--accent)}
+
+/* ── As-is ── */
+.bpm-old{display:flex;align-items:center;gap:14px}
+.heart{width:30px;height:30px;flex:none;display:grid;place-items:center;font-size:24px;
+  animation:beat var(--beat,.9s) ease-in-out infinite;filter:drop-shadow(0 0 6px var(--hc,#f472b6))}
+@keyframes beat{0%{transform:scale(1)}15%{transform:scale(1.25)}35%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+.bpm-num{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.bpm-unit{font-size:var(--t-label);font-weight:800;color:#f9a8d4;margin-left:5px}
+.mismatch{margin-top:6px;font-size:var(--t-micro);color:#fca5a5;line-height:1.5}
+.bar{height:8px;border-radius:999px;background:var(--track);overflow:hidden;margin-top:7px}
+.bar>i{display:block;height:100%;border-radius:999px}
+.statrow-old{display:flex;align-items:center;gap:9px;margin:9px 0}
+.statrow-old .lb{font-size:var(--t-meta);width:52px;flex:none;color:var(--tx1)}
+.statrow-old .tk{flex:1;height:6px;border-radius:999px;background:var(--track);overflow:hidden;position:relative}
+.statrow-old .tk>i{position:absolute;top:0;bottom:0;border-radius:999px}
+.statrow-old .vv{font-size:var(--t-label);width:32px;text-align:right;font-variant-numeric:tabular-nums;color:var(--tx2)}
+.radar{display:block;margin:2px auto 6px}
+.zerobadge{font-size:var(--t-micro);color:#fca5a5;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);
+  border-radius:var(--r-sm);padding:7px 10px;line-height:1.55;margin-bottom:10px}
+
+/* ── To-be ── */
+.now{border-radius:var(--r-md);padding:13px 14px;border:1px solid var(--nowb);background:var(--nowbg)}
+.now .stage-label{font-size:var(--t-micro);font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--nowfg)}
+.now .headline{font-family:"Noto Serif KR",serif;font-size:14.5px;line-height:1.65;color:var(--tx0);margin-top:7px}
+.now .q{color:var(--tx1)}
+
+.nrow{padding:11px 0;border-bottom:1px solid var(--hair)}
+.nrow:last-child{border-bottom:0}
+.nrow .hd{display:flex;align-items:center;gap:var(--s2);margin-bottom:5px;flex-wrap:wrap}
+.nrow .dot{width:7px;height:7px;border-radius:999px;flex:none}
+.nrow .nm{font-size:var(--t-meta);font-weight:800;letter-spacing:.02em;color:var(--tx1)}
+.nrow .band{font-size:var(--t-micro);font-weight:800;padding:2px 7px;border-radius:999px;
+  background:rgba(255,255,255,.08);color:var(--tx1)}
+.nrow .band.cold{background:rgba(248,113,113,.16);color:#fca5a5}
+.nrow .trend{margin-left:auto;font-size:var(--t-micro);font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.trend.up{color:#6ee7b7;background:rgba(52,211,153,.16)}
+.trend.dn{color:#fca5a5;background:rgba(248,113,113,.16)}
+.trend.flat{color:var(--tx2);background:rgba(255,255,255,.07)}
+.nrow .txt{font-size:var(--t-body);line-height:1.7;color:var(--tx1)}
+.nrow .txt em{font-style:normal;color:var(--tx0)}
+/* 위치 마커 — 누적 채움(게이지)이 아니라 눈금 위 한 점 */
+.mark{display:flex;gap:3px;margin-top:8px;align-items:center}
+.mark i{height:3px;flex:1;border-radius:999px;background:rgba(255,255,255,.10)}
+.mark i.on{background:currentColor;box-shadow:0 0 7px currentColor;height:5px}
+.mark i.cold.on{background:var(--c-cold);box-shadow:0 0 7px var(--c-cold)}
+
+.sealed{display:block;width:100%;text-align:center;appearance:none;cursor:pointer;
+  border:1px dashed rgba(239,68,68,.4);border-radius:var(--r-md);padding:14px;background:rgba(239,68,68,.07);font:inherit}
+.sealed:hover{background:rgba(239,68,68,.11)}
+.sealed:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sealed .lk{font-size:17px}
+.sealed .cp{font-size:var(--t-meta);color:var(--tx1);margin-top:6px;line-height:1.6}
+.sealed .cta{display:inline-block;margin-top:9px;font-size:var(--t-meta);font-weight:800;color:#fca5a5}
+
+.thought{font-family:"Noto Serif KR",serif;font-size:var(--t-body);font-style:italic;color:var(--tx2);line-height:1.75}
+.empty{font-size:var(--t-body);color:var(--tx2);line-height:1.7}
+
+.pulse-inline{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;
+  background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12)}
+.pulse-dot{width:8px;height:8px;border-radius:999px;background:var(--hc,#f472b6);
+  box-shadow:0 0 9px var(--hc,#f472b6);animation:beat var(--beat,.9s) ease-in-out infinite}
+.pulse-lb{font-size:var(--t-micro);font-weight:800;letter-spacing:.05em;color:var(--tx1)}
+
+@media (prefers-reduced-motion: reduce){
+  .heart,.pulse-dot{animation:none !important}
+  .pulse-dot{box-shadow:0 0 5px var(--hc,#f472b6)}
+  *{transition:none !important}
+}
+
+.viewtag{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:5;
+  font-size:var(--t-label);font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.62);color:var(--ink1)}
+.viewtag.tobe{border-color:rgba(167,139,250,.5);color:#ede9fe;background:rgba(76,29,149,.55)}
+
+.callout{border-left:3px solid var(--accent);background:rgba(167,139,250,.08);padding:13px var(--s4);border-radius:0 var(--r-sm) var(--r-sm) 0;margin:var(--s4) 0}
+.callout.warn{border-color:var(--warn);background:rgba(251,146,60,.08)}
+.callout.bad{border-color:var(--bad);background:rgba(248,113,113,.08)}
+.callout p{margin:0;font-size:13.5px} .callout p+p{margin-top:var(--s2)}
+ul.tight{margin:var(--s2) 0;padding-left:20px}
+ul.tight li{font-size:13.5px;color:var(--ink1);margin:5px 0}
+
+.opt{border:1px solid var(--panel-border);border-radius:var(--r-lg);padding:var(--s4) 18px;background:rgba(255,255,255,.03)}
+.opt.rec{border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.06)}
+.opt .tag{font-size:var(--t-micro);font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2)}
+.opt.rec .tag{color:#6ee7b7}
+.opt h4{margin:6px 0 var(--s2);color:var(--ink);font-size:15px}
+.opt p{font-size:13px;margin:0 0 var(--s2)}
+.kv{font-size:var(--t-meta);color:var(--ink2);border-top:1px solid var(--hair);padding-top:9px;margin-top:9px}
+.kv b{color:var(--ink1)}
+
+.q-box{border:1px solid rgba(251,146,60,.35);background:rgba(251,146,60,.07);border-radius:var(--r-lg);padding:var(--s4) 18px;margin:14px 0}
+.q-box .qn{font-size:var(--t-label);font-weight:900;letter-spacing:.1em;color:var(--warn);text-transform:uppercase}
+.q-box h4{margin:6px 0 10px;color:var(--ink);font-size:15.5px}
+.q-box .try{font-size:var(--t-meta);color:var(--ink2);margin-top:9px}
+.q-box .try a{color:#c4b5fd}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>상태창 개편 목업 <span style="color:var(--accent)">R2</span> — BPM 게이지 · 바이오메트릭 스탯 HUD</h1>
+  <p class="sub">
+    docs/14 §G 재해석 <strong>#8(BPM 게이지)</strong>·<strong>#9(바이오메트릭 스탯 HUD)</strong>의 개편안이다.
+    방향만 정해져 있고 형태가 미정이라 패치 전 컨펌용으로 만들었다.
+    <strong>슬라이더를 움직이면 실제 카피가 바뀐다</strong> — 이게 개편의 핵심이라 글로 설명하지 않고 만지게 했다.
+    결정 항목마다 <strong>반대안도 무대에서 렌더</strong>되니 토글해서 비교할 것.
+  </p>
+  <div class="meta">
+    <span class="chip">2026-08-20</span>
+    <span class="chip">블록 D · §G-8 / §G-9</span>
+    <span class="chip ok">정찰 wf_a39e45cd-f60</span>
+    <span class="chip ok">4렌즈 크리틱 반영 R2</span>
+    <span class="chip ok">종원 컨펌 2026-08-20 · 구현 완료</span>
+  </div>
+</header>
+
+<nav class="jump">
+  <a href="#tldr">0. 요약</a>
+  <a href="#facts">1. 뒤집힌 전제</a>
+  <a href="#stage-sec">2. 무대</a>
+  <a href="#bpm">3. BPM 3안</a>
+  <a href="#hud">4. HUD 상세</a>
+  <a href="#copy">5. 서술자 전문</a>
+  <a href="#naming">6. 명명 충돌</a>
+  <a href="#states">7. 상태 매트릭스</a>
+  <a href="#contract">8. 구현 계약</a>
+  <a href="#decide">9. 결정 요청</a>
+</nav>
+
+<!-- 0 -->
+<section id="tldr">
+  <h2><span class="n">0</span>세 줄 요약</h2>
+  <div class="grid3">
+    <div class="card">
+      <h4 style="margin-top:0">BPM은 이미 반쯤 죽어 있다</h4>
+      <p style="margin:0">V2 STORY에선 <strong>LLM이 bpm을 출력하지도 않고</strong> 저장도 안 된다 — 매턴 상수 <code>65</code>를 프롬프트에 먹이고 HUD에 65를 그린다. 살아 움직이는 건 V1 SANDBOX뿐이고 거기서 <strong>턴당 ~205–235 토큰</strong>을 쓴다.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">V2 상태창은 전부 0을 보여준다</h4>
+      <p style="margin:0">키 불일치로 8축 전부 0 · 관계 영구 STRANGER(docs/13 E-1.11, 현재도 사실). <strong>V2 유저는 이 HUD를 한 번도 제대로 본 적이 없다</strong> — 개편으로 잃을 "정상 동작하던 이전 상태"가 없다. 무대에서 <em>현재 V2</em>로 확인할 수 있다.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">서술자는 이미 문법이 있다</h4>
+      <p style="margin:0">블록 B <code>PersonaLensPromptBlock</code>이 서술 문법을 확정해 뒀다. HUD 개편은 새 발명이 아니라 <strong>같은 문법을 방향만 뒤집는</strong> 일이다. 단 <strong>어휘가 겹치면 안 된다</strong>(§6).</p>
+    </div>
+  </div>
+  <div class="callout">
+    <p><strong>제안 요지</strong> — BPM은 <em>프롬프트에서 완전히 빼고</em>, 이미 페이로드에 있는 <code>emotion</code>으로 <em>박동만</em> 파생시킨다(숫자 삭제, 토큰 100% 회수, V2에서도 처음으로 작동). HUD 8축은 <em>수치 막대를 서술 한 줄 + 구간명 + 변화 방향</em>으로 바꾸고, 숫자는 '숫자로 보기' 접힘 안으로 내린다.</p>
+  </div>
+</section>
+
+<!-- 1 -->
+<section id="facts">
+  <h2><span class="n">1</span>조사가 뒤집은 전제</h2>
+  <p class="lede">설계 전에 코드를 끝까지 읽었더니 §G-8·§G-9의 전제 중 둘이 사실과 달랐다. 모르고 설계하면 엉뚱한 걸 만든다.</p>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:28%">§G가 가정한 것</th><th style="width:37%">실제 코드</th><th>설계에 미치는 영향</th></tr></thead>
+    <tbody>
+      <tr><td><strong>#8</strong> "BPM을 <u>렌즈의 감정 신호로 흡수</u>"</td>
+        <td>렌즈에는 <strong>응답 역채널이 없다.</strong> V1·V2 출력 스키마 어디에도 렌즈 관련 필드가 없다 — 렌즈는 <em>주입 전용</em>이다.</td>
+        <td>"흡수"를 문자 그대로 하려면 <strong>새 출력 필드가 필요</strong>하고, 같은 문장의 "토큰 회수"와 모순된다. → 흡수는 <em>렌즈</em>가 아니라 <em>이미 있는 <code>emotion</code></em>으로 해야 성립.</td></tr>
+      <tr><td><strong>#8</strong> BPM = 패널 안의 한 요소</td>
+        <td>심박 로직이 <strong>6개 표면에 복제</strong> — 상태창 · 데스크톱 정보바 · 모바일 배지 · 엔딩 크레딧 · V2 히로인 셀렉터 · DialogueBox.</td>
+        <td>드랍이든 흡수든 <strong>단일 컴포넌트 수정으로 안 끝난다.</strong></td></tr>
+      <tr><td><strong>#9</strong> "수치→서술형" = 문장을 새로 써야 함</td>
+        <td><code>NORMAL_STATS.tooltip</code>이 이미 서술이고 <code>BPM_RANGES</code>가 구간 서술의 선례다. 없는 건 <strong>축별 구간 임계값</strong>뿐.</td>
+        <td>§G-9는 <strong>카피 작업이 아니라 임계값 설계</strong>다.</td></tr>
+      <tr><td><strong>#10</strong> "8축 소프트캡화"</td>
+        <td>V1은 <code>getMaxNormalStatValue() &gt;= 100</code>으로 <strong>5축 아무거나</strong> 엔딩을 열고 관계 단계도 5축 MAX로 올린다.</td>
+        <td><strong>소프트캡을 넣는 순간 V1 엔딩과 LOVER 승급이 동시에 도달불가</strong>가 된다. <em>(이번 범위 밖 — 경고만)</em></td></tr>
+      <tr><td>시크릿 3축은 "잠들어 있다"(docs/16 §E)</td>
+        <td>사실. 쓰기·저장·클램프·HUD·엔딩통계는 다 있고 <strong>현재값 프롬프트 재주입만 끊겼다</strong> — 유일 소비처가 死코드 <code>SandboxPromptAssembler</code>.</td>
+        <td>깨우기가 <code>.formatted()</code> 인자 추가 수준. <strong>HUD는 이 슬롯을 비워둔 채 설계했다.</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="stage-sec">
+  <h2><span class="n">2</span>무대 — 만져보는 개편안</h2>
+  <p class="lede">
+    <strong>상태 프리셋</strong>으로 첫 턴·연인·적대를 오가고, <strong>슬라이더</strong>로 구간 경계를 넘겨 보라.
+    <strong>결정 토글</strong>은 §9의 각 안건에 대응한다 — 추천안뿐 아니라 반대안도 그려진다.
+  </p>
+
+  <div class="controls">
+    <div class="ctl"><label>상태 프리셋</label>
+      <div class="seg" id="seg-preset">
+        <button data-v="new" aria-pressed="true">첫 턴 (전부 0)</button>
+        <button data-v="mid" aria-pressed="false">진행 중</button>
+        <button data-v="lover" aria-pressed="false">연인</button>
+        <button data-v="enemy" aria-pressed="false">적대</button>
+      </div>
+      <div class="hint">신규 방은 8축 전부 0이다 — 가장 흔한 상태라 기본값으로 뒀다.</div>
+    </div>
+    <div class="ctl"><label>보기</label>
+      <div class="seg" id="seg-view">
+        <button data-v="v1" aria-pressed="false">현재 V1</button>
+        <button data-v="v2" aria-pressed="false">현재 V2</button>
+        <button data-v="tobe" aria-pressed="true">개편안</button>
+      </div>
+      <div class="hint">현재 V2 = 키 불일치로 전부 0인 실제 화면.</div>
+    </div>
+    <div class="ctl"><label>디바이스</label>
+      <div class="seg" id="seg-dev">
+        <button data-v="desk" aria-pressed="true">데스크톱</button>
+        <button data-v="mob" aria-pressed="false">모바일 375×667</button>
+      </div>
+    </div>
+    <div class="ctl"><label>관계 단계</label>
+      <div class="seg" id="seg-rel">
+        <button data-v="STRANGER" aria-pressed="true">타인</button>
+        <button data-v="ACQUAINTANCE" aria-pressed="false">지인</button>
+        <button data-v="FRIEND" aria-pressed="false">친구</button>
+        <button data-v="LOVER" aria-pressed="false">연인</button>
+        <button data-v="ENEMY" aria-pressed="false">적대</button>
+      </div>
+    </div>
+    <div class="ctl"><label>캐릭터 이름 (조사·길이)</label>
+      <div class="seg" id="seg-name">
+        <button data-v="아이리" aria-pressed="true">아이리</button>
+        <button data-v="강채린" aria-pressed="false">강채린</button>
+        <button data-v="Sierra" aria-pressed="false">Sierra</button>
+        <button data-v="레오나르도 디 카프리오" aria-pressed="false">긴 이름</button>
+      </div>
+      <div class="hint">비한글 이름은 <code>josa.js</code> 계약대로 <strong>이름 생략 폴백</strong>으로 떨어진다.</div>
+    </div>
+    <div class="ctl"><label>직전 턴 감정</label>
+      <div class="seg" id="seg-emo"></div>
+      <div id="pulse-why" class="hint"></div>
+    </div>
+
+    <div class="decisions">
+      <div class="ctl"><label>결정 1 · 심박</label>
+        <div class="seg" id="seg-bpm">
+          <button data-v="none" aria-pressed="false">A 없음</button>
+          <button data-v="pulse" aria-pressed="true">B 박동</button>
+          <button data-v="number" aria-pressed="false">C 숫자 존치</button>
+        </div>
+      </div>
+      <div class="ctl"><label>결정 2 · 수치 노출</label>
+        <div class="seg" id="seg-num">
+          <button data-v="hidden" aria-pressed="false">전면 서술</button>
+          <button data-v="details" aria-pressed="true">숫자로 보기 접힘</button>
+        </div>
+      </div>
+      <div class="ctl"><label>결정 3 · 시크릿</label>
+        <div class="seg" id="seg-sec">
+          <button data-v="sealed" aria-pressed="true">봉인 카드</button>
+          <button data-v="hidden" aria-pressed="false">섹션 숨김</button>
+          <button data-v="on" aria-pressed="false">시크릿 켜짐</button>
+        </div>
+      </div>
+      <div class="ctl"><label>결정 4 · trust 라벨</label>
+        <div class="seg" id="seg-trust">
+          <button data-v="믿음" aria-pressed="true">HUD=믿음</button>
+          <button data-v="신뢰도" aria-pressed="false">현행 신뢰도</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sliders" id="sliders"></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="viewtag" id="viewtag">개편안</div>
+    <div id="mount" style="display:contents"></div>
+    <span class="note">대화 화면 (배경·스탠딩·대사창 생략)</span>
+  </div>
+  <p style="font-size:12.5px;color:var(--ink2);margin-top:10px">
+    ※ 실물과 다른 점: 배경·스탠딩·대사창을 생략했고, 패널 등장 모션(spring 280/26)과 hover 툴팁은 재현하지 않았다.
+    색·재질·타이포·간격은 <code>BiometricStatusPanel.jsx</code> 실측값 기준이되, <strong>대비 미달 값은 AA를 만족하도록 올렸다</strong>(§8).
+    섹션 라벨은 현재·개편 <strong>양쪽 다 한글</strong>로 맞춰, 서술형 전환 효과만 비교되게 했다.
+  </p>
+</section>
+
+<!-- 3 -->
+<section id="bpm">
+  <h2><span class="n">3</span>§G-8 BPM — 3안</h2>
+  <p class="lede">"렌즈의 감정 신호로 흡수 or 프롬프트 블록 드랍" 중 하나를 정해야 한다. 조사 결과 <strong>흡수를 렌즈로 하는 건 불가능</strong>(역채널 없음)이라, 실질 선택지는 셋이다.</p>
+  <div class="grid3">
+    <div class="opt">
+      <div class="tag">A안</div><h4>완전 드랍</h4>
+      <p>프롬프트 블록 · 출력 필드 · 6개 표면 표시를 전부 제거. 심박이라는 개념을 서비스에서 뺀다.</p>
+      <div class="kv"><b>토큰</b> V1 턴당 ~205–235 회수 · <b>구현</b> 중(6표면) · <b>잃는 것</b> 살아있는 캐릭터라는 체감의 가장 값싼 장치</div>
+    </div>
+    <div class="opt rec">
+      <div class="tag">B안 · 추천</div><h4>드랍 + 박동 파생</h4>
+      <p>프롬프트·출력 필드는 A안과 똑같이 전부 제거하고, <strong>이미 페이로드에 있는 <code>emotion</code></strong>(V1·V2 씬 공통)과 스탯 델타로 <strong>3단 박동을 클라이언트에서 파생</strong>한다. 숫자는 없애고 박동만 남긴다.</p>
+      <div class="kv"><b>토큰</b> A안과 동일 100% 회수 · <b>구현</b> 소(파생 함수 1개 + 표면 정리) · <b>덤</b> <strong>V2에서 처음으로 심박이 작동</strong></div>
+    </div>
+    <div class="opt">
+      <div class="tag">C안</div><h4>존치 · V2 수리</h4>
+      <p>V2에 출력 스키마·<code>updateBpm</code>·SSE 3층을 새로 놓아 제대로 살린다.</p>
+      <div class="kv"><b>토큰</b> 회수 0(V2에 신규 지출) · <b>구현</b> 중~대 · <b>평가</b> 저가치로 판정한 장치에 새로 투자</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p><strong>B안을 미는 이유.</strong> §G-8의 문장은 "흡수 <em>or</em> 드랍"이지만 실제로 원한 건 <em>토큰은 회수하되 살아있는 느낌은 잃지 않는 것</em>이라고 읽었다. B안은 둘을 동시에 준다.</p>
+    <p>덤이 하나 더 있다: 지금 BPM은 <strong>LLM이 지어낸 숫자</strong>라 대사 톤과 어긋나는 순간이 잦다. 무대의 <em>현재 V1</em>에서 그 상태를 재현해 뒀다 — 담담한 대사에 152가 뜨는 화면이다. 파생 방식은 같은 <code>emotion</code>에서 나오므로 <strong>구조적으로 어긋날 수 없다</strong>.</p>
+  </div>
+
+  <h3>파생 규칙 (B안) — 15개 <code>EmotionTag</code> 전수 매핑</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>박동</th><th>표시</th><th><code>EmotionTag</code></th><th>보정</th></tr></thead>
+    <tbody>
+      <tr><td><strong>잔잔</strong></td><td>느린 박동 · <span style="color:#f9a8d4">연분홍</span></td><td>NEUTRAL · RELAX · SAD · SULKING · DISGUST · DUMBFOUNDED</td>
+        <td rowspan="3">직전 턴 <code>|스탯 델타| 합 ≥ 6</code>이면 한 단계↑<br>시크릿 ON + 음란도 ≥ 60이면 최소 '두근'<br><strong>미지의 값 → 잔잔</strong>(fail-safe)</td></tr>
+      <tr><td><strong>두근</strong></td><td>보통 박동 · <span style="color:#f472b6">핑크</span></td><td>SHY · JOY · FLIRTATIOUS · PLEADING · SURPRISE</td></tr>
+      <tr><td><strong>쿵쾅</strong></td><td>빠른 박동 · <span style="color:#ef4444">레드</span></td><td>HEATED · PANIC · ANGRY · FRIGHTENED</td></tr>
+    </tbody>
+  </table></div>
+  <p style="font-size:13px"><strong>라벨을 '평온'이 아니라 '잔잔'으로 잡은 이유</strong> — 감정 태그에도 '평온'이 있어 같은 단어가 두 뜻으로 쓰인다. 그리고 SAD·SULKING이 '평온'으로 표시되면 "대사와 어긋나지 않는다"는 B안의 근거가 깨진다. <strong>박동 라벨은 감정어가 아니라 박동의 세기</strong>여야 한다 — 잔잔/두근/쿵쾅은 셋 다 의태어라 감정과 층위가 갈린다.</p>
+  <p style="font-size:13px">숫자를 없애는 게 핵심이다. 숫자가 있으면 유저는 그걸 <em>올리려고</em> 한다 — 심박은 올리는 게임이 아니라 <em>읽는 분위기</em>여야 한다.</p>
+</section>
+
+<!-- 4 -->
+<section id="hud">
+  <h2><span class="n">4</span>§G-9 HUD — 무엇을 어떻게 바꾸는가</h2>
+  <h3>진단: 수치 막대가 만든 문제</h3>
+  <ul class="tight">
+    <li><strong>관계를 그라인드로 만든다.</strong> 8개 막대는 "채워야 할 것"으로 읽힌다. §G-10이 만렙=엔딩 결합을 해제하기로 한 방향과 어긋난다.</li>
+    <li><strong>불투명하다.</strong> 의존도 47이 무슨 뜻인지, 뭘 해서 올랐는지 알 수 없다. 툴팁 설명은 hover 없는 모바일에선 못 본다.</li>
+    <li><strong>레이더가 모바일에서 잘린다.</strong> 패널 폭 <code>min(310px,40vw)</code> → 375px에서 <strong>150px</strong>인데 레이더는 230px 고정 SVG다. <em>(미등록 결함)</em></li>
+    <li><strong>말과 숫자가 따로 논다.</strong> 캐릭터는 프롬프트에서 서술로 움직이는데 UI만 계량기다.</li>
+  </ul>
+
+  <h3>개편 구조</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th style="width:15%">섹션</th><th style="width:35%">현재</th><th>개편안</th></tr></thead>
+    <tbody>
+      <tr><td><strong>헤더</strong></td><td>BPM 숫자 26px + 심장 + 게이지 + 3구간 표</td><td><strong>심박 pill 하나</strong>(숫자 없음) + 이름. 세로 92px → 34px</td></tr>
+      <tr><td><strong>지금 이 관계</strong></td><td>관계 태그 문자열 1줄 + 레이더 230px</td><td><strong>전용 헤드라인</strong>(관계 단계 × 지배 축 뉘앙스, 축 서술과 <u>다른 문장</u>) + 단계 라벨. 레이더 삭제</td></tr>
+      <tr><td><strong>마음</strong></td><td>5축 × (라벨 + 막대 + 숫자)</td><td>5축 × (<strong>서술 한 줄 + 구간명 + 변화 방향</strong> + 위치 마커). 숫자는 접힘 안으로</td></tr>
+      <tr><td><strong>비밀</strong></td><td>시크릿 3축 막대 (비시크릿에선 블러)</td><td>비시크릿 = <strong>봉인 카드</strong>(클릭 가능 업셀) / 시크릿 = 3축 서술 + 진행 아크 슬롯</td></tr>
+      <tr><td><strong>속마음</strong></td><td>세리프 이탤릭 1문장</td><td><strong>변경 없음</strong></td></tr>
+      <tr><td><strong>섹션 라벨</strong></td><td>영문(Heartbeat/Stats/Secret…)</td><td>한글. <em>단 이건 서술형 전환과 무관한 별개 변경이라 무대에서는 양쪽 다 한글로 맞춰 비교했다.</em></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout warn">
+    <p><strong>왜 위치 마커이지 게이지가 아닌가.</strong> 초안은 5칸 누적 채움이었는데, 그건 8칸 막대를 5칸으로 줄인 것일 뿐이라 "수치를 없앤다"는 전제와 모순이고 냉각 구간이 <em>빈 게이지</em>=낮은 점수로 읽힌다. 그래서 <strong>채움이 아니라 눈금 위 한 점</strong>으로 바꿨고, 냉각은 색을 달리해 "낮음"이 아니라 <strong>"역방향"</strong>임을 표시한다.</p>
+  </div>
+  <div class="callout warn">
+    <p><strong>숫자를 완전히 없애지는 않았다.</strong> 전면 서술로 가면 "내가 뭘 해서 올랐지"의 피드백 루프가 끊긴다. 그래서 <strong>변화 방향은 항상</strong> 보이게 남기고 절대 수치는 접힘에 뒀다. 다만 방향 배지는 <strong>직전 턴 기준임을 카피에 명시</strong>했다 — 기간이 없으면 해석이 갈린다.</p>
+  </div>
+
+  <h3>모바일: 좌측 패널 → 바텀시트</h3>
+  <p>375px에서 150px로 찌그러지는 좌측 패널을 유지할 이유가 없다. 살아있는 프리미티브 <code>mobile/BottomSheet.jsx</code>(z-index 70)로 옮긴다. 서술형이 오히려 여기서 유리하다 — 문장은 좁은 폭에서 읽히지만 레이더는 안 읽힌다.</p>
+</section>
+
+<!-- 5 -->
+<section id="copy">
+  <h2><span class="n">5</span>서술자 전문 — 8축 × 5구간</h2>
+  <p class="lede">블록 B <code>PersonaLensPromptBlock</code>의 문법을 <strong>방향만 뒤집어</strong> 적용했다. 렌즈는 <em>캐릭터→유저</em> 프롬프트 문장이고, 이건 <em>유저가 읽는</em> 화면 문장이라 주어가 캐릭터 이름이 된다.</p>
+
+  <h4>카피 계약</h4>
+  <ul class="tight">
+    <li><code>{이름}은/는 ⟨판정⟩ — ⟨겉으로 드러나는 증거⟩</code> 구조 고정. 대시가 판정과 증거를 가른다. <strong>40/40 준수</strong>.</li>
+    <li><strong>최고·최저 밴드에만</strong> 큰따옴표 예시 대사 1개 + 서술 종결. 중간 3밴드는 대사 금지. <em>(초안은 최고 밴드에만 있어 적대 루트가 저예산으로 보였다 — 냉각 8문장에 대사를 채웠다.)</em></li>
+    <li><strong>낮은 값에 부정 어휘를 쓰지 않는다.</strong> 낮음은 페널티가 아니라 다른 관계의 재미다.</li>
+    <li>수치·축 이름을 문장 안에 노출하지 않는다.</li>
+    <li><strong>레지스터 분리</strong> — 서술자 40문장 = 문어체 '~다'(나레이션) / 시스템 안내·CTA·빈 상태 = 해요체(제품 기본, <code>DialogueBox</code>·<code>EndingCredits</code> 관례).</li>
+    <li><strong>렌즈 예약어 회피</strong> — '무방비 · 너한테만 · 맡기려 · 시선 · 놀림 1순위'는 렌즈 서술자가 쓰는 어휘라 HUD에서 뺐다(§6).</li>
+    <li>조사는 <code>josa.js</code> 계약을 따른다 — 한글 종성 판별, <strong>비한글 종결은 이름 생략 폴백</strong>.</li>
+  </ul>
+
+  <div class="tbl-wrap" id="copytable"></div>
+
+  <h4>구간 임계값</h4>
+  <p>백엔드 스탯은 <code>-100 ~ +100</code> 하드 클램프다. 음수 구간이 실제로 존재하므로(ENEMY) 5구간으로 나눴다. 구간명은 화면에 그대로 노출된다.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>범위</th><th>일반 5축</th><th>시크릿 3축</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>-100 ~ -40</td><td><strong>냉각</strong></td><td><strong>닫힘</strong></td><td>역방향. 마커 색이 달라진다</td></tr>
+      <tr><td>-39 ~ 9</td><td><strong>거리</strong></td><td><strong>잠듦</strong></td><td>초기값 0 포함</td></tr>
+      <tr><td>10 ~ 39</td><td><strong>보통</strong></td><td><strong>희미</strong></td><td></td></tr>
+      <tr><td>40 ~ 79</td><td><strong>가까움</strong></td><td><strong>짙음</strong></td><td></td></tr>
+      <tr><td>80 ~ 100</td><td><strong>밀착</strong></td><td><strong>삼킴</strong></td><td>V1 엔딩 임계(100)와 겹침 — §G-10 소프트캡과 연결</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 6 -->
+<section id="naming">
+  <h2><span class="n">6</span>명명 충돌 — 시각 설계보다 먼저 정할 것</h2>
+  <div class="callout bad">
+    <p>초안은 "HUD <code>신뢰도</code>를 <code>믿음</code>으로 바꾸면 해결"이라고 봤는데, <strong>크리틱에서 더 깊은 충돌이 드러났다 — 라벨이 아니라 문장이 겹친다.</strong></p>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th style="width:26%">겹치는 것</th><th style="width:37%">렌즈 (페르소나)</th><th>HUD 초안 (수정 전)</th></tr></thead>
+    <tbody>
+      <tr><td>키</td><td><code>trust</code> · 라벨 "신뢰감" · 동사 "믿는다"</td><td><code>trust</code> · 라벨 "신뢰도"</td></tr>
+      <tr><td>문장</td><td>6–8 <em>고민을 먼저 꺼내기 시작한다</em></td><td><em>당신에게 고민을 먼저 꺼낸다</em></td></tr>
+      <tr><td>대사</td><td>9–10 <em>"이 얘긴 너한테만 하는 거야"</em></td><td><em>"이건 너한테만 말하는 건데."</em></td></tr>
+      <tr><td>타 축 전이</td><td>친근함 9–10 <em>완전히 무방비다</em> / 카리스마 9–10 <em>결정을 맡기려 한다</em> / 매력 6–8 <em>자꾸 시선이 간다</em></td><td><em>당신 앞에서 무방비다</em> / <em>판단 자체를 맡기려 든다</em> / <em>자꾸 당신 쪽을 본다</em></td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>R2에서 한 조치</strong> — HUD 40문장에서 렌즈 예약어 5종을 전부 걷어내고 재작성했다. 무대에서 <code>trust</code> 서술을 확인할 수 있다.</p>
+
+  <div class="callout warn">
+    <p><strong>남은 선택 (결정 4).</strong> 라벨 자체도 정리해야 한다. 두 갈래다.</p>
+    <p><strong>(a) HUD를 바꾼다</strong> — 신뢰도 → <strong>믿음</strong>. 블록 B 산출물 무접촉, 이번 개편 안에서 끝난다. 단 렌즈의 서술 동사가 이미 "믿는다"라 의미장이 여전히 가깝다.</p>
+    <p><strong>(b) 렌즈를 바꾼다</strong> — 렌즈 <code>trust</code> 라벨을 <strong>듬직함</strong>으로. 렌즈 5축이 매력·친근함·카리스마·신비 <em>전부 인상 형용사</em>인데 '신뢰감'만 관계 상태어라 애초에 결이 어긋나 있다. 근본 해법이지만 <strong>이미 구현된 블록 B(BE <code>PersonaLensPromptBlock</code> + FE <code>PersonaApi</code> 라벨)를 건드린다.</strong></p>
+  </div>
+  <p><strong>프레임 분리는 두 갈래 공통으로 적용한다.</strong> 렌즈 = <strong>"내가 그 사람에게 어떻게 보이는가"</strong>(페르소나 소유·보관함) / HUD = <strong>"그 사람이 나를 어떻게 대하는가"</strong>(방 소유·상태창).
+  극장 아바타 <code>CHARM="매력"</code>은 화면이 분리돼 실충돌이 없으나, <strong>통합 화면을 만들면 즉시 충돌</strong>한다.</p>
+</section>
+
+<!-- 7 -->
+<section id="states">
+  <h2><span class="n">7</span>상태 매트릭스</h2>
+  <p class="lede">초안에 없어서 크리틱에서 지적된 부분이다. 무대에서 프리셋·보기 토글로 상당수를 확인할 수 있다.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th style="width:20%">상태</th><th style="width:12%">무대 확인</th><th>처리</th></tr></thead>
+    <tbody>
+      <tr><td><strong>첫 턴 (8축 전부 0)</strong></td><td>프리셋 · 기본값</td><td>축 서술을 돌리지 <u>않는다</u>. 전용 빈 카피 — 헤드라인 "아직 아무것도 아니에요"(해요체) + 목록 자리에 안내 1줄. <strong>5줄 전부 '거리' 문장은 첫인상이 거절 통보로 읽힌다.</strong></td></tr>
+      <tr><td>일부 축만 0</td><td>슬라이더</td><td>정상 렌더. 0은 '거리/잠듦' 구간</td></tr>
+      <tr><td>스탯 로드 실패</td><td>—</td><td>패널 전체가 아니라 <strong>축 행만</strong> 스켈레톤 1줄. 헤드라인·속마음은 살린다</td></tr>
+      <tr><td>속마음 미생성</td><td>—</td><td>섹션 자체를 숨긴다(빈 따옴표 금지). V1은 10턴 주기라 초반엔 정상적으로 없다</td></tr>
+      <tr><td>시크릿 비활성</td><td>결정 3 토글</td><td>봉인 카드 / 숨김 / 블러 3안</td></tr>
+      <tr><td>V2 히로인 0명</td><td>—</td><td>패널 진입 자체를 막는다(셀렉터에서 빈 상태 처리)</td></tr>
+      <tr><td>V2 히로인 3~5명</td><td>—</td><td>셀렉터 → 히로인별 패널. <strong>패널은 항상 1명분</strong>이라 축 수는 불변</td></tr>
+      <tr><td>긴 이름</td><td>이름 토글</td><td>서술 첫머리에 오므로 2~3줄로 번진다. 이름 길이 상한(<code>name VARCHAR(50)</code>)을 감안해 <strong>표시용 20자 말줄임</strong> 권장</td></tr>
+      <tr><td>비한글 이름</td><td>이름 토글 · Sierra</td><td><code>josa.js</code> 계약대로 이름 생략 폴백 — "이 캐릭터는"</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 8 -->
+<section id="contract">
+  <h2><span class="n">8</span>구현 계약</h2>
+  <h4>백엔드</h4>
+  <ul class="tight">
+    <li><strong>제거</strong> — <code>CharacterPromptAssembler.buildBpmBlock()</code>(:456-472) · CURRENT STATE BPM 2줄(:299-300) · 출력 스키마 <code>"bpm"</code> 2곳(:873, :953) · <code>StoryDirectorPromptAssemblerV2</code>:408 상수 BPM 줄 · <code>DirectorPromptAssembler</code>:61 · 死코드 <code>ChatModePolicy.supportsBpm</code>(:233)</li>
+    <li><strong>컬럼</strong> — <code>chat_rooms.current_bpm</code> / <code>chat_room_heroines.current_bpm</code>·<code>base_bpm</code>은 즉시 DROP하지 말고 <strong>엔티티에서만 떼고 한 릴리즈 유지</strong>. DTO에서 빼는 순간 구 FE가 <code>undefined</code>를 읽으므로 <strong>FE 선행 배포</strong>.</li>
+    <li><strong>서술자는 프론트에 둔다.</strong> 8축 값은 이미 DTO에 전부 실려 있고(<code>StoryV2Responses:111-116</code>), 카피 수정에 서버 배포를 걸지 않기 위해서다. 프롬프트용 서술자와 <strong>공유하지 않는다</strong> — 하나는 LLM 지시문, 하나는 유저 카피다(§6의 중복이 정확히 공유했을 때 생기는 사고).</li>
+    <li><strong>동반 권장</strong> — 시크릿 3축 현재값 재주입(<code>CharacterPromptAssembler</code>:291-319 <code>.formatted()</code> 인자) + V2 누락 3축(dependency/playfulness/trust). HUD가 마음을 서술로 보여주는데 LLM이 자기 수치를 모르면 화면과 대사가 어긋난다.</li>
+  </ul>
+  <h4>프론트</h4>
+  <ul class="tight">
+    <li><strong>신설</strong> <code>src/utils/relationNarrative.js</code> — <code>bandOf(v)</code> · <code>narrate(axis,v,name)</code> · <code>headline(stage,stats,name)</code> · <code>derivePulse(emotion,deltaSum,secret,lust)</code>. 순수 함수 — <strong>이 저장소 최초의 유닛 테스트 대상</strong>으로 적합하다(현재 FE 테스트 0건).</li>
+    <li><strong><code>josa.js</code> 확장</strong> — 현재 <code>josaWaGwa</code>(와/과)뿐이다. <code>josaEunNeun</code>·<code>josaIGa</code>를 <strong>같은 계약</strong>(비한글 종결 → <code>null</code> → 이름 생략 폴백)으로 추가한다. 목업의 <code>josaNeun</code>은 이 계약을 어기므로 <strong>그대로 옮기지 말 것</strong>.</li>
+    <li><strong>수정</strong> — <code>BiometricStatusPanel.jsx</code>(전면) · <code>DialogueBox.jsx</code> 데스크톱 정보바 BPM pill·모바일 배지 · <code>StoryV2HeroineSelector.jsx</code>:98 · <code>EndingCredits.jsx</code>:724</li>
+    <li><strong>동반 수정(필수)</strong> — <strong>docs/13 E-1.11</strong> V2 키 불일치. <code>ChatPageV2.jsx</code>:1145·1149·2098·2101이 <code>heroine.stats</code>/<code>relationStatus</code>를 읽는데 BE는 평탄 <code>statX</code>/<code>statusLevel</code>을 준다. <strong>안 고치면 개편해도 V2는 계속 전부 0이다.</strong></li>
+    <li><strong>삭제</strong> — <code>story-v2/StoryV2CharacterPanel.jsx</code>(死코드) · <code>mobile/CompactBadge.jsx</code>(死코드) · 레이더 SVG · <code>BPM_RANGES</code></li>
+    <li><strong>토큰</strong> — <code>tailwind.config.js</code>에 <code>chat.*</code> 색군 신설. 챗 화면은 로비 <code>lb-*</code>/<code>lobby.*</code>를 한 줄도 안 쓰고 100% 인라인 하드코딩이라 스탯 8색·관계 5테마·글래스 표면이 5개 파일에 복제돼 있다.</li>
+    <li><strong>접근성</strong> — 무한 반복 심박에 <code>prefers-reduced-motion</code> 필수. 마커는 색 단독 전달 금지(구간명 텍스트 병기). 패널 <code>role="dialog"</code>+포커스 트랩, 변화 방향은 텍스트 대체 제공.</li>
+    <li><strong>대비</strong> — 현재 <code>white/.15~.30</code>대 미세 텍스트는 AA 미달이다. 목업은 텍스트 사다리를 <strong>4단(.94/.78/.60/.46)</strong>으로 정리했고 <code>.46</code>은 12px 이상에만 쓴다.</li>
+  </ul>
+  <h4>범위 밖</h4>
+  <p>극장 전 표면(BPM·8축·시크릿 스탯 <strong>0건</strong>, §C#6 무변경) · 속마음 1E 과금(§G-11 별건) · 8축 소프트캡(§G-10 — 엔딩 임계 통일 선행).</p>
+</section>
+
+<!-- 9 -->
+<section id="decide">
+  <h2><span class="n">9</span>결정 — 확정 (2026-08-20)</h2>
+  <div class="callout"><p><strong>5건 전부 확정됐고 구현이 들어갔다.</strong> 1 = <strong>B안(드랍 + 박동 파생)</strong> · 2 = <strong>숫자로 보기 접힘</strong> · 3 = <strong>봉인 카드</strong> · 4 = <strong>(b) 렌즈 신뢰감 → 듬직함</strong> · 5 = <strong>E-1.11 포함</strong>. 아래 박스는 각 안건의 선택지와 근거를 기록으로 남긴 것이다 — 무대의 토글로 반대안을 다시 볼 수 있다.</p></div>
+
+  <div class="q-box"><div class="qn">결정 1 · 심박</div>
+    <h4>A 완전 드랍 / <strong>B 드랍 + 박동 파생 (추천)</strong> / C 존치·V2 수리</h4>
+    <p style="margin:0">B안이면 숫자는 서비스에서 사라지고 박동만 남는다. 토큰 회수는 A안과 같고 V2에서 처음으로 작동한다.</p>
+    <p class="try">무대에서 <a href="#stage-sec">결정 1 토글</a>로 세 화면 비교 가능.</p>
+  </div>
+
+  <div class="q-box"><div class="qn">결정 2 · 수치 노출</div>
+    <h4>전면 서술(숫자·접힘 전부 제거) / <strong>서술 + 구간명 + 방향, 숫자는 접힘 (추천)</strong></h4>
+    <p style="margin:0">위치 마커와 구간명은 두 안 모두 유지된다(마커는 게이지가 아니라 눈금 위 한 점이라 "수치"로 읽히지 않는다).</p>
+    <p class="try">무대에서 <a href="#stage-sec">결정 2 토글</a>.</p>
+  </div>
+
+  <div class="q-box"><div class="qn">결정 3 · 시크릿 3축</div>
+    <h4><strong>봉인 카드(업셀·추천)</strong> / 섹션 숨김 / 현행 블러</h4>
+    <p style="margin:0">docs/16 §E가 조교·타락 아크를 "장르 체감가치 1위"로 보류해 뒀다. 봉인 카드는 <strong>그 아크가 들어올 자리를 비워두면서</strong> 지금은 시크릿 업셀로 쓴다. 아크를 안 할 거면 숨김이 맞다.</p>
+    <p class="try">무대에서 <a href="#stage-sec">결정 3 토글</a>.</p>
+  </div>
+
+  <div class="q-box"><div class="qn">결정 4 · trust 명명</div>
+    <h4>(a) HUD 신뢰도 → <strong>믿음</strong> / (b) 렌즈 신뢰감 → <strong>듬직함</strong></h4>
+    <p style="margin:0">
+      문장 중복은 R2에서 이미 걷어냈으니 <strong>남은 건 라벨뿐</strong>이다.
+      (a)는 블록 B 무접촉·이번 개편 안에서 종결. (b)는 렌즈 5축을 인상 형용사로 정렬하는 근본 해법이지만 <strong>이미 구현·커밋된 블록 B를 건드린다</strong>(BE 서술자 + FE 라벨 + 이미 저장된 프로필 데이터는 컬럼명 무변경이라 마이그레이션은 불필요).
+    </p>
+    <p class="try">무대에서 <a href="#stage-sec">결정 4 토글</a>은 (a) 적용 여부만 보여준다.</p>
+  </div>
+
+  <div class="q-box"><div class="qn">결정 5 · 동반 범위</div>
+    <h4>docs/13 <strong>E-1.11(V2 키 불일치)</strong>를 이 개편에 포함하는가?</h4>
+    <p style="margin:0">원래 버그픽스 배치 7 항목이다. 그런데 <strong>안 고치면 개편해도 V2 상태창은 계속 전부 0</strong>이라 같은 파일을 두 번 여는 낭비가 생긴다. <strong>포함을 권한다.</strong></p>
+  </div>
+</section>
+
+</div>
+
+<script>
+"use strict";
+// ═══════════ 데이터 ═══════════
+const AXES = [
+  {k:'intimacy',    ko:'친밀도', hex:'#60a5fa', secret:false},
+  {k:'affection',   ko:'호감도', hex:'#f472b6', secret:false},
+  {k:'dependency',  ko:'의존도', hex:'#a78bfa', secret:false},
+  {k:'playfulness', ko:'장난기', hex:'#34d399', secret:false},
+  {k:'trust',       ko:'믿음',   hex:'#fbbf24', secret:false},
+  {k:'lust',        ko:'음란도', hex:'#ef4444', secret:true},
+  {k:'corruption',  ko:'타락도', hex:'#8b5cf6', secret:true},
+  {k:'obsession',   ko:'집착도', hex:'#ec4899', secret:true},
+];
+const BAND_N = ['냉각','거리','보통','가까움','밀착'];
+const BAND_S = ['닫힘','잠듦','희미','짙음','삼킴'];
+
+// 40문장 — 렌즈 예약어(무방비·너한테만·맡기려·시선·놀림1순위) 회피, 전 문장 대시 구조, 양 극단에만 대사
+const NARR = {
+  intimacy:[
+    '{N} 대화를 서둘러 끝낸다 — "그럼, 이만." 용건이 끝나면 자리를 뜬다.',
+    '{N} 필요한 말만 한다 — 대화가 끊겨도 굳이 잇지 않는다.',
+    '{N} 무난하게 대화를 이어간다 — 묻는 말에는 답하지만 먼저 화제를 꺼내지는 않는다.',
+    '{N} 사소한 이야기까지 먼저 꺼낸다 — 오늘 있었던 일, 별것 아닌 투정이 늘었다.',
+    '{N} 침묵도 편하게 견딘다 — "딱히 할 말은 없는데, 그냥 있어." 곁에 있는 것 자체가 대화가 됐다.'],
+  affection:[
+    '{N} 거리를 먼저 벌린다 — "가까이 오지 마." 손이 닿을 자리를 미리 비운다.',
+    '{N} 당신을 이성으로 의식하지 않는다 — 거리가 좁혀져도 표정이 그대로다.',
+    '{N} 가끔 당신을 의식한다 — 눈이 마주쳐도 먼저 피하지는 않는다.',
+    '{N} 말끝을 자주 흐린다 — 칭찬에 대답이 늦고, 가까워지면 목소리가 작아진다.',
+    '{N} 감정을 숨기지 못한다 — "...그렇게 보지 마." 얼굴이 붉어지는 걸 스스로도 안다.'],
+  dependency:[
+    '{N} 당신 손을 빌리지 않는다 — "됐어, 내가 해." 도움을 제안하면 경계부터 한다.',
+    '{N} 혼자서 다 해결한다 — 도움을 제안하면 정중히 사양한다.',
+    '{N} 필요할 때만 손을 빌린다 — 부탁에 굳이 이유를 덧붙인다.',
+    '{N} 결정을 앞두면 당신을 먼저 찾는다 — 사소한 선택까지 의견을 구한다.',
+    '{N} 당신 없이는 갈피를 못 잡는다 — "네가 정해줘." 고르는 일을 통째로 넘긴다.'],
+  playfulness:[
+    '{N} 당신 앞에서 웃지 않는다 — "웃겨?" 농담은 그대로 흘러간다.',
+    '{N} 진지한 대화를 선호한다 — 농담에는 짧게 웃고 만다.',
+    '{N} 가끔 농담을 받아친다 — 분위기가 풀리면 표정이 부드러워진다.',
+    '{N} 먼저 장난을 건다 — 티키타카가 길어지고, 받아치는 속도가 붙었다.',
+    '{N} 하루 종일 당신을 골린다 — "또 속았네?" 진지한 얘기도 장난으로 시작한다.'],
+  trust:[
+    '{N} 당신의 말을 곧이듣지 않는다 — "그 말, 몇 번째지?" 의심이 먼저 나온다.',
+    '{N} 당신의 말을 한 번 더 재본다 — 확답을 피하고 여지를 남긴다.',
+    '{N} 대체로 당신을 믿는다 — 다만 중요한 일은 스스로 확인한다.',
+    '{N} 확인하지 않고 넘어간다 — 되묻는 일이 눈에 띄게 줄었다.',
+    '{N} 문을 잠그지 않는다 — "…이건 아무한테도 안 한 얘긴데." 말해도 되는지 재지 않는다.'],
+  lust:[
+    '{N} 그런 낌새 자체를 끊는다 — "그만." 농담이 그쪽으로 기울면 바로 화제를 자른다.',
+    '{N} 그런 낌새를 읽지 않는다 — 아슬아슬한 말에도 표정이 그대로다.',
+    '{N} 가끔 아슬아슬한 농담에 반응한다 — 웃고 나서 바로 화제를 돌린다.',
+    '{N} 닿는 거리를 피하지 않는다 — 머무는 시간이 길어지고 숨이 얕아진다.',
+    '{N} 먼저 선을 넘으려 한다 — "...계속 참으라고?" 물러설 생각이 없다.'],
+  corruption:[
+    '{N} 자기 원칙을 더 단단히 붙든다 — "그건 안 돼." 흔들릴 자리를 미리 피한다.',
+    '{N} 자기 원칙을 지킨다 — 애매한 부탁에는 선을 그어 답한다.',
+    '{N} 예외를 만들기 시작했다 — 당신 앞에서만 규칙이 느슨해진다.',
+    '{N} 스스로도 달라진 걸 안다 — 예전이라면 하지 않았을 말을 먼저 꺼낸다.',
+    '{N} 되돌아갈 생각이 없다 — "이게 나야. 네가 만든." 후회를 입에 담지 않는다.'],
+  obsession:[
+    '{N} 당신을 셈에서 지운다 — "누구였더라." 이름을 일부러 흐린다.',
+    '{N} 당신의 시간을 존중한다 — 답이 늦어도 재촉하지 않는다.',
+    '{N} 연락이 없으면 조금 신경 쓴다 — 먼저 묻지는 않고 읽은 시간만 확인한다.',
+    '{N} 당신의 하루를 알고 싶어한다 — 누구를 만났는지 은근히 캐묻는다.',
+    '{N} 당신을 독차지하려 든다 — "나만 보면 되잖아." 다른 이름이 나오면 말이 짧아진다.'],
+};
+
+// 헤드라인 — 축 서술과 문장을 공유하지 않는 전용 세트
+const HEAD_STAGE = {
+  STRANGER:'아직 아무것도 아니다', ACQUAINTANCE:'이름을 부르는 사이가 됐다',
+  FRIEND:'곁에 두는 게 자연스러워졌다', LOVER:'선을 넘은 사이다', ENEMY:'돌아선 사이다',
+};
+const HEAD_WARM = {
+  intimacy:'말수가 늘었고, 침묵이 덜 어색하다', affection:'눈이 마주치는 시간이 길어졌다',
+  dependency:'먼저 기대오는 쪽이 됐다', playfulness:'농담이 먼저 나온다', trust:'숨기는 게 줄었다',
+};
+const HEAD_COLD = {
+  intimacy:'말이 짧아졌고, 침묵이 길다', affection:'눈을 맞추지 않는다',
+  dependency:'혼자 결정하고 통보한다', playfulness:'농담이 통하지 않는다', trust:'말끝마다 확인이 붙는다',
+};
+
+const REL = {
+  STRANGER:{ko:'타인',acc:'#94a3b8',glow:'rgba(148,163,184,.18)'},
+  ACQUAINTANCE:{ko:'지인',acc:'#34d399',glow:'rgba(52,211,153,.25)'},
+  FRIEND:{ko:'친구',acc:'#60a5fa',glow:'rgba(96,165,250,.25)'},
+  LOVER:{ko:'연인',acc:'#f472b6',glow:'rgba(244,114,182,.3)'},
+  ENEMY:{ko:'적대',acc:'#ef4444',glow:'rgba(239,68,68,.25)'},
+};
+
+// EmotionTag 15종 전수
+const EMO = {
+  NEUTRAL:{b:0,ko:'평상'}, RELAX:{b:0,ko:'편안'}, SAD:{b:0,ko:'슬픔'}, SULKING:{b:0,ko:'삐짐'},
+  DISGUST:{b:0,ko:'경멸'}, DUMBFOUNDED:{b:0,ko:'황당'},
+  SHY:{b:1,ko:'부끄러움'}, JOY:{b:1,ko:'기쁨'}, FLIRTATIOUS:{b:1,ko:'유혹'}, PLEADING:{b:1,ko:'애원'}, SURPRISE:{b:1,ko:'놀람'},
+  HEATED:{b:2,ko:'흥분'}, PANIC:{b:2,ko:'당황'}, ANGRY:{b:2,ko:'화남'}, FRIGHTENED:{b:2,ko:'겁먹음'},
+};
+const EMO_DEMO = ['NEUTRAL','SAD','SHY','HEATED','ANGRY'];
+const PULSE = [{ko:'잔잔',hex:'#f9a8d4',beat:'1.05s'},{ko:'두근',hex:'#f472b6',beat:'.72s'},{ko:'쿵쾅',hex:'#ef4444',beat:'.46s'}];
+
+const PRESETS = {
+  new:  {intimacy:0,affection:0,dependency:0,playfulness:0,trust:0,lust:0,corruption:0,obsession:0, rel:'STRANGER'},
+  mid:  {intimacy:52,affection:63,dependency:24,playfulness:71,trust:45,lust:0,corruption:0,obsession:0, rel:'FRIEND'},
+  lover:{intimacy:84,affection:92,dependency:66,playfulness:58,trust:81,lust:72,corruption:35,obsession:48, rel:'LOVER'},
+  enemy:{intimacy:-52,affection:-71,dependency:-40,playfulness:-33,trust:-64,lust:0,corruption:0,obsession:12, rel:'ENEMY'},
+};
+
+// ═══════════ 상태 ═══════════
+const S = {
+  preset:'new', view:'tobe', dev:'desk', rel:'STRANGER', name:'아이리', emo:'NEUTRAL',
+  bpm:'pulse', num:'details', sec:'sealed', trust:'믿음',
+  v:{...PRESETS.new}, prev:{...PRESETS.new},
+};
+delete S.v.rel; delete S.prev.rel;
+
+// ═══════════ 순수 로직 (→ relationNarrative.js) ═══════════
+function bandOf(v){ if(v<=-40)return 0; if(v<=9)return 1; if(v<=39)return 2; if(v<=79)return 3; return 4; }
+function hasJong(ch){ const c=ch.charCodeAt(0); if(c<0xAC00||c>0xD7A3) return null; return (c-0xAC00)%28!==0; }
+/** josa.js 계약 준수: 비한글 종결 → null → 이름 생략 폴백 */
+function subjectOf(name){
+  if(!name) return '이 캐릭터는';
+  const j = hasJong(name[name.length-1]);
+  if(j===null) return '이 캐릭터는';
+  return name + (j ? '은' : '는');
+}
+function narrate(axis, val, name){ return NARR[axis][bandOf(val)].replace('{N}', subjectOf(name)); }
+/**
+ * 지배 축 = 관계를 가장 크게 규정하는 축.
+ * 양수가 하나라도 있으면 최댓값, 전부 음수면 **최솟값**(가장 덜 나쁜 축이 아니라
+ * 가장 크게 돌아선 축이 관계를 설명한다).
+ */
+function dominantAxis(v){
+  const normals = AXES.filter(a=>!a.secret);
+  const anyPos = normals.some(a=>v[a.k]>0);
+  let best=normals[0], bv=anyPos?-Infinity:Infinity;
+  for(const a of normals){
+    if(anyPos ? v[a.k]>bv : v[a.k]<bv){ bv=v[a.k]; best=a; }
+  }
+  return best;
+}
+function allZero(v){ return AXES.every(a=>v[a.k]===0); }
+function headline(stage, v){
+  const dom = dominantAxis(v);
+  const cold = v[dom.k] < 0 || stage==='ENEMY';
+  const flavor = cold ? HEAD_COLD[dom.k] : HEAD_WARM[dom.k];
+  return `${HEAD_STAGE[stage]} — ${flavor}.`;
+}
+function derivePulse(emo, dsum, secretOn, lust){
+  let b = (EMO[emo] ? EMO[emo].b : 0);            // 미지의 값 → 잔잔 (fail-safe)
+  if(dsum >= 6) b = Math.min(2, b+1);
+  if(secretOn && lust >= 60) b = Math.max(1, b);
+  return PULSE[b];
+}
+function deltaSum(){ return AXES.reduce((s,a)=> s + Math.abs(S.v[a.k]-S.prev[a.k]), 0); }
+function trendOf(k){ const d=S.v[k]-S.prev[k]; return d>0?'up':(d<0?'dn':'flat'); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function quoteWrap(t){ return esc(t).replace(/"([^"]*)"/g,'<em>"$1"</em>'); }
+function labelOf(a){ return (a.k==='trust' && S.trust==='신뢰도') ? '신뢰도' : a.ko; }
+
+// ═══════════ 렌더 ═══════════
+const secTitle = (i,t)=>`<div class="sectitle"><span class="i" aria-hidden="true">${i}</span><span class="t">${t}</span></div>`;
+
+function renderCurrent(variant){   // 'v1' | 'v2'
+  const th = REL[S.rel];
+  const isV2 = variant==='v2';
+  const stats = isV2 ? {intimacy:0,affection:0,dependency:0,playfulness:0,trust:0,lust:0,corruption:0,obsession:0} : S.v;
+  const relNow = isV2 ? 'STRANGER' : S.rel;
+  // V1: LLM이 지어낸 숫자 — 감정과 어긋난 값을 일부러 보여준다 / V2: 상수 65
+  const bpm = isV2 ? 65 : 152;
+  const hc = bpm>=140?'#ff2d55':bpm>=110?'#ff6b9d':bpm>=85?'#f472b6':'#f9a8d4';
+  const pct = Math.min(100,Math.max(0,((bpm-60)/120)*100));
+
+  const rows = AXES.filter(a=>!a.secret).map(a=>{
+    const v=stats[a.k], w=Math.abs(v)/2, left=v>=0?50:50-w;
+    return `<div class="statrow-old"><span class="lb">${a.k==='trust'?'신뢰도':a.ko}</span>
+      <span class="tk"><i style="left:${left}%;width:${w}%;background:${a.hex}"></i></span>
+      <span class="vv">${v}</span></div>`;
+  }).join('');
+  const secretRows = AXES.filter(a=>a.secret).map(a=>{
+    const v=stats[a.k];
+    return `<div class="statrow-old"><span class="lb">${a.ko}</span>
+      <span class="tk"><i style="left:50%;width:${Math.abs(v)/2}%;background:${a.hex}"></i></span>
+      <span class="vv">${v}</span></div>`;
+  }).join('');
+
+  const n=5,R=76,cx=90,cy=88;
+  const pts=AXES.filter(a=>!a.secret).map((a,i)=>{
+    const ang=-Math.PI/2+i*2*Math.PI/n, r=R*Math.max(0,Math.min(100,stats[a.k]))/100;
+    return [cx+r*Math.cos(ang), cy+r*Math.sin(ang)];
+  });
+  const grid=[.25,.5,.75,1].map(f=>{
+    const p=Array.from({length:n},(_,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n;
+      return `${cx+R*f*Math.cos(ang)},${cy+R*f*Math.sin(ang)}`;}).join(' ');
+    return `<polygon points="${p}" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="1"/>`;}).join('');
+  const labels=AXES.filter(a=>!a.secret).map((a,i)=>{
+    const ang=-Math.PI/2+i*2*Math.PI/n,r=R+16;
+    return `<text x="${cx+r*Math.cos(ang)}" y="${cy+r*Math.sin(ang)}" font-size="10" font-weight="600"
+      fill="rgba(255,255,255,.6)" text-anchor="middle" dominant-baseline="middle">${a.k==='trust'?'신뢰':a.ko.slice(0,2)}</text>`;}).join('');
+
+  return `
+  ${secTitle('💓','심박')}
+  <div class="bpm-old">
+    <div class="heart" style="--beat:${(60/bpm).toFixed(2)}s;--hc:${hc}" aria-hidden="true">💗</div>
+    <div style="flex:1">
+      <div><span class="bpm-num">${bpm}</span><span class="bpm-unit">BPM</span></div>
+      <div class="bar"><i style="width:${pct}%;background:linear-gradient(90deg,#f9a8d4,#f472b6)"></i></div>
+    </div>
+  </div>
+  <div class="mismatch">${isV2
+     ? '⚠ V2는 LLM이 bpm을 출력하지 않는다 — 영구 상수 65다.'
+     : '⚠ 직전 턴 감정은 <b>'+ (EMO[S.emo]?EMO[S.emo].ko:'?') +'</b>인데 LLM이 152를 뱉었다 — 대사 톤과 어긋난다.'}</div>
+  </div><div class="sec">
+  ${secTitle('💫','관계')}
+  <div style="font-size:15px;font-weight:700;color:${REL[relNow].acc}">${REL[relNow].ko}</div>
+  ${isV2?'<div class="mismatch" style="margin-top:6px">⚠ 관계가 영구 STRANGER로 고정된다.</div>':''}
+  </div><div class="sec">
+  ${secTitle('📊','스탯')}
+  ${isV2?'<div class="zerobadge">⚠ docs/13 E-1.11 — 키 불일치(<code>heroine.stats</code> vs 평탄 <code>statX</code>)로 <b>8축 전부 0</b>. 실제 V2 유저가 보는 화면이다.</div>':''}
+  <svg class="radar" width="180" height="176" viewBox="0 0 180 176" role="img" aria-label="스탯 레이더">
+    ${grid}<polygon points="${pts.map(p=>p.join(',')).join(' ')}" fill="${th.acc}22" stroke="${th.acc}" stroke-width="1.5"/>${labels}</svg>
+  ${rows}
+  </div><div class="sec">
+  ${secTitle('🔒','시크릿')}
+  <div style="filter:blur(5px);opacity:.55" aria-hidden="true">${secretRows}</div>
+  </div><div class="sec">
+  ${secTitle('💭','속마음')}
+  <div class="thought">…오늘은 좀 더 오래 붙잡아 둘 걸 그랬나.</div>`;
+}
+
+function renderToBe(){
+  const th = REL[S.rel];
+  const zero = allZero(S.v);
+  const pulse = derivePulse(S.emo, deltaSum(), S.sec==='on', S.v.lust);
+  const nm = subjectOf(S.name).replace(/[은는]$/,'');
+
+  // 헤더 — 결정 1
+  let head = `<div style="font-size:13px;font-weight:800;color:var(--tx0);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nm)}</div>`;
+  if(S.bpm==='pulse'){
+    head += `<div class="pulse-inline" style="--hc:${pulse.hex};--beat:${pulse.beat};margin-left:auto">
+      <span class="pulse-dot" aria-hidden="true"></span><span class="pulse-lb">심박 · ${pulse.ko}</span></div>`;
+  }else if(S.bpm==='number'){
+    const b = S.emo==='HEATED'?148:(S.emo==='SHY'?104:68);
+    head += `<div class="pulse-inline" style="--hc:${pulse.hex};margin-left:auto">
+      <span class="pulse-lb" style="font-variant-numeric:tabular-nums">${b} BPM</span></div>`;
+  }
+
+  // 지금 이 관계
+  const now = zero
+    ? `<div class="now" style="--nowb:${th.acc}40;--nowbg:${th.acc}12;--nowfg:${th.acc}">
+         <div class="stage-label">${th.ko}</div>
+         <div class="headline">아직 아무것도 아니에요 — 몇 마디 나눠 봐야 알 수 있어요.</div></div>`
+    : `<div class="now" style="--nowb:${th.acc}40;--nowbg:${th.acc}12;--nowfg:${th.acc}">
+         <div class="stage-label">${th.ko}</div>
+         <div class="headline">${quoteWrap(headline(S.rel, S.v))}</div></div>`;
+
+  // 마음
+  const mkRow = (a)=>{
+    const v=S.v[a.k], b=bandOf(v), cold=(b===0);
+    const bandName = (a.secret?BAND_S:BAND_N)[b];
+    const tr=trendOf(a.k);
+    const trTxt = tr==='up'?'직전 턴 ↑':tr==='dn'?'직전 턴 ↓':'변화 없음';
+    const marks = Array.from({length:5},(_,i)=>`<i class="${i===b?'on':''} ${cold?'cold':''}"></i>`).join('');
+    return `<div class="nrow" style="color:${a.hex}">
+      <div class="hd">
+        <span class="dot" style="background:${a.hex}" aria-hidden="true"></span>
+        <span class="nm">${labelOf(a)}</span>
+        <span class="band ${cold?'cold':''}">${bandName}</span>
+        <span class="trend ${tr}">${trTxt}</span>
+      </div>
+      <div class="txt">${quoteWrap(narrate(a.k, v, S.name))}</div>
+      <div class="mark" aria-hidden="true">${marks}</div>
+    </div>`;
+  };
+
+  const heartBody = zero
+    ? `<div class="empty">아직 읽을 게 없어요. 몇 번 더 이야기를 나누면 여기에 채워집니다.</div>`
+    : AXES.filter(a=>!a.secret).map(mkRow).join('') + (S.num==='details' ? `
+      <details style="margin-top:11px">
+        <summary style="font-size:var(--t-meta);color:var(--tx2);cursor:pointer;letter-spacing:.04em;font-weight:700">숫자로 보기</summary>
+        <div style="font-size:var(--t-meta);margin-top:var(--s2);line-height:1.95;font-variant-numeric:tabular-nums;color:var(--tx1)">
+          ${AXES.filter(a=>!a.secret || S.sec==='on').map(a=>
+            `<div><span style="color:${a.hex}">${labelOf(a)}</span> ${S.v[a.k]} <span style="color:var(--tx3)">/ 100</span></div>`).join('')}
+        </div>
+      </details>` : '');
+
+  // 비밀 — 결정 3
+  let secretSec = '';
+  if(S.sec==='on'){
+    secretSec = `</div><div class="sec">${secTitle('🔒','비밀')}${AXES.filter(a=>a.secret).map(mkRow).join('')}`;
+  }else if(S.sec==='sealed'){
+    secretSec = `</div><div class="sec">${secTitle('🔒','비밀')}
+      <button type="button" class="sealed">
+        <div class="lk" aria-hidden="true">🔒</div>
+        <div class="cp">시크릿 모드에서만 보이는 마음이 있어요.</div>
+        <span class="cta">해금하고 보기 →</span>
+      </button>`;
+  }else if(S.sec==='blur'){
+    secretSec = `</div><div class="sec">${secTitle('🔒','비밀')}
+      <div style="filter:blur(5px);opacity:.55" aria-hidden="true">${AXES.filter(a=>a.secret).map(mkRow).join('')}</div>`;
+  }
+
+  return `
+  <div style="display:flex;align-items:center;gap:10px">${head}</div>
+  </div><div class="sec">
+  ${secTitle('💫','지금 이 관계')}
+  ${now}
+  </div><div class="sec">
+  ${secTitle('🫧','마음')}
+  ${heartBody}
+  ${secretSec}
+  </div><div class="sec">
+  ${secTitle('💭','속마음')}
+  <div class="thought">…오늘은 좀 더 오래 붙잡아 둘 걸 그랬나.</div>`;
+}
+
+function render(){
+  const th = REL[S.rel];
+  const inner = S.view==='tobe' ? renderToBe() : renderCurrent(S.view);
+  const shell = `<div class="sec">${inner}</div>`;
+
+  const why = document.getElementById('pulse-why');
+  if(why){
+    const ds=deltaSum(), base=EMO[S.emo]?EMO[S.emo].b:0;
+    why.innerHTML = S.view==='tobe' && S.bpm==='pulse'
+      ? `기본 <b style="color:var(--ink1)">${PULSE[base].ko}</b>`
+        + (ds>=6?` + 델타 ${ds}≥6 <b style="color:var(--ink1)">한 단계↑</b>`:'')
+        + (S.sec==='on'&&S.v.lust>=60?` + 음란도 하한`:'')
+        + ` = <b style="color:var(--ink1)">${derivePulse(S.emo,ds,S.sec==='on',S.v.lust).ko}</b>`
+      : `현재안은 LLM이 뱉은 숫자를 그대로 쓴다.`;
+  }
+
+  const stage=document.getElementById('stage');
+  stage.classList.toggle('mobile', S.dev==='mob');
+  const tag=document.getElementById('viewtag');
+  tag.textContent = (S.view==='tobe'?'개편안':(S.view==='v1'?'현재 V1 SANDBOX':'현재 V2 STORY')) + (S.dev==='mob'?' · 모바일':'');
+  tag.className='viewtag'+(S.view==='tobe'?' tobe':'');
+
+  const mount=document.getElementById('mount');
+  if(S.dev==='mob'){
+    mount.innerHTML=`<div class="sheetwrap"><div class="scrim"></div>
+      <div class="sheet" style="--acc:${th.acc}" role="dialog" aria-label="상태창">
+        <div class="grabrow"><span class="grab"></span>
+          <button type="button" class="close" aria-label="닫기">✕</button></div>
+        <div class="toprule"></div><div class="body">${shell}</div>
+      </div></div>`;
+  }else{
+    mount.innerHTML=`<div class="panel" style="--acc:${th.acc};--glow:${th.glow}" role="dialog" aria-label="상태창">
+      <div class="toprule"></div><div class="body">${shell}</div></div>`;
+  }
+}
+
+// ═══════════ 배선 ═══════════
+function wireSeg(id,key,after){
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    [...el.querySelectorAll('button')].forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+    S[key]=b.dataset.v; if(after) after(b.dataset.v); render();
+  });
+}
+document.getElementById('seg-emo').innerHTML = EMO_DEMO.map((k,i)=>
+  `<button data-v="${k}" aria-pressed="${i===0}">${EMO[k].ko}</button>`).join('');
+
+wireSeg('seg-view','view'); wireSeg('seg-dev','dev'); wireSeg('seg-rel','rel');
+wireSeg('seg-name','name'); wireSeg('seg-emo','emo');
+wireSeg('seg-bpm','bpm'); wireSeg('seg-num','num'); wireSeg('seg-sec','sec'); wireSeg('seg-trust','trust');
+wireSeg('seg-preset','preset', v=>{
+  const p=PRESETS[v];
+  S.prev={...S.v};
+  AXES.forEach(a=>{ S.v[a.k]=p[a.k]; const el=document.getElementById('sl-'+a.k);
+    if(el){ el.value=p[a.k]; document.getElementById('out-'+a.k).textContent=p[a.k]; } });
+  S.rel=p.rel;
+  [...document.querySelectorAll('#seg-rel button')].forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.v===p.rel)));
+});
+
+const slWrap=document.getElementById('sliders');
+slWrap.innerHTML=AXES.map(a=>`
+  <div class="sl ${a.secret?'secret':''}">
+    <label for="sl-${a.k}">${a.ko}</label>
+    <input id="sl-${a.k}" type="range" min="-100" max="100" step="1" value="${S.v[a.k]}" data-k="${a.k}"
+      aria-label="${a.ko} 값">
+    <output id="out-${a.k}" for="sl-${a.k}">${S.v[a.k]}</output>
+  </div>`).join('');
+// 연속 드래그 시 prev가 1px씩 따라가 트렌드가 무의미해지는 문제 → 드래그 시작값을 기준으로 고정
+let dragBase=null;
+slWrap.addEventListener('pointerdown',e=>{ const k=e.target.dataset?.k; if(k) dragBase={k,v:S.v[k]}; });
+slWrap.addEventListener('input',e=>{
+  const k=e.target.dataset.k; if(!k) return;
+  if(!dragBase || dragBase.k!==k) dragBase={k,v:S.v[k]};
+  S.prev[k]=dragBase.v;
+  S.v[k]=Number(e.target.value);
+  document.getElementById('out-'+k).textContent=e.target.value;
+  render();
+});
+window.addEventListener('pointerup',()=>{ dragBase=null; });
+
+document.getElementById('copytable').innerHTML=`<table>
+  <thead><tr><th style="width:66px">축</th>${BAND_N.map((b,i)=>`<th>${b} / ${BAND_S[i]}</th>`).join('')}</tr></thead>
+  <tbody>${AXES.map(a=>`<tr>
+    <td><strong style="color:${a.hex}">${a.ko}</strong>${a.secret?'<br><span style="font-size:var(--t-micro);color:#fca5a5">시크릿</span>':''}</td>
+    ${NARR[a.k].map(s=>`<td style="font-size:12px">${esc(s).replace('{N}','<span style="color:var(--tx3)">{이름}은/는</span>')}</td>`).join('')}
+  </tr>`).join('')}</tbody></table>`;
+
+render();
+</script>
+</body>
+</html>
