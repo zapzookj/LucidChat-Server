@@ -269,6 +269,17 @@ public class TheaterDirectorEngine {
      * 정책: 각 Act는 약 5~8 Chapter로 구성. 여기서는 6 Chapter를 기준으로
      * 유저 플레이 스타일(Chapter당 씬 수)에 따라 자동 조절된다.
      */
+    /**
+     * [블록 D · 극장 엔딩 부활] 엔딩 지점인가 — 마지막 Act의 마지막 Chapter.
+     *
+     * <p>{@code TheaterService.finalizeChapter}가 {@code ChapterReport.endingReady}로 내보내는
+     * 조건과 동일하며, {@code TheaterEndingService.triggerEnding}의 진행도 가드로도 쓰인다.
+     * 두 곳이 같은 술어를 봐야 UI 신호와 서버 판정이 어긋나지 않는다.
+     */
+    public boolean isEndingPoint(TheaterState state) {
+        return state.getCurrentAct().next() == null && isLastChapterOfAct(state);
+    }
+
     public boolean isLastChapterOfAct(TheaterState state) {
         // Chapter 번호가 6에 도달했거나, 호감도 최고치가 임계치 넘었을 때
         int chapterThreshold = switch (state.getCurrentAct()) {

@@ -1,5 +1,6 @@
 package com.spring.aichat.service.theater;
 
+import com.spring.aichat.domain.ending.EndingResultDocument;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
@@ -53,6 +54,8 @@ public class TheaterEndingService {
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties openAiProperties;
     private final ObjectMapper objectMapper;
+    private final com.spring.aichat.domain.ending.EndingResultRepository endingResultRepository;
+    private final TheaterDirectorEngine directorEngine;
 
     private static final int DOMINANT_STAT_THRESHOLD = 80;
     private static final int HAPPY_THRESHOLD = 70;
@@ -72,8 +75,19 @@ public class TheaterEndingService {
         ChatRoom room = getOwnedRoom(roomId, username);
         TheaterState state = getState(roomId);
 
+        // [블록 D · 극장 엔딩 부활] 이미 엔딩이면 **저장된 결과를 돌려준다.**
+        //   기존에는 400을 던져서 아카이브의 "엔딩 다시 보기"가 100% 실패했다(docs/13 B-9.9).
         if (state.isEndingReached()) {
-            throw new BadRequestException("이미 엔딩에 도달했습니다.");
+            return loadPersistedEnding(roomId)
+                .orElseThrow(() -> new BadRequestException(
+                    "이미 엔딩에 도달했지만 저장된 결과가 없습니다. (이 개편 이전에 종료된 세션)"));
+        }
+
+        // [블록 D · 극장 엔딩 부활] 진행도 가드.
+        //   기존 가드는 위 중복 검사 하나뿐이라 URL 직타(/theater/{id}/ending)로 Act 1에서도
+        //   엔딩이 확정되고 markEnded()로 **resume 불가 영구 전환**됐다. 되돌릴 API도 없다.
+        if (!directorEngine.isEndingPoint(state)) {
+            throw new BadRequestException("아직 이야기가 끝나지 않았습니다.");
         }
 
         // ─── 1. 메인 히로인 & 호감도 확정 ───
@@ -128,7 +142,7 @@ public class TheaterEndingService {
         log.info("🎭 [ENDING] Reached | roomId={} | type={} | mainHeroine={} | affection={} | dominantStat={}({})",
             roomId, endingType, mainHeroine.getName(), mainAffection, dominantStat, dominantValue);
 
-        return new TheaterEnding(
+        TheaterEnding result = new TheaterEnding(
             endingType.name(),
             endingType.getMoodCategory(),
             endingType.getTitleKo(),
@@ -142,6 +156,44 @@ public class TheaterEndingService {
             extractMemoryHighlights(roomId),
             stats
         );
+
+        // ─── 8. 결과 영속 (블록 D · docs/13 B-9.9) ───
+        //   저장 실패가 엔딩 자체를 무르게 하면 안 된다 — 상태는 이미 ENDED로 넘어갔고
+        //   유저는 지금 엔딩을 보는 중이다. 실패는 '다시 보기 불가'로만 degrade시킨다.
+        persistEnding(roomId, endingType.name(), result);
+
+        return result;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [블록 D] 엔딩 결과 영속 / 재조회
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void persistEnding(Long roomId, String endingType, TheaterEnding payload) {
+        try {
+            String json = objectMapper.writeValueAsString(payload);
+            EndingResultDocument doc = endingResultRepository.findByRoomId(roomId).orElse(null);
+            if (doc == null) {
+                endingResultRepository.save(new EndingResultDocument(roomId, "THEATER", endingType, json));
+            } else {
+                doc.overwrite(endingType, json);
+                endingResultRepository.save(doc);
+            }
+        } catch (Exception e) {
+            log.error("🎭 [ENDING] Persist failed — 다시 보기 불가 상태로 degrade | roomId={}", roomId, e);
+        }
+    }
+
+    /** 저장된 엔딩 재조회 — 아카이브 "엔딩 다시 보기"가 이 경로를 탄다. */
+    public java.util.Optional<TheaterEnding> loadPersistedEnding(Long roomId) {
+        return endingResultRepository.findByRoomId(roomId).map(doc -> {
+            try {
+                return objectMapper.readValue(doc.getPayloadJson(), TheaterEnding.class);
+            } catch (Exception e) {
+                log.error("🎭 [ENDING] Stored payload unreadable | roomId={}", roomId, e);
+                return null;
+            }
+        }).filter(java.util.Objects::nonNull);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -201,6 +253,13 @@ public class TheaterEndingService {
 
             Also provide a single closing_quote — 가장 기억에 남을 한 문장.
 
+            # 이 극의 실제 내용 (반드시 반영하라)
+            %s
+
+            ⚠️ 위 내용은 유저가 500~700씬에 걸쳐 실제로 겪은 이야기다.
+               일반적인 결말이 아니라 **이 극의 결말**을 써라 — 유저가 내린 선택과 남은 순간들이
+               마지막 씬에서 회수되어야 한다.
+
             # Output JSON
             {
               "scenes": [
@@ -214,7 +273,8 @@ public class TheaterEndingService {
             heroine.getName(), heroine.getEffectiveRole(),
             type.name(), type.getTitleKo(),
             dominantStat.name(), dominantValue, affection,
-            toneDescription
+            toneDescription,
+            buildDramaContext(room, state)
         );
 
         String responseText = openRouterClient.completeJson(
@@ -318,13 +378,53 @@ public class TheaterEndingService {
     }
 
     private List<String> extractMemoryHighlights(Long roomId) {
-        // 감독 노트 중 AUTO_MOMENT / CHAPTER_END 타입을 최근 5개 추출
-        return directorNoteRepository.findByRoom_IdOrderByCreatedAtAsc(roomId).stream()
+        // 감독 노트 중 AUTO_MOMENT / CHAPTER_END 타입을 **최근** 5개 추출.
+        // [docs/13 E-4.12] ASC 정렬에 limit(5)를 걸어 '최초 5개'를 뽑고 있었다 —
+        //   Act 1 초반 순간만 회상되고 정작 클라이맥스가 빠졌다. 뒤에서 5개를 잘라 시간순으로 되돌린다.
+        List<String> all = directorNoteRepository.findByRoom_IdOrderByCreatedAtAsc(roomId).stream()
             .filter(n -> "AUTO_MOMENT".equals(n.getNoteType()) || "CHAPTER_END".equals(n.getNoteType()))
             .map(TheaterDirectorNote::getContent)
             .filter(Objects::nonNull)
-            .limit(5)
             .toList();
+        return all.size() <= 5 ? all : all.subList(all.size() - 5, all.size());
+    }
+
+    /**
+     * [블록 D · 극장 엔딩 부활] 엔딩 프롬프트에 주입할 '이 극의 실제 내용'.
+     *
+     * <p>기존 프롬프트는 히로인 이름·엔딩 타입·스탯 숫자만 받았다 — 극의 맥락이 <b>0바이트</b>였다.
+     * {@code room}/{@code state} 인자가 이미 넘어와 있는데 쓰이지 않았다.
+     * 90~100 에너지를 쓴 유저에게 자기 극과 무관한 3씬을 내보내면 엔딩이 없느니만 못하다.
+     */
+    private String buildDramaContext(ChatRoom room, TheaterState state) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("- 진행: Act ").append(state.getCurrentAct().getNumber())
+          .append(" (").append(state.getCurrentAct().getTitle()).append("), Chapter ")
+          .append(state.getCurrentChapter()).append("까지 완주\n");
+
+        // 유저가 실제로 내린 선택 — 이 극을 이 극으로 만든 것
+        List<TheaterBranchChoice> choices =
+            branchChoiceRepository.findByRoom_IdOrderByChosenAtAsc(room.getId());
+        if (!choices.isEmpty()) {
+            sb.append("- 유저가 내린 주요 선택(시간순):\n");
+            List<TheaterBranchChoice> tail = choices.size() <= 8
+                ? choices : choices.subList(choices.size() - 8, choices.size());
+            for (TheaterBranchChoice c : tail) {
+                if (c.getChosenLabel() == null || c.getChosenLabel().isBlank()) continue;
+                sb.append("    · Act ").append(c.getActNumber())
+                  .append(" — ").append(c.getChosenLabel()).append('\n');
+            }
+        }
+
+        // 기억에 남은 순간들
+        List<String> moments = extractMemoryHighlights(room.getId());
+        if (!moments.isEmpty()) {
+            sb.append("- 기억에 남은 순간들:\n");
+            for (String m : moments) sb.append("    · ").append(m).append('\n');
+        }
+
+        return sb.length() == 0 ? "(기록된 맥락 없음 — 일반적인 결말로 작성하라.)" : sb.toString();
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

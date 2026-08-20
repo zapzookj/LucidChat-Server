@@ -343,7 +343,10 @@ public class TheaterService {
             heroineItems, badges,
             transitionToNewAct,
             transitionToNewAct ? state.getCurrentAct().getTitle() : null,
-            leadsToIntermission
+            leadsToIntermission,
+            // [블록 D · 극장 엔딩 부활] 위 leadsToIntermission 주석이 "엔딩 진입 시점엔 directorEngine이
+            //   endingReached를 set할 것"이라 가정했지만 그런 코드는 존재한 적이 없다. 여기서 신호를 낸다.
+            isLastAct && isLastChapterOfAct
         );
     }
 

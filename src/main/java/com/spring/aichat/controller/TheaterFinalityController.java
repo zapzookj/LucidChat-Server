@@ -56,6 +56,21 @@ public class TheaterFinalityController {
         return endingService.triggerEnding(roomId, authentication.getName());
     }
 
+    /**
+     * [블록 D · 극장 엔딩 부활] 저장된 엔딩 재조회 — "엔딩 다시 보기".
+     *
+     * <p>프론트는 이 GET을 먼저 시도하고 404면 POST(최초 발동)로 넘어간다.
+     * 발동과 감상을 분리해야 아카이브에서 몇 번이든 다시 볼 수 있다
+     * (기존에는 다시 보기가 발동 API를 재호출해 항상 400이었다 — docs/13 B-9.9).
+     */
+    @GetMapping("/ending")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ResponseEntity<TheaterEnding> getEnding(@PathVariable Long roomId) {
+        return endingService.loadPersistedEnding(roomId)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  세이브 / 로드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

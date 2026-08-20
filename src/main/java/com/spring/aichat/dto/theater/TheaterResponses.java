@@ -305,7 +305,17 @@ public final class TheaterResponses {
         List<ReportBadge> badges,
         boolean transitioningToNewAct,
         String nextActTitle,
-        boolean leadsToIntermission
+        boolean leadsToIntermission,
+        /**
+         * [블록 D · 극장 엔딩 부활] 마지막 Act의 마지막 Chapter를 끝냈다 = 엔딩 지점.
+         *
+         * <p>이 신호가 없어서 극장 엔딩이 정상 플레이로 도달 불가였다 —
+         * {@code markEnded()}를 호출하는 유일한 코드가 {@code triggerEnding} 내부인데,
+         * 그 {@code triggerEnding}으로 가는 유일한 UI 진입이 {@code sessionStatus=="ENDED"}
+         * 카드에만 뜨는 아카이브 CTA였다(닭-달걀).
+         * 프론트는 이 플래그를 보고 {@code /theater/:roomId/ending}으로 보낸다.
+         */
+        boolean endingReady
     ) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
