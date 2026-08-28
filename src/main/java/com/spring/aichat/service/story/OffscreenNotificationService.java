@@ -192,8 +192,11 @@ public class OffscreenNotificationService {
     }
 
     @Transactional
-    public void markRead(Long notificationId) {
-        notificationRepository.findById(notificationId).ifPresent(OffscreenNotification::markRead);
+    public void markRead(Long roomId, Long notificationId) {
+        // [docs/13 B-13] 방 스코프 조회 — 컨트롤러가 방 소유권만 검사하므로 조회 스코프를 맞춘다.
+        //   1-arg 구버전은 남기지 않는다(CLAUDE.md §2-6) — 남기면 호출부가 조용히 낡은 경로로 컴파일된다.
+        notificationRepository.findByIdAndChatRoom_Id(notificationId, roomId)
+            .ifPresent(OffscreenNotification::markRead);
     }
 
     /**

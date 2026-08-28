@@ -35,6 +35,15 @@ public class JwtTokenService {
     private static final String DEFAULT_ROLE = "ROLE_USER";
 
     /**
+     * [버그픽스 B-10.1 · docs/17_assets/defect_register.md §B-10.1 · docs/19 D-31]
+     * 토큰 타입 구분 클레임. 리소스 서버 디코더는 만료·nbf만 보므로 타입 구분이 없으면
+     * refresh 토큰이 Bearer 액세스 토큰 자리에 그대로 통과한다.
+     */
+    public static final String TOKEN_TYPE_CLAIM = "typ";
+    public static final String TOKEN_TYPE_ACCESS = "access";
+    public static final String TOKEN_TYPE_REFRESH = "refresh";
+
+    /**
      * Access Token & Refresh Token 발급
      */
     public TokenPair issueTokenPair(String username, String role) {
@@ -66,6 +75,9 @@ public class JwtTokenService {
             .expiresAt(now.plusSeconds(props.accessTokenTtlSeconds()))
             .subject(username)
             .claim("role", role)
+            // [버그픽스 B-10.1 · docs/17_assets/defect_register.md §B-10.1 · docs/19 D-31]
+            //   토큰 타입 구분자. 검증은 JwtBlacklistFilter가 한다(TOKEN_TYPE_CLAIM).
+            .claim(TOKEN_TYPE_CLAIM, TOKEN_TYPE_ACCESS)
             .build();
 
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
@@ -74,14 +86,25 @@ public class JwtTokenService {
 
     /**
      * Refresh Token 생성 (랜덤 UUID 대신 JWT 형식을 사용하여 유효성 검증도 가능하게 함)
+     *
+     * <p>[버그픽스 B-10.1/B-10.2 · docs/17_assets/defect_register.md §B-10.1·§B-10.2 · docs/19 D-31]
+     * <ul>
+     *   <li>{@code typ=refresh} — 이전에는 AT/RT의 차이가 jti·role·만료뿐이라 RT를
+     *       {@code Authorization: Bearer}에 그대로 넣으면 통과했다. TTL이 14일(AT의 336배)이라
+     *       사실상 14일짜리 액세스 토큰이었다. 거부는 JwtBlacklistFilter가 한다.</li>
+     *   <li>{@code jti} — 없으면 로그아웃·블랙리스트(BL:{jti})로 무효화할 수단이 아예 없다.
+     *       회전(reissue) 시 구 RT의 jti를 블랙리스트에 넣는 것도 이 클레임이 전제다.</li>
+     * </ul>
      */
     private String generateRefreshToken(String username) {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
+            .id(UUID.randomUUID().toString())   // jti — B-10.2
             .issuer(props.issuer())
             .issuedAt(now)
             .expiresAt(now.plusSeconds(props.refreshTokenTtlSeconds()))
             .subject(username)
+            .claim(TOKEN_TYPE_CLAIM, TOKEN_TYPE_REFRESH)   // B-10.1
             .build();
 
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
@@ -118,7 +141,27 @@ public class JwtTokenService {
         }
         String role = (user != null) ? extractPrimaryRole(user) : DEFAULT_ROLE;
 
+        // [버그픽스 B-10.2 · docs/17_assets/defect_register.md §B-10.2 · docs/19 D-31]
+        //   RTR 회전 시 구 RT의 jti를 블랙리스트에 넣는다. 기존에는 Redis 값 불일치로
+        //   '재발급'만 막혔을 뿐, 구 RT를 Bearer로 쓰는 경로는 열려 있었다.
+        //   (B-10.1의 typ 거부가 1차 방어선이고 이건 다층 방어 — 레거시 RT는 jti가 없어
+        //    여기서 걸리지 않으므로 typ 규칙 쪽이 반드시 함께 있어야 한다.)
+        blacklistRotatedRefreshToken(jwt);
+
         return issueTokenPair(username, role);
+    }
+
+    /** [버그픽스 B-10.2] 회전된 구 refresh 토큰을 남은 TTL만큼 BL:{jti}에 등록. */
+    private void blacklistRotatedRefreshToken(Jwt oldRefreshJwt) {
+        String jti = oldRefreshJwt.getId();
+        if (jti == null || jti.isBlank() || oldRefreshJwt.getExpiresAt() == null) {
+            return; // 픽스 이전 발급분(jti 없음) — typ 규칙이 Bearer 경로를 막는다
+        }
+        long ttl = Duration.between(Instant.now(), oldRefreshJwt.getExpiresAt()).getSeconds();
+        if (ttl > 0) {
+            redisTemplate.opsForValue().set(
+                BLACKLIST_PREFIX + jti, "rotated", ttl, TimeUnit.SECONDS);
+        }
     }
 
     /**
@@ -142,7 +185,19 @@ public class JwtTokenService {
      * [Phase6/Tier3 / M-4] 블랙리스트 키를 BL:{jti}로 변경. 토큰 전체를 키로 저장하던
      * 비효율(긴 키, Redis 메모리 낭비)을 제거.
      */
-    public void logout(String accessToken, String username) {
+    public void logout(String accessToken, String refreshToken, String username) {
+        // [버그픽스 B-10.2 잔여 · docs/19 §F D-31] 로그아웃 시 **RT의 jti도** 블랙리스트한다.
+        //   Redis의 REFRESH_PREFIX 삭제만으로는 '서버가 기억하는 최신 RT'만 지워질 뿐,
+        //   유저가 이미 들고 있는 RT 문자열 자체는 남은 TTL(14일) 동안 유효하다.
+        //   typ 클레임(B-10.1)이 Bearer 오용은 막지만, /auth/refresh 재발급은 그것만으로 막히지 않는다.
+        //   ※ 1-arg/2-arg 구버전은 남기지 않는다(CLAUDE.md §2-6) — 호출부를 컴파일러가 드러내게 한다.
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            try {
+                blacklistRotatedRefreshToken(jwtDecoder.decode(refreshToken));
+            } catch (JwtException e) {
+                log.warn("[JWT] logout: refresh token decode 실패 (무시) — {}", e.getMessage());
+            }
+        }
         try {
             Jwt jwt = jwtDecoder.decode(accessToken);
             long ttl = Duration.between(Instant.now(), jwt.getExpiresAt()).getSeconds();
@@ -232,6 +287,33 @@ public class JwtTokenService {
             }
             String sub = jwt.getSubject();
             return sub != null && Boolean.TRUE.equals(redisTemplate.hasKey(SUSPENDED_PREFIX + sub));
+        } catch (JwtException e) {
+            return false;
+        }
+    }
+
+    /**
+     * [버그픽스 B-10.1 · docs/17_assets/defect_register.md §B-10.1 · docs/19 D-31]
+     * Bearer 자리에 들어온 토큰이 <b>refresh 토큰</b>인지 판정한다. 호출자는 JwtBlacklistFilter.
+     *
+     * <p>판정 규칙 (§B-10.1 수정안 4번 — 전환기 하위 호환):
+     * <ul>
+     *   <li>{@code typ == "refresh"} → refresh. (이 픽스 이후 발급분)</li>
+     *   <li>{@code typ} 없음 &amp;&amp; {@code jti} 없음 → refresh. 픽스 이전 RT는 정확히 이 모양이고,
+     *       픽스 이전 AT는 jti를 갖는다(:63) — 이 조합만이 레거시 RT를 특정한다.</li>
+     *   <li>그 외 → access로 간주해 통과. AT TTL이 1시간이라 전환은 1시간 안에 끝난다.</li>
+     * </ul>
+     * 유효하지 않은 토큰은 Resource Server가 401로 처리하므로 여기서는 false(통과)로 위임한다.
+     */
+    public boolean isRefreshTypeToken(String token) {
+        try {
+            Jwt jwt = jwtDecoder.decode(token);
+            String typ = jwt.getClaimAsString(TOKEN_TYPE_CLAIM);
+            if (typ != null) {
+                return TOKEN_TYPE_REFRESH.equals(typ);
+            }
+            String jti = jwt.getId();
+            return jti == null || jti.isBlank();
         } catch (JwtException e) {
             return false;
         }

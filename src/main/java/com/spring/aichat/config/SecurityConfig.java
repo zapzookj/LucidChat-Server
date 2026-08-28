@@ -61,7 +61,18 @@ public class SecurityConfig {
                 "/login/**",            // 로그인 페이지 등
                 "/swagger-ui/**", "/v3/api-docs/**", // Swagger
                 "/actuator/**",          // (선택) 헬스 체크 등
-                "/api/v1/payments/webhook",   // Phase 5: PortOne webhook (no JWT)
+                // Phase 5: PortOne webhook (no JWT — PortOne 서버가 직접 호출하므로 JWT를 가질 수 없다)
+                // [버그픽스 B-1.3 · docs/17 §B-1.3 · docs/19 D-17] permitAll은 유지하되 무인증이
+                //   아니다: PaymentController.verifyWebhookSecret이 공유 시크릿을 검증하고
+                //   prod에서 시크릿 미설정이면 fail-closed로 전량 거부한다.
+                //   이 줄을 지우면(=authenticated) PortOne 재시도가 401로 전부 실패해 결제 누락
+                //   보완 경로 자체가 죽는다 — 게이트는 컨트롤러 진입부에 두는 것이 맞다.
+                "/api/v1/payments/webhook",
+                // [D-30 · C-1.5] NICE 본인확인 팝업 콜백 수신. 팝업 컨텍스트에는 JWT가 없으므로
+                //   인증을 걸 수 없다. 이 엔드포인트는 GET/POST 양쪽을 받아 **SPA로 302만** 하며,
+                //   실제 검증은 인증된 /verify/success가 수행한다(권한 상승 표면 없음).
+                //   ⚠ 메서드 무관 블록에 두어야 POST 폼 콜백도 통과한다 — GET 전용 블록으로 옮기지 말 것.
+                "/api/v1/verify/callback",
                 "/api/v1/webhook/**",
                 "/health"                // 헬스 체크 엔드포인트
             ).permitAll()

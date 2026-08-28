@@ -5,6 +5,7 @@ import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.auth.AuthResponse;
+import com.spring.aichat.security.ClientIpResolver;   // [B-11.1] XFF 최우측 리졸버 — 중복 구현 금지
 import com.spring.aichat.dto.auth.LoginRequest;
 import com.spring.aichat.dto.auth.SignupRequest;
 import com.spring.aichat.exception.BusinessException;
@@ -52,7 +53,10 @@ public class AuthController {
     public AuthResponse signup(@RequestBody @Valid SignupRequest req,
                                HttpServletRequest httpReq,
                                HttpServletResponse response) {
-        String clientIp = extractClientIp(httpReq);
+        // [docs/13 B-11.1 · docs/19 §F D-31] XFF 최좌측은 클라이언트가 임의 주입할 수 있어
+        //   레이트리밋을 헤더 조작만으로 완전 우회할 수 있었다. 올바른 리졸버가 이미 있으므로 재사용한다
+        //   (두 벌의 IP 해석이 갈라지면 다음 감사에서 또 어긋난다).
+        String clientIp = ClientIpResolver.resolve(httpReq);
         if (rateLimiter.checkSignup(clientIp)) {
             throw new RateLimitException("회원가입 시도가 너무 빈번합니다.", 60);
         }
@@ -109,7 +113,10 @@ public class AuthController {
     public AuthResponse login(@RequestBody @Valid LoginRequest req,
                               HttpServletRequest httpReq,
                               HttpServletResponse response) {
-        String clientIp = extractClientIp(httpReq);
+        // [docs/13 B-11.1 · docs/19 §F D-31] XFF 최좌측은 클라이언트가 임의 주입할 수 있어
+        //   레이트리밋을 헤더 조작만으로 완전 우회할 수 있었다. 올바른 리졸버가 이미 있으므로 재사용한다
+        //   (두 벌의 IP 해석이 갈라지면 다음 감사에서 또 어긋난다).
+        String clientIp = ClientIpResolver.resolve(httpReq);
         if (rateLimiter.checkLogin(clientIp)) {
             throw new RateLimitException("로그인 시도가 너무 빈번합니다. 1분 후 다시 시도해주세요.", 60);
         }
@@ -128,7 +135,8 @@ public class AuthController {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             String accessToken = bearerToken.substring(7);
             String username = jwtTokenService.extractUsername(accessToken);
-            jwtTokenService.logout(accessToken, username);
+            // [B-10.2 잔여] RT도 함께 무효화 — 쿠키가 없으면 null이 넘어가고 서비스가 스킵한다.
+            jwtTokenService.logout(accessToken, refreshToken, username);
         }
 
         clearRefreshTokenCookie(response);
@@ -163,11 +171,6 @@ public class AuthController {
         return Arrays.asList(env.getActiveProfiles()).contains("prod");
     }
 
-    private String extractClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
+    // [docs/13 B-11.1] extractClientIp(XFF 최좌측) 제거 — ClientIpResolver로 일원화.
+    //   오버로드·구버전을 남기면 호출부가 조용히 낡은 경로로 컴파일된다(CLAUDE.md §2-6).
 }

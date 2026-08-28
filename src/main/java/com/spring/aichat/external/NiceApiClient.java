@@ -45,7 +45,27 @@ public class NiceApiClient {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * [C-1.3 · docs/17_assets/defect_register.md 수정안 ③ · D-30]
+     * 자격증명 미주입 판정. application.yml의 nice 블록은 `YOUR_NICE_CLIENT_ID` 같은
+     * **리터럴 플레이스홀더**라, 환경변수를 안 꽂으면 그 문자열이 그대로 Basic 인증에 실려
+     * NICE가 401을 준다 — 운영 로그에서 '설정 누락'과 'NICE 장애'가 구분되지 않는다.
+     * 그래서 blank와 `YOUR_` 접두 플레이스홀더를 모두 '미설정'으로 본다.
+     */
+    private static boolean isUnset(String value) {
+        return value == null || value.isBlank() || value.startsWith("YOUR_");
+    }
+
     public String getAccessToken() {
+        // [C-1.3] 진입부 가드 — 자격증명이 없으면 외부 호출 전에 명시적으로 실패시킨다.
+        //   ※ 전역 fail-fast(부팅 차단)가 아니라 진입부 차단이다(docs/19 D-31과 같은 원칙):
+        //     설정 누락이 애플리케이션 부팅 블로커가 되면 안 된다.
+        if (isUnset(props.getClientId()) || isUnset(props.getClientSecret()) || isUnset(props.getProductId())) {
+            log.error("[NICE] 자격증명 미주입 — NICE_CLIENT_ID/NICE_CLIENT_SECRET/NICE_PRODUCT_ID 환경변수를 확인하라");
+            throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
+                "본인확인 서비스가 아직 설정되지 않았습니다. 잠시 후 다시 시도해 주세요.");
+        }
+
         try {
             String credentials = props.getClientId() + ":" + props.getClientSecret();
             String basicAuth = Base64.getEncoder().encodeToString(
@@ -168,6 +188,9 @@ public class NiceApiClient {
         data.put("returnurl", props.getReturnUrl());
         data.put("sitecode", siteCode);
         data.put("authtype", "M");
+        // [D-30] methodtype은 NICE가 returnurl로 결과를 돌려줄 때의 HTTP 메서드다.
+        //   returnurl(=백엔드 /api/v1/verify/callback)이 GET·POST를 **양쪽 다** 받으므로
+        //   이 값이 무엇이든 콜백은 성립한다 — 실연동에서 다른 값이 요구되면 여기만 바꾸면 된다.
         data.put("methodtype", "get");
         data.put("popupyn", "Y");
 

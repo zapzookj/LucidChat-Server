@@ -19,6 +19,15 @@ import java.util.Optional;
 public interface OffscreenNotificationRepository extends JpaRepository<OffscreenNotification, Long> {
 
     /**
+     * [docs/13 B-13 · docs/19 §F D-31] 방 스코프 단건 조회.
+     *
+     * <p>컨트롤러의 {@code @PreAuthorize}는 <b>방 소유권만</b> 검사하므로, 알림 조회를
+     * {@code findById}로 하면 '내 방 id + 남의 알림 id' 조합으로 타 유저 알림을
+     * 읽음 처리할 수 있다(IDOR). 소유권 검사와 조회의 스코프를 일치시킨다.
+     */
+    Optional<OffscreenNotification> findByIdAndChatRoom_Id(Long id, Long chatRoomId);
+
+    /**
      * 방의 활성 알림 — 미응답 + 미만료. 디렉터 prompt 인젝션용.
      */
     List<OffscreenNotification>

@@ -218,7 +218,7 @@ public class StoryV2Controller {
         @PathVariable Long roomId,
         @PathVariable Long notificationId
     ) {
-        notificationService.markRead(notificationId);
+        notificationService.markRead(roomId, notificationId);
         return ResponseEntity.noContent().build();
     }
 

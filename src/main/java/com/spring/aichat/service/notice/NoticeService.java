@@ -29,7 +29,14 @@ public class NoticeService {
 
     @Transactional(readOnly = true)
     public NoticeResponse get(Long id) {
-        return NoticeResponse.from(load(id));
+        Notice n = load(id);
+        // [docs/13 B-12 · docs/19 §F D-31] 미게시 공지 본문이 유저 대면 GET에 그대로 노출됐다.
+        //   존재 여부까지 감추기 위해 403이 아니라 404로 닫는다(초안 제목 유추 방지).
+        //   ※ 어드민 화면은 adminList만 쓰고 이 단건 API를 쓰지 않는다 — 별도 getForAdmin 불요.
+        if (!n.isPublished()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "공지를 찾을 수 없습니다: " + id);
+        }
+        return NoticeResponse.from(n);
     }
 
     @Transactional(readOnly = true)
