@@ -97,6 +97,21 @@ docs/14 §C#6에서 **극장 무변경**이 확정됐다. 공용 메서드에 �
 - 테스트는 23개 파일 / 순수 유닛(Mockito·POJO)뿐이다. **통합·리포지토리·컨트롤러 테스트는 0건.**
 - `AichatApplicationTests`(`@SpringBootTest`)는 `src/test/resources` 부재로 CI가 `*Test` 글롭으로 의도적으로 제외한다 — 사실상 죽은 테스트다.
 - 즉 **자동 테스트가 잡아주는 범위가 좁다.** 서비스 로직 변경은 수동 재현 시나리오를 함께 남겨라.
+- 베이스라인 실측(2026-08-21, `cleanTest` 강제 재실행): `*Test` 글롭 **21클래스 / 116건 전부 녹색**.
+- ✅ **컨텍스트 기동 검증은 가능하다 — 반드시 하라.** 2026-08-21에 `MongoConfig`의 `@EnableMongoRepositories` basePackages 누락(`domain.ending` 빠짐)으로 **애플리케이션이 부팅되지 않는 상태**가 컴파일 통과 + 116건 녹색인 채로 master에 올라갔다(docs/19 §C-1). 리포지토리·설정 클래스를 신설하면 **패키지가 스캔 범위 안인지** 확인하고, 아래로 실제 기동을 확인하라.
+
+```bash
+# 로컬 기동 검증. JWT_SECRET_BASE64가 없으면 Base64 디코드에서 죽으니(Illegal base64 character 24) 더미로 채운다.
+JWT_SECRET_BASE64="$(node -e "console.log(Buffer.alloc(32,7).toString('base64'))")" ./gradlew bootRun --no-daemon
+# 성공 판정 문자열: "Started AichatApplication in"
+```
+
+- ⚠ **프론트: `vite build` 통과를 검증으로 믿지 마라.** 존재하지 않는 **named export**를 import하면 rollup은 **경고만** 내고 exit 0이다(`"X" is not exported by ...`). 반면 `npm run dev`는 모듈 로드 시점에 던져 **페이지가 즉시 죽는다.** 2026-08-21에 `/events/select` 삭제 후 `sendEventSelectStream` import가 `ChatPage.jsx`·`ChatPageV2.jsx`에 남아 정확히 이렇게 master에 올라갔다.
+
+```bash
+# 심볼을 지웠으면 빌드 로그의 이 경고를 반드시 훑어라 (build만 보면 놓친다)
+npm run build 2>&1 | grep -i "not exported"
+```
 
 ---
 
@@ -106,9 +121,12 @@ docs/14 §C#6에서 **극장 무변경**이 확정됐다. 공용 메서드에 �
 |---|---|
 | 제품 결정 (로비·페르소나·BM·레거시 처분 §G 21건) | `docs/14_ProductDecisions_Session_Handoff.md` + `14_assets/impl_spec_details.md` |
 | 시크릿 모드 전략 (핵심 BM) | `docs/16_SecretMode_Pivot_Directive.md` |
-| 버그 레지스터 (원자 245건, **정본 좌표**) | `docs/17_assets/defect_register.md` |
-| 버그픽스 배치 계획·결정 안건 | `docs/17_BugFix_Session_Readiness.md` |
-| **런칭 행정·인프라 실행 + 결정 안건 정본** | `docs/18_Launch_Admin_Runbook.md` |
+| 버그 레지스터 (원자 245건 — 근거·수정안 **본문**) | `docs/17_assets/defect_register.md` |
+| **결함 상태·좌표 정본** (블록 D 재판정 델타 245행) | `docs/19_assets/rejudgment_delta.md` |
+| **버그픽스 결정 안건 정본** (22건 + 결정 불요 33건) | `docs/19_assets/decision_agenda.md` · 상위 판단 `docs/19_Register_Rejudgment.md` |
+| 블록 D 회귀·미등재 신규 결함 | `docs/19_assets/blockd_regressions.md` |
+| 버그픽스 배치 계획 | `docs/17_BugFix_Session_Readiness.md` §D |
+| 런칭 행정·인프라 실행 | `docs/18_Launch_Admin_Runbook.md` (§4 결정 안건은 docs/19가 대체) |
 | 상태창 개편 설계 | `docs/17_assets/hud_redesign_mockup.html` |
 
 `docs/13`의 파일:라인은 낡았다 — **docs/17 레지스터가 정본 좌표**다.

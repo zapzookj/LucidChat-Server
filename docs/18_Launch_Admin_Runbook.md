@@ -79,9 +79,12 @@ docs/14 §C-#3이 **시크릿 정면 전략**을 확정했다: 성인 콘텐츠(
 | E3 | **연동 스펙 문서 확보** | ★ 아래 질문의 답이 코드 분기를 가른다 |
 | E4 | return URL 등록 — `https://{운영도메인}/verify/callback` | §3-B와 짝 |
 
-> **★ E3에서 반드시 확인할 것: CheckPlus 콜백이 `GET` 쿼리인가 `POST` 폼인가.**
-> `POST`면 브라우저가 우리 도메인으로 폼 전송을 하므로 SPA 라우트만으로는 못 받는다 — **백엔드 수신 엔드포인트 + 302 리다이렉트**가 필요하다.
-> `GET`이면 SPA 라우트로 충분하다. 이 답을 받기 전에는 §3-B를 반쪽만 만들어 두는 게 맞다.
+> **★ E3에서 확인할 것: CheckPlus 콜백이 `GET` 쿼리인가 `POST` 폼인가.**
+> `POST`면 브라우저가 우리 도메인으로 폼 전송을 하므로 SPA 라우트만으로는 못 받는다 — **백엔드 수신 엔드포인트 + 302 리다이렉트**가 필요하다. `GET`이면 SPA 라우트로도 받을 수 있다.
+>
+> ⚠ **정정 (2026-08-26 · D-33 · docs/19 §F #30)** — 원문은 "이 답을 받기 전에는 §3-B를 반쪽만 만들어 두는 게 맞다"였다. **틀렸다.**
+> **백엔드가 `GET`·`POST` 양쪽을 받아 검증 후 SPA로 302하면 스펙 답을 기다릴 필요 자체가 없다.** 두 경우의 상위집합을 한 번에 구현하는 쪽이 분기보다 싸고, `POST`로 밝혀졌을 때의 재작업도 0이다.
+> 이 지침을 그대로 두면 docs/16의 **'C-1 성인인증 0순위'가 NICE 계약 리드타임에 인질로 잡힌다** — E3 답은 계약 체결 이후에나 나오는데, 그것이 임계경로(§5)의 맨 끝이다. §3-B의 C-1.5는 **지금 착수한다.**
 
 ### 1-F. 사이트 표기 (AWS 해제 후)
 
@@ -103,12 +106,39 @@ docs/14 §C-#3이 **시크릿 정면 전략**을 확정했다: 성인 콘텐츠(
 | GitHub 리포 이름 변경 | remote가 옛 주소(`AI-CharacterChat-Server`)를 가리킴. 리다이렉트로 동작 중 | `git remote set-url origin https://github.com/zapzookj/LucidChat-Server.git` |
 
 **§2-A 배포 후 확인 순서** — 앞이 깨지면 뒤를 볼 필요가 없다.
-1. `/actuator/health` + Flyway 로그에 V25·V26·V27 적용 확인
+
+> ⚠ **0·0-B단계는 2026-08-26에 추가됐다** (D-33 문서 정정 · docs/19 §C-1 · [`19_assets/decisions_confirmed.md`](19_assets/decisions_confirmed.md) §A #1).
+> 이 절차에는 **부팅 확인 자체가 없었다.** 2026-08-21에 `MongoConfig`의 `@EnableMongoRepositories` basePackages 누락(`domain.ending`)으로 **애플리케이션이 뜨지 않는 상태**가 `compileJava` 통과 + 유닛테스트 116건 전부 녹색인 채로 master에 올라갔다.
+> 통합·컨텍스트 테스트가 0건이고 `@SpringBootTest`는 CI 글롭에서 의도적으로 제외돼 있어 **기동 실패를 잡을 자동 수단이 구조적으로 없다**(docs/19 §G-3). 배포 순서의 첫 칸에 사람이 넣는 것이 현재 유일한 방어다.
+
+0. **컨텍스트 기동 확인** — 배포 전 로컬에서 한 번, 배포 후 ECS 태스크 로그에서 한 번. **성공 판정 문자열은 `Started AichatApplication in`이다.** `/actuator/health`만 보면 재시작 루프를 "아직 롤아웃 중"과 구분하지 못한다.
+   ```bash
+   # 로컬 (CLAUDE.md §3) — JWT_SECRET_BASE64가 없으면 Base64 디코드에서 죽는다(Illegal base64 character 24)
+   JWT_SECRET_BASE64="$(node -e "console.log(Buffer.alloc(32,7).toString('base64'))")" ./gradlew bootRun --no-daemon
+   # 프로드 — 실패 시 "APPLICATION FAILED TO START"가 먼저 뜬다
+   aws logs tail <ecs-log-group> --since 15m | grep -E "Started AichatApplication|APPLICATION FAILED TO START"
+   ```
+
+0-B. **외부 자격증명 주입 확인** — **기본값 없는 `${ENV}` 플레이스홀더가 21개**다(실측: `application.yml` 14 · `application-prod.yml` 7 — `MODELSLAB_API_KEY`·`MODELSLAB_DEFAULT_MODEL_ID`·`MODELSLAB_WEBHOOK_SECRET`·`LUCID_WEBHOOK_BASE`·`OPENROUTER_API_KEY`·`FAL_API_KEY`·`JWT_SECRET_BASE64`·`AWS_*`·`CLOUDFRONT_ASSETS_URL`·OAuth 4종 / `DB_*`·`REDIS_*`·`MONGO_URI`). **하나라도 빠지면 플레이스홀더 해석 실패로 기동 자체가 죽는다** — 0단계와 한 몸이다. ECS 태스크 정의의 환경변수·시크릿 목록과 대조하라.
+   ```bash
+   grep -oE '\$\{[A-Z0-9_]+\}' src/main/resources/application.yml src/main/resources/application-prod.yml | sort -u
+   ```
+   ⚠ 반대 유형도 있다 — NICE·PortOne은 `${ENV}`가 아니라 **리터럴 플레이스홀더**(`YOUR_NICE_CLIENT_ID` 등, `application.yml:91-93,98-99`)라 **미주입이어도 기동은 성공하고 런타임에 조용히 실패**한다. 기동 로그로는 못 잡으니 §3-B의 실호출로 확인할 것.
+
+1. `/actuator/health` + Flyway 로그에 V25·V26·V27 적용 확인 (신규 마이그레이션이 있으면 V28 이후도 함께)
 2. 게스트 로비 200 (블록 A)
 3. 페르소나 프로필 생성·카드 저장 (블록 B, V25)
 4. 자유 대화 1턴 — 상태창 서술형 렌더 + 박동 표시 (블록 D §G-8/9)
 5. `topic_concluded` 후 "다음 씬" 버튼 → 3분기 카드 (§G-13 부활분, **실행 검증 최초**)
 6. 엔딩·업적이 게이트로 막혀 있는지 (`legacy.*` 기본 off)
+7. **베타 가짜 성인인증 계정 정리** (2026-08-26 등재 · D-33) — 삭제된 `/users/beta-activate`가 만든 행이 DB에 남아 있다. `UserService.activateBetaTester`가 `completeAdultVerification("BETA_TESTER_" + userId)`로 **NICE 인증 없이 `is_adult=true`를 세팅**했다(`User.java:214-218`, 엔드포인트는 블록 B `cab6b3e`에서 제거). 엔드포인트를 지워도 **이미 만들어진 계정의 성인 권한은 그대로 살아 있다.**
+   ```sql
+   -- 조회 (AWS 복구 직후 1쿼리)
+   SELECT id, email, ci_hash, adult_verified_at FROM users WHERE ci_hash LIKE 'BETA_TESTER_%';
+   -- 정리 — 인증 상태만 되돌린다(계정·결제 이력은 건드리지 않는다)
+   UPDATE users SET is_adult = false, ci_hash = NULL, adult_verified_at = NULL WHERE ci_hash LIKE 'BETA_TESTER_%';
+   ```
+   '결제 사실이 연령을 증명하지 않는다'는 이유로 예외를 두면 **청소년보호정책·PG 심사에서 방어가 안 된다.** 1회 SQL + 해당 유저 재인증 안내가 전부이며, **시크릿 BM 오픈 전 완료 조건**이다(§1-D 심사 제출 전).
 
 ---
 
@@ -121,7 +151,7 @@ docs/14 §C-#3이 **시크릿 정면 전략**을 확정했다: 성인 콘텐츠(
 | ID | 내용 | 규모 |
 |---|---|---|
 | B-1.1 | `PaymentService.verifyAndDeliver`에 PortOne 응답 `merchant_uid` ↔ 주문 대조 | SMALL |
-| B-1.2 | `orders.imp_uid` unique 인덱스 + 마이그레이션 | SMALL + DB |
+| B-1.2 | `orders.imp_uid` unique 인덱스 + 마이그레이션 (**V28** — V25 블록 B / V26·V27 블록 D 선점) | SMALL + DB |
 | B-1.3 | 웹훅 서명/IP 검증 — PortOne V1 유지 + 공유 시크릿·IP 화이트리스트(추천) | SMALL |
 
 지금은 `imp_uid` 재사용으로 **1건 결제 → N건 지급**이 되고, 동일가 교차 상품(14,900원 LUCID_PASS ↔ SECRET_UNLOCK_PERMANENT)까지 통과한다. 웹훅이 `permitAll`이라 로그인 없이 타인 주문 확정도 가능하다.
@@ -134,7 +164,7 @@ docs/14 §C-#3이 **시크릿 정면 전략**을 확정했다: 성인 콘텐츠(
 |---|---|---|
 | C-1.3 | NICE 자격증명 — yml 리터럴(`YOUR_NICE_CLIENT_ID`)을 실값으로. **코드 변경 불필요** — `@ConfigurationProperties(prefix="nice")`라 `NICE_CLIENT_ID` 등 ECS 환경변수로 주입된다 | 1-E 계약 |
 | C-1.4 | `nice.return-url` — `https://yourdomain.com/verify/callback` 플레이스홀더 → 운영 도메인. 동일하게 env 주입 | 1-E |
-| **C-1.5** | **FE `/verify/callback` 라우트 부재** — App.jsx에 라우트가 아예 없다. **진짜 코드 결함** | **1-E의 E3 답 필요**(GET/POST) |
+| **C-1.5** | **FE `/verify/callback` 라우트 부재** — App.jsx에 라우트가 아예 없다. **진짜 코드 결함**. 수신은 **백엔드가 GET·POST 양쪽을 받아 SPA로 302**하는 형태로 만들면 스펙 답과 무관하게 한 번에 닫힌다 | ~~1-E의 E3 답 필요~~ → **선행 없음, 지금 가능** (2026-08-26 정정 · docs/19 §F #30) |
 | E-1.12a/b | 성인인증 모달 데드엔드 — 팝업을 닫으면 스테일 step 클로저로 'Verification in progress…' 영구 고착 | 없음, **지금 가능** |
 
 ### 3-C. 결제 진입점 정리 (docs/13 C-2)
@@ -175,6 +205,10 @@ docs/14 §C-#3이 **시크릿 정면 전략**을 확정했다: 성인 콘텐츠(
 
 docs/17 §E의 17건 중 **10건이 블록 D로 해소**됐다. 남은 것과 새로 생긴 것만 정리한다.
 
+> ⚠ **2026-08-21 재판정 정정 — 이 절의 결정 안건은 [`19_Register_Rejudgment.md`](19_Register_Rejudgment.md) §E가 대체한다.**
+> 레지스터 245건을 블록 D 반영 HEAD(`20c4cf9`)로 전수 재판정한 결과 **아래 4-A 표의 ④·⑫가 사실과 어긋남이 확인**되어 4-B로 되돌렸다(§4-A 각 행 참조).
+> 새 결정 안건 22건 + 결정 불요 즉시 착수 33건은 [`19_assets/decision_agenda.md`](19_assets/decision_agenda.md)가 정본이다.
+
 ### 4-A. 해소됨 — 다시 묻지 않는다
 
 | 원 번호 | 내용 | 처리 |
@@ -182,12 +216,12 @@ docs/17 §E의 17건 중 **10건이 블록 D로 해소**됐다. 남은 것과 �
 | ① | 블록 D 선행 여부 | 완료 |
 | ② | 게이트 위치 | 서버측 확정·구현(`legacy.*`) |
 | ③ | 극장 엔딩 처분 | (a) 부활 구현 |
-| ④ | §G-7 ↔ §G-13 범위 | (a) 확정·구현 |
+| ~~④~~ | §G-7 ↔ §G-13 범위 | ⚠ **정정(08-21)** — 결정만 (a)로 확정됐고 **V1 디렉터 정리는 미집행**(E-1.3 잔존). → 4-B로 이동 |
 | ⑥ | 레거시 CG 트랙 | (b) 노브 차단 구현 |
 | ⑦ | `/events/select` | 삭제 완료 |
 | ⑨ | 미푸시 스택 선배포 | 2026-08-21 푸시 완료 |
 | ⑩ | `flyway.enabled` | true 원복·커밋 |
-| ⑫ | V2 STORY 엔딩 NPE(E-4.9) | 엔딩 게이트로 **도달 불가** |
+| ~~⑫~~ | V2 STORY 엔딩 NPE(E-4.9) | ⚠ **정정(08-21) — 사실오류.** 게이트는 `EndingEligibilityService:62`(checkAndActivateEligibility)에만 있고 실제 엔딩을 확정하는 `processDirectorTrigger`(:96)에는 없다. `ending_eligible=true`가 이미 저장된 기존 V2 STORY 방은 `ChatStreamServiceV2:685` → `:114 markEndingReached`에 여전히 도달한다. → 4-B로 이동(docs/19 §E 안건 2) |
 | ⑤(부분) | §G-4 엔딩 시드 | quote 2필드 유지 확정(극장 폴백 공용). role-desc 삭제만 잔여 |
 
 ### 4-B. 남은 결정 — 버그픽스 착수 전 필요
@@ -208,7 +242,7 @@ docs/17 §E의 17건 중 **10건이 블록 D로 해소**됐다. 남은 것과 �
 | 7 | **§G-7 (b) 지켜보기 제거 여부** | 잔존 V1 STORY 방 수(4-B ②)에 종속. 방이 0이면 제거 가능 |
 | 8 | **레거시 CG 트랙 (a) 코드 폐지 시점** | 지금은 (b) 노브 차단만. 갤러리를 씬 일러 열람처로 개편하는 작업이 따라온다 |
 | 9 | **E-4.11 pro 모델 배선** | **블록 C의 3.6-flash 치환 이후.** 지금 하면 엔딩마다 3.1-pro 단가 |
-| 10 | **§G-4 role-desc 시드 삭제** | 엔딩 게이트 오프로 사문화 — 우선순위 낮음 |
+| 10 | ~~**§G-4 role-desc 시드 삭제**~~ **→ 종결(보존)** | 엔딩 게이트 오프로 사문화 — 우선순위 낮음. **정정(2026-08-26 · D-33)**: §G-4의 role-desc 시드 삭제 지시는 블록 D의 **§C#6 '코드 보존, 진입만 차단' 원칙으로 대체됐다**(게이트차단은 소멸이 아니다 — 노브를 켜면 시드가 그대로 필요하다). 삭제하지 않고 **보존으로 종결**하며 결정 안건에서 내린다 |
 
 ### 4-D. 배치 계획 갱신
 
@@ -219,7 +253,8 @@ B-7 · B-8.1~8.4 · B-9.2/9.6/9.7 · E-1.15 · E-4.10 · E-3 ④.1~④.4 · F-3.
 E-2.1~2.12 · D-2.h/i/j (§G-6 노브) · B-3.1 · D-2.d · D-6.1 · E-4.17.a · E-5.1.a (`/events/select` 삭제) ·
 E-4.1 · E-4.2 (§G-1) · E-1.11 · B-8.5 · C-0.1/0.4 · B-9.8/9.9 · E-4.12 (수정 완료)
 
-**⚠ 마이그레이션 번호: V28부터.** V26·V27을 블록 D가 썼다.
+**⚠ 마이그레이션 번호: V28부터.** V25는 블록 B(페르소나), V26·V27은 블록 D(BPM·승급 NOT NULL 해제)가 썼다.
+**갱신(2026-08-26)**: 버그픽스 세션이 `V28__orders_imp_uid_unique.sql`(결제 정합, B-1.2)을 신설했다 — **그 이후 신규는 V29부터**다. 착수 전 반드시 `ls src/main/resources/db/migration/`로 다음 가용 번호를 확인하라. 같은 번호로 새 파일을 만들면 **로컬은 checksum mismatch로 죽고 프로드는 조용히 통과**해 스키마가 갈린다(CLAUDE.md §2-2).
 
 ---
 

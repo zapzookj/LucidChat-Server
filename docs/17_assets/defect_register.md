@@ -3,12 +3,23 @@
 > [`13_BugSweep_Findings.md`](../13_BugSweep_Findings.md)의 확정 104건을 **원자 단위 245건**으로 분해하고, 블록 A·B 반영 후의 master HEAD(aichat `14fd094` · FE `55a4b78` · Admin `0188aba`) 실코드로 전수 재검증한 결과다.
 > docs/13의 파일:라인은 상당수 낡았다 — **이 문서의 좌표가 정본**이다. 상위 판단·배치·결정 안건은 [`17_BugFix_Session_Readiness.md`](../17_BugFix_Session_Readiness.md).
 
-| 상태 | 건수 |
-|---|---|
-| 🔴 잔존 | 236 |
-| ✅ 수정됨 | 6 |
-| 🟠 부분수정 | 2 |
-| ⚪ 코드소멸 | 1 |
+> ⚠ **2026-08-21 재판정 — 상태와 좌표는 [`19_assets/rejudgment_delta.md`](../19_assets/rejudgment_delta.md)가 정본이다.**
+> 블록 D(aichat `20c4cf9` · FE `b062997`) 반영 후 245건을 전수 재판정했다. **좌표 114건이 갱신**됐다 — `ChatStreamService.java`(-373줄)·`ChatRoom.java`(-137)·`CharacterPromptAssembler.java`(-130)·FE `ChatPage.jsx`(-307)·`ChatPageV2.jsx`(-330)·`BiometricStatusPanel.jsx`(전면 재작성)에 걸린 원자는 **이 문서의 라인 번호를 쓰지 마라.**
+> **이 문서의 근거·수정안 본문은 그대로 유효**하다. 델타 표는 그 위에 덮는 상태·좌표 갱신분이다. 상위 판단은 [`19_Register_Rejudgment.md`](../19_Register_Rejudgment.md).
+
+| 상태 | 작성 시(08-20) | **재판정 후(08-21)** |
+|---|---|---|
+| 🔴 잔존 | 236 | **197** |
+| 🟡 게이트차단 (`legacy.*` 노브 기본 off — 켜면 부활) | — | **24** |
+| ✅ 수정됨 | 6 | 13 |
+| 🟠 부분수정 | 2 | 4 |
+| ⚪ 소멸 | 1 | 6 |
+| ↔ 재분류 | — | 1 (+D-3.6 → 08-26 기준 **2**) |
+
+> ⚠ **2026-08-26 본문 정정 (D-33 문서 정정 묶음)** — 이 문서 본문에 직접 반영한 3건.
+> 1. **마이그레이션 번호 전면 정정.** 본문 곳곳의 "V25/V26" 지시는 전부 낡았다. 실측 점유: **V25 블록 B**(페르소나) · **V26·V27 블록 D**(BPM·승급 NOT NULL 해제) · **V28 결제 정합**(`V28__orders_imp_uid_unique.sql`). 신규는 **V29부터**이며 배정 계획은 **`V29 구독 / V30 에너지 분할 / V31 일러·극장`**이다(docs/17 §B-3과 동일). **착수 전 `ls src/main/resources/db/migration/`로 다음 가용 번호를 매번 확인하라** — 같은 번호로 새 파일을 만들면 로컬은 checksum mismatch로 죽고 프로드는 조용히 통과해 스키마가 갈린다(CLAUDE.md §2-2).
+> 2. **C-0.5 원 수정안 폐기 · 무수정 존치로 종결** — `storyAvailable`은 V1 STORY 잔재가 아니라 **V2 STORY 히로인 풀 필터**다. 시드를 일괄 false로 내리면 라이브 기능이 죽는다. 해당 절 머리말 참조.
+> 3. **D-3.6 재분류: D절(P1) → B절(P0-A 착취)** — 순 0E 무한 GPU 드레인이 성립한다. 배치 3이 아니라 **배치 1(착취 차단)** 소관.
 
 ---
 
@@ -67,9 +78,9 @@ Order.java:13-17 테이블 정의에 imp_uid 인덱스가 없다:
 
 **수정안**
 
-(1) Order.java:26에 `@Column(name = "imp_uid", length = 50, unique = true)` 부여 + @Table indexes에 `@Index(name="uk_order_imp_uid", columnList="imp_uid", unique=true)` 추가. (2) Flyway 마이그레이션 신설 — **V26**(V25는 페르소나 렌즈로 이미 사용·로컬 dev DB 적용 완료): 기존 중복 imp_uid 정리 SELECT를 먼저 돌린 뒤 `CREATE UNIQUE INDEX uk_order_imp_uid ON orders (imp_uid);` (NULL 다중 허용되는 MySQL/MariaDB 기준 PENDING 주문의 NULL impUid는 문제없음 — DB 엔진 확인 후 적용). (3) PaymentService.verifyAndDeliver의 markPaid 저장 지점(:202-204)에서 DataIntegrityViolationException을 잡아 PAYMENT_ALREADY_PROCESSED로 매핑.
+(1) Order.java:26에 `@Column(name = "imp_uid", length = 50, unique = true)` 부여 + @Table indexes에 `@Index(name="uk_order_imp_uid", columnList="imp_uid", unique=true)` 추가. (2) Flyway 마이그레이션 신설 — **V28**(2026-08-26 정정 · D-33 — V25는 블록 B 페르소나, V26·V27은 블록 D가 선점. 실제 파일 `V28__orders_imp_uid_unique.sql`): 기존 중복 imp_uid 정리 SELECT를 먼저 돌린 뒤 `CREATE UNIQUE INDEX uk_order_imp_uid ON orders (imp_uid);` (NULL 다중 허용되는 MySQL/MariaDB 기준 PENDING 주문의 NULL impUid는 문제없음 — DB 엔진 확인 후 적용). (3) PaymentService.verifyAndDeliver의 markPaid 저장 지점(:202-204)에서 DataIntegrityViolationException을 잡아 PAYMENT_ALREADY_PROCESSED로 매핑.
 
-**제품 결정 연동**: 블록 D 무관. 단 **운영 주의**: 프로드는 ddl-auto=validate(application.yml:50 주석 명시)이므로 엔티티만 고치면 기동 실패한다 — 반드시 Flyway 마이그레이션과 세트로 배포. 메모리상 로컬 dev DB에 V25가 이미 적용되어 있으므로 신규 번호는 V26부터.
+**제품 결정 연동**: 블록 D 무관. 단 **운영 주의**: 프로드는 ddl-auto=validate(application.yml:50 주석 명시)이므로 엔티티만 고치면 기동 실패한다 — 반드시 Flyway 마이그레이션과 세트로 배포. **신규 번호는 V28부터**(2026-08-26 정정 · D-33 — V25 블록 B / V26·V27 블록 D 선점). 착수 전 `ls src/main/resources/db/migration/`로 다음 가용 번호를 매번 재확인할 것.
 
 ---
 
@@ -472,7 +483,7 @@ chargeBatchEnergy 성공 시 '과금 완료 배치' 워터마크를 남긴다 �
 
 **수정안**
 
-TheaterState에 `rerollCount` 컬럼(default 0)을 추가(Flyway V26+ — B-1.2와 같은 마이그레이션에 묶을 수 있음)하고 TheaterLobbyService.rerollStats :520 가드 뒤에 `if (state.getRerollCount() >= MAX_REROLLS) throw new BadRequestException(...)` + 성공 시 증가. 비용 정책(B-6.1)이 (a) 에너지 과금으로 확정되면 횟수 제한 없이 과금만으로도 자연 억제되므로 MAX_REROLLS는 넉넉히(예: 3~5) 잡거나 생략 가능 — **B-6.1 결정 후에 착수할 것**(중복 설계 방지).
+TheaterState에 `rerollCount` 컬럼(default 0)을 추가(Flyway **V31** 일러·극장 묶음 — 2026-08-26 정정 · D-33: 앞을 V26·V27 블록 D / V28 결제 / V29 구독 / V30 에너지 분할이 점유. ⚠ 극장 스키마는 결제와 **롤백 단위가 다르니 같은 파일에 묶지 말 것**)하고 TheaterLobbyService.rerollStats :520 가드 뒤에 `if (state.getRerollCount() >= MAX_REROLLS) throw new BadRequestException(...)` + 성공 시 증가. 비용 정책(B-6.1)이 (a) 에너지 과금으로 확정되면 횟수 제한 없이 과금만으로도 자연 억제되므로 MAX_REROLLS는 넉넉히(예: 3~5) 잡거나 생략 가능 — **B-6.1 결정 후에 착수할 것**(중복 설계 방지).
 
 **제품 결정 연동**: §C #6 '극장 유지'로 게이트 오프 대상 아님. 다만 §G #10 '8축 스탯 — 유지하되 소프트캡화(만렙=엔딩 결합 해제)'는 **자유/스토리의 8축**에 대한 재해석이고, 극장 아바타 5축은 impl_spec_details §1 '극장 무변경 원칙'에 따라 별개다 — 블록 D/B 담당자가 두 스탯 체계를 혼동해 극장 리롤·게이트를 건드리지 않도록 경계 필요.
 
@@ -715,7 +726,7 @@ FE 도달 경로 확정: ChatPageV2.jsx:4494-4497 `{roomInfo?.endingReached && (
 **수정안**
 
 엔딩 결과를 영속하고 재호출 시 그대로 반환한다.
-1) 영속 계층: MongoDB가 이미 붙어 있으므로 마이그레이션 없는 `EndingResultDocument`(_id=roomId, endingType, endingTitle, scenesJson, memories, characterQuote, generatedAt) 신설이 가장 싸다. RDB를 고르면 chat_room에 ending_payload JSON 컬럼 추가 → Flyway 마이그레이션 필요(현재 V25까지, docs/13 배치3의 V25는 V26으로 이월 필요 — 메모리 참조).
+1) 영속 계층: MongoDB가 이미 붙어 있으므로 마이그레이션 없는 `EndingResultDocument`(_id=roomId, endingType, endingTitle, scenesJson, memories, characterQuote, generatedAt) 신설이 가장 싸다. RDB를 고르면 chat_room에 ending_payload JSON 컬럼 추가 → Flyway 마이그레이션 필요(2026-08-26 정정 · D-33 — **V28까지 점유**: V25 블록 B · V26·V27 블록 D · V28 결제. 신규는 **V29부터**). ※ 실제로는 **Mongo(`EndingResultDocument`)로 확정·구현**됐다(`25d0fb0`) — 이 RDB 분기는 미채택.
 2) EndingService.generateEnding 진입부(현 :69 '데이터 로드' 직전)에:
 ```java
 var saved = endingResultRepository.findByRoomId(roomId).orElse(null);
@@ -726,7 +737,7 @@ if (saved != null) return saved.toResponse();   // LLM 0콜
 
 **제품 결정 연동**: 블록 D 게이트 오프가 서버 측이면 자유·스토리 경로는 소멸한다. 하지만 (a) B-8.5의 극장 방 우회가 남고, (b) 극장 엔딩은 '유지'인데 극장도 결과를 영속하지 않아 같은 영속 계층이 필요하다(B-9.9). 즉 이 영속 작업은 블록 D 이후에도 버려지지 않는다 — 오히려 극장 다시 보기를 살리려면 반드시 해야 한다. EndingResultDocument를 V1/V2/극장 공용으로 설계할 것.
 
-**❓ 결정 필요**: 엔딩 결과 영속 위치를 Mongo(마이그레이션 없음, 기존 ChatLogDocument와 같은 스토어)로 갈지 RDB(트랜잭션 원자성 유리)로 갈지 — 종원의 운영 취향 판단. 로컬 dev DB에 V25가 이미 적용돼 있어 RDB를 고르면 V26 번호 배정 조율이 필요하다.
+**❓ 결정 필요**: 엔딩 결과 영속 위치를 Mongo(마이그레이션 없음, 기존 ChatLogDocument와 같은 스토어)로 갈지 RDB(트랜잭션 원자성 유리)로 갈지 — 종원의 운영 취향 판단. → **결정 완료(2026-08-21): Mongo(`EndingResultDocument`)로 확정·구현**(`25d0fb0`, docs/19 §B). 마이그레이션 번호 조율은 불요 — 이 안건은 소멸했다.
 
 ---
 
@@ -1419,9 +1430,20 @@ if (chatMode == ChatMode.STORY) {
 
 ---
 
-### C-0.5. Character.storyAvailable 기본값 true + 공식 시드 전부 story-available: true — V1 STORY 트랙 삭제 결정과 불일치하며 C-0.4의 도달 조건을 제공
+### C-0.5. ~~Character.storyAvailable 기본값 true + 공식 시드 전부 story-available: true~~ — **원 수정안 폐기 · 무수정 존치로 종결 (2026-08-26 · D-33)**
 
-**🔴 잔존** · P3 · SMALL · YML/BE  
+**⛔ 수정안 폐기 · 무수정 존치** · P3 · N/A · -  
+> **폐기 사유** — 원 수정안(①시드 `story-available` 일괄 false ②엔티티 기본값 false ③DTO 필드 제거)을 집행하면 **라이브 기능이 죽는다.** `storyAvailable`은 V1 STORY의 잔재가 아니라 **V2 STORY 히로인 풀의 필터**로 현재 사용 중이다(실측):
+> - `service/story/StoryV2Service.java:126`·`:165` `.filter(c -> c.getWorldId() != null && c.isStoryAvailable() && !c.isHidden())` — 월드 히로인 풀 조회
+> - `:487` `if (!h.isStoryAvailable())` · `:563` `if (!h.isStoryAvailable() || h.isHidden())` — 히로인 편입·전환 가드
+> - `domain/character/Character.java:758` `c.storyAvailable = spec.ugcWorldId() != null;` — **UGC 월드 캐릭터가 이 플래그로 태어난다.** 시드를 false로 내리면 공식 10종이 V2 월드 히로인 풀에서 통째로 사라지고, 기본값을 false로 바꾸면 UGC 히로인 편입 경로가 조용히 막힌다.
+> - 어드민 노출·조작 경로도 살아 있다(`AdminCharacterService.java:37` · `CharacterVisibilityRequest`) — 죽은 필드가 아니다.
+>
+> 원래의 기능적 위험(=C-0.4 STORY 500의 도달 조건 제공)은 **C-0.4가 '무조건 400'으로 수정되면서 이미 닫혔다**(docs/19 재판정: C-0.4 ✅ 수정됨). 남는 것은 명명 혼동뿐이므로 **코드 변경 없이 `Character.java:85`에 javadoc 1줄**("V1 STORY 트랙과 무관 — V2 STORY 히로인 풀 필터")로 종결한다. ⚠ 이 항목을 §G #2(V1 STORY 트랙 삭제) 이행 목록에 다시 올리지 말 것.
+
+<sub>(아래는 폐기된 원 판정·수정안 원문 — 근거 추적용으로 보존)</sub>
+
+**🔴 잔존(원 판정)** · P3 · SMALL · YML/BE  
 `aichat/src/main/java/com/spring/aichat/domain/character/Character.java:85 / src/main/resources/application-characters.yml:36,200,302,425,541,659,776,889,1001,1112`
 
 **근거**
@@ -1430,13 +1452,14 @@ Character.java:85 `private boolean storyAvailable = true;` (docs/13은 'ChatRoom
 application-characters.yml — 공식 10종 전부 `story-available: true` (10개 라인 전부 확인). application-charactersm.yml(남캐)도 대부분 true.
 이 플래그는 CharacterResponse.java:17 `boolean storyAvailable`로 FE에 그대로 노출되고, LobbyService.java:189 가드가 이 값만 보므로 **STORY 500의 도달 조건을 제공하는 유일한 데이터**다.
 
-**수정안**
+**수정안** — ⛔ **폐기됨(2026-08-26). 아래 ①~③을 집행하지 말 것.** 사유는 이 절 머리말 참조.
 
 C-0.4(서비스 무조건 차단)를 넣으면 기능적 위험은 사라지므로 필수는 아니다. 다만 §G #2 이행 시 정리 대상: ①application-characters.yml/charactersm.yml의 `story-available` 시드 키를 일괄 false로 내리거나 키 자체 제거 ②Character.java:85 기본값 false로 ③CharacterResponse.java:17 `storyAvailable` 필드가 FE 어디서도 소비되지 않는지 확인 후(현재 FE grep 상 미소비) 제거. ③까지 하면 계약 변경이므로 FE 동시 배포 필요 — 순서는 C-0.4 → 시드 정리 → DTO 정리.
 
 **제품 결정 연동**: docs/14 §G #2(V1 STORY 트랙 삭제) 이행 범위에 직접 포함. §G #4 '죽은 시드 필드' 정리와 같은 성격이나 §G #4 목록(background/behavioral-anchors/tts-voice-id)에는 story-available이 명시돼 있지 않다 — 블록 D 착수 시 목록에 추가할지 판단 필요.
 
-**❓ 결정 필요**: §G #2 'V1 STORY 트랙 삭제' 이행 시 story-available 시드 키를 (a)false로 내릴지 (b)키/컬럼째 제거할지 — 잔존 V1 STORY 방을 '읽기 전용'으로 남기기로 하면 (b)는 조회 코드까지 건드리게 된다.
+~~**❓ 결정 필요**: §G #2 'V1 STORY 트랙 삭제' 이행 시 story-available 시드 키를 (a)false로 내릴지 (b)키/컬럼째 제거할지 — 잔존 V1 STORY 방을 '읽기 전용'으로 남기기로 하면 (b)는 조회 코드까지 건드리게 된다.~~
+→ **결정 소멸(2026-08-26)**: (a)·(b) 어느 쪽도 취하지 않는다. 플래그가 V2 STORY 라이브 필터이므로 **무수정 존치**가 답이고, 종원에게 물을 안건이 아니다.
 
 ---
 
@@ -1996,7 +2019,7 @@ public void refundEnergy(EnergySplit s) {
 }
 ```
 1-arg 시그니처를 남기지 말 것 — 남기면 호출부가 조용히 낡은 경로로 컴파일되어 회귀한다. 7개 호출부 전부 컴파일 에러로 드러나게 하는 것이 목적.
-3) 지연 환불 4곳(D-1.2/D-1.6/D-1.7/D-1.8)용 유료 분할분 영속: Flyway **V26**(로컬 dev DB에 V25가 이미 적용됐으므로 V25 재사용 금지)으로 `scene_illustrations.energy_charged_paid`, `character_creation_jobs.energy_charged_paid`, `ugc_world_creation_jobs.energy_charged_paid` (INT NOT NULL DEFAULT 0) 추가. `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)`으로 확장(CharacterCreationJob.java:339-341, UgcWorldCreationJob.java:215-217은 `+=` 누산이라 그대로 누산).
+3) 지연 환불 4곳(D-1.2/D-1.6/D-1.7/D-1.8)용 유료 분할분 영속: Flyway **V30**(에너지 분할 묶음 · 2026-08-26 정정 · D-33 — 앞을 V25 블록 B / V26·V27 블록 D / V28 결제 / V29 구독이 점유. 에너지 분할 3컬럼은 **한 파일에 묶고**, 착수 시점의 다음 가용 번호로 확정할 것)으로 `scene_illustrations.energy_charged_paid`, `character_creation_jobs.energy_charged_paid`, `ugc_world_creation_jobs.energy_charged_paid` (INT NOT NULL DEFAULT 0) 추가. `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)`으로 확장(CharacterCreationJob.java:339-341, UgcWorldCreationJob.java:215-217은 `+=` 누산이라 그대로 누산).
 4) 기존 행(default 0)은 전액 free 환불로 폴백 — 신규 손실만 차단하는 보수적 처리.
 5) 회귀 테스트: free=0/paid=N에서 각 환불 경로 후 paid 정확 복원 / free만 쓴 경우 paid 미증가 — 2방향 단위 테스트.
 
@@ -2028,7 +2051,7 @@ private void refundManualCharge(SceneIllustration s) {
 
 **수정안**
 
-`SceneIllustration`에 `energyChargedPaid` 추가(Flyway V26 `scene_illustrations.energy_charged_paid`). 차감 지점 SceneRequestService.java:137 `u.consumeEnergy(cost)`의 반환 `EnergySplit`을 `SceneIllustration.createPending(...)`(도메인 :117-121)에 함께 저장. `refundManualCharge`에서 `user.refundEnergy(new EnergySplit(s.getEnergyCharged()-s.getEnergyChargedPaid(), s.getEnergyChargedPaid()))`. 기존 행은 paid=0 폴백.
+`SceneIllustration`에 `energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — D-1.1과 같은 파일. 2026-08-26 정정 · D-33). 차감 지점 SceneRequestService.java:137 `u.consumeEnergy(cost)`의 반환 `EnergySplit`을 `SceneIllustration.createPending(...)`(도메인 :117-121)에 함께 저장. `refundManualCharge`에서 `user.refundEnergy(new EnergySplit(s.getEnergyCharged()-s.getEnergyChargedPaid(), s.getEnergyChargedPaid()))`. 기존 행은 paid=0 폴백.
 
 **제품 결정 연동**: none — 씬 일러는 §G #6에서 '일원화 후 존속'(레거시 캐릭터 일러 트랙을 흡수하는 쪽)으로 확정된 트랙이라 블록 D로 사라지지 않는다. docs/16 이미지 노드 수위 확정으로 트래픽이 늘 경로다.
 
@@ -2145,7 +2168,7 @@ public void failAndRefund(Long jobId, String reason) {
 
 **수정안**
 
-`CharacterCreationJob`에 `energyChargedPaid` 추가(Flyway V26). `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)` 확장(누산 그대로). 차감 지점 전부(CharacterCreationService.java:249 base 리롤, :396 golden 리롤, :435 emotion 리롤, 단계 진입 차감들)에서 `consumeEnergy` 반환 분할분을 함께 누산. `failAndRefund`는 `user.refundEnergy(new EnergySplit(job.getEnergyCharged()-job.getEnergyChargedPaid(), job.getEnergyChargedPaid()))`. 기존 잡은 paid=0 폴백.
+`CharacterCreationJob`에 `energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — 2026-08-26 정정 · D-33). `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)` 확장(누산 그대로). 차감 지점 전부(CharacterCreationService.java:249 base 리롤, :396 golden 리롤, :435 emotion 리롤, 단계 진입 차감들)에서 `consumeEnergy` 반환 분할분을 함께 누산. `failAndRefund`는 `user.refundEnergy(new EnergySplit(job.getEnergyCharged()-job.getEnergyChargedPaid(), job.getEnergyChargedPaid()))`. 기존 잡은 paid=0 폴백.
 
 **제품 결정 연동**: none — UGC는 docs/14 BM(25E UGC)의 핵심이라 §G 처분 대상이 아니다.
 
@@ -2174,7 +2197,7 @@ public void failAndRefund(Long jobId, String reason) {
 
 **수정안**
 
-D-1.6과 동일 패턴. `UgcWorldCreationJob.energyChargedPaid` 추가(Flyway V26 `ugc_world_creation_jobs.energy_charged_paid`), `chargeEnergy(int, int)` 확장, 차감 지점(UgcWorldService.java:275-278 rerollAsset, 기본 패키지 차감)에서 분할분 누산, `failAndRefund`에서 분할 환불.
+D-1.6과 동일 패턴. `UgcWorldCreationJob.energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — 2026-08-26 정정 · D-33), `chargeEnergy(int, int)` 확장, 차감 지점(UgcWorldService.java:275-278 rerollAsset, 기본 패키지 차감)에서 분할분 누산, `failAndRefund`에서 분할 환불.
 
 ---
 
@@ -2496,7 +2519,7 @@ return submitGeneration(user, target.character(), ...);
 **수정안**
 
 씬 일러 트랙의 설비를 그대로 이식한다.
-1) `UserIllustration`에 `energyCharged`(int) · `energyRefunded`(boolean) 추가 — Flyway V26 `user_illustrations.energy_charged INT NOT NULL DEFAULT 0`, `energy_refunded BOOLEAN NOT NULL DEFAULT false`. (D-1.1 적용 시 `energy_charged_paid`도 함께.)
+1) `UserIllustration`에 `energyCharged`(int) · `energyRefunded`(boolean) 추가 — Flyway **V31**(일러·극장 묶음 — 2026-08-26 정정 · D-33) `user_illustrations.energy_charged INT NOT NULL DEFAULT 0`, `energy_refunded BOOLEAN NOT NULL DEFAULT false`. (D-1.1 적용 시 `energy_charged_paid`도 함께.)
 2) `requestIllustration`(:119)에서 차감액(과 유료 분할분)을 `createPending`에 실어 저장.
 3) `SceneIllustration.refundableOnFail()`(도메인 :162-165) 동형 메서드 추가: `"MANUAL".equals(triggerType) && energyCharged > 0 && !energyRefunded && user != null`.
 4) **private 헬퍼 `failAndRefund(UserIllustration illust, String reason)`을 신설하고 :482/:501/:567/:576/:588의 `markFailed(...)` 호출을 전부 이 헬퍼로 교체** — markFailed 직접 호출을 남기지 말 것(다음에 실패 전이를 추가하는 사람이 또 빠뜨린다). 헬퍼는 `SceneRenderWriteService.refundManualCharge`(:53-68)와 동일하게 userId 직접 조회 + 멱등 가드 + `cacheService.evictUserProfile` + 환불 실패는 로그만.
@@ -3445,7 +3468,13 @@ loc.markGenerating();   // updatedAt 갱신 → 다음 재시도 창이 다시 6
 
 ### D-3.6. 프로필 초안·Stage0 산출에 길이 상한 부재 — name(50)/tagline(100)/role(100)/tone(300) 초과 시 완주한 잡이 바인딩에서 통째로 FAILED (전액 환불되어 무과금 GPU 드레인 성립)
 
-**🔴 잔존** · P1 · SMALL · BE/FE  
+> ↔ **재분류 (2026-08-26 · D-33 · docs/19 결정 안건 D-19): `## D. P1 자산 손실·데이터 정합` → `## B. P0-A 착취 가능(자금·권한)`.**
+> 파일 위치는 추적 편의를 위해 이 절에 그대로 두되, **심각도·배치는 B절(P0-A) 기준으로 읽는다** — 배치 3(자산 손실 정지)이 아니라 **배치 1(착취 차단)** 소관이다.
+> 사유: 이것은 '가끔 나는 실패'가 아니라 **재현 가능한 순 0E 무한 GPU 드레인**이다. 유저가 프로필 초안에 상한 없는 문자열을 넣으면(`CharacterCreationService.java:267-318 updateProfileDraft`에 길이 검증이 전무하고 DTO에 `@Size`도, 컨트롤러에 `@Valid`도 없다) 파이프라인은 **전 스테이지를 완주해 GPU를 다 쓰고**, 마지막 바인딩(`Character.createUgc`)에서 varchar 초과로 죽어 `failAndRefund`가 **전액 환불**한다. 즉 공격자 비용 0 · 우리 비용은 잡 1건 풀코스이며 **횟수 제한이 없다**. 결제·권한 침해와 같은 등급의 자금 착취면이고, 지표에도 '실패·환불'로만 잡혀 안 보인다.
+> ⚠ 수정 시 **환불 자체를 없애지 말 것** — **입력 시점 400 거부**(D-19 방향, 선례 `UgcWorldService.updateWorld:404-421`이 name/intro/lore를 이미 400으로 거부한다) 또는 **Stage 0 정규화 절삭**(`ConceptStructuringService`의 `normalizeShort`를 name/tagline/role/tone까지 확장)으로 **잡이 시작되기 전에** 막아야 한다. 완주 후 실패시키고 환불만 끊으면 정상 유저의 손실로 바뀐다.
+> ※ `Character.createUgc`(현 `:762`·`:764`·`:770`)는 절삭 없이 그대로 대입한다 — 실측 재확인(2026-08-26). D-19 표제의 "조용한 절삭" 표현은 느슨한 서술이며, 실제 증상은 **절삭이 아니라 varchar 초과 예외**다.
+
+**↔ 재분류(D → B절 P0-A) · 🔴 잔존** · ~~P1~~ **P0** · SMALL · BE/FE  
 `aichat/src/main/java/com/spring/aichat/service/ugc/CharacterCreationService.java:267-318 (특히 302-309) / src/main/java/com/spring/aichat/service/ugc/ConceptStructuringService.java:170-178 / src/main/java/com/spring/aichat/service/ugc/UgcPipelineWorker.java:544-586, 613-616`
 
 **근거**
@@ -3606,10 +3635,10 @@ UserSubscription.java:50-52, 81 — 구독 1행이 최신 결제 1건의 주문�
 
 두 안 중 택1.
 (A) 최소 수정(권장·BE 단독): `RefundService.clawback()`(RefundService.java:95)이 merchantUid 대신 **Order의 유저**로 회수 대상을 찾도록 변경 — `subscriptionService.deactivateForUserIfTier(order.getUser(), order.getProductType().toSubscriptionType(), order.getMerchantUid())` 형태로, `findByUser_IdAndActiveTrue`로 활성 구독을 잡고 티어가 일치할 때만 회수. `merchantUid` 불일치는 '이전 회차 환불'로 간주해 감사 로그에 명시.
-(B) 이력 보존(내구성 우선): V26 마이그레이션으로 `user_subscription_payments(subscription_id, merchant_uid, paid_at, days_added)` 이력 테이블을 만들고 `renew()`가 append. `findByMerchantUid`는 이력 테이블 경유로 교체. D-4.1의 잔여기간 계산·부분 환불 산식과도 맞물린다.
+(B) 이력 보존(내구성 우선): **V29+ 결제·구독 묶음 마이그레이션**(2026-08-26 정정 · D-33 — V28은 `V28__orders_imp_uid_unique.sql`이 점유했다)으로 `user_subscription_payments(subscription_id, merchant_uid, paid_at, days_added)` 이력 테이블을 만들고 `renew()`가 append. `findByMerchantUid`는 이력 테이블 경유로 교체. D-4.1의 잔여기간 계산·부분 환불 산식과도 맞물린다.
 어느 안이든 `renew()`가 이전 uid를 무조건 버리는 현행(라인 81)은 유지 불가.
 
-**제품 결정 연동**: 블록 D 무관. 단 docs/16(시크릿=핵심 BM)·docs/14 §D의 PG 가맹 심사 항목과 직결 — 환불 처리 정합성은 PG 심사·소비자 분쟁의 1차 점검 대상이다. (b)안 선택 시 V26 스키마가 D-4.4의 unique index와 같은 마이그레이션에 묶인다.
+**제품 결정 연동**: 블록 D 무관. 단 docs/16(시크릿=핵심 BM)·docs/14 §D의 PG 가맹 심사 항목과 직결 — 환불 처리 정합성은 PG 심사·소비자 분쟁의 1차 점검 대상이다. (b)안 선택 시 이 스키마가 D-4.4의 unique index와 같은 마이그레이션(구독 묶음, V29+)에 묶인다.
 
 **❓ 결정 필요**: 갱신 이력이 있는 구독에서 **과거 회차 1건만 환불**할 때의 제품 정책: (a) 그 회차분 30일만 만료일에서 차감, (b) 구독 전체 즉시 해지, (c) 과거 회차 환불 자체를 CS에서 금지. docs/14 §D가 '환불 산식'을 법적 문서에 명시하라고 요구하므로 이 결정이 약관 문구를 좌우한다.
 
@@ -3646,7 +3675,7 @@ SubscriptionService.java:101-117 — `.ifPresent(...)`만 있고 **else 분기·
 
 ---
 
-### D-4.4. '유저당 활성 구독 1개' DB 제약 부재 — 인덱스가 비유니크, 마이그레이션도 없음 (제안된 V25는 블록 B가 선점 → V26으로)
+### D-4.4. '유저당 활성 구독 1개' DB 제약 부재 — 인덱스가 비유니크, 마이그레이션도 없음 (제안된 V25는 블록 B가 선점 → ~~V26~~ **V29+로** · 2026-08-26 정정 · D-33)
 
 **🔴 잔존** · P1 · SMALL · BE/DB_MIGRATION  
 `aichat/src/main/java/com/spring/aichat/domain/payment/UserSubscription.java:23-26`
@@ -3663,11 +3692,12 @@ UserSubscription.java:11-26 — 설계 주석은 '최대 1개'를 선언하는�
 26: })
 ```
 `@Index`에 `unique = true`가 없고, DB 레벨 보강도 없다: `grep -rn "user_subscriptions" src/main/resources/db/migration/` → **0건**(테이블 자체가 Flyway가 아니라 ddl-auto 산물, application-local.yml:21 `ddl-auto: update` / application-prod.yml:24 `validate`).
-★ 제안된 버전 번호는 사용 불가: `src/main/resources/db/migration/` 실측 V1~V25 연속 점유, **V25__persona_profile_lens.sql은 블록 B 커밋 cab6b3e(2026-08-15)가 선점**(파일 1행 "[2026-08-15 블록 B 페르소나 개편]"). **다음 가용 버전 = V26**.
+★ 제안된 버전 번호는 사용 불가: `src/main/resources/db/migration/` 실측 V1~V25 연속 점유, **V25__persona_profile_lens.sql은 블록 B 커밋 cab6b3e(2026-08-15)가 선점**(파일 1행 "[2026-08-15 블록 B 페르소나 개편]"). ~~다음 가용 버전 = V26~~
+**갱신 (2026-08-26 · D-33)** — 그 뒤로도 번호가 더 나갔다: **V26·V27은 블록 D**(`V26__drop_bpm_not_null.sql` · `V27__drop_promotion_not_null.sql`), **V28은 결제 정합**(`V28__orders_imp_uid_unique.sql`, B-1.2)이 점유했다. **구독 부분 유니크는 V29부터** 배정한다 — 착수 시점에 `ls src/main/resources/db/migration/`로 다시 확인할 것. ⚠ 같은 번호로 새 파일을 만들면 **로컬은 checksum mismatch로 죽고 프로드는 조용히 통과**해 스키마가 갈린다(CLAUDE.md §2-2).
 
 **수정안**
 
-`src/main/resources/db/migration/V26__subscription_active_unique.sql` 신규 작성(V25 아님):
+`src/main/resources/db/migration/V29__subscription_active_unique.sql` 신규 작성 (2026-08-26 정정 · D-33 — V26·V27 블록 D, V28 결제 점유. 결제 V28 파일에 함께 넣는 것도 가능하나 **같은 번호로 새 파일을 만들지는 말 것**):
 ```sql
 -- 1) 기존 중복 활성 행 정리 (인덱스 생성 실패 방지)
 WITH ranked AS (
@@ -3678,9 +3708,9 @@ FROM ranked r WHERE s.id = r.id AND r.rn > 1;
 -- 2) 부분 유니크 인덱스
 CREATE UNIQUE INDEX uq_sub_user_active ON user_subscriptions(user_id) WHERE active = true;
 ```
-엔티티 쪽은 부분 인덱스를 JPA `@Index`로 표현할 수 없으므로 UserSubscription.java:23-26에는 주석으로 'DB 레벨 부분 유니크(V26)'만 명시하고 인덱스 선언은 그대로 둘 것(ddl-auto=validate가 부분 인덱스를 검증하지 않으므로 충돌 없음). 배포 전 `application.yml`의 미커밋 `flyway.enabled: false`를 `true`로 되돌릴 것.
+엔티티 쪽은 부분 인덱스를 JPA `@Index`로 표현할 수 없으므로 UserSubscription.java:23-26에는 주석으로 'DB 레벨 부분 유니크(V29)'만 명시하고 인덱스 선언은 그대로 둘 것(ddl-auto=validate가 부분 인덱스를 검증하지 않으므로 충돌 없음). 배포 전 `application.yml`의 미커밋 `flyway.enabled: false`를 `true`로 되돌릴 것.
 
-**제품 결정 연동**: 블록 D 무관. 다만 **블록 B가 이미 V25를 소비했다는 사실이 docs/13 배치3 지시서를 무효화**하므로(메모리의 'V25→V26 이월' 경고와 일치), 배치3 착수 시 버전 번호를 반드시 재확인할 것. 또 블록 B가 페르소나 슬롯을 구독에 결합했지만 슬롯 판정은 `User.subscriptionTier`(UserPersonaService.java:153-157)를 읽으므로 이 결함의 500 폭발 반경에는 들어가지 않는다.
+**제품 결정 연동**: 블록 D 무관. 다만 **블록 B가 이미 V25를 소비했다는 사실이 docs/13 배치3 지시서를 무효화**하므로(그 뒤 V26·V27은 블록 D, V28은 결제가 더 가져갔다 — 2026-08-26 정정 · D-33), 배치3 착수 시 버전 번호를 반드시 재확인할 것. 또 블록 B가 페르소나 슬롯을 구독에 결합했지만 슬롯 판정은 `User.subscriptionTier`(UserPersonaService.java:153-157)를 읽으므로 이 결함의 500 폭발 반경에는 들어가지 않는다.
 
 **❓ 결정 필요**: 프로드 DB에 이미 중복 활성 행이 존재할 경우 **어느 행을 살릴지**: (a) 만료일이 가장 먼 행(위 SQL 기본값·유저 유리), (b) 최신 결제 행. 그리고 (a)로 정리해 죽는 행에 대해 보상(에너지/기간 이월)을 할지. 마이그레이션 실행 전 `SELECT user_id, count(*) FROM user_subscriptions WHERE active GROUP BY 1 HAVING count(*)>1`로 실제 존재 여부부터 확인 필요.
 
@@ -3713,9 +3743,9 @@ SubscriptionService.java:41-72 — 조회 후 분기해서 INSERT하는데 유�
 3중 방어를 같은 커밋에.
 ① **비관적 락**: `UserSubscriptionRepository`에 `@Lock(LockModeType.PESSIMISTIC_WRITE) @Query("SELECT s FROM UserSubscription s WHERE s.user.id = :userId AND s.active = true") List<UserSubscription> lockActiveByUser(Long userId)` 추가. 유저 행이 없으면 락 대상이 없어 레이스가 남으므로 `userRepository.findByIdForUpdate(userId)`로 **User 행을 먼저 잠그고** activateSubscription 전체를 그 락 안에서 수행하는 편이 확실.
 ② **반환 타입 방어**: `findByUser_IdAndActiveTrue`를 `Optional`이 아니라 `List<UserSubscription> findByUser_IdAndActiveTrueOrderByExpiresAtDesc(Long)`로 바꾸고, `SubscriptionService.getActiveSubscription`에서 size>1이면 `log.error`+첫 행 반환(500 대신 degrade) — D-4.4 인덱스가 적용되기 전/실패한 환경에서도 조회가 죽지 않게. 호출부 5곳(SubscriptionService:44/87/109/137, UserController:137) 동시 수정.
-③ D-4.4의 V26 부분 유니크 인덱스가 최종 방어선 — INSERT 시 `DataIntegrityViolationException`을 잡아 재조회 후 renew로 전환하는 catch를 activateSubscription에 추가.
+③ D-4.4의 **V29** 부분 유니크 인덱스가 최종 방어선 — INSERT 시 `DataIntegrityViolationException`을 잡아 재조회 후 renew로 전환하는 catch를 activateSubscription에 추가.
 
-**제품 결정 연동**: 블록 D 무관. docs/14 §C #5가 구독 존속을 확정했고 docs/14 §D의 PG 심사가 걸려 있어 '결제는 됐는데 구독 조회 500' 상태는 런칭 차단 사유급. 단 이 원자는 D-4.4(V26)와 **반드시 한 세트로** 처리해야 한다 — 인덱스만 넣고 catch를 안 넣으면 레이스가 500 대신 결제 실패로 바뀐다.
+**제품 결정 연동**: 블록 D 무관. docs/14 §C #5가 구독 존속을 확정했고 docs/14 §D의 PG 심사가 걸려 있어 '결제는 됐는데 구독 조회 500' 상태는 런칭 차단 사유급. 단 이 원자는 D-4.4(부분 유니크, V29+)와 **반드시 한 세트로** 처리해야 한다 — 인덱스만 넣고 catch를 안 넣으면 레이스가 500 대신 결제 실패로 바뀐다.
 
 ---
 
@@ -4112,12 +4142,12 @@ ChatLogPersister.java:74-95 — 3회 재시도가 전부 실패한 뒤 같은 �
 **수정안**
 
 데드레터 싱크를 Mongo 밖으로 옮긴다. 우선순위:
-(A) **RDB(PostgreSQL)로 이관** — `ChatLogDeadletter`를 JPA 엔티티로 전환하고 V26(D-4.4와 같은 마이그레이션 파일 또는 V27)에 `chat_log_deadletter(id, original_room_id, original_role, payload_json TEXT, error_message, attempt_count, failed_at)` 테이블 추가. 채팅 로그와 저장소가 완전히 분리돼 Mongo 장애를 견딘다. RDB까지 죽었다면 어차피 서비스 전체가 정지 상태라 허용 가능한 실패.
+(A) **RDB(PostgreSQL)로 이관** — `ChatLogDeadletter`를 JPA 엔티티로 전환하고 **V29 이후 다음 가용 번호**(D-4.4와 같은 파일 또는 그 다음 번호 — 2026-08-26 정정 · D-33)에 `chat_log_deadletter(id, original_room_id, original_role, payload_json TEXT, error_message, attempt_count, failed_at)` 테이블 추가. 채팅 로그와 저장소가 완전히 분리돼 Mongo 장애를 견딘다. RDB까지 죽었다면 어차피 서비스 전체가 정지 상태라 허용 가능한 실패.
 (B) 차선 — 실패 페이로드를 Redis 리스트(`chatlog:deadletter`)에 LPUSH + 별도 배치가 Mongo 복구 후 재밀어넣기. RDB 마이그레이션 없이 가능하지만 Redis도 죽으면 동일 문제.
 (C) 최소 — :93의 `log.error`에 **payloadJson 전문을 함께 출력**(현재는 예외만 찍고 본문을 버린다). CloudWatch에서 수동 복구 가능해진다. 최소 이것만이라도 즉시 적용.
-권장: (C)를 즉시, (A)를 D-4.4의 V26 마이그레이션에 묶어 처리.
+권장: (C)를 즉시, (A)를 D-4.4의 구독 마이그레이션(V29+)에 묶어 처리.
 
-**제품 결정 연동**: 블록 D 무관. docs/13 §G가 이 항목을 반박에서 D-6으로 재분류했으므로 배치3 범위에 포함되는 것이 맞다. D-4.4의 V26 마이그레이션과 같은 배치에서 처리하면 마이그레이션 파일을 1개로 합칠 수 있다(단 관심사가 달라 V26/V27 분리 권장).
+**제품 결정 연동**: 블록 D 무관. docs/13 §G가 이 항목을 반박에서 D-6으로 재분류했으므로 배치3 범위에 포함되는 것이 맞다. D-4.4의 구독 마이그레이션과 같은 배치에서 처리하면 파일을 1개로 합칠 수 있다(단 관심사가 달라 **번호 분리 권장** — 롤백 단위를 나눈다).
 
 **❓ 결정 필요**: 데드레터를 어디까지 보장할지 = 운영 비용 판단. (A) RDB 이관은 마이그레이션 1건이지만, 이 페이로드를 실제로 수동 복구할 운영 프로세스(chat_logs 재삽입 도구)가 없으면 보관만 하는 셈이다(엔티티 주석 :22-23이 '수동 복구 도구'를 전제하는데 그 도구가 코드에 없음). 복구 도구까지 만들 것인지, 아니면 (C) 로그 출력으로 끝낼 것인지 오너 결정 필요.
 
@@ -4876,7 +4906,7 @@ CHARACTER_VISUALS 등록 slug는 :52/:57/:62/:67의 airi·taeri·luna·yeonhwa 4
 
 **수정안**
 
-§G-6 처분에 종속. 트랙 폐지(권장)면 파일째 삭제로 소멸. 존치한다면: (1) Character 엔티티에 `loraId` 컬럼 신설(Flyway V26) + application-characters.yml에 `lora-id:` 시드 10종 + CharacterSeedProperties/applySeed 바인딩, (2) IllustrationService.submitGeneration에서 `character.getLoraId()`를 우선 사용하고 null이면 LoRA 슬롯을 아예 비운다(airi 폴백 금지 — 잘못된 얼굴보다 LoRA 없는 렌더가 낫다), (3) getLoraId(slug)/getLoraUrl/isSupported 삭제.
+§G-6 처분에 종속. 트랙 폐지(권장)면 파일째 삭제로 소멸. 존치한다면: (1) Character 엔티티에 `loraId` 컬럼 신설(Flyway **V31** 일러·극장 묶음 — 2026-08-26 정정 · D-33) + application-characters.yml에 `lora-id:` 시드 10종 + CharacterSeedProperties/applySeed 바인딩, (2) IllustrationService.submitGeneration에서 `character.getLoraId()`를 우선 사용하고 null이면 LoRA 슬롯을 아예 비운다(airi 폴백 금지 — 잘못된 얼굴보다 LoRA 없는 렌더가 낫다), (3) getLoraId(slug)/getLoraUrl/isSupported 삭제.
 
 **제품 결정 연동**: docs/14 §G-6 '레거시 캐릭터 일러 트랙(ModelsLab CG) 동결·씬 일러로 일원화·신규 노출 중단'의 정중앙. 이 맵을 DB 일반화까지 해서 고치는 것은 동결 대상에 대한 투자다. 추가로 자동 트리거 중 승급(ChatStreamService:323)은 §G-1 'V1 승급 시험 삭제'와, 엔딩(:992)은 §C-6 '엔딩 스토리만 게이트 오프'와 세트로 제거·차단될 예정 — 즉 이 결함의 도달면은 곧 축소된다. 반면 극장(TheaterAutoNoteService:198)은 §C-6 '극장 유지'라 남는다.
 

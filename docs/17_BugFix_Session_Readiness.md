@@ -19,6 +19,8 @@ docs/13은 2026-08-07~09 작성이고 그 **이후에 블록 A(로비·게스트
 
 ## B. 검증 결과 — docs/13 대비 정정
 
+> ⚠ **아래 수치는 블록 D 이전(2026-08-20) 집계다.** 현행 상태 정본은 [`19_assets/rejudgment_delta.md`](19_assets/rejudgment_delta.md) — 실제 수정 대상 **201건**(§D 머리말 참조). 이 표는 재판정의 출발점으로만 읽을 것.
+
 | 상태 | 건수 | 비고 |
 |---|---|---|
 | 🔴 잔존 | **236** | 블록 A·B는 결제·극장·업적·UGC 파이프라인을 한 줄도 건드리지 않았다 |
@@ -34,6 +36,7 @@ docs/13은 2026-08-07~09 작성이고 그 **이후에 블록 A(로비·게스트
 1. **B-3 "V1·V2 양쪽"은 사실이 아니다.** 현재 V2는 `boostModeResolver.resolveEnergyCost()`로 서버 산정한다. 클라 지정은 V1 `/events/select` 하나뿐 — 그리고 그 경로는 **FE 호출처가 0건**(아래 D6).
 2. **B-5 제안이 과대**하다. 전용 엔드포인트 `POST /theater/rooms/{id}/prefetch`가 이미 있고 FE 유일 호출부가 `prefetch=false` 고정이라, 플래그 제거는 **FE 무영향 ONE_LINE**이다.
 3. **배치3 "Flyway V25"는 무효.** V25는 블록 B가 선점했다. 같은 번호로 파일을 만들면 로컬 dev DB가 checksum mismatch로 부팅 실패하고 프로드는 조용히 통과 — 최악의 분기. **신규는 V26부터**, 관심사별 분리. ⚠ **갱신(2026-08-20): V26은 블록 D가 선점했다** (`V26__drop_bpm_not_null.sql` — §G-8 BPM 폐지 선행 스키마). 버그픽스 세션은 **V28부터**: V28 결제·구독 / V29 에너지 분할 / V30 일러·극장 (V27도 블록 D가 씀 — 승급 NOT NULL 해제).
+   ⚠ **재갱신(2026-08-26 · D-33)**: V28은 `V28__orders_imp_uid_unique.sql`(결제 정합 B-1.2)이 실제로 점유했다. 구독 부분 유니크(D-4.4)를 **별도 파일로 뺄 경우 V28을 재사용하지 말고 V29**를 쓰고 이후 배정을 한 칸씩 민다(에너지 분할 V30 / 일러·극장 V31). 착수 전 `ls src/main/resources/db/migration/`로 다음 가용 번호 확인은 매번 필수다.
 4. **배치4의 `SWIMSUIT→SWIMWEAR`는 '저비용 고효과'가 아니다.** 해당 맵은 §G-6 동결 대상 트랙이라 고쳐도 유저에게 도달하지 않는다.
 5. **docs/13의 "targetCharacterId 서버 요구를 완화하라" 제안이 틀렸다.** 그 값은 지급 트래킹용으로 의도된 것이다(`SecretModeService:148`). FE가 보내도록 고치는 게 맞다.
 
@@ -86,6 +89,12 @@ POST /theater/rooms/{id}/ending → triggerEnding
 
 ## D. 배치 재설계 (docs/13 §H 대체)
 
+> ⚠ **2026-08-26 정정 (D-33) — 이 문서의 상태 수치는 낡았다. 결함 상태·좌표 정본은 [`19_assets/rejudgment_delta.md`](19_assets/rejudgment_delta.md)다.**
+> §B의 "잔존 236 / 수정됨 6"은 **블록 D 이전** 집계다. 블록 D 반영 HEAD(`20c4cf9`)로 전수 재판정한 결과는 **잔존 197 · 게이트차단 24 · 부분수정 4 · 수정됨 13 · 소멸 6 · 재분류 1 = 실제 수정 대상 201건**이다([`19_Register_Rejudgment.md`](19_Register_Rejudgment.md) §B).
+> **`게이트차단` 24건은 소멸이 아니다** — `legacy.*` 노브를 켜면 그대로 부활한다. 총량은 245 → 201로 **18% 줄었을 뿐**이며, docs/18 §4-D가 기대한 "배치 8이 거의 비었다"는 엔딩·업적 축에 한정된 이야기다.
+> 결정 안건 정본도 이 문서 §E가 아니라 [`19_assets/decision_agenda.md`](19_assets/decision_agenda.md)(22건 + 결정 불요 33건)와 [`19_assets/decisions_confirmed.md`](19_assets/decisions_confirmed.md)(종원 확정 답변)다.
+> 아래 배치 계획의 **골격(병렬성·순서 제약)은 여전히 유효**하므로 그대로 두되, 각 배치에 담기는 결함 목록은 위 델타로 걸러 쓸 것.
+
 docs/13 §H는 블록 A·B 이전 상태 기준이라 그대로 쓸 수 없다. 아래가 검증 결과를 반영한 새 계획이다.
 
 | 배치 | 내용 | 대상 | 병렬 |
@@ -96,7 +105,7 @@ docs/13 §H는 블록 A·B 이전 상태 기준이라 그대로 쓸 수 없다. 
 | **1B DB 무결성** | **V28**(orders.imp_uid unique + 구독 부분 유니크) · D-4 구독 정합 3건 | BE+DB | 배치 1 직후 단독 리비전 |
 | **2 결제·인증 개통** | C-1.3~1.5 · C-2 전량 · PortOne 초기화 이관 | BE+FE+INFRA | **행정 선행 확인 필요** |
 | **3 자산 손실 정지** | V29 EnergySplit · D-1 호출부 7곳 · D-2 · D-3 UGC 좀비잡 · D-6 | BE 단독 | ✔ |
-| **4 극장 구조** | D-5 prefetch batchId · B-4.a 2단 롤아웃 · B-5 · E-4 극장분 | BE(+FE 후속) | ✔ |
+| **4 극장 구조** | D-5 prefetch batchId · B-4.a **BE 단독**(§G 6번 정정 — 롤아웃 창 불요) · B-5 · E-4 극장분 | BE(+FE 후속) | ✔ |
 | **5 시드·문자열** | E-3 ② 유령키 11행 · ③ BGM · ④.10 blank · E-2.13/14/15 | YML 중심 | ✔ 가장 안전 |
 | **6 어드민** | E-6 · F-6 | Admin 독립 | ✔ 완전 독립 |
 | **7 FE 단독** | E-1 대부분 · F 카피 | FE | 배치 2와는 순차 |
@@ -219,7 +228,12 @@ BE 8커밋(+2996/−490) · FE 6커밋(+3377/−3731)이 미푸시고 프로드�
 3. `IllegalArgumentException → 400` 매핑 — 지금까지 500이던 **진짜 서버 버그가 400에 묻힌다**. 핸들러에 `log.warn(스택)` 필수.
 4. `E-4.3` 극장 명령어 분류기 verdict 반환 — 배포 즉시 유저 체감 변화(통과하던 명령이 거부된다). 로그만 먼저 며칠.
 5. `D-2.k` 웹훅 실패 전이 — ModelsLab 중간 상태 문자열 집합 미확정. 그대로 켜면 **정상 생성을 죽이고 환불까지 나간다.** 로그 수집 선행.
-6. `B-4.a` 극장 분기 — `branchToken` 필수화를 한 번에 하면 구 FE 극장이 전량 400. **3단 롤아웃 필수**(관용 모드 → FE 배포 → 필수화).
+6. ~~`B-4.a` 극장 분기 — `branchToken` 필수화를 한 번에 하면 구 FE 극장이 전량 400. **3단 롤아웃 필수**(관용 모드 → FE 배포 → 필수화).~~
+   ⚠ **정정 (2026-08-26 · D-33 · docs/19 §E-3)** — 위 서술은 **`branchToken` 도입 이전 기준**이라 더 이상 유효하지 않다. 실측:
+   - FE는 **이미 보내고 있다** — `LucidChat-Front/src/api/TheaterGameplayApi.js:23-31 confirmBranchChoice`가 `{ level, chosenIndex, branchToken, optionsSnapshot }`를 POST `/theater/rooms/{id}/branches/choose`로 전송한다.
+   - BE는 **이미 발급·소비한다** — `TheaterBranchService.java:101-102·139-140 generateBranchToken`+`putBranchContext` → `:327-328 if (branchToken != null) consumeBranchContext(...)`. DTO·컨트롤러도 배선 완료(`TheaterRequests.java:104` · `TheaterBranchController.java:77·96`).
+   - 즉 현재 상태는 **"관용 모드"가 이미 배포된 3단 롤아웃의 2단계 이후**다. 남은 것은 `:327`의 null 관용을 없애는 **BE 단독 변경**이고 **FE 무수정**이다.
+   - **3단 롤아웃 창은 불필요하다.** 남은 회귀 위험은 롤아웃이 아니라 *구 FE 탭이 열려 있는 세션*뿐이며, 이는 400 응답 + 재시도 안내로 흡수된다.
 7. FE 로컬 에셋 폴백(`b1349e7`)의 전역 `MutationObserver` — 프로드 env에 플래그가 새면 전 이미지 깨짐. 테스트가 못 잡는 구조적 위험.
 
 **커밋 위생**: 파일 명시 `git add`, 매 커밋 전 `git status --porcelain`로 `application.yml` 미스테이징 확인, `./gradlew test --tests '*Test'` 녹색 유지.
