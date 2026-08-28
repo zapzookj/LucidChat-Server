@@ -55,6 +55,8 @@ public class IllustrationService {
     /** [V2 Story] V2 STORY 방의 히로인 조회 — characterId 기반. V1 path는 사용 안 함. */
     private final ChatRoomHeroineRepository heroineRepository;
     private final RedisCacheService cacheService;
+    /** [docs/19 안건 10 = (c)] 자동 CG 트랙 게이트. 컨트롤러(수동 10E)와 분리된 노브다. */
+    private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     /**
      * [Phase 5.5 UX Polish · R6] AUTO 일러스트가 특정 DirectorNote와 연결됐을 때
      * 폴링 완료 시 노트의 relatedIllustrationUrl을 업데이트하기 위한 의존성.
@@ -207,6 +209,14 @@ public class IllustrationService {
     @Async("illustrationExecutor")
     public void generateAutoIllustration(Long userId, Long characterId, Long roomId,
                                          String triggerType, Long noteId) {
+        // [docs/19 안건 10 = (c) 종원 확정] 레거시 CG 자동 트랙 게이트.
+        //   컨트롤러(IllustrationController:115)는 수동 10E 경로만 막았고 여기는 무게이트였다 —
+        //   극장 자동 노트 3경로(AUTO_MOMENT/BRANCH_TAKEN/CHAPTER_END)가 유저 에너지 0으로
+        //   ModelsLab 외부 과금을 계속 냈다. 차단은 submitGeneration '전'이어야 지출이 실제로 멈춘다.
+        if (!legacy.getIllustration().isTheaterAutoCgEnabled()) {
+            log.debug("[ILLUST] Auto generation skipped by legacy gate: trigger={}, roomId={}", triggerType, roomId);
+            return;
+        }
         try {
             User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));

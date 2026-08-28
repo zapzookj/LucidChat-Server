@@ -55,6 +55,25 @@ public class LegacyFeatureProperties {
     public static class Illustration {
         /** §G-6 레거시 캐릭터 일러(ModelsLab CG) 트랙. 씬 일러로 일원화·동결. */
         private boolean legacyCgEnabled = false;
+
+        /**
+         * [docs/19 안건 10 = (c) 종원 확정] 레거시 CG 트랙의 <b>자동 생성</b> 경로.
+         *
+         * <p>{@code legacyCgEnabled}는 유저가 버튼을 눌러 10E를 내는 수동 경로
+         * ({@code IllustrationController:115})만 막았고, 서비스 계층
+         * {@code IllustrationService.generateAutoIllustration}은 무게이트로 남아 있었다.
+         * 그 결과 극장 자동 노트 3경로(AUTO_MOMENT / BRANCH_TAKEN / CHAPTER_END)가
+         * <b>유저 에너지 차감 0으로 ModelsLab 외부 과금을 계속 발생</b>시켰다(지표에도 안 잡힌다).
+         *
+         * <p>수동 경로와 분리한 이유: 서비스 계층을 {@code legacyCgEnabled}로 곧장 막으면
+         * 극장의 유일한 캐릭터 이미지 산출물(다이어리 카드)이 사라져 docs/14 §C#6 '극장 무변경'과
+         * 정면 충돌한다. 전용 노브로 두면 <b>되돌릴 수 있고 데이터 정합도 유지</b>된다
+         * (판정은 '소멸'이 아니라 '게이트차단' — docs/19 §B).
+         *
+         * <p>자유 대화 엔딩 자동 CG({@code ChatStreamService})도 같은 메서드를 타지만
+         * 그쪽은 이미 {@code legacy.ending.dialogue-enabled}로 상위에서 차단돼 있다.
+         */
+        private boolean theaterAutoCgEnabled = false;
     }
 
     @Getter @Setter
