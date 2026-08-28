@@ -42,6 +42,35 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     long countByUser_IdAndStatus(Long userId, OrderStatus status);
 
+    // ─────────────────────────────────────────────
+    // [적대적 리뷰 P1] 미지급 감시 — UndeliveredPaymentScheduler 전용
+    //   웹훅 재시도가 다 소진된 뒤에도 '아무도 모르는 미지급'이 남지 않게 주기 스캔한다.
+    //   저장소에 EntityManager 직접 사용 선례가 0건이라 JPQL은 여기로 모은다.
+    // ─────────────────────────────────────────────
+
+    /**
+     * 결제 식별자(imp_uid)는 붙었는데 지급도 환불도 되지 않은 주문 — 주문 상태 불변식 위반.
+     *
+     * <p>REFUNDED 제외가 필수다: 환불 주문은 impUid를 보존한 채 PAID→REFUNDED로 전이하므로,
+     * 빼지 않으면 정상 환불 건이 전부 오탐으로 올라온다.
+     */
+    @Query("SELECT o FROM Order o WHERE o.impUid IS NOT NULL "
+        + "AND o.status NOT IN ('PAID', 'REFUNDED') ORDER BY o.createdAt DESC")
+    List<Order> findImpUidWithoutDelivery(org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * 검증 실패로 FAILED 확정됐지만 PortOne 쪽에는 실제 결제가 존재하는 주문.
+     *
+     * <p>사유 접두어는 {@code PaymentService.verifyAndDeliver}가 {@code markFailed}에 넣는
+     * 문자열과 맞춰야 한다. {@code "PortOne status: "}는 <b>의도적으로 제외</b> — 그쪽은 애초에
+     * 돈이 나가지 않았고 결제창 이탈이 흔해 오탐이 스캔 전체를 무의미하게 만든다.
+     */
+    @Query("SELECT o FROM Order o WHERE o.status = 'FAILED' AND o.createdAt >= :since "
+        + "AND (o.failedReason LIKE 'Amount mismatch%' "
+        + "  OR o.failedReason LIKE 'merchant_uid mismatch%') ORDER BY o.createdAt DESC")
+    List<Order> findFailedWithRealPayment(@Param("since") LocalDateTime since,
+                                          org.springframework.data.domain.Pageable pageable);
+
     // [Phase 6] 매출 집계 (paidAt 기준). status 문자열 리터럴은 기존 JPQL 관례를 따름.
     @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status = 'PAID' AND o.paidAt >= :from AND o.paidAt < :to")
     long sumPaidBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);

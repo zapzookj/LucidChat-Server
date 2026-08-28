@@ -6,6 +6,7 @@ import com.spring.aichat.domain.payment.Order;
 import com.spring.aichat.domain.payment.OrderRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
+import com.spring.aichat.config.PortOneProperties;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.external.PortOneClient;
@@ -37,6 +38,8 @@ public class RefundService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final PortOneClient portOneClient;
+    /** [C-2.l] PortOne 서버 자격증명 미주입 가드용. */
+    private final PortOneProperties portOneProperties;
     private final SecretModeService secretModeService;
     private final SubscriptionService subscriptionService;
     private final RedisCacheService cacheService;
@@ -54,6 +57,11 @@ public class RefundService {
         if (order.getImpUid() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "impUid 가 없어 PortOne 취소가 불가합니다.");
         }
+
+        // [C-2.l · docs/17_assets/defect_register.md §C-2.l] PortOne 자격증명 미주입 가드.
+        //   아래 catch가 모든 예외를 "PortOne 결제 취소에 실패했습니다"로 뭉개므로, 설정 누락이
+        //   CS 창구에서 'PG 장애'로 오독된다. 실호출 전에 명시적으로 끊는다.
+        portOneProperties.assertConfigured("refund");
 
         // 1. PortOne 결제 취소 (실패 시 중단 — 아무것도 변경되지 않음)
         try {

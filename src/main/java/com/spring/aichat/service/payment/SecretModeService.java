@@ -15,6 +15,7 @@ import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.service.cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +67,31 @@ public class SecretModeService {
 
     private static final String SECRET_PASS_PREFIX = "secret_pass:";
 
+    /**
+     * [docs/19_assets/decisions_confirmed.md §A #7 = (b) · 종원 확정] 시크릿 상품 노출 토글.
+     *
+     * <p>off(기본)면 시크릿 상품 3종(SECRET_PASS_24H · SECRET_UNLOCK_PERMANENT ·
+     * LUCID_MIDNIGHT_PASS)의 <b>주문 생성이 서버측에서 400으로 거부</b>되고
+     * ({@code PaymentService.prepareOrder}), FE는 이 값을 {@code /users/secret-status}의
+     * {@code secretProductsEnabled}로 받아 상품 카드·탭을 숨긴다.
+     *
+     * <p><b>해제 시점 = '승인 PG의 성인 콘텐츠 정책 확인 이후'</b>. 심사 통과 후 몰래 켜는
+     * 경로는 docs/14 §C-#3이 배제했다 — 성인 콘텐츠를 수용하는 PG를 먼저 확보하는 것이
+     * 정면 전략이고, 이 토글은 그 확인까지의 대기 스위치다(docs/18 §1-D D2).
+     *
+     * <p>ⓘ 이 플래그는 <b>구매(진입)만</b> 막는다. 이미 권한을 보유한 계정의 콘텐츠 접근
+     * ({@link #canAccessSecretMode(User)})은 건드리지 않는다 — 결제 완료 유저의 권한을
+     * 사후에 회수하는 셈이 되기 때문이다. 심사 기간에는 신규 취득 경로가 닫히므로
+     * 실질적으로 게이팅 상태가 유지된다(잔여 판단은 보고서 notes 참조).
+     */
+    @Value("${bm.secret-products-enabled:false}")
+    private boolean secretProductsEnabled;
+
+    /** [안건 7] 시크릿 상품 판매 허용 여부. FE 노출 판정·서버측 주문 거부의 단일 소스. */
+    public boolean isSecretProductsEnabled() {
+        return secretProductsEnabled;
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  접근 권한 판정 — V1/V2 통합 (BM 피벗)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -92,11 +118,33 @@ public class SecretModeService {
         return canAccessSecretMode(user);
     }
 
-    /** [UGC v1] 캐릭터 레벨 Secret 허용 여부 — 미존재 캐릭터는 차단. */
+    /**
+     * [UGC v1] 캐릭터 레벨 Secret 허용 여부 — 미존재 캐릭터는 차단.
+     *
+     * <p>[안건 9-A · docs/19_assets/decisions_confirmed.md §C] <b>캐릭터 나이 19+ 런타임 게이트</b>.
+     * 어드민 승인(secretEligible)만으로는 부족하다 — 승인 판정과 무관하게 매 요청 재판정되어야
+     * 승인 후 나이가 하향 수정되는 역방향도 다음 요청부터 자동 차단된다(블록 B 페르소나 게이트와 동형).
+     *
+     * <p><b>age == null은 유예(통과)한다.</b> 기존 UGC 캐릭터는 age가 배선된 적이 없어 전부 null이고
+     * (안건 9-D가 이번에 배선했다), 여기서 null을 막으면 <b>배포 순간 기존 승인 캐릭터의 시크릿이
+     * 전면 차단</b>되어 유료 해금 보유 유저가 산 것을 잃는다(decisions_confirmed §C-E).
+     * 즉 이 게이트는 <b>신규 생성분부터</b> 강제된다. 백필 정책은 종원 미결 —
+     * 백필이 끝나면 이 null 유예를 제거해야 게이트가 완결된다.
+     *
+     * <p>⚠ <b>적용 범위</b>: 이 함수는 V1 SANDBOX·엔딩·V1 씬일러 축만 덮는다.
+     * V2 STORY 4곳(ChatStreamServiceV2:176·:1157 · StoryV2Service:847 · SceneRequestService:230)은
+     * 1-arg canAccessSecretMode + world.secretAllowed만 보고 캐릭터 자격을 조회하지 않는다(안건 9-A′ 미착수).
+     */
     public boolean isCharacterSecretEligible(Long characterId) {
         return characterRepository.findById(characterId)
-            .map(Character::isSecretEligible)
+            .map(c -> c.isSecretEligible() && isCharacterAgeAllowed(c))
             .orElse(false);
+    }
+
+    /** [안건 9-A] 나이 판정 — null은 유예(위 javadoc의 배포 함정), 값이 있으면 19+만 허용. */
+    private boolean isCharacterAgeAllowed(Character c) {
+        Integer age = c.getAge();
+        return age == null || age >= com.spring.aichat.service.ugc.UgcModerationService.MIN_CHARACTER_AGE;
     }
 
     /**
@@ -307,7 +355,8 @@ public class SecretModeService {
      */
     public SecretModeStatus getStatus(User user) {
         if (!Boolean.TRUE.equals(user.getIsAdult())) {
-            return new SecretModeStatus(false, false, false, false, false, false, "NEED_ADULT_VERIFY");
+            return new SecretModeStatus(false, false, false, false, false, false,
+                "NEED_ADULT_VERIFY", secretProductsEnabled);
         }
 
         // [블록 B] 페르소나 나이 게이트 — 인증·구매보다 먼저 안내(FE 프로필 수정 제안 모달)
@@ -321,7 +370,7 @@ public class SecretModeService {
         String reason = !personaAdult ? "PERSONA_UNDERAGE"
             : (entitled ? "GRANTED" : "NEED_PURCHASE");
         return new SecretModeStatus(true, personaAdult, midnightPass, anyPermanentUnlock,
-            anyActive24hPass, canAccess, reason);
+            anyActive24hPass, canAccess, reason, secretProductsEnabled);
     }
 
     /**
@@ -335,7 +384,13 @@ public class SecretModeService {
         boolean hasPermanentUnlock,
         boolean has24hPass,
         boolean canAccess,
-        String accessReason
+        String accessReason,
+        // [docs/19 안건 7 = (b)] 시크릿 상품 판매·노출 허용 여부 (= bm.secret-products-enabled).
+        //   false면 FE는 시크릿/미드나잇 패스 상품 카드·탭을 렌더하지 않는다. 서버는 이 값과
+        //   무관하게 독립적으로 prepareOrder에서 400을 던진다 — FE는 UX일 뿐 게이트가 아니다.
+        //   미인증 유저에게도 내려간다(NEED_ADULT_VERIFY 분기 포함) — 상품 카드 노출은
+        //   성인 인증 여부와 독립된 롤아웃 축이기 때문이다.
+        boolean secretProductsEnabled
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

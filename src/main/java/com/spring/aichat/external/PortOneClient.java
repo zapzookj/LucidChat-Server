@@ -40,6 +40,12 @@ public class PortOneClient {
     }
 
     public String getAccessToken() {
+        // [C-2.l 심층방어] 자격증명 미주입은 여기서 단일하게 끊는다.
+        //   호출부(PaymentService·RefundService) 진입부에도 가드가 있지만, 제3의 호출자가 생기면
+        //   그쪽은 우회한다 — 토큰 발급이 모든 PortOne 호출의 실제 초크포인트이므로 여기가 최종 방어다.
+        //   가드가 없으면 아임포트가 401을 주고 '설정 누락'이 'PG 장애'와 로그에서 구분되지 않는다.
+        //   NiceApiClient.getAccessToken과 대칭.
+        props.assertConfigured("getAccessToken");
         try {
             Map<String, String> body = Map.of(
                 "imp_key", props.getApiKey(),

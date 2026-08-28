@@ -60,6 +60,21 @@ public enum ProductType {
         return this == SECRET_PASS_24H || this == SECRET_UNLOCK_PERMANENT;
     }
 
+    /**
+     * [docs/19_assets/decisions_confirmed.md §A #7 = (b)] PG 심사용 시크릿 노출 토글
+     * ({@code bm.secret-products-enabled})에 묶이는 상품인가.
+     *
+     * <p>{@link #isSecretProduct()}와 <b>다르다</b> — 이쪽은 LUCID_MIDNIGHT_PASS까지 포함한다.
+     * 안건 7의 확정이 정확히 "미드나잇 패스 카드도 같은 env 토글에 묶어 심사 중 미노출"이기
+     * 때문이다. 두 메서드를 합치지 않은 이유: {@code isSecretProduct()}는 '캐릭터 대상 시크릿
+     * 재화'라는 지급 로직상의 분류라, 여기에 구독을 끼워 넣으면 다른 호출부 의미가 바뀐다.
+     */
+    public boolean isSecretGated() {
+        return this == SECRET_PASS_24H
+            || this == SECRET_UNLOCK_PERMANENT
+            || this == LUCID_MIDNIGHT_PASS;
+    }
+
     /** ProductType -> SubscriptionType 변환 (구독 상품인 경우) */
     public SubscriptionType toSubscriptionType() {
         return switch (this) {
