@@ -81,8 +81,15 @@ public final class TheaterRequests {
      * 프론트가 현재 배치의 70% 지점 도달 시 prefetch용으로 호출하거나,
      * 배치 소비 완료 시 동기적으로 호출.
      */
+    /**
+     * [버그픽스 B-5.1] {@code prefetch} 필드는 <b>서버가 더 이상 읽지 않는다.</b>
+     *
+     * <p>이 플래그가 과금 2지점을 건너뛰면서도 같은 SceneBatch 전문을 돌려줘서, 자기 방
+     * 소유자면 누구나 {@code {"prefetch":true}}로 극장 전체를 무과금 완주할 수 있었다.
+     * 필드를 지우지 않고 남긴 이유는 <b>구 클라이언트 페이로드 역호환</b>뿐이다 —
+     * 값이 무엇이든 동작에 영향이 없다. 신규 코드는 이 필드를 참조하지 마라.
+     */
     public record NextBatchRequest(
-        /** 이 요청이 prefetch 목적인지 (체감 지연 관리용 힌트) */
         boolean prefetch
     ) {}
 

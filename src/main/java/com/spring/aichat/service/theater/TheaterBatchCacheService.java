@@ -2,6 +2,7 @@ package com.spring.aichat.service.theater;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.spring.aichat.dto.theater.BranchOffer;
 import com.spring.aichat.dto.theater.LlmSceneBatchOutput;
 import com.spring.aichat.dto.theater.TheaterResponses.SceneBatch;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,18 @@ import java.util.Optional;
  * - theater:batch:{roomId}:{batchId}             — 단일 배치 (직렬화된 SceneBatch)
  * - theater:batch:raw:{roomId}:{batchId}         — LLM 원본 응답 (재파싱용, 선택적)
  * - theater:chapter:rolling:{roomId}             — 현재 Chapter의 롤링 요약
- * - theater:branch:ctx:{roomId}:{token}          — 분기 컨텍스트 (1회용)
+ * - theater:branch:ctx:{roomId}:{token}          — 분기 후 컨텍스트 ("active" 전용, 1회용)
+ * - theater:branch:offer:{roomId}:{scene|location}
+ *                                                — [B-4 · P2-e] 서버 발급 분기 오퍼 원본
+ *                                                  (씬/LOCATION 각각 방당 1개 — 상호 축출 방지)
+ * - theater:branch:pending:{roomId}              — [B-4] 소비된 배치가 남긴 분기 신호 마커
  *
  * [TTL]
  * - 배치 캐시: 6시간 (세션 길이 대응)
  * - 롤링 요약: 6시간
  * - 분기 컨텍스트: 30분 (유저가 고민하는 시간 고려)
+ * - 분기 오퍼 / pending 마커: 6시간 (배치 캐시와 동조 — 배치보다 길면 사라진 배치의
+ *   분기가 적용되는 어긋남이 생긴다)
  *
  * [무효화 정책]
  * - 유저가 분기를 선택하면 해당 배치 이후의 모든 prefetch 배치 evict
@@ -44,6 +51,12 @@ public class TheaterBatchCacheService {
     private static final Duration BATCH_TTL = Duration.ofHours(6);
     private static final Duration ROLLING_TTL = Duration.ofHours(6);
     private static final Duration BRANCH_CTX_TTL = Duration.ofMinutes(30);
+    /**
+     * [버그픽스 B-4.a~f · docs/17_assets/defect_register.md] 분기 오퍼 원본 TTL.
+     * 배치 캐시(BATCH_TTL)와 **동조**시킨다 — 오퍼가 배치보다 오래 살면 이미 사라진 배치에
+     * 대한 분기를 확정하게 되어 서버 상태와 어긋난다. 반대로 짧으면 정상 유저가 400을 본다.
+     */
+    private static final Duration BRANCH_OFFER_TTL = Duration.ofHours(6);
     /**
      * [Phase 6 도그푸딩 #2 결함 B] 분기 선택 시 다음 chapter용 화자 히로인 hint TTL.
      * 분기 직후 ~ 다음 chapter 첫 batch 진입까지 충분한 30분.
@@ -73,6 +86,53 @@ public class TheaterBatchCacheService {
 
     private String branchCtxKey(Long roomId, String token) {
         return "theater:branch:ctx:" + roomId + ":" + token;
+    }
+
+    /**
+     * [적대적 리뷰 P2-e] 오퍼 종류. 씬 분기와 LOCATION 분기가 <b>서로 다른 키</b>를 쓴다.
+     *
+     * <p>왜 나눴나 — 방당 키 1개였을 때는 두 흐름이 서로를 축출했다. 새 Chapter 진입 시
+     * LOCATION 오퍼를 받은 상태에서 (또는 그 반대로) 상대 오퍼가 발급되면 앞선 오퍼가 사라져
+     * 멱등 재사용이 깨지고, 새로고침할 때마다 LLM이 다시 돌았다(비용) — 그리고 사용자는
+     * "만료됐습니다"를 봤다.
+     */
+    public enum BranchOfferKind {
+        SCENE("scene"),
+        LOCATION("location");
+
+        private final String suffix;
+
+        BranchOfferKind(String suffix) { this.suffix = suffix; }
+
+        public String suffix() { return suffix; }
+    }
+
+    /**
+     * [버그픽스 B-4.a~f · 적대적 리뷰 P2-e] 분기 오퍼 원본 키 — **종류당 방당 1개**.
+     *
+     * ⚠ 네임스페이스를 branchCtxKey와 분리한 이유: 오퍼 토큰과 분기 후 컨텍스트("active")가
+     *   같은 키 공간을 쓰면 클라이언트가 branchToken="active"를 보내 다음 배치용 컨텍스트를
+     *   선점 소비할 수 있다.
+     * ⚠ 토큰별 키가 아니라 (방, 종류)당 단일 키인 이유: purgeRoom(세이브 로드·방 삭제)이
+     *   패턴 SCAN 없이 **두 키를 명시적으로** 지울 수 있어야 한다. 고아 오퍼가 남으면
+     *   롤백된 시점의 분기가 재적용된다.
+     */
+    private String branchOfferKey(Long roomId, BranchOfferKind kind) {
+        return "theater:branch:offer:" + roomId + ":" + kind.suffix();
+    }
+
+    /**
+     * [버그픽스 B-4.e] 소비된 배치가 남긴 분기 신호 마커.
+     *
+     * ⚠ 왜 필요한가: 분기 옵션 prefetch가 실패하면 FE fallback은 notifyBatchConsumed
+     *   (= state.advanceBatch()) **이후에** /branches/scene을 호출한다. 그 시점의
+     *   currentBatchId는 분기를 실은 배치보다 1 크다. 게다가 FE는 70% 지점에서 다음 배치를
+     *   prefetch하므로 currentBatchId 배치가 **자기만의 branchSignal을 갖고 캐시에 존재**할 수
+     *   있어 단순 오프셋 추정이 엉뚱한 레벨을 집는다. 소비 시점에 서버가 직접 남긴 이 마커라야
+     *   정확하다.
+     */
+    private String pendingBranchKey(Long roomId) {
+        return "theater:branch:pending:" + roomId;
     }
 
     /** [R3] 활성 감독 명령어 키 — text와 noteId를 ":"로 구분해 저장 */
@@ -182,6 +242,101 @@ public class TheaterBatchCacheService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [버그픽스 B-4.a~f · docs/17_assets/defect_register.md] 분기 오퍼 원본
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 오퍼 발급/갱신 (종류당 방당 1개 — 같은 종류의 새 오퍼가 이전 오퍼를 덮어쓴다). */
+    public void putBranchOffer(Long roomId, BranchOfferKind kind, BranchOffer offer) {
+        try {
+            String json = objectMapper.writeValueAsString(offer);
+            redisTemplate.opsForValue().set(branchOfferKey(roomId, kind), json, BRANCH_OFFER_TTL);
+            log.debug("🎭 [CACHE] Branch offer stored | roomId={} | kind={} | level={} | sourceBatchId={}",
+                roomId, kind, offer.level(), offer.sourceBatchId());
+        } catch (JsonProcessingException e) {
+            log.warn("🎭 [CACHE] Failed to serialize branch offer | roomId={}: {}", roomId, e.getMessage());
+        }
+    }
+
+    /**
+     * 오퍼 조회 — <b>비파괴</b>.
+     * 확정 성공 후에만 evictBranchOffer로 소비한다(1회용). 조회에서 지우면 새로고침 복구가 막힌다.
+     */
+    public Optional<BranchOffer> readBranchOffer(Long roomId, BranchOfferKind kind) {
+        String json = redisTemplate.opsForValue().get(branchOfferKey(roomId, kind));
+        if (json == null) return Optional.empty();
+        try {
+            return Optional.of(objectMapper.readValue(json, BranchOffer.class));
+        } catch (JsonProcessingException e) {
+            log.warn("🎭 [CACHE] Failed to deserialize branch offer | roomId={}: {}", roomId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** 오퍼 소멸 — ① 확정 성공 직후(1회용 → 리플레이 차단) ② purgeRoom ③ TTL. */
+    public void evictBranchOffer(Long roomId, BranchOfferKind kind) {
+        redisTemplate.delete(branchOfferKey(roomId, kind));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [버그픽스 B-4.e] 소비된 배치의 분기 신호 마커
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 방금 소비된 배치가 분기를 실고 있었다는 사실 + 그 서버 원본 신호.
+     *
+     * @param batchId        분기를 실은 배치 id (소비 직전의 currentBatchId)
+     * @param level          서버 확정 레벨
+     * @param contextSummary 서버 확정 컨텍스트
+     * @param actNumber      [적대적 리뷰 P2-c] 마커를 남긴 시점의 Act
+     * @param chapterNumber  [적대적 리뷰 P2-c] 마커를 남긴 시점의 Chapter
+     */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    public record PendingBranch(int batchId, String level, String contextSummary,
+                                int actNumber, int chapterNumber) {
+
+        /**
+         * [적대적 리뷰 P2-c] 마커가 <b>현재 지점</b>의 것인지.
+         *
+         * <p>currentBatchId는 Chapter/Act 전환 시 0으로 리셋되는데 마커는 6h를 살아남는다.
+         * 좌표를 검사하지 않으면 이전 Chapter에서 확정하지 않고 넘어간 분기가 새 Chapter에서
+         * 되살아나 레벨·컨텍스트·과금을 한 칸 오염시킨다.
+         *
+         * <p>배포 이전에 적재된 마커는 act/chapter가 없어 역직렬화 시 0이 된다 —
+         * Act는 1부터라 자연히 불일치로 폐기된다(의도된 fail-safe).
+         */
+        public boolean matchesPosition(int act, int chapter) {
+            return actNumber == act && chapterNumber == chapter;
+        }
+    }
+
+    public void putPendingBranch(Long roomId, int batchId, String level, String contextSummary,
+                                 int actNumber, int chapterNumber) {
+        if (level == null || level.isBlank()) return;
+        try {
+            String json = objectMapper.writeValueAsString(
+                new PendingBranch(batchId, level, contextSummary, actNumber, chapterNumber));
+            redisTemplate.opsForValue().set(pendingBranchKey(roomId), json, BRANCH_OFFER_TTL);
+        } catch (JsonProcessingException e) {
+            log.warn("🎭 [CACHE] Failed to serialize pending branch | roomId={}: {}", roomId, e.getMessage());
+        }
+    }
+
+    public Optional<PendingBranch> readPendingBranch(Long roomId) {
+        String json = redisTemplate.opsForValue().get(pendingBranchKey(roomId));
+        if (json == null) return Optional.empty();
+        try {
+            return Optional.of(objectMapper.readValue(json, PendingBranch.class));
+        } catch (JsonProcessingException e) {
+            log.warn("🎭 [CACHE] Failed to deserialize pending branch | roomId={}: {}", roomId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public void clearPendingBranch(Long roomId) {
+        redisTemplate.delete(pendingBranchKey(roomId));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5 UX Polish · R3] 활성 감독 명령어
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -283,6 +438,14 @@ public class TheaterBatchCacheService {
         clearRollingSummary(roomId);
         clearActiveDirectorCommand(roomId);
         redisTemplate.delete(heroineHintKey(roomId));
+        // [버그픽스 B-4.e] 세이브 로드(TheaterSaveLoadService)·방 삭제 시 분기 오퍼도 반드시 폐기한다.
+        //   남겨두면 롤백된 시점의 오퍼가 살아남아 되돌린 분기를 그대로 재적용할 수 있다.
+        // [적대적 리뷰 P2-e] 오퍼 키가 종류별로 갈라졌으므로 **두 키를 모두 명시적으로** 지운다.
+        //   패턴 SCAN을 쓰지 않는다(운영 Redis에서 KEYS/SCAN 순회는 금지 관례).
+        for (BranchOfferKind kind : BranchOfferKind.values()) {
+            evictBranchOffer(roomId, kind);
+        }
+        clearPendingBranch(roomId);
         log.info("🎭 [CACHE] Purged all caches | roomId={}", roomId);
     }
 }

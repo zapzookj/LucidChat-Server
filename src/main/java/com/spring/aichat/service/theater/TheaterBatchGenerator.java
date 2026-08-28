@@ -255,7 +255,12 @@ public class TheaterBatchGenerator {
                     batch.speakerHeroineId(), batch.speakerHeroineName(),
                     batch.scenes(), batch.chapterEndAfter(),
                     new BranchSignal(level, forcedContext),
-                    batch.locationChoiceAfter(),
+                    // [적대적 리뷰 P3] 9번째 인자는 `nextBatchPrefetched`다 — 여기에
+                    //   `locationChoiceAfter()`(파생 메서드)를 넘기고 있었다. 둘 다 boolean이라
+                    //   컴파일은 통과하지만, 서버가 분기 신호를 강제 보정할 때마다 응답의
+                    //   '다음 배치 프리페치됨' UX 힌트가 '이 배치가 LOCATION 분기인가'로 뒤바뀌어 나갔다.
+                    //   강제 보정은 LLM이 신호를 빠뜨릴 때마다 발동하므로 빈도가 낮지 않다.
+                    batch.nextBatchPrefetched(),
                     batch.heroineAffectionDeltas()
                 );
                 log.warn("🎭 [BATCH-GEN] Forced branch signal | injected={} | LLM-returned={} | roomId={}",
@@ -265,6 +270,27 @@ public class TheaterBatchGenerator {
             if ("MAJOR".equals(level)) {
                 state.markMajorBranchDoneInChapter();
             }
+        } else if (batch.branchSignal() != null) {
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  [적대적 리뷰 P2-d ①] LLM 자작 분기 신호를 버린다
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  분기 발생 여부의 정본은 DirectorEngine이다(resolvedBranchLevel). 디렉터가
+            //  '분기 없음'으로 결정한 배치에서 LLM이 제 마음대로 branch_signal을 채우면,
+            //  그 값이 그대로 실려 나가 **오퍼 발급의 정본**이 되어 버린다. 구 코드에는
+            //  MINOR 폴백이 있어 이런 케이스를 흡수했지만 서버 확정으로 옮긴 뒤에는
+            //  미지 문자열·LOCATION이 그대로 분기 흐름을 열거나 400을 낳는다.
+            //  근본 처방은 여기서 정규화해 **애초에 신호를 만들지 않는 것**이다.
+            //  (미지 레벨의 2차 방어는 TheaterBranchService.normalizeSceneLevel의 MINOR 강등.)
+            log.warn("🎭 [BATCH-GEN] Dropped LLM-authored branch signal (director decided none) "
+                    + "| roomId={} | level={}", room.getId(), batch.branchSignal().level());
+            batch = new SceneBatch(
+                batch.batchId(), batch.actNumber(), batch.chapterNumber(),
+                batch.speakerHeroineId(), batch.speakerHeroineName(),
+                batch.scenes(), batch.chapterEndAfter(),
+                null,
+                batch.nextBatchPrefetched(),
+                batch.heroineAffectionDeltas()
+            );
         }
 
         // ─── [v2] Scene 로그 MongoDB 영구 저장 ───

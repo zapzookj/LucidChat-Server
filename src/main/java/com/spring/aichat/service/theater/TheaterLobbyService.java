@@ -7,7 +7,6 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.AvatarStat;
-import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.ChatModePolicy;
 import com.spring.aichat.domain.enums.WorldId;
@@ -54,8 +53,12 @@ public class TheaterLobbyService {
     private final ChatRoomRepository chatRoomRepository;
     private final TheaterStateRepository theaterStateRepository;
     private final TheaterHeroineAffectionRepository heroineAffectionRepository;
-    // [Polish · LOCATION fix] requiresLocationChoice 결정 시 분기 기록 조회용
-    private final TheaterBranchChoiceRepository branchChoiceRepository;
+    // [적대적 리뷰 P1-1] requiresLocationChoice의 분기 기록 조회는 TheaterProgressGateService로
+    //   옮겨졌다 — 여기서 리포지토리를 직접 들고 있으면 술어가 또 갈라진다.
+    // [D-13 ③] NarrativeProgress.endingReady 판정용 — 엔딩 지점 술어의 단일 소유자.
+    private final TheaterDirectorEngine directorEngine;
+    // [적대적 리뷰 P1-1] LOCATION 선행 술어의 단일 소유자 (로비·배치 가드·오퍼 발급 공용).
+    private final TheaterProgressGateService gateService;
     private final UserRepository userRepository;
     private final RedisCacheService cacheService;
     private final ObjectMapper objectMapper;
@@ -591,9 +594,13 @@ public class TheaterLobbyService {
 
     /**
      * 활성극이 있고 그것이 excludeRoomId가 아니면 ARCHIVED로 전환.
-     * createSession / resume 흐름에서 사용 — 활성 1개 정책 보장.
+     * createSession / resume / <b>세이브 load</b> 흐름에서 사용 — 활성 1개 정책 보장.
+     *
+     * <p>[D-14] 세이브 load 경로({@code TheaterSaveLoadService.load})에서도 호출해야 해서
+     * {@code private} → {@code public}으로 열었다. resume에는 있고 load에만 빠져 있던 비대칭이
+     * 블록 D로 ENDED 도달이 정상 플레이 경로가 되면서 실제 도달 가능해졌다.
      */
-    private void archiveCurrentActiveIfAny(User user, Long excludeRoomId) {
+    public void archiveCurrentActiveIfAny(User user, Long excludeRoomId) {
         Optional<TheaterState> currentActive = theaterStateRepository.findActiveByUserId(user.getId());
         if (currentActive.isEmpty()) return;
         TheaterState s = currentActive.get();
@@ -747,23 +754,11 @@ public class TheaterLobbyService {
         //      유저가 LOCATION을 선택해도 state의 어떤 필드도 변하지 않아 buildRoomInfo가
         //      계속 true를 반환 → autoStart=false 유지 → batch 안 만들어짐 → "반응 없음".
         //      branch_choices 테이블의 기록을 진실의 단일 원천으로 활용.
-        boolean locationAlreadyChosenThisChapter =
-            branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
-                room.getId(),
-                state.getCurrentAct().getNumber(),
-                state.getCurrentChapter(),
-                BranchLevel.LOCATION
-            );
-
-        boolean requiresLocationChoice =
-            affections.size() >= 2
-                && state.getCurrentAct().getNumber() <= 3
-                && state.getCurrentBatchId() == 0
-                && state.getScenesInCurrentChapter() == 0
-                && !state.isInIntermission()
-                && !state.isInterventionActive()
-                && !state.isEndingReached()
-                && !locationAlreadyChosenThisChapter;
+        //
+        //   [적대적 리뷰 P1-1] 이 술어의 정본은 이제 TheaterProgressGateService다.
+        //      같은 조건을 여기·requestNextBatch·prefetch가 각자 복붙해 들고 있었고,
+        //      정작 오퍼 발급(POST /branches/location)에는 **없었다**. 세 곳이 같은 것을 보게 한다.
+        boolean requiresLocationChoice = gateService.isLocationChoiceRequired(room.getId(), state);
 
         NarrativeProgress progress = new NarrativeProgress(
             state.getCurrentAct().getNumber(),
@@ -778,7 +773,11 @@ public class TheaterLobbyService {
             currentHeroine != null ? currentHeroine.getName() : null,
             state.isInIntermission(),
             state.getIntermissionStamina(),
-            requiresLocationChoice
+            requiresLocationChoice,
+            // [D-13 ③] 방 진입 시점의 엔딩 준비 신호. 챕터 리포트를 닫지 않고 이탈해도
+            //   플레이 페이지가 로드하면서 엔딩으로 유도할 수 있게 한다.
+            //   이미 엔딩에 도달했으면 여기서 또 유도하지 않는다(아카이브 '다시 보기'가 담당).
+            !state.isEndingReached() && directorEngine.isEndingPoint(state)
         );
 
         List<HeroineAffectionSnapshot> heroineSnapshots = affections.stream()

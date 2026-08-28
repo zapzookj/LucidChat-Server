@@ -3,7 +3,6 @@ package com.spring.aichat.service.theater;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
-import com.spring.aichat.domain.enums.BranchLevel;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.TheaterAct;
@@ -51,17 +50,48 @@ public class TheaterService {
     private final TheaterBatchCacheService batchCache;
     private final TheaterDirectorEngine directorEngine;
     private final UserRepository userRepository;
+    /**
+     * [적대적 리뷰 P1-1 / P1-4] LOCATION 선행 술어 + 미확정 분기 가드의 단일 소유자.
+     * 이 술어를 여기와 로비와 분기 오퍼가 각자 들고 있던 것이 P1-1의 원인이었다.
+     */
+    private final TheaterProgressGateService gateService;
+
+    /**
+     * [B-5.2 · 적대적 리뷰 P1] 과금 워터마크 게이트를 **실제로 거부**할지.
+     *
+     * <p>기본 {@code false} = 관측 모드(WARN만). 켜기 전 확인할 것:
+     * ① 로그 {@code "Unpaid batch consume detected"} 건수가 0에 수렴하는가
+     * ② 배포가 혼재 창을 만들지 않는가(drain-then-switch) — 롤링 창에서는 정상 결제 유저가
+     *    거부당할 수 있다(구 태스크가 markBatchPaid를 안 한다).
+     */
+    @org.springframework.beans.factory.annotation.Value("${theater.paid-batch-gate-enforced:false}")
+    private boolean paidBatchGateEnforced;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 다음 배치 조회/생성
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * [버그픽스 B-5.1] {@code prefetch} 파라미터를 <b>제거했다</b>(하위호환 오버로드 없음 — CLAUDE.md §2-6).
+     *
+     * <p>클라이언트가 보낸 플래그가 과금 2지점을 모두 건너뛰면서도 <b>같은 SceneBatch 전문</b>을
+     * 돌려줘서, 자기 방 소유자면 누구나 에너지 0으로 Act 1~4를 완주할 수 있었다.
+     * 선행 생성은 전용 엔드포인트 {@code POST /{roomId}/prefetch}가 담당한다(본문 미반환).
+     */
     @Transactional
-    public SceneBatch requestNextBatch(Long roomId, String username, boolean prefetch) {
+    public SceneBatch requestNextBatch(Long roomId, String username) {
         ChatRoom room = getOwnedRoom(roomId, username);
         TheaterState state = getState(roomId);
 
         if (state.isEndingReached()) throw new BadRequestException("이미 엔딩에 도달한 세션입니다.");
+        // [D-13 ② · docs/19_assets/blockd_regressions.md — "엔딩 지점을 넘긴 뒤에도 서버가 계속
+        //   플레이를 허용"] 종료 가드가 isEndingReached() 하나뿐이라, 챕터 리포트에서 엔딩 CTA를
+        //   누르지 않고 이탈하면 ACT_4 Chapter 5·6·7…이 무한히 진행됐다. leadsToIntermission이
+        //   마지막 Act·마지막 챕터에서 false이므로 **인터미션도 영구히 열리지 않는다**(스탯 성장 소멸).
+        //   isEndingPoint()는 '마지막 챕터를 끝낸 뒤'에만 참이라 정상 플레이를 막지 않는다([D-13 ①]).
+        if (directorEngine.isEndingPoint(state)) {
+            throw new BadRequestException("ENDING_READY");
+        }
         if (state.isInIntermission()) throw new BadRequestException("인터미션 중입니다. 인터미션을 종료해주세요.");
         if (state.isInterventionActive()) throw new BadRequestException("난입 세션이 활성 상태입니다. 먼저 복귀해주세요.");
 
@@ -70,32 +100,57 @@ public class TheaterService {
         //   기존 버그: 프론트가 자동 진입 시 batch 0과 LOCATION 모달이 병렬로 트리거되어
         //              batch 0이 한 번 생성되고, 분기 선택 후 invalidate → 또 생성 → LLM 비용 2배.
         //   ⚠️ 분기 기록 확인이 빠지면 LOCATION 선택 후에도 가드가 풀리지 않아 "반응 없음" 버그.
-        if (state.getCurrentBatchId() == 0
-            && state.getScenesInCurrentChapter() == 0
-            && state.getCurrentAct().getNumber() <= 3
-            && affectionRepository.findByRoom_Id(roomId).size() >= 2
-            && !branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
-            roomId, state.getCurrentAct().getNumber(), state.getCurrentChapter(),
-            BranchLevel.LOCATION)) {
+        //   [적대적 리뷰 P1-1] 술어를 인라인으로 복붙해 두던 것을 gateService로 옮겼다 —
+        //   로비(requiresLocationChoice)·오퍼 발급과 **같은 것**을 보게 하기 위해서다.
+        if (gateService.isLocationChoiceRequired(roomId, state)) {
             log.info("🎭 [THEATER] Batch request blocked — LOCATION choice required | roomId={}", roomId);
             throw new BadRequestException("LOCATION_CHOICE_REQUIRED");
         }
+
+        // ─── [적대적 리뷰 P1-4 — 도입했다가 철회] 미확정 분기 가드를 두지 않는다 ───
+        //  한때 '분기를 확정하지 않고 /next-batch만 부르면 MAJOR 1E·CLIMAX 2E가 opt-in이 된다'는
+        //  이유로 400(BRANCH_CHOICE_REQUIRED)을 던졌으나, **철회했다.**
+        //
+        //  ① 성격 판정이 틀렸다 — 분기를 건너뛰는 것은 *착취*가 아니라 *포기*다.
+        //     B-4.b가 막는 것은 "분기를 취하면서 0원을 내는 것"이고, 건너뛰기는 그 분기의
+        //     서사·컨텍스트·보상을 통째로 버린다. 상품을 안 사는 것을 도둑질이라 하지 않는다.
+        //  ② 대가가 명백히 컸다 — 확정하지 않고 새로고침/이탈하거나, 옵션 LLM이 실패하거나,
+        //     에너지가 모자라 확정이 튕기거나, 세이브를 로드하면 pending 마커(TTL 6h)가 남아
+        //     /next-batch가 영구 400이 됐다. 마커를 지우는 경로가 전부 도달 불가라 **6시간 잠금**이다.
+        //     완주에 90~100E가 드는 트랙에서 1~2E를 지키려고 세션을 세우는 것은 역전된 거래다.
+        //  CLAUDE.md의 기준 그대로 — 정상 유저를 막는 가드는 착취를 남기는 것보다 나쁘다.
+
+        // ─── [적대적 리뷰 P1-3] pending 마커를 '한 배치 수명'으로 강제 ───
+        //  마커를 지우는 곳이 확정 성공과 purgeRoom뿐이라, 분기를 제시받고 확정하지 않은 채
+        //  다음 배치로 넘어간 세션이 **정확히 한 칸 오염**됐다(다음 배치의 분기를 옛 마커가
+        //  가로채 레벨·컨텍스트·과금이 한 칸 밀린다). **동기 배치 요청이 왔다 = 분기 시점이
+        //  지났다**는 뜻이므로 여기서 마커의 수명을 끊는다.
+        //  ⚠ 캐시 HIT 조기 반환보다 앞에 둔다 — 뒤에 두면 캐시 HIT 경로에서 마커가 살아남는다.
+        //  ⚠ prefetchNextBatchAsync에는 넣지 않는다 — 70% 지점의 비동기 prefetch가
+        //    FE fallback 경로(소비 후 /branches/scene)가 의존하는 마커를 지워 버린다.
+        batchCache.clearPendingBranch(roomId);
 
         int batchId = state.getCurrentBatchId();
 
         // ─── 캐시 체크 ───
         Optional<SceneBatch> cached = batchCache.getBatch(roomId, batchId);
         if (cached.isPresent()) {
-            log.info("🎭 [THEATER] Batch cache HIT | roomId={} | batchId={} | prefetch={}",
-                roomId, batchId, prefetch);
-            if (!prefetch) chargeBatchEnergy(username);
+            log.info("🎭 [THEATER] Batch cache HIT | roomId={} | batchId={}", roomId, batchId);
+            // [B-5.1] 캐시 HIT도 반드시 과금한다 — 전용 prefetch가 미리 데워 둔 배치를
+            //   유저가 실제로 '받아 가는' 지점이 여기이기 때문이다.
+            chargeBatchEnergy(username);
+            // [B-5.2] 과금 워터마크 전진. 차감 **직후**에 둔다 — 같은 트랜잭션이므로
+            //   에너지 부족(InsufficientEnergyException)이면 여기까지 오지 못하고,
+            //   이후 어떤 실패로 롤백되면 차감과 워터마크가 함께 되돌아간다.
+            state.markBatchPaid(batchId);
             return cached.get();
         }
 
-        log.info("🎭 [THEATER] Batch cache MISS | roomId={} | batchId={} | prefetch={}",
-            roomId, batchId, prefetch);
+        log.info("🎭 [THEATER] Batch cache MISS | roomId={} | batchId={}", roomId, batchId);
 
-        if (!prefetch) chargeBatchEnergy(username);
+        chargeBatchEnergy(username);
+        // [B-5.2] 캐시 MISS 경로의 워터마크 전진 (위 HIT 경로와 같은 규칙).
+        state.markBatchPaid(batchId);
 
         // [Phase III · 작업 3] 분기 직후 컨텍스트 consume — 그동안 dead code였음.
         //   BranchService.applyBranchChoice가 "active" 토큰으로 Redis에 저장한
@@ -131,13 +186,10 @@ public class TheaterService {
 
             // [Polish · P1 #7 + LOCATION fix] LOCATION choice 선행 가드 (prefetch도 동일).
             //   분기 미선택 상태에선 어떤 batch도 LLM에 던지지 않는다.
-            if (state.getCurrentBatchId() == 0
-                && state.getScenesInCurrentChapter() == 0
-                && state.getCurrentAct().getNumber() <= 3
-                && affectionRepository.findByRoom_Id(roomId).size() >= 2
-                && !branchChoiceRepository.existsByRoom_IdAndActNumberAndChapterNumberAndBranchLevel(
-                roomId, state.getCurrentAct().getNumber(), state.getCurrentChapter(),
-                BranchLevel.LOCATION)) {
+            //   [적대적 리뷰 P1-1] 동기 경로와 같은 술어를 쓴다.
+            //   ⚠ P1-3의 clearPendingBranch는 여기 넣지 않는다 — 비동기 prefetch가 FE fallback
+            //     경로의 마커를 지워 버려 분기 레벨을 잃는다.
+            if (gateService.isLocationChoiceRequired(roomId, state)) {
                 log.debug("🎭 [PREFETCH] Skipped — LOCATION choice required | roomId={}", roomId);
                 return CompletableFuture.completedFuture(null);
             }
@@ -187,6 +239,57 @@ public class TheaterService {
                 "클라이언트 상태가 오래되었습니다. 새로고침 후 다시 시도해주세요.");
         }
 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [버그픽스 B-5.2] 과금 워터마크 검사 — 무과금 배치로 진행·보상이 확정되던 구멍
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  B-5.1(클라이언트 prefetch 플래그 제거)로도 sibling 경로가 남아 있었다:
+        //    ① POST /{roomId}/prefetch 는 **과금 없이** 배치를 만든다(202·본문 없음).
+        //    ② 그 안의 중복 가드는 existsBatch(roomId, currentBatchId + 1)를 보는데
+        //       TheaterBatchGenerator는 putBatch(roomId, state.getCurrentBatchId())로
+        //       **N 키**에 저장한다(기존 결함 D-5.1/5.2) → 가드가 항상 통과하고 배치 N이 생긴다.
+        //    ③ 여기(onBatchConsumed)는 batchId 일치 + 캐시 존재만 봤다.
+        //  → /prefetch → /batch-consumed 를 반복하면 /next-batch를 한 번도 부르지 않고
+        //    에너지 0으로 Act 1~4를 완주해 엔딩(90~100E 가치)에 도달할 수 있었다.
+        //  씬 본문을 못 볼 뿐 호감도·씬수·화자·분기 마커·advanceBatch()가 전부 정상 진행됐다.
+        //
+        //  ⚠ 정상 유저를 막지 않는가 — 유저에게 SceneBatch 전문을 넘겨주는 엔드포인트는
+        //    /next-batch **하나뿐**이고(전 코드베이스 grep: SceneBatch 반환 지점 1곳),
+        //    그 경로는 캐시 HIT/MISS 양쪽 모두 과금 후 markBatchPaid한다. 즉 정상 플레이에서
+        //    consumedBatchId는 항상 워터마크 이하다. Chapter/Act 전환·세이브 로드의 리셋은
+        //    TheaterState 쪽에 근거와 함께 박아 두었다.
+        Integer paidWatermark = state.getLastPaidBatchId();
+        if (paidWatermark == null) {
+            // [grandfather] 배포 이전부터 진행 중이던 세션 — 컬럼이 NULL이다(V30은 기존 행을
+            //   채우지 않는다). 이들에게 게이트를 걸면 **전 유저 장애**이므로 통과시키고,
+            //   지금 소비하는 배치까지는 지불된 것으로 보아 워터마크를 세운다.
+            //   다음 배치부터는 정상 게이트가 적용된다. 신규 세션의 초기값은 -1이라 여기 오지 않는다.
+            log.warn("🎭 [THEATER] Paid-watermark absent (pre-B5.2 session) — grandfathered "
+                + "| roomId={} | batchId={}", roomId, consumedBatchId);
+            state.adoptPaidWatermark(consumedBatchId);
+        } else if (consumedBatchId > paidWatermark) {
+            // ★ [적대적 리뷰 P1] 기본값은 **거부하지 않는다**(fail-open + WARN).
+            //   이 세션에서 이미 같은 유형의 사고를 한 번 냈다 — '미확정 분기 가드'가 정상 유저를
+            //   잠가 철회했다. 여기서 반복하지 않는다.
+            //
+            //   거부를 기본으로 켤 수 없는 이유(실측): ECS 롤링 배포는 신·구 태스크가 동시에
+            //   트래픽을 받는 창을 만든다. 그 창에서 신 태스크가 만든 세션(워터마크 -1 — non-null이라
+            //   grandfather 대상이 아니다)이 /next-batch를 **구** 태스크로 태우면 markBatchPaid가
+            //   실행되지 않고, 이어지는 /batch-consumed가 **신** 태스크로 가면 정상 결제 유저가
+            //   거부당한다. 게다가 FE는 이 실패를 console.error로만 삼켜 **무증상 정지**가 된다
+            //   (철회했던 분기 가드가 6시간 잠금이었다면 이쪽은 무기한이다).
+            //
+            //   그래서 이번 릴리즈는 **관측만** 한다. 로그로 실제 거부 대상이 0에 수렴하는 것을
+            //   확인한 뒤 THEATER_PAID_BATCH_GATE=true로 강제한다. 강제 시점에는 FE가
+            //   ErrorCode.UNPAID_BATCH를 받아 loadNextBatch()로 자기 치유하도록 이미 배선돼 있다.
+            log.warn("🎭 [THEATER] Unpaid batch consume {} | roomId={} | batchId={} | paidWatermark={}",
+                paidBatchGateEnforced ? "REJECTED" : "detected (fail-open — 관측 모드)",
+                roomId, consumedBatchId, paidWatermark);
+            if (paidBatchGateEnforced) {
+                throw new BusinessException(ErrorCode.UNPAID_BATCH,
+                    "아직 열람하지 않은 배치입니다. 다음 장면을 먼저 불러와 주세요.");
+            }
+        }
+
         SceneBatch batch = batchCache.getBatch(roomId, consumedBatchId)
             .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR,
                 "소비된 배치 캐시가 없습니다. batchId=" + consumedBatchId));
@@ -208,6 +311,24 @@ public class TheaterService {
         state.addScenes(scenesInBatch);
         state.setCurrentHeroine(batch.speakerHeroineId());
         state.advanceBatch();
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [버그픽스 B-4.e · docs/17_assets/defect_register.md] 분기 신호 마커
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  분기 오퍼는 이제 클라이언트가 보낸 level·contextSummary가 아니라 **서버가 캐시한
+        //  배치의 branchSignal**로만 발급된다(B-4.b/d). 그런데 FE의 분기 옵션 prefetch가
+        //  실패하면 fallback 호출이 바로 위 advanceBatch() **이후에** 들어온다 — 그때
+        //  currentBatchId는 분기를 실은 배치보다 1 크고, FE가 70% 지점에서 미리 만든
+        //  다음 배치가 자기만의 branchSignal을 갖고 캐시에 있을 수 있어 오프셋 추정이
+        //  엉뚱한 레벨을 집는다. 소비 시점의 서버 원본을 여기서 못 박아 둔다.
+        //  [적대적 리뷰 P2-c] 좌표(act·chapter)를 함께 남긴다. currentBatchId는 Chapter/Act 전환 시
+        //  0으로 리셋되는데 마커는 6h를 살아남으므로, 좌표가 없으면 이전 Chapter의 미확정 분기가
+        //  새 Chapter에서 부활한다.
+        if (batch.branchSignal() != null && batch.branchSignal().level() != null) {
+            batchCache.putPendingBranch(roomId, consumedBatchId,
+                batch.branchSignal().level(), batch.branchSignal().context(),
+                state.getCurrentAct().getNumber(), state.getCurrentChapter());
+        }
 
         boolean chapterEnd = batch.chapterEndAfter() || state.isChapterComplete();
         room.touch(EmotionTag.NEUTRAL);
@@ -259,7 +380,13 @@ public class TheaterService {
         }
 
         boolean isLastChapterOfAct = directorEngine.isLastChapterOfAct(state);
-        boolean transitionToNewAct = isLastChapterOfAct;
+        boolean isLastAct = state.getCurrentAct().next() == null;
+        // [D-13 ③ · docs/19_assets/blockd_regressions.md — "엔딩 시점 챕터 리포트가 '막이 바뀝니다 —
+        //   (현재 Act 제목)' 배지를 함께 띄운다"] 기존 transitionToNewAct = isLastChapterOfAct는
+        //   **마지막 Act에서도 참**이었다. state.advanceToNextAct()는 next()==null이면 no-op이라
+        //   상태는 멀쩡했지만, 아래 ACT_TRANSITION 배지와 nextActTitle이 '막이 바뀝니다 — 방금 끝낸
+        //   Act 제목'이라는 거짓 신호를 냈다(엔딩 직전인데 다음 막을 예고). 마지막 Act는 제외한다.
+        boolean transitionToNewAct = isLastChapterOfAct && !isLastAct;
 
         // [Polish · 인터미션 정책 변경] Act 사이 → Chapter 사이마다 인터미션.
         //   기존: Act 사이에만 인터미션 (4 Act → 3회) → 평균 ~22점 상승. 5종 max 500 못 찍음.
@@ -267,10 +394,9 @@ public class TheaterService {
         //   예외: 마지막 Act의 마지막 chapter는 엔딩 직진 — 몰입 끊김 방지.
         //         (엔딩 진입 시점엔 directorEngine이 endingReached를 set할 것이고, 그 직전이라
         //          한 번 더 stamina를 쥐여줘봤자 엔딩 후엔 의미 없음.)
-        boolean isLastAct = state.getCurrentAct().next() == null;
         boolean leadsToIntermission = !(isLastAct && isLastChapterOfAct);
 
-        if (transitionToNewAct && state.getCurrentAct().next() != null) {
+        if (transitionToNewAct) {
             Character newMain = directorEngine.confirmMainHeroineIfApplicable(room, state);
 
             // [Phase 6 도그푸딩 #2 결함 B / Patch B-5 (c)] Act 3 → Act 4 진입 시
@@ -320,6 +446,11 @@ public class TheaterService {
 
         batchCache.invalidateBatchesFrom(roomId, 0);
         batchCache.clearRollingSummary(roomId);
+        // [적대적 리뷰 P2-c] Chapter/Act 전환 지점에서 pending 마커를 끊는다.
+        //   currentBatchId는 여기서 0으로 리셋되는데(state.completeChapter) 마커 TTL은 6h다.
+        //   좌표 검사(PendingBranch.matchesPosition)가 1차 방어지만, 전환 지점에서 실제로
+        //   지워 두는 편이 "옛 분기가 부활한다"는 면 자체를 없앤다.
+        batchCache.clearPendingBranch(roomId);
 
         List<ReportBadge> badges = new java.util.ArrayList<>();
         if (transitionToNewAct) {

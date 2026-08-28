@@ -95,7 +95,11 @@ public class TheaterDirectorNoteService {
     @Transactional
     public DirectorNoteView updateNote(Long roomId, String username, Long noteId, String content) {
         getOwnedRoom(roomId, username);
-        TheaterDirectorNote note = directorNoteRepository.findById(noteId)
+        // [D-15 · IDOR · docs/13 B-13과 동일 패턴] findById(noteId)는 노트가 이 방의 것인지 보지 않는다.
+        //   컨트롤러(TheaterFinalityController:132-135)의 @PreAuthorize도 **방 소유권만** 검사하므로,
+        //   "내 소유 roomId + 남의 노트 id" 조합으로 타인의 MANUAL 감독 노트를 수정할 수 있었다.
+        //   방 스코프 질의로 교체 — 남의 노트는 404가 된다.
+        TheaterDirectorNote note = directorNoteRepository.findByIdAndRoom_Id(noteId, roomId)
             .orElseThrow(() -> new NotFoundException("노트를 찾을 수 없습니다."));
         if (!"MANUAL".equals(note.getNoteType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "자동 생성된 노트는 수정할 수 없습니다.");
@@ -111,7 +115,9 @@ public class TheaterDirectorNoteService {
     @Transactional
     public void deleteNote(Long roomId, String username, Long noteId) {
         getOwnedRoom(roomId, username);
-        TheaterDirectorNote note = directorNoteRepository.findById(noteId)
+        // [D-15 · IDOR] updateNote와 동일 — 컨트롤러(TheaterFinalityController:144-147)가
+        //   방 소유권만 보므로 노트 자체를 방 스코프로 꺼내야 타인 노트 삭제가 막힌다.
+        TheaterDirectorNote note = directorNoteRepository.findByIdAndRoom_Id(noteId, roomId)
             .orElseThrow(() -> new NotFoundException("노트를 찾을 수 없습니다."));
         if (!"MANUAL".equals(note.getNoteType())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "자동 생성된 노트는 삭제할 수 없습니다.");

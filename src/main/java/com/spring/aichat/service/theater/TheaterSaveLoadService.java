@@ -42,8 +42,12 @@ public class TheaterSaveLoadService {
     private final TheaterStateRepository theaterStateRepository;
     private final TheaterHeroineAffectionRepository affectionRepository;
     private final TheaterSaveSlotRepository saveSlotRepository;
+    /** [적대적 리뷰 P2] 로드 시 되돌린 지점 이후의 분기 확정 기록 폐기용. */
+    private final TheaterBranchChoiceRepository branchChoiceRepository;
     private final TheaterBatchCacheService batchCache;
     private final ObjectMapper objectMapper;
+    // [D-14] load 시 '활성 극 1개' 정책 유지용 — resume 경로와 같은 메서드를 재사용한다.
+    private final TheaterLobbyService theaterLobbyService;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 슬롯 목록
@@ -174,12 +178,20 @@ public class TheaterSaveLoadService {
 
     @Transactional
     public LoadResult load(Long roomId, String username, int slotNumber) {
-        getOwnedRoom(roomId, username);
+        ChatRoom room = getOwnedRoom(roomId, username);
 
         TheaterSaveSlot slot = saveSlotRepository.findByRoom_IdAndSlotNumber(roomId, slotNumber)
             .orElseThrow(() -> new NotFoundException("세이브 슬롯이 비어있습니다."));
 
         TheaterState state = getState(roomId);
+
+        // [D-14 · docs/19_assets/blockd_regressions.md] load 경로의 '활성 극 1개' 정책 복구.
+        //   resume(TheaterLobbyService.resumeArchivedSession)에는 archiveCurrentActiveIfAny가
+        //   있는데 load에만 빠져 있던 비대칭이다. 블록 D로 ENDED가 정상 플레이로 도달 가능해지면서
+        //   "엔딩 본 방(또는 아카이브된 방)에 세이브 로드" 조합이 실현 가능해졌고, 그 순간
+        //   findActiveByUserId가 2건을 만나 IncorrectResultSizeDataAccessException으로 터진다.
+        //   excludeRoomId=roomId — 지금 로드하는 방 자신은 건드리지 않는다.
+        theaterLobbyService.archiveCurrentActiveIfAny(room.getUser(), roomId);
 
         try {
             JsonNode root = objectMapper.readTree(slot.getSnapshotJson());
@@ -224,6 +236,16 @@ public class TheaterSaveLoadService {
         }
 
         batchCache.purgeRoom(roomId);
+
+        // [적대적 리뷰 P2] 되돌린 지점 이후의 분기 확정 기록도 함께 폐기한다.
+        //   남겨 두면 재진행 시 alreadyResolved 게이트(중복 확정 차단)가 그 챕터의 씬 분기를
+        //   **전부 소멸**시킨다 — 같은 챕터를 다시 플레이하는데 분기가 하나도 안 나온다.
+        //   되돌린 시점 이후는 '일어나지 않은 일'이므로 기록도 되돌리는 것이 정합이다.
+        int discarded = branchChoiceRepository.deleteFromPosition(
+            roomId, state.getCurrentAct().getNumber(), state.getCurrentChapter());
+        if (discarded > 0) {
+            log.info("🎭 [LOAD] 되돌린 지점 이후 분기 확정 기록 {}건 폐기 | roomId={}", discarded, roomId);
+        }
 
         log.info("🎭 [LOAD] slot={} | roomId={}", slotNumber, roomId);
         return new LoadResult(roomId, slotNumber, true, "로드 완료");

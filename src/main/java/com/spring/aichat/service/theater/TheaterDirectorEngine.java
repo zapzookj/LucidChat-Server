@@ -272,23 +272,43 @@ public class TheaterDirectorEngine {
     /**
      * [블록 D · 극장 엔딩 부활] 엔딩 지점인가 — 마지막 Act의 마지막 Chapter.
      *
-     * <p>{@code TheaterService.finalizeChapter}가 {@code ChapterReport.endingReady}로 내보내는
-     * 조건과 동일하며, {@code TheaterEndingService.triggerEnding}의 진행도 가드로도 쓰인다.
-     * 두 곳이 같은 술어를 봐야 UI 신호와 서버 판정이 어긋나지 않는다.
+     * <p>{@code TheaterEndingService.triggerEnding}의 진행도 가드이자
+     * {@code TheaterService.requestNextBatch}의 종료 가드([D-13 ②])다.
+     *
+     * <p>⚠ {@code TheaterService.finalizeChapter}의 {@code ChapterReport.endingReady}는
+     * {@code completeChapter()} <b>직전</b>에 {@code isLastAct && isLastChapterOfAct}로 계산된다.
+     * 즉 "지금 끝낸 챕터가 마지막이었다"는 <b>과거형 신호</b>이고, 이 메서드는 그 직후의
+     * <b>상태</b>(chapter가 이미 +1 된 뒤)를 본다. 두 술어는 문자열이 다르지만 시퀀스상 정확히
+     * 이어진다 — 리포트가 endingReady를 낸 직후부터 이 메서드가 참이 된다.
      */
     public boolean isEndingPoint(TheaterState state) {
-        return state.getCurrentAct().next() == null && isLastChapterOfAct(state);
+        // [D-13 ① · docs/19_assets/blockd_regressions.md — "isEndingPoint 가드가 마지막 챕터
+        //   '진행 중'에도 참"] 기존 구현은 isLastChapterOfAct(= currentChapter >= threshold)를 그대로
+        //   재사용해서 **ACT_4 Chapter 4를 시작한 순간부터** 참이었다. 그 결과 URL 직타·뒤로가기로
+        //   POST /theater/{id}/ending을 부르면 마지막 챕터 27씬을 한 장면도 안 보고 엔딩이 확정되고,
+        //   markEnded()로 resume 불가 상태가 된다 — 되돌릴 API가 없다.
+        //
+        //   그래서 "마지막 Act의 마지막 챕터를 **끝냈는가**"로 좁힌다(>= 가 아니라 >).
+        //   TheaterService.finalizeChapter가 state.completeChapter()로 currentChapter를 +1 하므로
+        //   ACT_4 Ch4를 완주하면 chapter=5 > 4가 되어 정확히 이 시점부터 참이 된다.
+        //   (advanceToNextAct는 next()==null인 마지막 Act에서 no-op이라 chapter가 5로 남는다.)
+        boolean isLastAct = state.getCurrentAct().next() == null;
+        return isLastAct && state.getCurrentChapter() > chapterThresholdOf(state);
     }
 
     public boolean isLastChapterOfAct(TheaterState state) {
         // Chapter 번호가 6에 도달했거나, 호감도 최고치가 임계치 넘었을 때
-        int chapterThreshold = switch (state.getCurrentAct()) {
+        return state.getCurrentChapter() >= chapterThresholdOf(state);
+    }
+
+    /** Act별 "마지막 Chapter" 번호. isLastChapterOfAct / isEndingPoint가 같은 기준을 봐야 한다. */
+    private int chapterThresholdOf(TheaterState state) {
+        return switch (state.getCurrentAct()) {
             case ACT_1_MEETING -> 5;
             case ACT_2_BONDING -> 6;
             case ACT_3_TURNING -> 5;
             case ACT_4_RESOLUTION -> 4;
         };
-        return state.getCurrentChapter() >= chapterThreshold;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -89,6 +89,28 @@ public class TheaterState {
     private int currentBatchId = 0;
 
     /**
+     * [버그픽스 B-5.2 · docs/17_assets/defect_register.md §B-5.2] <b>과금 워터마크</b> —
+     * 이번 Chapter에서 <b>실제로 에너지가 차감된</b> 최대 batchId.
+     *
+     * <p><b>왜 DB 컬럼인가</b> — 레지스터의 수정안은 Redis(TheaterBatchCacheService)를 제안했지만
+     * 돈 판정을 휘발 저장소에 두면 Redis 유실 시 정상 유저의 소비가 전부 거부된다.
+     * 반대로 관대 모드로 폴백하면 게이트가 무의미해진다. 그래서 영속 컬럼으로 둔다(V30).
+     *
+     * <p><b>왜 Chapter 단위인가</b> — {@code currentBatchId}가 {@link #completeChapter()}·
+     * {@link #advanceToNextAct()}에서 0으로 리셋되기 때문이다. 워터마크만 이전 Chapter 값을
+     * 들고 있으면 새 Chapter의 배치가 전부 '이미 지불됨'이 되어 게이트가 통째로 뚫린다.
+     * 따라서 두 리셋 지점에서 <b>반드시 함께</b> -1로 되돌린다.
+     *
+     * <p><b>NULL의 의미(grandfather)</b> — {@code NULL}은 "배포 이전부터 진행 중이던 세션"이다.
+     * 이들에겐 과금 이력이 애초에 존재하지 않으므로 게이트를 걸면 <b>전 유저 장애</b>가 된다.
+     * 소비 시점에 NULL이면 통과시키고 그 자리에서 워터마크를 세운다(TheaterService.onBatchConsumed).
+     * 신규 세션은 이 초기값 {@code -1}("이번 Chapter에서 아직 아무것도 지불하지 않음")로
+     * 생성되므로 NULL과 <b>구분된다</b> — 둘 다 통과시키면 게이트가 무의미해진다.
+     */
+    @Column(name = "last_paid_batch_id")
+    private Integer lastPaidBatchId = -1;
+
+    /**
      * [Phase 5.5 UX Polish · R2] Chapter당 MAJOR 분기를 1회만 발생시키기 위한 플래그.
      *  - false: 이번 Chapter에서 MAJOR가 아직 발생하지 않음
      *  - true:  이번 Chapter의 MAJOR가 이미 사용됨 (그 후 배치들은 MINOR로 처리)
@@ -301,6 +323,28 @@ public class TheaterState {
         this.currentBatchId += 1;
     }
 
+    /**
+     * [B-5.2] 과금 워터마크 전진 — {@code chargeBatchEnergy} <b>성공 직후</b>에만 호출한다.
+     * 후퇴하지 않는다(Math.max 의미론): 같은 배치를 두 번 받아 가거나(난입 복귀 후 재요청 등)
+     * 이미 앞선 배치를 지불한 상태에서 옛 batchId가 들어와도 워터마크가 뒤로 밀리면
+     * 정상 유저의 다음 소비가 막힌다.
+     */
+    public void markBatchPaid(int batchId) {
+        if (this.lastPaidBatchId == null || batchId > this.lastPaidBatchId) {
+            this.lastPaidBatchId = batchId;
+        }
+    }
+
+    /**
+     * [B-5.2] grandfather 승격 — 배포 이전 세션(NULL)의 첫 소비 지점에서만 호출한다.
+     * NULL인 채로 두면 게이트가 영원히 켜지지 않고, 여기서 -1로 두면 그 유저는
+     * 이미 지불한 현재 배치를 소비하지 못해 막힌다. 그래서 '지금 소비하는 배치까지는
+     * 지불된 것으로 본다'로 승격한다.
+     */
+    public void adoptPaidWatermark(int batchId) {
+        this.lastPaidBatchId = batchId;
+    }
+
     public void setCurrentHeroine(Long heroineId) {
         this.currentHeroineId = heroineId;
     }
@@ -308,6 +352,10 @@ public class TheaterState {
     public void completeChapter() {
         this.scenesInCurrentChapter = 0;
         this.currentBatchId = 0;
+        // [B-5.2] currentBatchId가 0으로 돌아가므로 과금 워터마크도 반드시 함께 리셋한다.
+        //   안 하면 새 Chapter의 batch 0..N이 이전 Chapter의 워터마크에 덮여 전부
+        //   '이미 지불됨'으로 통과한다 — 게이트를 켜 놓고 구멍만 넓히는 꼴이 된다.
+        this.lastPaidBatchId = -1;
         this.currentChapter += 1;
         // [R2] 새 Chapter 시작 시 MAJOR 분기 가능 상태로 reset
         this.majorBranchDoneInChapter = Boolean.FALSE;
@@ -323,6 +371,10 @@ public class TheaterState {
         this.currentChapter = 1;
         this.scenesInCurrentChapter = 0;
         this.currentBatchId = 0;
+        // [B-5.2] completeChapter와 같은 이유 — Act 전환도 currentBatchId를 0으로 되돌린다.
+        //   finalizeChapter는 completeChapter → advanceToNextAct 순으로 부르므로 중복 대입이지만,
+        //   이 메서드가 단독 호출되는 경로가 생겨도 워터마크가 새지 않도록 여기서도 못 박는다.
+        this.lastPaidBatchId = -1;
         this.intermissionStamina = 5;
         // [R2] Act 전환 시도 동일 reset
         this.majorBranchDoneInChapter = Boolean.FALSE;
@@ -510,6 +562,13 @@ public class TheaterState {
         this.totalSceneCount = totalScenes;
         this.currentHeroineId = currentHeroineId;
         this.currentBatchId = batchId;
+        // [B-5.2] 세이브 로드 — 되돌린 지점 **이후는 지불되지 않은 것**으로 둔다(batchId - 1).
+        //   ① 앞서 있으면(= 로드 전 워터마크 유지) 되돌린 구간이 통째로 무료가 된다.
+        //   ② 정상 유저를 막지 않는다 — TheaterSaveLoadService.loadSlot이 batchCache.purgeRoom을
+        //      부르므로 로드 직후엔 소비할 캐시 자체가 없고, 유저는 반드시 /next-batch(과금)를
+        //      한 번 거쳐야 한다. 그 호출이 markBatchPaid(batchId)로 워터마크를 다시 올린다.
+        //   ③ NULL(배포 이전 세션)이었더라도 여기서 non-null이 되어 게이트가 정상 가동한다.
+        this.lastPaidBatchId = batchId - 1;
         this.statCharm = AvatarStat.clamp(charm);
         this.statWit = AvatarStat.clamp(wit);
         this.statBoldness = AvatarStat.clamp(boldness);

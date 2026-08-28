@@ -120,7 +120,13 @@ public final class TheaterResponses {
         //   먼저 받아야 하는 상태. true면 프론트는 batch 요청을 보류하고 LOCATION 모달만 띄움.
         //   기존: LOCATION 분기 모달과 batch 0 LLM 호출이 병렬로 발생 → 분기 후 invalidation
         //         → batch 0 재생성으로 LLM 비용 2배.
-        boolean requiresLocationChoice
+        boolean requiresLocationChoice,
+        // [D-13 ③ · docs/19_assets/blockd_regressions.md — "극장 엔딩 진입이 '챕터 리포트 닫기' 한
+        //   경로에만 걸려 있어 이탈 시 부활 실패"] 마지막 Act의 마지막 Chapter를 끝낸 상태인가.
+        //   ChapterReport.endingReady는 리포트를 띄운 그 순간에만 존재하는 일회성 신호라,
+        //   유저가 리포트를 닫지 않고 새로고침·이탈하면 엔딩 진입점이 영구히 사라졌다.
+        //   방 진입 시점에도 서버가 같은 사실을 알려줘야 FE가 엔딩으로 유도할 수 있다.
+        boolean endingReady
     ) {}
 
     public record HeroineAffectionSnapshot(
@@ -222,7 +228,19 @@ public final class TheaterResponses {
         List<BranchOption> options,
         int actNumber,
         int chapterNumber,
-        long sceneSequence
+        long sceneSequence,
+        /**
+         * [버그픽스 B-4.a/b/c/e · docs/17_assets/defect_register.md]
+         * 서버가 이 분기를 실제로 제시했다는 증거 토큰.
+         *
+         * ⚠ 이 필드가 없어서 그동안 토큰이 **한 번도 왕복한 적이 없었다.**
+         *   BE는 발급해 Redis에 넣었지만 응답 DTO에 싣지 않았고, FE
+         *   (TheaterPlayPage.jsx:373 `options.branchToken`)는 항상 undefined→null을
+         *   되돌려 보냈다. 그 결과 applyBranchChoice의 토큰 분기가 死코드였고
+         *   서버는 클라이언트가 보낸 옵션 스냅샷을 그대로 믿었다.
+         *   이 필드 하나로 토큰이 왕복하게 되며 FE 변경은 0줄이다.
+         */
+        String branchToken
     ) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
