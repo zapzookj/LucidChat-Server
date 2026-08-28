@@ -164,6 +164,12 @@ public class User {
 
     /** 에너지 차감: free 우선 -> paid 폴백 */
     public void consumeEnergy(int amount) {
+        // [docs/17 §F #1 · docs/19 §F D-6] 음수 방어 — 전 차감 경로의 뿌리 착취면.
+        //   음수가 들어오면 아래 total < amount 검사를 통과한 뒤 paidEnergy -= (음수) 로
+        //   에너지가 '발행'된다. 클라이언트가 비용을 지정하던 경로가 이 구멍을 태웠다(docs/13 B-3).
+        if (amount < 0) {
+            throw new IllegalArgumentException("에너지 차감량은 음수일 수 없습니다: " + amount);
+        }
         int total = this.freeEnergy + this.paidEnergy;
         if (total < amount) {
             throw new InsufficientEnergyException(

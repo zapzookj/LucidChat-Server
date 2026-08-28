@@ -482,6 +482,10 @@ public class ChatStreamService {
             triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode, jpa.room().getChatMode());
 
         } catch (Exception e) {
+            // [docs/19 §F D-23 · 계약] TX-2 커밋 이후 구간이다 — **여기서 환불하지 않는다.**
+            //   TX-2가 커밋됐다는 것은 유저가 대금에 상응하는 것(응답·스탯·로그)을 이미 받았다는 뜻이고,
+            //   결손은 '전달'뿐이다. 여기에 보상을 넣으면 이중 지급이자 전송 실패를 유도하는 무료 획득면이 된다.
+            //   (레지스터 D-2.b의 미결 안건이었고 '환불하지 않는다'로 종결됐다. 되돌리지 말 것.)
             log.error("❌ Unexpected error | roomId={}", roomId, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
         }
@@ -681,13 +685,21 @@ public class ChatStreamService {
                         parsed.lastOutfit(), parsed.lastTime());
                     freshRoom.updateTopicConcluded(false); // 시간 넘기기 후 → 새 주제 시작
 
+                    // [docs/19 §F D-25] 이 경로에 단계 판정 주체가 없었다.
+                    //   블록 D가 refreshRelationFromStats에서 statusLevel 무조건 대입을 제거하면서
+                    //   단계 변경을 resolvePromotionLogic으로 일원화했는데, 시간 넘기기에는 그 호출을 안 붙였다
+                    //   → 승급·강등이 1턴 지연되고, 같은 TX에서 dynamicRelationTag가 stale한 단계 기준으로
+                    //   다시 만들어져 SSE의 relationStatus/tag가 실제 스탯과 어긋난 채 내려갔다.
+                    //   (커밋 메시지가 지적한 '시간 넘기기는 승급 로직을 아예 안 탔다'가 방향만 바뀐 채 남아 있었다.)
+                    PromotionEvent promoEvent = resolvePromotionLogic(freshRoom, parsed);
+
                     freshRoom.refreshRelationFromStats();   // [블록 D · §G-1] 태그 갱신 전용
 
                     StatsSnapshot statsSnapshot = buildStatsSnapshot(freshRoom, effectiveSecretMode);
 
                     return new SendChatResponse(roomId, parsed.sceneResponses(),
                         freshRoom.getAffectionScore(), freshRoom.getStatusLevel().name(),
-                        null, null, null,
+                        promoEvent, null, null,
                         statsSnapshot,
                         freshRoom.getDynamicRelationTag(), null,
                         false, null,
@@ -1095,9 +1107,15 @@ public class ChatStreamService {
             EasterEggType eggType = EasterEggType.valueOf(eggTrigger.toUpperCase());
             var unlock = achievementService.unlockEasterEgg(userId, eggType);
             boolean revert = (eggType == EasterEggType.FOURTH_WALL);
-            return new EasterEggEvent(eggType.name(),
-                new AchievementInfo(unlock.code(), unlock.title(), unlock.titleKo(),
-                    unlock.description(), unlock.icon(), unlock.isNew()), revert);
+            // [docs/19 §C-2 · P0] 업적 게이트 오프(기본값)면 unlockEasterEgg가 null을 반환한다
+            //   (AchievementService:67). 여기서 무가드로 역참조하면 NPE가 아래 catch(IllegalArgumentException)에
+            //   안 잡히고 TX-2 밖 catch(Exception)로 가서 compensateFullRollback + TX_ERROR —
+            //   유저가 본문을 다 본 뒤 턴 전체(로그·메시지·스탯)를 잃는다. SANDBOX 주력 표면이다.
+            //   docs/14 §C#6이 '이스터에그 연출은 유지, 업적만 오프'로 확정했으므로 achievement만 null로 내린다.
+            AchievementInfo achievement = (unlock == null) ? null
+                : new AchievementInfo(unlock.code(), unlock.title(), unlock.titleKo(),
+                    unlock.description(), unlock.icon(), unlock.isNew());
+            return new EasterEggEvent(eggType.name(), achievement, revert);
         } catch (IllegalArgumentException ignored) {
             return null;
         }
@@ -1458,6 +1476,14 @@ public class ChatStreamService {
                 compensateFullRollback(rollbackCtx);
                 sendSseError(emitter, "TX_ERROR", "자동 응답 처리 실패");
                 return;
+            }
+
+            // [docs/19 §F D-8] 가격표 소비는 TX-2 커밋 이후다.
+            //   resolveBranchCost 안에서 evict하면 Redis가 DB 롤백을 안 따라가므로,
+            //   에너지 부족·스트림 실패로 보상 롤백이 돌 때 가격표만 사라져
+            //   재시도 시 4E 카드가 1E가 된다.
+            if (isBranchResponse) {
+                directorService.consumeBranchPricing(roomId);
             }
 
             // ── [Phase 6-Illust hotfix] 장소 전환 처리 — canonical_key 기반 ──

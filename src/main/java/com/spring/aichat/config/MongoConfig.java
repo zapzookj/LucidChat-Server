@@ -33,7 +33,8 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
 @EnableMongoAuditing
 @EnableMongoRepositories(basePackages = {
     "com.spring.aichat.domain.chat",
-    "com.spring.aichat.domain.theater"
+    "com.spring.aichat.domain.theater",
+    "com.spring.aichat.domain.ending"
 }
 )
 public class MongoConfig {

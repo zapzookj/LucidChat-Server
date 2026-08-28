@@ -71,6 +71,15 @@ public class EndingService {
             .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId));
 
         com.spring.aichat.domain.character.Character character = room.getCharacter();
+        // [docs/13 E-4.9 · docs/19 §F D-5] V2 STORY 방은 멀티 히로인이라 room.character가 null이다.
+        //   가드가 없으면 바로 아래 getName()에서 NPE → 확정 500이고, 프론트가 3회 재시도까지 한다.
+        //   현재는 legacy.ending.dialogue-enabled 게이트로 도달 불가지만 **노브를 켜는 순간 P0가 부활**하므로
+        //   부활 선행 조건으로 지금 넣는다(3줄). 도달 시 500이 아니라 400으로 닫는 것이 §G-2와 같은 방향이다.
+        if (character == null) {
+            throw new com.spring.aichat.exception.BusinessException(
+                com.spring.aichat.exception.ErrorCode.BAD_REQUEST,
+                "이 방에서는 엔딩을 생성할 수 없습니다. (멀티 히로인 방)");
+        }
         String characterName = character.getName();
         String userNickname = room.getUser().getNickname();
         int affection = room.getAffectionScore();

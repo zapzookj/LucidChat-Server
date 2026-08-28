@@ -262,7 +262,13 @@ public class DirectorService {
     }
 
     /**
-     * 선택한 분기의 서버측 비용을 반환하고 가격표를 소비(evict)한다.
+     * 선택한 분기의 서버측 비용을 <b>읽기만</b> 한다. 소비(evict)는 {@link #consumeBranchPricing(Long)}이 한다.
+     *
+     * <p>[docs/19 §F D-8] 예전에는 여기서 곧바로 evict했다. 그런데 이 메서드는 TX-1 안에서 불리고
+     * <b>Redis evict는 DB 트랜잭션과 함께 롤백되지 않는다</b> — {@code consumeEnergy}가 에너지 부족으로
+     * 던지거나 이후 스트림이 실패해 보상 롤백이 돌면 <b>가격표만 사라진다</b>. 그러면 유저가 충전 후
+     * 같은 분기를 다시 골랐을 때 캐시 미스로 4E 카드가 1E가 된다(정상 유저 손해이자 착취면).
+     * 그래서 소비 시점을 '턴 전체 성공 후'로 미뤘다.
      *
      * @return 서버가 제시했던 비용. 인덱스 범위 밖·캐시 만료·미BRANCH면 {@link Optional#empty()}
      *         → 호출부는 레거시 기본값으로 폴백한다(관용 롤아웃).
@@ -282,11 +288,22 @@ public class DirectorService {
                     chosenIndex, costs.size(), roomId);
                 return Optional.empty();
             }
-            cacheService.evict(key);
             return Optional.of(((Number) costs.get(chosenIndex)).intValue());
         } catch (Exception e) {
             log.warn("🎬 [DIRECTOR] Branch cost resolve failed | roomId={}", roomId, e);
             return Optional.empty();
+        }
+    }
+
+    /**
+     * 가격표를 소비한다. <b>턴 전체가 성공한 뒤</b>에만 호출할 것(docs/19 §F D-8).
+     * 실패·롤백 경로에서는 호출하지 않아야 재시도가 같은 가격으로 이뤄진다.
+     */
+    public void consumeBranchPricing(Long roomId) {
+        try {
+            cacheService.evict(BRANCH_PRICE_KEY_PREFIX + roomId);
+        } catch (Exception e) {
+            log.warn("🎬 [DIRECTOR] Branch pricing evict failed (non-fatal) | roomId={}", roomId, e);
         }
     }
 

@@ -95,6 +95,13 @@ public class EndingEligibilityService {
     @Transactional
     public boolean processDirectorTrigger(ChatRoom room, boolean endingTriggered, String endingTypeStr) {
         if (!endingTriggered) return false;
+        // [블록 D · docs/14 §C#6] 엔딩 게이트 오프 — checkAndActivateEligibility(:62)에만 있고
+        //   여기엔 빠져 있었다(docs/19 §D — docs/18 §4-A ⑫의 '게이트로 도달 불가'는 사실오류였다).
+        //   게이트 도입 *이전*에 ending_eligible=true가 저장된 기존 V2 STORY 방은 :104 방어를 통과해
+        //   markEndingReached까지 도달했고, 정작 감상 경로(EndingController)는 400이라
+        //   '도달만 하고 볼 수는 없는' 상태로 영구 고정됐다.
+        //   ※ V2 STORY 경로에는 원래 업적 배선이 없다(E-4.10) — 여기서 찾지 말 것.
+        if (!legacy.getEnding().isDialogueEnabled()) return false;
         if (!room.isStoryMode()) return false;
         if (room.isEndingReached()) {
             log.debug("🎬 [ENDING-TRIGGER] Already reached, ignored: roomId={}", room.getId());
