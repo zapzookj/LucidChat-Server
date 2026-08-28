@@ -21,6 +21,8 @@ import com.spring.aichat.service.audit.AuditLogService;
 import com.spring.aichat.service.notification.NotificationService;
 import com.spring.aichat.service.ugc.UgcAssetService;
 import com.spring.aichat.service.ugc.UgcJobJson;
+// [안건 9-B] 시크릿 자격 나이 기준 단일 소스 — 상수 복제 금지(게이트가 갈린다)
+import com.spring.aichat.service.ugc.UgcModerationService;
 import com.spring.aichat.service.ugc.UgcPromptAssembler;
 import com.spring.aichat.service.ugc.UgcWorkflowFactory;
 import lombok.RequiredArgsConstructor;
@@ -186,6 +188,17 @@ public class AdminUgcReviewService {
 
         if (req.secretApprove() != null) {
             if (req.secretApprove()) {
+                // [안건 9-B · docs/19_assets/decisions_confirmed.md §C] 나이 미달 승인 거부.
+                // 이 분기는 지금까지 상태 전제조건이 하나도 없었다(바로 위 publishApprove는
+                // PENDING_PUBLIC을 강제하는데 비대칭). 신청 경로(requestSecretReview)만 막아도
+                // 이 API 한 방으로 secretEligible=true가 되므로, 서버측 최종 판정은 여기다(§F ②).
+                // age == null 유예는 SecretModeService.isCharacterSecretEligible의 배포 함정과 동일한 이유 —
+                // 기존 UGC 캐릭터가 전부 null이라 막으면 승인 큐 전체가 잠긴다.
+                Integer age = c.getAge();
+                if (age != null && age < UgcModerationService.MIN_CHARACTER_AGE) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST,
+                        UgcModerationService.MIN_CHARACTER_AGE + "세 미만 캐릭터는 Secret 모드를 승인할 수 없습니다: age=" + age);
+                }
                 c.approveSecret(req.note());
                 detail.append("secret=APPROVED ");
                 notifyOwner(c, "Secret 모드가 허용되었어요",

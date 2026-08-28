@@ -78,7 +78,7 @@ class WorldBridgeTest {
     private static Character ugcChar(WorldId officialWorld, Long ugcWorld) {
         return Character.createUgc(new Character.UgcCharacterSpec(
             1L, "미아", "ugc-mia", "system", "model",
-            "tagline", "desc", "role", "personality", "tone",
+            "tagline", "desc", "role", null, "personality", "tone",   // age=null (안건 9-D 배선)
             "appearance", "clothing", "backstory", "core", "flaws", "quirks",
             "greeting", "intro", "http://img", "http://thumb", "DEFAULT",
             officialWorld, ugcWorld, "160cm", "likes", "dislikes", "hobby", "무드", "quote",

@@ -541,17 +541,26 @@ public class UgcPipelineWorker {
             String neutralKey = "characters/" + slug + "/default_neutral.png";
             String thumbnailKey = "characters/" + slug + "/thumbnail.png";
 
+            // [D-19 / D-3.6 최종 방어] varchar 상한 절삭 — 여기는 이미 GPU를 전부 쓴 시점이라
+            // 거부가 불가능하다(거부 = 완주한 잡 폐기 + 전액 환불 = 순 0E GPU 드레인).
+            // 구버전 잡 JSON(Stage 0 절삭 도입 이전 생성분)이나 미래의 새 입력 경로가 바인딩을
+            // 죽이지 못하게 하는 마지막 방어선. 유저 입력 거부는 CharacterCreationService에서 한다.
+            String boundName = ConceptStructuringService.normalizeShort(profile.name(), UgcTextLimits.NAME_MAX);
+            if (boundName == null) boundName = profile.name();   // name은 NOT NULL — blank→null 계약 회피
             Character.UgcCharacterSpec spec = new Character.UgcCharacterSpec(
                 job.getUserId(),
-                profile.name(),
+                boundName,
                 slug,
                 promptAssembler.buildUgcBaseSystemPrompt(profile),
                 openAiProps.model(),
-                profile.tagline(),
+                ConceptStructuringService.normalizeShort(profile.tagline(), UgcTextLimits.TAGLINE_MAX),
                 profile.personality(),
-                profile.role(),
+                ConceptStructuringService.normalizeShort(profile.role(), UgcTextLimits.ROLE_MAX),
+                // [안건 9-D · decisions_confirmed §C] Stage 0 age 배선 — 그동안 버려져 프롬프트에
+                // `- Age: null`이 실렸고, 시크릿 자격 판정도 판정 소스 자체가 없었다.
+                profile.age(),
                 profile.personality(),
-                profile.tone(),
+                ConceptStructuringService.normalizeShort(profile.tone(), UgcTextLimits.TONE_MAX),
                 profile.appearance(),
                 profile.clothing(),
                 profile.backstory(),

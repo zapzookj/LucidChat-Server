@@ -46,8 +46,15 @@ public class UgcModerationService {
     /** 유저 노출용 일반 안내 (기준 미노출 원칙). */
     static final String BLOCK_MESSAGE = "이 컨셉으로는 캐릭터를 만들 수 없어요. 내용을 수정해 다시 시도해 주세요.";
 
-    /** 캐릭터 최소 연령 — 성인인증(만 19세) 서비스 기준과 정합. */
-    static final int MIN_CHARACTER_AGE = 19;
+    /**
+     * 캐릭터 최소 연령 — 성인인증(만 19세) 서비스 기준과 정합.
+     *
+     * <p>[안건 9 · docs/19_assets/decisions_confirmed.md §C] 시크릿 자격 게이트 3곳
+     * ({@code SecretModeService.isCharacterSecretEligible} · {@code AdminUgcReviewService.review} ·
+     * {@code UgcCharacterService.requestSecretReview})이 같은 기준을 봐야 하므로 public으로 승격.
+     * 상수를 각 패키지에 복제하면 한쪽만 바뀌는 순간 게이트가 갈린다.
+     */
+    public static final int MIN_CHARACTER_AGE = 19;
 
     /**
      * 하드 키워드 — 의도적으로 소수만 유지 (좁은 게이트 원칙).

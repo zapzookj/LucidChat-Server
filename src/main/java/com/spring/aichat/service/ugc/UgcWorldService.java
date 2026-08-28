@@ -475,6 +475,10 @@ public class UgcWorldService {
             owner.consumeEnergy(props.world().reroll()); // 1E — 부족 시 차감 전 예외
             userRepository.save(owner);
 
+            // [안건 20 = (A)] 승인 후 장소 추가 → 재검수 회귀. updateTexts만 회귀시키고
+            //   장소 추가를 열어 두면 미검수 장소 설명이 공개 캐릭터 프롬프트에 주입된다(E-5.3.a).
+            locked.markNeedsRereview();
+
             return locationRepository.save(
                 UgcWorldLocation.createGenerating(worldId, key, displayName, description, order)).getId();
         });

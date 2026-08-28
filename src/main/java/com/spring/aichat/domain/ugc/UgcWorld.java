@@ -125,6 +125,19 @@ public class UgcWorld {
         }
     }
 
+    /**
+     * [안건 20 = (A) 종원 확정 · docs/19_assets/decisions_confirmed.md §B #20] 재검수 회귀.
+     *
+     * <p>승인 후 <b>장소 추가</b>도 심사 대상 텍스트(장소 설명)를 늘리는 행위다 —
+     * {@code updateTexts}만 회귀시키고 장소 추가를 열어 두면 그쪽으로 우회면이 몰린다.
+     * 캐릭터 텍스트·월드 lore·월드 장소 세 경로에 같은 원칙을 적용해야 한다.
+     */
+    public void markNeedsRereview() {
+        if (this.reviewStatus != WorldReviewStatus.NONE) {
+            this.reviewStatus = WorldReviewStatus.NONE;
+        }
+    }
+
     // ── 검수 판정 (캐릭터 공개 심사 피기백 — AdminUgcReviewService 전용) ──
 
     public void approve(String note) {

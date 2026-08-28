@@ -36,7 +36,7 @@ class LobbyServiceGuestTest {
     private static Character ugc(long id, String name, boolean publish, boolean hidden, Long ownerId) {
         Character c = Character.createUgc(new Character.UgcCharacterSpec(
             ownerId, name, "ugc-" + id, "system", "model",
-            "tagline-" + name, "desc", "role", "personality", "tone",
+            "tagline-" + name, "desc", "role", null, "personality", "tone",   // age=null (안건 9-D 배선)
             "appearance", "clothing", "backstory", "core", "flaws", "quirks",
             "greeting", "intro", "http://img", "http://thumb", "DEFAULT",
             null, null, "160cm", "likes", "dislikes", "hobby", "무드", "quote",

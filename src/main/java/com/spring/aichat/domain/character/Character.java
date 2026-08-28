@@ -81,6 +81,15 @@ public class Character {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    /**
+     * [C-0.5 종결 · docs/19 §F D-33] <b>V1 STORY 트랙 잔재가 아니다.</b>
+     *
+     * <p>레지스터 C-0.5의 원 수정안(시드 일괄 {@code story-available: false} · 기본값 false)은
+     * <b>폐기됐다</b> — 이 필드는 현재 <b>V2 STORY 월드 히로인 풀 필터</b>로 살아 있고
+     * ({@code StoryV2Service}의 공식 월드 캐스팅 검증), 내리면 히로인 풀이 비어 라이브 기능이 죽는다.
+     * V1 STORY 생성은 이 플래그가 아니라 {@code LobbyService}의 §G-2 무조건 400이 막는다.
+     * <b>무수정 존치.</b>
+     */
     @Column(name = "story_available", nullable = false)
     private boolean storyAvailable = true;
 
@@ -404,9 +413,11 @@ public class Character {
         if (seed.loverUnlockOutfits() != null) this.loverUnlockOutfits = seed.loverUnlockOutfits();
         if (seed.loverUnlockLocations() != null) this.loverUnlockLocations = seed.loverUnlockLocations();
         if (seed.outfitDescriptions() != null) this.outfitDescriptions = seed.outfitDescriptions();
-        if (seed.endingRoleDesc() != null) this.endingRoleDesc = seed.endingRoleDesc();
-        if (seed.endingQuoteHappy() != null) this.endingQuoteHappy = seed.endingQuoteHappy();
-        if (seed.endingQuoteBad() != null) this.endingQuoteBad = seed.endingQuoteBad();
+        // [D-27 동반 · E-3 ④.9] 빈 문자열 시드를 DB에 영속시키지 않는다 — getEffective* 폴백이
+        // isBlank()로 방어하더라도, ""가 저장되면 어드민 화면·시드 감사에서 '값 있음'으로 보인다.
+        if (seed.endingRoleDesc() != null && !seed.endingRoleDesc().isBlank()) this.endingRoleDesc = seed.endingRoleDesc();
+        if (seed.endingQuoteHappy() != null && !seed.endingQuoteHappy().isBlank()) this.endingQuoteHappy = seed.endingQuoteHappy();
+        if (seed.endingQuoteBad() != null && !seed.endingQuoteBad().isBlank()) this.endingQuoteBad = seed.endingQuoteBad();
         if (seed.introNarration() != null) this.introNarration = seed.introNarration();
         if (seed.firstGreeting() != null) this.firstGreeting = seed.firstGreeting();
 
@@ -487,17 +498,22 @@ public class Character {
         return role != null ? role : name;
     }
 
+    // [D-27 · docs/19_assets/decision_agenda.md D-27 (E-3 ④.10)] 엔딩 인용구 폴백은
+    // `!= null`이 아니라 `isBlank()`로 판정한다. 빈 문자열 시드("")가 null 검사를 통과해
+    // 극장 엔딩(TheaterEndingService:125-126·325-335)·엔딩(EndingService:169-171)이
+    // 대사 없는 씬을 렌더하던 결함. 위 getEffective* 계열의 기존 관례와도 정합.
     public String getEffectiveEndingRoleDesc() {
-        return endingRoleDesc != null ? endingRoleDesc : "a character in a visual novel";
+        return (endingRoleDesc != null && !endingRoleDesc.isBlank())
+            ? endingRoleDesc : "a character in a visual novel";
     }
 
     public String getEffectiveEndingQuoteHappy() {
-        return endingQuoteHappy != null ? endingQuoteHappy
+        return (endingQuoteHappy != null && !endingQuoteHappy.isBlank()) ? endingQuoteHappy
             : "당신과의 모든 순간이, " + name + "에겐 기적이었어요.";
     }
 
     public String getEffectiveEndingQuoteBad() {
-        return endingQuoteBad != null ? endingQuoteBad
+        return (endingQuoteBad != null && !endingQuoteBad.isBlank()) ? endingQuoteBad
             : "그 분이 처음 문을 열었을 때의 온기가... 아직도 손끝에 남아 있습니다.";
     }
 
@@ -693,6 +709,13 @@ public class Character {
         String tagline,
         String description,
         String role,
+        /**
+         * [안건 9-D · docs/19_assets/decisions_confirmed.md §C] 캐릭터 나이 (Stage 0 산출).
+         * 이 슬롯이 없어 위저드가 표시까지 하는 age가 바인딩에서 통째로 버려졌고,
+         * 그 결과 모든 UGC 캐릭터가 프롬프트에 `- Age: null` 리터럴을 실었다.
+         * 시크릿 자격 판정(SecretModeService·AdminUgcReviewService)의 유일한 판정 소스이기도 하다.
+         */
+        Integer age,
         String personality,
         String tone,
         String appearance,
@@ -748,6 +771,10 @@ public class Character {
         c.tagline = spec.tagline();
         c.description = spec.description();
         c.role = spec.role();
+        // [안건 9-D · docs/19_assets/decisions_confirmed.md §C] Stage 0 age 배선.
+        // 19세 미만은 UgcModerationService(MIN_CHARACTER_AGE=19)가 생성 단계에서 이미 거부하므로
+        // 여기 도달하는 값은 19+ 또는 null(LLM 미산출)이다.
+        c.age = spec.age();
         c.personality = spec.personality();
         c.tone = spec.tone();
         c.appearance = spec.appearance();
@@ -835,14 +862,35 @@ public class Character {
      * [2026-07-30 P1 빈값=삭제] tagline은 빈 문자열=삭제(null). 프롬프트 필수 필드
      * (name/personality/tone/firstGreeting)는 빈 문자열도 '유지' — "" 저장으로
      * getEffective* 폴백이 무력화되는 사고 방지.
+     *
+     * @return 이 수정으로 PUBLIC → PENDING_PUBLIC 재심사 회귀가 일어났으면 true (안건 20 (A))
      */
-    public void updateUgcTexts(String name, String tagline, String personality,
-                               String tone, String firstGreeting) {
-        if (name != null && !name.isBlank()) this.name = name;
-        if (tagline != null) this.tagline = tagline.isBlank() ? null : tagline;
-        if (personality != null && !personality.isBlank()) this.personality = personality;
-        if (tone != null && !tone.isBlank()) this.tone = tone;
-        if (firstGreeting != null && !firstGreeting.isBlank()) this.firstGreeting = firstGreeting;
+    public boolean updateUgcTexts(String name, String tagline, String personality,
+                                  String tone, String firstGreeting) {
+        boolean changed = false;
+        if (name != null && !name.isBlank() && !name.equals(this.name)) { this.name = name; changed = true; }
+        if (tagline != null) {
+            String next = tagline.isBlank() ? null : tagline;
+            if (!Objects.equals(next, this.tagline)) { this.tagline = next; changed = true; }
+        }
+        if (personality != null && !personality.isBlank() && !personality.equals(this.personality)) {
+            this.personality = personality; changed = true;
+        }
+        if (tone != null && !tone.isBlank() && !tone.equals(this.tone)) { this.tone = tone; changed = true; }
+        if (firstGreeting != null && !firstGreeting.isBlank() && !firstGreeting.equals(this.firstGreeting)) {
+            this.firstGreeting = firstGreeting; changed = true;
+        }
+
+        // [안건 20 (A) · docs/19_assets/decisions_confirmed.md §B #20] 승인 후 텍스트 수정 재심사 회귀.
+        // 여기 다섯 필드가 곧 심사 대상 텍스트다. 회귀가 없으면 심사를 통과시킨 뒤 personality/tone/
+        // firstGreeting을 통째로 갈아끼우는 것이 무료·무제한이라 공개 심사가 무력화된다
+        // (UgcWorld.updateTexts:112-126이 월드 트랙에서 이미 쓰는 것과 같은 원칙 — 캐릭터만 비대칭이었다).
+        // PUBLIC만 되돌린다: PRIVATE는 심사 대상이 아니고, PENDING_PUBLIC은 이미 대기 상태다.
+        if (changed && visibility == CharacterVisibility.PUBLIC) {
+            this.visibility = CharacterVisibility.PENDING_PUBLIC;
+            return true;
+        }
+        return false;
     }
 
     // ── 공개 심사 경로 ──

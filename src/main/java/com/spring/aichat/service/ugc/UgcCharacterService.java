@@ -78,6 +78,18 @@ public class UgcCharacterService {
     @Transactional
     public void requestSecretReview(String username, Long characterId) {
         Character character = ownedUgc(username, characterId);
+
+        // [안건 9-C · docs/19_assets/decisions_confirmed.md §C] 나이 미달 신청 차단.
+        // ⚠ 이건 게이트가 아니라 '안내'다 — 서버측 최종 판정은 A(SecretModeService.isCharacterSecretEligible)와
+        // B(AdminUgcReviewService.review의 secretApprove)에 있다. 여기만 막으면 어드민 API 직타로
+        // secretEligible=true가 되므로(§F ②, beta-activate 사고와 같은 형태) 이 검사에 의존하지 말 것.
+        // age == null은 통과시킨다 — 기존 UGC 캐릭터가 전부 null이라 여기서 막으면 신청면이 통째로 죽는다.
+        Integer age = character.getAge();
+        if (age != null && age < UgcModerationService.MIN_CHARACTER_AGE) {
+            throw new BadRequestException(
+                "%d세 미만 캐릭터는 Secret 모드를 신청할 수 없어요.".formatted(UgcModerationService.MIN_CHARACTER_AGE));
+        }
+
         character.requestSecretReview();
         log.info("[UGC] Secret 심사 신청: characterId={}, username={}", characterId, username);
     }
@@ -87,7 +99,22 @@ public class UgcCharacterService {
     @Transactional
     public void updateTexts(String username, Long characterId, UgcDtos.UpdateTextsRequest req) {
         Character character = ownedUgc(username, characterId);
-        character.updateUgcTexts(req.name(), req.tagline(), req.personality(), req.tone(), req.firstGreeting());
+
+        // [D-19 / D-3.6 · decision_agenda D-19] 길이 상한 400 거부. 이 경로는 바인딩이 끝난
+        // Character를 직접 수정하므로, 검증이 없으면 varchar 초과가 커밋 시점 500으로 터진다
+        // (role은 이 DTO에 없다 — name/tagline/tone만 varchar, personality·firstGreeting은 TEXT).
+        UgcTextLimits.requireMax(req.name(), UgcTextLimits.NAME_MAX, "이름");
+        UgcTextLimits.requireMax(req.tagline(), UgcTextLimits.TAGLINE_MAX, "한 줄 소개");
+        UgcTextLimits.requireMax(req.tone(), UgcTextLimits.TONE_MAX, "말투");
+
+        boolean revertedToReview = character.updateUgcTexts(
+            req.name(), req.tagline(), req.personality(), req.tone(), req.firstGreeting());
+        // [안건 20 (A) · decisions_confirmed §B #20] 승인 후 심사 대상 필드 수정 → PENDING_PUBLIC 자동 회귀.
+        // 회귀 판정 자체는 Character.updateUgcTexts 안(불변식)에 있고 여기선 로깅만 한다.
+        if (revertedToReview) {
+            log.info("[UGC] 승인 후 텍스트 수정 → 재심사 회귀(PENDING_PUBLIC): characterId={}, username={}",
+                characterId, username);
+        }
         // [2026-07-31 난이도] 무료 편집 — 무효값·null은 유지(NORMAL도 명시값)
         var difficulty = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(req.difficulty());
         if (difficulty != null) character.updateDifficulty(difficulty);

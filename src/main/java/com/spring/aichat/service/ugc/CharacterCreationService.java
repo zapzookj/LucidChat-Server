@@ -272,6 +272,12 @@ public class CharacterCreationService {
                 nz(req.flaws()), nz(req.speechQuirks()), nz(req.firstGreeting()), nz(req.introNarration())));
         moderationService.assertRawConceptAllowed(combined);
 
+        // [D-19 / D-3.6 · docs/19_assets/decision_agenda.md D-19] 유저 입력 길이 상한 — 400 거부.
+        // 여기서 막지 않으면 초과값이 잡 JSON에 그대로 실려, 전 스테이지를 완주한 뒤 최종 바인딩의
+        // varchar 초과로 잡이 죽고 전액 환불된다(순 0E GPU 드레인). 절삭이 아니라 거부인 이유는
+        // UgcTextLimits javadoc 참조 — 조용히 자르면 유저 편집 의도가 소실된다.
+        UgcTextLimits.requireCharacterTexts(req.name(), req.tagline(), req.role(), req.tone());
+
         txTemplate.executeWithoutResult(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             if (job.getStatus().isTerminal()

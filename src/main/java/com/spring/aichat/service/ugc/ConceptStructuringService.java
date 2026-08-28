@@ -169,8 +169,18 @@ public class ConceptStructuringService {
 
         // [리뷰 픽스] 신상 4종은 VARCHAR(30/200) 컬럼에 저장된다 — LLM 과다 산출·배열 bullet 펼침이
         // 최종 바인딩(전 스테이지 완주 후)에서 varchar 초과로 잡 전체를 죽이지 않도록 정규화·절삭.
+        // [D-19 / D-3.6] name/tagline/role/tone도 VARCHAR(50/100/100/300)인데 위 절삭 대상에서
+        // 빠져 있었다 — 바로 이 주석이 서술하는 실패 모드에 그대로 노출돼 있던 4필드다.
+        // personality/appearance/clothing/backstory/coreValues/flaws/speechQuirks/firstGreeting/
+        // introNarration은 TEXT 컬럼이라 절삭 불요.
+        // name은 NOT NULL 컬럼이라 normalizeShort의 blank→null 계약을 그대로 쓸 수 없다 — 절삭만 취한다.
+        String shortName = normalizeShort(effectiveName, UgcTextLimits.NAME_MAX);
+        if (shortName == null) shortName = effectiveName;
         StructuredConcept.CharacterProfile fixed = new StructuredConcept.CharacterProfile(
-            effectiveName, p.tagline(), p.age(), p.role(), p.personality(), p.tone(),
+            shortName,
+            normalizeShort(p.tagline(), UgcTextLimits.TAGLINE_MAX), p.age(),
+            normalizeShort(p.role(), UgcTextLimits.ROLE_MAX), p.personality(),
+            normalizeShort(p.tone(), UgcTextLimits.TONE_MAX),
             p.appearance(), p.clothing(), p.backstory(), p.coreValues(), p.flaws(),
             p.speechQuirks(), dialogue, intro,
             normalizeShort(p.height(), 30), normalizeShort(p.likes(), 200),
