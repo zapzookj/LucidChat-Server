@@ -453,19 +453,19 @@ app:
       - { character-slug: airi, time-of-day: NIGHT,     location-key: LIBRARY,    probability: 15, notes: "몰래 책장 정리하며 읽기" }
 
       # ━━ 연화 (천 년 묵은 구미호, ORIENTAL_FANTASY) ━━
-      #  야행성. 밤의 달빛 숲에서 가장 생기가 돈다. 낮에는 나른히 잠을 청한다.
+      #  야행성. 밤의 깊은 숲에서 가장 생기가 돈다. 낮에는 나른히 잠을 청한다.
       - { character-slug: yeonhwa, time-of-day: MORNING,   location-key: HIDDEN_GROVE,   probability: 60, notes: "밤새 노닐다 새벽잠" }
       - { character-slug: yeonhwa, time-of-day: MORNING,   location-key: MOUNTAIN_CABIN, probability: 40, notes: "몸을 누이는 은신처" }
       - { character-slug: yeonhwa, time-of-day: NOON,      location-key: LAKE_PAVILION,  probability: 45, notes: "물그림자 보며 나른히" }
       - { character-slug: yeonhwa, time-of-day: NOON,      location-key: BAMBOO_PATH,    probability: 30, notes: "대숲 산책" }
       - { character-slug: yeonhwa, time-of-day: NOON,      location-key: HIDDEN_GROVE,   probability: 25, notes: "낮잠" }
-      - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: MOONLIT_FOREST, probability: 50, notes: "자기 영역 거닐기" }
+      - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: DEEP_FOREST    , probability: 50, notes: "자기 영역 거닐기" }
       - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: HIDDEN_GROVE,   probability: 30, notes: "꽃·나비와 장난" }
       - { character-slug: yeonhwa, time-of-day: AFTERNOON, location-key: LAKE_PAVILION,  probability: 20, notes: "물가에서 머리 빗기" }
       - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: LAKE_PAVILION,  probability: 45, notes: "달 뜨길 기다림" }
-      - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: MOONLIT_FOREST, probability: 35, notes: "밤마실 채비" }
+      - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: DEEP_FOREST    , probability: 35, notes: "밤마실 채비" }
       - { character-slug: yeonhwa, time-of-day: EVENING,   location-key: SHRINE_GATE,    probability: 20, notes: "인간 세상 기웃거리기" }
-      - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: MOONLIT_FOREST, probability: 55, notes: "가장 생기 도는 시간" }
+      - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: DEEP_FOREST    , probability: 55, notes: "가장 생기 도는 시간" }
       - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: LAKE_PAVILION,  probability: 30, notes: "달빛 아래 춤" }
       - { character-slug: yeonhwa, time-of-day: NIGHT,     location-key: TEAHOUSE,       probability: 15, notes: "변신하여 인간 홀리기" }
 
@@ -536,22 +536,22 @@ app:
       - { character-slug: chaerin, time-of-day: NIGHT,     location-key: HAN_RIVER,         probability: 25, notes: "야간 러닝" }
 
       # ━━ 로제타 (장난 심한 문제아 영애, FANTASY_ACADEMY) ━━
-      #  환영 마법의 천재. 주목받기를 즐기고, 거울의 정원에서 환영 장난을 꾸민다.
+      #  환영 마법의 천재. 주목받기를 즐기고, 아카데미 정원에서 환영 장난을 꾸민다.
       - { character-slug: rosetta, time-of-day: MORNING,   location-key: GREAT_HALL,        probability: 50, notes: "화려한 등장" }
       - { character-slug: rosetta, time-of-day: MORNING,   location-key: DORMITORY,         probability: 30, notes: "느긋한 치장" }
-      - { character-slug: rosetta, time-of-day: MORNING,   location-key: GARDEN_OF_MIRRORS, probability: 20, notes: "환영 장난 구상" }
+      - { character-slug: rosetta, time-of-day: MORNING,   location-key: GARDEN_OF_ACADEMY, probability: 20, notes: "환영 장난 구상" }
       - { character-slug: rosetta, time-of-day: NOON,      location-key: GREAT_HALL,        probability: 50, notes: "주목받으며 식사" }
-      - { character-slug: rosetta, time-of-day: NOON,      location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "장난 마법 시연" }
+      - { character-slug: rosetta, time-of-day: NOON,      location-key: GARDEN_OF_ACADEMY, probability: 30, notes: "장난 마법 시연" }
       - { character-slug: rosetta, time-of-day: NOON,      location-key: ARENA,             probability: 20, notes: "결투 구경하며 야유" }
-      - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: GARDEN_OF_MIRRORS, probability: 45, notes: "환영 마법 연습" }
+      - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: GARDEN_OF_ACADEMY, probability: 45, notes: "환영 마법 연습" }
       - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: ARENA,             probability: 30, notes: "실력 과시" }
       - { character-slug: rosetta, time-of-day: AFTERNOON, location-key: GREAT_HALL,        probability: 25, notes: "추종자들과 어울림" }
       - { character-slug: rosetta, time-of-day: EVENING,   location-key: ARENA,             probability: 40, notes: "도발과 결투" }
       - { character-slug: rosetta, time-of-day: EVENING,   location-key: GREAT_HALL,        probability: 35, notes: "저녁 사교" }
-      - { character-slug: rosetta, time-of-day: EVENING,   location-key: GARDEN_OF_MIRRORS, probability: 25, notes: "노을 속 환영 연출" }
+      - { character-slug: rosetta, time-of-day: EVENING,   location-key: GARDEN_OF_ACADEMY, probability: 25, notes: "노을 속 환영 연출" }
       - { character-slug: rosetta, time-of-day: NIGHT,     location-key: ASTRONOMY_TOWER,   probability: 40, notes: "몰래 야경 독차지" }
       - { character-slug: rosetta, time-of-day: NIGHT,     location-key: DORMITORY,         probability: 40, notes: "취침 (의외로 일찍)" }
-      - { character-slug: rosetta, time-of-day: NIGHT,     location-key: GARDEN_OF_MIRRORS, probability: 20, notes: "한밤의 장난 준비" }
+      - { character-slug: rosetta, time-of-day: NIGHT,     location-key: GARDEN_OF_ACADEMY, probability: 20, notes: "한밤의 장난 준비" }
 
       # ━━ 시에라 (잠꾸러기 힐링계 후배, FANTASY_ACADEMY) ━━
       #  느긋하고 무해함. 마법의 숲에서 동물·식물과 어울리고, 늘 졸리다.
@@ -559,12 +559,12 @@ app:
       - { character-slug: sierra, time-of-day: MORNING,   location-key: ENCHANTED_FOREST,  probability: 25, notes: "이른 동물 친구들과 인사" }
       - { character-slug: sierra, time-of-day: MORNING,   location-key: GREAT_HALL,        probability: 15, notes: "지각 조식" }
       - { character-slug: sierra, time-of-day: NOON,      location-key: ENCHANTED_FOREST,  probability: 45, notes: "동물들과 점심 나눔" }
-      - { character-slug: sierra, time-of-day: NOON,      location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "꽃 구경" }
+      - { character-slug: sierra, time-of-day: NOON,      location-key: GARDEN_OF_ACADEMY, probability: 30, notes: "꽃 구경" }
       - { character-slug: sierra, time-of-day: NOON,      location-key: GREAT_HALL,        probability: 25, notes: "간식 탐험" }
       - { character-slug: sierra, time-of-day: AFTERNOON, location-key: ENCHANTED_FOREST,  probability: 50, notes: "숲 산책·식물 관찰" }
-      - { character-slug: sierra, time-of-day: AFTERNOON, location-key: GARDEN_OF_MIRRORS, probability: 30, notes: "거울 정원에서 멍하니" }
+      - { character-slug: sierra, time-of-day: AFTERNOON, location-key: GARDEN_OF_ACADEMY, probability: 30, notes: "정원에서 멍하니" }
       - { character-slug: sierra, time-of-day: AFTERNOON, location-key: DORMITORY,         probability: 20, notes: "오후 낮잠" }
-      - { character-slug: sierra, time-of-day: EVENING,   location-key: GARDEN_OF_MIRRORS, probability: 40, notes: "해질녘 꽃밭" }
+      - { character-slug: sierra, time-of-day: EVENING,   location-key: GARDEN_OF_ACADEMY, probability: 40, notes: "해질녘 꽃밭" }
       - { character-slug: sierra, time-of-day: EVENING,   location-key: ENCHANTED_FOREST,  probability: 35, notes: "동물들 재워주기" }
       - { character-slug: sierra, time-of-day: EVENING,   location-key: DORMITORY,         probability: 25, notes: "이른 저녁 휴식" }
       - { character-slug: sierra, time-of-day: NIGHT,     location-key: DORMITORY,         probability: 65, notes: "일찍 잠듦" }

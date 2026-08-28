@@ -76,10 +76,29 @@ legacy:
     # §G-6 레거시 캐릭터 일러(ModelsLab CG) 트랙 — 씬 일러로 일원화·동결.
     # 지금도 FE에서 살아 있어 유저 10E가 환불 없이 소각 가능하다(docs/13 D-2.h).
     legacy-cg-enabled: ${LEGACY_CG_ILLUSTRATION_ENABLED:false}
+    # [docs/19 안건 10 = (c)] 같은 트랙의 *자동* 경로. 위 노브는 컨트롤러 1곳만 막아
+    # IllustrationService.generateAutoIllustration이 열려 있었고, 극장 자동 노트 3경로가
+    # 유저 에너지 0으로 ModelsLab 과금을 계속 냈다. 수동과 분리한 이유는 극장 다이어리 이미지가
+    # 유저 체감 영역이라 §C#6과 충돌하기 때문 — 노브로 두면 되돌릴 수 있다.
+    theater-auto-cg-enabled: ${LEGACY_THEATER_AUTO_CG_ENABLED:false}
   unlock:
     # §G-5 복장·장소 '관계 단계별 해금'. 복장/장소 값 자체는 살아있는 연출 변수다 —
     # 죽이는 건 LOCK 규칙뿐(impl_spec §5 명시). UGC 복장이 1종이라 공식 4캐릭 전용 no-op였다.
     relation-gated: ${LEGACY_RELATION_UNLOCK_ENABLED:false}
+
+# [docs/19_assets/decisions_confirmed.md §A #7 = (b) · 종원 확정] 시크릿 상품 노출 토글.
+#   legacy 블록에 넣지 않는다 — 이건 '레거시 처분'이 아니라 **런칭 롤아웃 스위치**다.
+#   PG 심사 중 시크릿 상품을 완전 게이팅된 상태로 제출하기 위한 것(docs/18 §1-D D2).
+#   묶이는 상품 3종: SECRET_PASS_24H · SECRET_UNLOCK_PERMANENT · LUCID_MIDNIGHT_PASS
+#     — 미드나잇 패스 카드까지 같은 토글에 묶는 것이 안건 7의 확정((a) 아님).
+#       상품 카드가 남으면 '게이팅됐다'는 주장과 심사자가 보는 화면이 어긋난다.
+#   ⚠ 게이트는 **서버측**이다(PaymentService.prepareOrder 400 거부). 프론트 카드만 숨기면
+#      /api/v1/payments/ready 가 소유권·성인검증만으로 열린 채 남는다.
+#   ⚠⚠ 해제 시점 = **'승인 PG의 성인 콘텐츠 정책 확인 이후'**. 심사를 통과하고 나서
+#      몰래 켜는 경로는 docs/14 §C-#3이 명시적으로 배제했다 — 성인 콘텐츠를 수용하는 PG를
+#      먼저 확보하는 것이 정면 전략이고, 이 토글은 '감추기'가 아니라 그 확인까지의 대기 스위치다.
+bm:
+  secret-products-enabled: ${SECRET_PRODUCTS_ENABLED:false}
 
 # 외부 API 공통 설정
 nice:
@@ -90,9 +109,23 @@ nice:
   api-url: https://svc.niceapi.co.kr:22001
 
 portone:
-  api-key: YOUR_PORTONE_API_KEY
-  api-secret: YOUR_PORTONE_API_SECRET
+  # [버그픽스 C-2.l · docs/17_assets/defect_register.md §C-2.l · docs/19]
+  #   기존에는 `YOUR_PORTONE_API_KEY` 리터럴이라 **미주입이어도 기동은 성공하고 런타임에만
+  #   조용히 실패**했다(아임포트 토큰 401 → 정상 결제도 지급 불가). docs/18 §2-A 0-B단계가
+  #   경고하는 유형이 정확히 이것이다.
+  #   ⚠ 기본값을 **비워 둔다**(`${ENV:}`). 기본값 없는 `${ENV}`로 만들면 미주입 시 컨텍스트
+  #     기동이 죽는데, 결제 설정 하나 때문에 서비스 전체를 내리는 건 과하다(docs/19 §C-1의
+  #     부팅 블로커 사고와 같은 실수). 기동은 시키고, **호출 시점에 명시적으로 끊는다** —
+  #     PortOneProperties.assertConfigured()가 blank/`YOUR_` 플레이스홀더를 모두 미설정으로 본다.
+  api-key: ${PORTONE_API_KEY:}
+  api-secret: ${PORTONE_API_SECRET:}
   api-url: https://api.iamport.kr
+  # [버그픽스 B-1.3 · docs/17_assets/defect_register.md §B-1.3 · docs/19 D-17]
+  #   /api/v1/payments/webhook 공유 시크릿. PortOne V1(api.iamport.kr)은 Standard Webhooks
+  #   서명을 제공하지 않으므로 콘솔 등록 URL의 쿼리(?secret=...) 또는 X-PortOne-Secret 헤더로 받는다.
+  #   ⚠ 미설정 시 로컬·개발은 검증 skip이지만 **prod 프로필은 fail-closed**(모든 웹훅 거부)다 —
+  #     프로드 배포 전 PORTONE_WEBHOOK_SECRET 주입 확인이 필수(docs/18 §2-A 자격증명 주입 확인).
+  webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
 
 auth:
   jwt:
@@ -154,6 +187,22 @@ modelslab:
 # 활성 절차: ① 전용 엔드포인트 가동(웜 워커 권장 — 콜드스타트 8분+ 실측)
 #           ② SCENE_RUNPOD_* env 주입 ③ SCENE_ILLUST_ENABLED=true
 # UGC 빌더(ugc.runpod.*)와 별개 엔드포인트 — 배치 vs 저지연 head-of-line blocking 회피(docs/07 B-2).
+
+# ────────────────────────────────────────────────
+# [B-5.2 · 적대적 리뷰 P1] 극장 과금 워터마크 게이트
+# ────────────────────────────────────────────────
+# /prefetch(무과금·본문 없음) → /batch-consumed 반복으로 /next-batch를 한 번도 부르지 않고
+# 극장을 무과금 완주할 수 있었다. 워터마크(theater_states.last_paid_batch_id)로 막는다.
+#
+# ⚠ 기본 false = **관측 모드**(WARN 로그만, 거부 없음). 켜기 전 조건 2가지:
+#   ① 로그 "Unpaid batch consume detected" 건수가 0에 수렴할 것
+#   ② 배포가 신·구 태스크 혼재 창을 만들지 않을 것(drain-then-switch) —
+#      롤링 창에서 구 태스크는 markBatchPaid를 하지 않아 정상 결제 유저가 거부당한다.
+#      게다가 FE가 그 실패를 삼키면 무증상 정지가 된다.
+# 이 세션에서 '미확정 분기 가드'가 정상 유저를 잠가 철회된 선례가 있다 — 같은 실수를 반복하지 말 것.
+theater:
+  paid-batch-gate-enforced: ${THEATER_PAID_BATCH_GATE:false}
+
 illustration:
   scene:
     enabled: ${SCENE_ILLUST_ENABLED:true}

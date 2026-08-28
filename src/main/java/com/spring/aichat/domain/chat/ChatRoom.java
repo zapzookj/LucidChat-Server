@@ -7,6 +7,7 @@ import com.spring.aichat.domain.world.World;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 
@@ -52,6 +53,7 @@ import java.time.LocalDateTime;
  * - {@code @Version}: TX-2 동시 stat 갱신 lost update 차단.
  *   {@code OptimisticLockingFailureException} 발생 시 호출처 retry.
  */
+@Slf4j // [E-3.①.13 · D-28] 시드 유령 키 폴백을 로그로 드러내기 위해 부착 (static 필드 — JPA 무영향)
 @Getter
 @NoArgsConstructor
 @Entity
@@ -325,7 +327,8 @@ public class ChatRoom {
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [V1 호환] Public 생성자 — V1 호출처(OnboardingService, LobbyService, TheaterLobbyService)
-    //  보호. 신규 V2 코드는 factory({@link #createSandbox}, {@link #createStoryV2}) 사용 권장.
+    //  보호. 신규 V2 코드는 factory({@link #createStoryV2}) 사용 권장.
+    //  ([D-29] createSandbox 팩토리는 호출부 0건이라 제거됨 — SANDBOX/THEATER는 이 생성자만 쓴다.)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** [V1 호환] Sandbox 또는 Theater 방 생성. STORY V2는 {@link #createStoryV2} 사용. */
@@ -360,33 +363,15 @@ public class ChatRoom {
         this(user, character, ChatMode.SANDBOX);
     }
 
-    /**
-     * SANDBOX 생성자 — V1 캐릭터 1:1 채팅.
-     * V1 호환을 위해 디폴트 location/outfit/time/8축 스탯 초기화.
-     */
-    public static ChatRoom createSandbox(User user, Character character) {
-        ChatRoom r = new ChatRoom();
-        r.user = user;
-        r.character = character;
-        r.chatMode = ChatMode.SANDBOX;
-        r.lastActiveAt = LocalDateTime.now();
-        r.currentBgmMode = BgmMode.DAILY;
-
-        // Sandbox V1 필드 초기화
-        r.affectionScore = 0;
-        r.statusLevel = RelationStatus.STRANGER;
-        r.lastEmotion = EmotionTag.NEUTRAL;
-        r.currentTimeOfDay = TimeOfDay.NIGHT;
-        r.currentLocation = parseLocationOrDefault(character.getEffectiveDefaultLocation());
-        r.currentOutfit = parseOutfitOrDefault(character.getEffectiveDefaultOutfit());
-        r.statIntimacy = 0;  r.statAffection = 0;  r.statDependency = 0;
-        r.statPlayfulness = 0;  r.statTrust = 0;
-        r.statLust = 0;  r.statCorruption = 0;  r.statObsession = 0;
-        r.dynamicRelationTag = "낯선 사람";
-        r.thoughtUpdatedAtTurn = 0;
-
-        return r;
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [D-29 · §G-4 데드코드 정리 · docs/19_assets/blockd_regressions.md]
+    //  `createSandbox(User, Character)` 팩토리 제거(2026-08-26).
+    //  제거 근거: `grep -rn "createSandbox" src/` 결과가 선언부 1건 + 자기 javadoc 1건뿐 —
+    //  외부 호출부 0건이었다. 실제 SANDBOX 방은 전부 위 public 생성자(:332/:359)로 만들어진다
+    //  (LobbyService.java:210, OnboardingService.java:45).
+    //  생성자와 중복된 초기화 로직(parseLocationOrDefault 등)을 품고 있어 E-3.① '유령 장소 키
+    //  소비 경로' 감사 때마다 실재하지 않는 경로를 세게 만들었다. 필요해지면 git에서 복원할 것.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
      * STORY V2 생성자 — World 탐험.
@@ -428,7 +413,7 @@ public class ChatRoom {
     /**
      * [2026-07-31 에픽 A] UGC 월드 STORY V2 생성자 — 브리지 설계.
      * 공식 {@link #createStoryV2}와 동일 구조이되 world(enum FK) 대신 ugcWorldId를 갖는다.
-     * UGC 월드는 defaultBgm 메타가 없어 BGM은 DAILY 기본.
+     * UGC 월드는 defaultBgm 메타가 없어 BGM은 V2 일상 기본값(DAILY_CALM)으로 시작한다.
      */
     public static ChatRoom createStoryV2Ugc(User user, Long ugcWorldId,
                                             String startLocationKey, String userPersona,
@@ -444,7 +429,12 @@ public class ChatRoom {
         r.lastActiveAt = LocalDateTime.now();
         r.userPersona = userPersona;
         r.storyUserNickname = storyUserNickname;
-        r.currentBgmMode = BgmMode.DAILY;
+        // [E-3.③.2 확장면 · D-28 · docs/19_assets/blockd_regressions.md] DAILY는 BgmMode.java:12에서
+        // '레거시 — V1 전용. V2는 CALM/BRIGHT 이원화'로 못박힌 값인데 V2 STORY 방이 여기서 시작했다.
+        // 시드 교정(worlds.yml)으로는 사라지지 않는 '명시적 하드코딩'이라 함께 고친다.
+        // FE 무영향: UGC 방은 worldId가 null이라 AudioEngine.resolveBgmSrc가 DAILY/DAILY_CALM 모두
+        // characterSlug 경로(/sounds/characters/{slug}/bgm_daily.mp3)로 해상한다(AudioEngine.jsx:60-62).
+        r.currentBgmMode = BgmMode.DAILY_CALM;
 
         r.currentUserLocationKey = startLocationKey;
         r.currentDay = 1;
@@ -1012,15 +1002,45 @@ public class ChatRoom {
         return Math.max(min, Math.min(max, v));
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [E-3.①.13 / ③.2 · D-28] 무효 시드 키를 '로그 없이' 삼키던 3인방.
+    //  이 침묵 때문에 E-3.①.1~①.12(장소 5종)와 ③.1(BGM MYSTERIOUS)이 2026-07 이래
+    //  프로드에서 조용히 폴백된 채 굴러갔다 — 시스템 어디에도 신호가 없었다.
+    //  폴백 자체는 유지한다(LLM이 임의 문자열을 보내는 정상 경로가 있다 — updateSceneState 참조).
+    //  대신 무효 키가 들어오면 WARN을 남겨 시드 오류가 부팅·방 생성 시점에 드러나게 한다.
+    //  근본 차단은 시더 단 검증(CharacterSeeder / CharacterRoutineSeeder)이 담당한다(①.14 / ②.12).
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     private static Location parseLocationOrDefault(String v) {
-        try { return Location.valueOf(v); } catch (Exception e) { return Location.ENTRANCE; }
+        try {
+            return Location.valueOf(v);
+        } catch (Exception e) {
+            log.warn("⚠️ [SEED] unknown Location key '{}' → ENTRANCE 폴백 (E-3.①)", v);
+            return Location.ENTRANCE;
+        }
     }
 
     private static Outfit parseOutfitOrDefault(String v) {
-        try { return Outfit.valueOf(v); } catch (Exception e) { return Outfit.MAID; }
+        try {
+            return Outfit.valueOf(v);
+        } catch (Exception e) {
+            log.warn("⚠️ [SEED] unknown Outfit key '{}' → MAID 폴백 (E-3.①.13 동종)", v);
+            return Outfit.MAID;
+        }
     }
 
+    /**
+     * [E-3.③.2] 호출부가 createStoryV2(:400)·resetStoryFields(:981) 둘뿐 — <b>전부 V2 STORY</b>다.
+     * 그런데 폴백 목적지가 BgmMode.DAILY였다: BgmMode.java:12가 '레거시 — V1 전용'으로 못박은 값이라
+     * V2 방이 자기 어휘 밖에 착지했다. V2 일상 기본값 DAILY_CALM으로 교정한다.
+     * (V1 SANDBOX 경로는 이 헬퍼를 타지 않고 {@code BgmMode.DAILY}를 직접 대입하므로 무영향.)
+     */
     private static BgmMode parseBgmModeOrDefault(String v) {
-        try { return BgmMode.valueOf(v); } catch (Exception e) { return BgmMode.DAILY; }
+        try {
+            return BgmMode.valueOf(v);
+        } catch (Exception e) {
+            log.warn("⚠️ [SEED] unknown BgmMode key '{}' → DAILY_CALM 폴백 (E-3.③)", v);
+            return BgmMode.DAILY_CALM;
+        }
     }
 }

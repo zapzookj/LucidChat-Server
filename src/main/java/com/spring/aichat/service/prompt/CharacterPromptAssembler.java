@@ -74,6 +74,14 @@ public class CharacterPromptAssembler {
         // ═══ STATIC RULES (캐시 타겟) ═══
         StringBuilder staticBuilder = new StringBuilder();
 
+        // [D-20 · docs/19 §C-D 'Age: null 리터럴 억제'] age는 nullable(Character.java:95)이고
+        // UGC 캐릭터는 전량 null이다(Stage 0이 산출해도 바인딩에서 버려짐). 그대로 %s에 넣으면
+        // 프롬프트에 "- Age: null"이 실려 LLM에 무의미한 토큰이 들어간다. 게이트 사정권 밖이라
+        // 100% 도달하므로, null이면 Age 줄 자체를 생략한다.
+        String ageLine = character.getAge() != null
+            ? "- Age: " + character.getAge() + "\n"
+            : "";
+
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         //  [Phase 6 도그푸딩 #3 / Tier 2] 캐릭터 정체성 섹션 — 가장 prominent 위치
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -86,8 +94,7 @@ public class CharacterPromptAssembler {
 
             ## Identity
             - Name: %s
-            - Age: %s
-            - Role: %s
+            %s- Role: %s
             - Personality: %s
             - Tone: %s (관계 단계에 따라 자연스럽게 변화)
 
@@ -132,7 +139,7 @@ public class CharacterPromptAssembler {
             """.formatted(
             character.getName(),                                              // YOU ARE: %s
             character.getName(),                                              // Identity Name
-            character.getAge(),                                               // Identity Age
+            ageLine,                                                          // Identity Age 줄 (null이면 줄 생략 — D-20)
             character.getEffectiveRole(),                                     // Identity Role
             character.getEffectivePersonality(effectiveSecretMode),           // Identity Personality
             character.getEffectiveTone(effectiveSecretMode),                  // Identity Tone

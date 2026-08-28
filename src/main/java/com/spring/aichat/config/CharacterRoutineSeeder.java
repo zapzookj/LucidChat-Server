@@ -5,6 +5,8 @@ import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.character.CharacterRoutine;
 import com.spring.aichat.domain.character.CharacterRoutineRepository;
 import com.spring.aichat.domain.enums.DayPart;
+import com.spring.aichat.domain.enums.WorldId;
+import com.spring.aichat.domain.world.WorldLocationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationRunner;
@@ -41,6 +43,8 @@ public class CharacterRoutineSeeder {
     private final CharacterRoutineRepository routineRepository;
     private final CharacterRepository characterRepository;
     private final CharacterRoutineSeedProperties seedProperties;
+    /** [E-3.②.12 · D-28] location-key ↔ WorldLocation 선언 대조용. */
+    private final WorldLocationRepository worldLocationRepository;
 
     private final org.springframework.transaction.PlatformTransactionManager txManager;
 
@@ -65,8 +69,31 @@ public class CharacterRoutineSeeder {
             .collect(Collectors.toSet());
 
         Map<String, Long> slugToId = new HashMap<>();
+        // [E-3.②.12 · D-28] 유령 location-key 차단용 — slug → 소속 WorldId 매핑도 함께 확보한다.
+        Map<String, WorldId> slugToWorldId = new HashMap<>();
         for (String slug : requiredSlugs) {
-            characterRepository.findBySlug(slug).ifPresent(c -> slugToId.put(slug, c.getId()));
+            characterRepository.findBySlug(slug).ifPresent(c -> {
+                slugToId.put(slug, c.getId());
+                if (c.getWorldId() != null) slugToWorldId.put(slug, c.getWorldId());
+            });
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  [E-3.②.12 · D-28] 선언된 WorldLocation 키 집합 사전 로드 (월드당 1회)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  이 시더는 location-key를 WorldLocation 선언과 대조하지 않아, 미선언 키(연화
+        //  MOONLIT_FOREST 3행 · 로제타/시에라 GARDEN_OF_MIRRORS 8행)를 그대로 적재해 왔다.
+        //  :74-76에서 매 부팅 전삭제 후 재삽입하므로 유령 키가 영구 재생산된다.
+        //  실행 순서가 World(0) → Location(1) → … → Routine(4)이라 대조에 필요한 데이터는
+        //  이미 DB에 있다 — 기술적으로 가능한데 안 하고 있던 검증이다.
+        //  처분은 skip: 유령 위치에 배치하느니 후보를 빼는 편이 안전하다
+        //  (WorldRoutingService.java:246 totalWeight가 남은 후보로 재정규화된다).
+        Map<WorldId, Set<String>> declaredKeysByWorld = new HashMap<>();
+        for (WorldId wid : new java.util.HashSet<WorldId>(slugToWorldId.values())) {
+            declaredKeysByWorld.put(wid,
+                worldLocationRepository.findByWorldIdAndActiveTrueOrderByDisplayOrderAsc(wid).stream()
+                    .map(l -> l.getLocationKey())
+                    .collect(Collectors.toSet()));
         }
 
         // 2) 기존 루틴 일괄 삭제 (시드에 등장한 캐릭터에 한정)
@@ -104,11 +131,25 @@ public class CharacterRoutineSeeder {
                 continue;
             }
 
+            // [E-3.②.12 · D-28] 선언된 WorldLocation과 대조 — 유령 키면 그 후보를 통째로 뺀다.
+            // (worldId가 없는 캐릭터 = UGC/월드 미소속은 대조 기준이 없어 통과시킨다.)
+            String locationKey = seed.locationKey().trim();
+            WorldId worldId = slugToWorldId.get(seed.characterSlug());
+            if (worldId != null) {
+                Set<String> declared = declaredKeysByWorld.getOrDefault(worldId, Set.of());
+                if (!declared.contains(locationKey)) {
+                    log.warn("⚠️ [ROUTINE-SEED] Undeclared location_key '{}' for {} ({}) — skip (E-3.②)",
+                        locationKey, seed.characterSlug(), worldId);
+                    skipped++;
+                    continue;
+                }
+            }
+
             int probability = seed.probability() == null ? 50 : seed.probability();
             String notes = seed.notes() == null ? "" : seed.notes();
 
             CharacterRoutine routine = CharacterRoutine.create(
-                characterId, timeOfDay, seed.locationKey().trim(), probability, notes);
+                characterId, timeOfDay, locationKey, probability, notes);
             routineRepository.save(routine);
             inserted++;
         }

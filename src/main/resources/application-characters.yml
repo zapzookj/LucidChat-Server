@@ -829,7 +829,10 @@ app:
       # easter-egg-dialogue: 기본 범용 블록 사용 (null)
 
       default-outfit: "DAILY"
-      default-location: "TERRACE"
+      # [E-3.①.6 · 안건 11(a)] 로제타 값(TERRACE) 복붙 오배정이었다 — 강채린은 MODERN_KOREA
+      # 소꿉친구인데 마법학원 테라스에서 시작했고, 자기 baseLocations(STREET)에도 없는 값이라
+      # getAllowedLocations 집합 밖이었다. baseLocations와 일치시킨다.
+      default-location: "STREET"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
       appearance-tags: "red eyes, brown hair, short hair, bob cut, gradient hair, earrings, necklace, white jacket, cropped jacket, black crop top, large breasts, cleavage, midriff, navel, green pants, cargo pants"
 
@@ -1053,7 +1056,9 @@ app:
       # easter-egg-dialogue: 기본 범용 블록 사용 (null)
 
       default-outfit: "DAILY"
-      default-location: "TERRACE"
+      # [E-3.①.9 · 안건 11(a)] 로제타 값(TERRACE) 복붙 오배정이었다 — 에델은 아카데미 도서관이
+      # 정체성(intro-narration 참조)인데 자기 baseLocations(LIBRARY)에도 없는 값이었다.
+      default-location: "LIBRARY"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
       appearance-tags: "blue eyes, white hair, long hair, hair over one eye, single braid, blue ribbon, drop earrings, hooded cloak, blue cloak, turtleneck sweater, ribbed sweater, black sweater, large breasts, pencil skirt, black skirt, pantyhose"
 
@@ -1172,7 +1177,9 @@ app:
       # easter-egg-dialogue: 기본 범용 블록 사용 (null)
 
       default-outfit: "DAILY"
-      default-location: "ABANDONED_SHRINE"
+      # [E-3.①.11 · 안건 11(a)] Location enum 미등재 유령 키였다. 종원 확정: V2가 이미 쓰는
+      # ANCIENT_SHRINE(application-v2.yml:114)으로 V1/V2 어휘 통일.
+      default-location: "ANCIENT_SHRINE"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
       appearance-tags: "yellow eyes, blonde hair, very long hair, low twintails, hair rings, dragon horns, dragon girl, dragon tail, china dress, white dress, mandarin collar, pelvic curtain, side slit, detached sleeves, wide sleeves, gold trim, armlet, black thighhighs"
 
@@ -1188,7 +1195,8 @@ app:
 
       # ── 캐릭터별 독립적인 복장 풀, 장소 풀, 해금 규칙 ──
       baseOutfits: "DAILY"
-      baseLocations: "ABANDONED_SHRINE"
+      # [E-3.①.12 · 안건 11(a)] default-location과 같은 값으로 ANCIENT_SHRINE 통일.
+      baseLocations: "ANCIENT_SHRINE"
       #      acquaintanceUnlockOutfits: "DATE"
       #      acquaintanceUnlockLocations: "DOWNTOWN"
       #      friendUnlockOutfits: "SWIMWEAR"

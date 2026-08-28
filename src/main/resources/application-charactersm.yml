@@ -396,6 +396,9 @@ app:
               Boundaries: 영주의 온몸을 그리스도 성결 벨트로 포박하고 열쇠는 자신의 성수병 안에 보관시킴.
 
       default-outfit: "DAILY"
+      # [E-3.①.15 · 안건 11(a)] 이 파일은 미활성 프로필(charactersm)이라 유령 키가 휴면 상태였다.
+      # Location enum에 CATHEDRAL을 추가(안건 11 (a))했으므로 이제 유효 키다 — 시크릿 시드
+      # 활성화 시 부활하던 ENTRANCE 폴백이 소멸한다. characters.yml:599와 값 동기 유지.
       default-location: "CATHEDRAL"
 
       ending-role-desc: "a saintly platinum blonde who purefies your soul and tames your flesh with her massive holy shaft"
@@ -473,6 +476,8 @@ app:
               Boundaries: 영원한 종속 선언용 환영 타투를 유저의 속궁둥이에 조각해 놓음.
 
       default-outfit: "DAILY"
+      # [E-3.①.15 · 안건 11(a)] Location enum에 TERRACE 추가로 유효 키가 됐다.
+      # characters.yml:718과 값 동기 유지(로제타는 default/base가 원래 일치 — 오배정 아님).
       default-location: "TERRACE"
 
       ending-role-desc: "a haughty mesugaki Nobel mage who tames and penetrates you like a disobedient pet"

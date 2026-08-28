@@ -46,7 +46,12 @@ app:
       hero-image-url: https://d3578f1gfp49r6.cloudfront.net/worlds/fantasy_academy/hero.png
       thumbnail-url: https://d3578f1gfp49r6.cloudfront.net/worlds/fantasy_academy/thumb.png
       opening-narration: 학교의 종이 울리고, 학생들이 분주히 움직인다. 하지만 이곳은 단순한 학교가 아니다. 마법과 모험이 기다리는 판타지 아카데미다.
-      default-bgm: MYSTERIOUS
+      # [E-3.③.1 · D-28] MYSTERIOUS는 BgmMode에 없는 값이라 ChatRoom.parseBgmModeOrDefault가
+      # 조용히 DAILY로 폴백했다. DAILY는 BgmMode.java:12에서 '레거시 — V1 전용'으로 못박힌 값이라
+      # V2 STORY 방이 자기 어휘 밖에서 시작했다. TOUCHING으로 교정 — 나머지 두 판타지 월드와
+      # 톤이 같고(:10, :23), FE는 공유 에셋(/sounds/bgm_touching.mp3)이라 신규 에셋이 불필요하다.
+      # ('신비' 톤을 살리려면 BgmMode에 MYSTERIOUS 정식 추가 + BGM 에셋 1종 제작이 필요 — 보류.)
+      default-bgm: TOUCHING
       mood-keywords: 마법,학교,모험,성장
       secret-allowed: true
       active: true

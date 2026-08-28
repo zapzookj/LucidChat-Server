@@ -2,6 +2,8 @@ package com.spring.aichat.config;
 
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
+import com.spring.aichat.domain.enums.Location;
+import com.spring.aichat.domain.enums.Outfit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,7 +55,9 @@ public class CharacterSeeder {
             return;
         }
 
+        int invalidEnumKeys = 0;
         for (CharacterSeedProperties.CharacterSeed seed : seeds) {
+            invalidEnumKeys += validateEnumKeys(seed);
             characterRepository.findBySlug(seed.slug())
                 .ifPresentOrElse(
                     existing -> {
@@ -82,5 +86,54 @@ public class CharacterSeeder {
         }
 
         log.info("🎭 [SEED] Character seeding complete: {} characters processed", seeds.size());
+        if (invalidEnumKeys > 0) {
+            log.error("❌ [CHAR-SEED] {}건의 무효 enum 시드 키가 남아 있다 — 위 로그의 캐릭터를 "
+                + "application-characters.yml에서 교정할 것 (E-3.①.14)", invalidEnumKeys);
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [E-3.①.14 · D-28] 시드 enum 키 검증
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  이 시더는 default-location/baseLocations/default-outfit/baseOutfits를 enum과 대조하지 않고
+    //  문자열 그대로 DB에 적재했다(Character.applySeed). app.seed.update-existing=true라 매 부팅마다
+    //  유령 키가 재적재됐고, 소비 시점(ChatRoom.parseLocationOrDefault)은 침묵 폴백이라 5명의
+    //  캐릭터가 2026-07 이래 엉뚱한 장소에서 시작하는 것을 아무도 몰랐다(E-3.①.1~①.12).
+    //
+    //  처분은 '보고 후 계속'이다 — throw로 부팅을 막으면 프로드가 시드 오타 하나로 죽는다.
+    //  기존 시더 관례(CharacterRoutineSeeder: log.warn + skip/continue)와 맞춘다.
+    //  적재 자체는 막지 않는다: 동적 배경 트랙으로 넘어갈 값이 섞일 수 있고, 런타임 폴백이 이미 있다.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** @return 무효 키 개수 */
+    private int validateEnumKeys(CharacterSeedProperties.CharacterSeed seed) {
+        int invalid = 0;
+        invalid += checkEnum(seed.slug(), "default-location", seed.defaultLocation(), Location.class);
+        invalid += checkEnumCsv(seed.slug(), "baseLocations", seed.baseLocations(), Location.class);
+        invalid += checkEnum(seed.slug(), "default-outfit", seed.defaultOutfit(), Outfit.class);
+        invalid += checkEnumCsv(seed.slug(), "baseOutfits", seed.baseOutfits(), Outfit.class);
+        return invalid;
+    }
+
+    /** 콤마 구분 목록(baseLocations/baseOutfits)의 각 토큰을 검사한다. */
+    private <E extends Enum<E>> int checkEnumCsv(String slug, String field, String csv, Class<E> type) {
+        if (csv == null || csv.isBlank()) return 0;
+        int invalid = 0;
+        for (String token : csv.split(",")) {
+            invalid += checkEnum(slug, field, token.trim(), type);
+        }
+        return invalid;
+    }
+
+    private <E extends Enum<E>> int checkEnum(String slug, String field, String value, Class<E> type) {
+        if (value == null || value.isBlank()) return 0;
+        try {
+            Enum.valueOf(type, value.trim());
+            return 0;
+        } catch (IllegalArgumentException e) {
+            log.error("❌ [CHAR-SEED] {} — {}의 '{}'는 {} enum에 없는 키다 (런타임에 조용히 폴백된다)",
+                slug, field, value, type.getSimpleName());
+            return 1;
+        }
     }
 }

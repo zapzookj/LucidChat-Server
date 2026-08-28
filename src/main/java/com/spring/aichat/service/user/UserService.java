@@ -43,6 +43,15 @@ public class UserService {
 
     public UserResponse getMyInfo(String username) {
         return cacheService.getUserProfile(username, UserResponse.class)
+            // [D-21 · docs/19_assets/decision_agenda.md D-21 (A)안 · 종원 확정]
+            //   EnergyRegenScheduler(:30·:40)는 벌크 UPDATE만 하고 *갱신된 유저 목록을 돌려받지 않는다*
+            //   — 즉 회복 대상별 캐시 evict가 원리적으로 불가능하다. 그래서 프로필 캐시에 실린
+            //   에너지 잔량은 TTL 만료까지(최대 30분) 낡은 값을 표시해 0에너지로 전송이 막힌다.
+            //   근거 비대칭: ChatStreamService는 이미 턴마다 evictUserProfile을 부른다
+            //   — 프로필 캐시가 '분당 변하는 잔량'을 담기에 부적합하다는 것이 코드로 드러나 있다.
+            //   → 캐시는 정적 프로필만 서빙하고, 에너지 4필드는 매 호출 PK 단건 조회로 덮어쓴다.
+            //   비용: /users/me 호출당 findById 1회.
+            .map(this::overlayFreshEnergy)
             .orElseGet(() -> {
                 User user = findUser(username);
 
@@ -65,6 +74,34 @@ public class UserService {
                 cacheService.cacheUserProfile(username, response);
                 return response;
             });
+    }
+
+    /**
+     * [D-21] 캐시 히트한 프로필의 에너지 4필드(energy·freeEnergy·paidEnergy·freeEnergyMax)를
+     * PK 단건 조회 결과로 덮어쓴다. 나머지 필드(닉네임·페르소나·구독 티어 등)는
+     * 변경 시점에 evictUserProfile이 걸려 있으므로 캐시 값을 그대로 신뢰한다.
+     *
+     * 유저 레코드가 사라진 경우(탈퇴 등)에는 캐시 값을 그대로 반환한다 —
+     * 여기서 예외를 던지면 조회 실패가 프로필 API 전체를 500으로 만든다.
+     */
+    private UserResponse overlayFreshEnergy(UserResponse cached) {
+        return userRepository.findById(cached.id())
+            .map(user -> new UserResponse(
+                cached.id(),
+                cached.username(),
+                cached.nickname(),
+                cached.email(),
+                cached.profileDescription(),
+                cached.isSecretMode(),
+                user.getEnergy(),
+                user.getFreeEnergy(),
+                user.getPaidEnergy(),
+                user.getFreeEnergyMax(),
+                cached.isAdultVerified(),
+                cached.subscriptionTier(),
+                cached.boostMode()
+            ))
+            .orElse(cached);
     }
 
     /**

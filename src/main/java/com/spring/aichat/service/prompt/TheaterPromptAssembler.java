@@ -209,7 +209,12 @@ public class TheaterPromptAssembler {
         sb.append("Speaker Name: ").append(heroine.getName())
             .append(" (slug: ").append(heroine.getSlug()).append(")\n");
         sb.append("Role: ").append(safeString(heroine.getEffectiveRole())).append("\n");
-        sb.append("Age: ").append(heroine.getAge()).append("\n");
+        // [D-20 · docs/19 §C-D 'Age: null 리터럴 억제'] age는 nullable이라 미기재 캐릭터는
+        // "Age: null"이 그대로 LLM에 실린다. 표기 정정이므로 §2-5(극장 무변경 = 유저 체감 동작
+        // 불변) 경계 안이다 — 종원 확정.
+        if (heroine.getAge() != null) {
+            sb.append("Age: ").append(heroine.getAge()).append("\n");
+        }
         sb.append("Appearance: ").append(heroine.getAppearance()).append("\n");
         sb.append("Clothing: ").append(heroine.getClothing()).append("\n");
         sb.append("Backstory: ").append(heroine.getBackstory()).append("\n");
