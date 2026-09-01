@@ -4,7 +4,15 @@
 #   (18:20 UTC = KST 03:20)
 set -euo pipefail
 cd /opt/lucid
-set -a; source ./.env; set +a
+# .env를 source하지 않는다 — OPENAI_PRO-MODEL처럼 하이픈 든 키는 bash 변수로 불가
+# (docker env_file은 허용). 필요한 5키만 추출한다.
+envval() { grep -E "^$1=" ./.env | head -1 | cut -d= -f2- | tr -d '\r'; }
+DB_USERNAME=$(envval DB_USERNAME)
+DB_NAME=$(envval DB_NAME)
+AWS_ACCESS_KEY=$(envval AWS_ACCESS_KEY)
+AWS_SECRET_KEY=$(envval AWS_SECRET_KEY)
+S3_ENDPOINT=$(envval S3_ENDPOINT)
+BACKUP_BUCKET=$(envval BACKUP_BUCKET)
 
 TS=$(date +%F)
 OUT="backups/lucidchat-${TS}.dump"
