@@ -85,6 +85,22 @@ docs/14 §C#6에서 **극장 무변경**이 확정됐다. 공용 메서드에 �
 
 시그니처를 바꿀 때 2-arg 구버전을 남기면 **호출부가 조용히 낡은 경로로 컴파일된다.** 오버로드를 없애면 컴파일러가 호출부를 전수로 드러내 준다 — 그게 검증 수단이다.
 
+### 2-7. enum에 값을 추가하면 DB CHECK 제약도 함께 넓혀라
+
+Hibernate 6.2+(Boot 3.4.2 = Hibernate 6.6)는 `@Enumerated(EnumType.STRING)` 컬럼에 **값 목록 CHECK 제약을 자동 생성**한다(`<table>_<column>_check`). 그런데 `ddl-auto`는 **update든 validate든 기존 CHECK를 갱신하지 않는다.**
+
+- 즉 enum에 값을 추가하면 **컴파일 통과·부팅 성공·테스트 녹색인 채로** 신규 값 저장만 런타임에 죽는다(`PSQLException: ... _check 제약 조건을 위반`). 2026-08-29에 `Location` 5종 추가(안건 11 (a))가 정확히 이렇게 터졌다 — 해당 캐릭터의 **모든 응답이 500**. 수정: `V31__chat_rooms_location_check_sync.sql`.
+- **"Flyway에 CREATE TABLE 이력이 없다 = CHECK가 없다"는 오판이다.** Hibernate가 만든 테이블일수록 CHECK가 붙어 있다. 반드시 실측하라.
+- prod는 `validate` — **validate는 CHECK를 검증하지 않는다.** 배포해도 경고 하나 없이 런타임에만 재현된다.
+
+```bash
+# 실측: 특정 컬럼의 CHECK 제약 정의
+psql -tAc "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
+           WHERE conrelid='chat_rooms'::regclass AND contype='c';"
+```
+
+마이그레이션은 제약 이름을 가정하지 말고(환경별 접미 숫자) 해당 컬럼의 CHECK를 전수로 떨군 뒤 하나로 재생성한다 — V31이 그 형식이다(멱등).
+
 ---
 
 ## 3. 검증 명령

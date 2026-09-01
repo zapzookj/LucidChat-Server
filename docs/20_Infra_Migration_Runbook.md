@@ -39,7 +39,13 @@ aws s3 sync lucidchat-ugc-gen     s3://lucidchat-ugc-gen     $R2 --only-show-err
 ```
 
 - `comfy`(7.9G)·`models`(491M)는 **RunPod 워커용** — 서비스 CDN 불요. 워커가 S3에서 직접 읽는 구조라면 R2에 동명 버킷으로 올리고 워커 env를 교체, 로컬 캐시 구조면 생략. (워커 리포 확인 후 결정 — §5-3)
-- `frontend-assets`(832M)는 Vercel 이전 잔재 — 업로드하지 않음(로컬 보관만).
+- `frontend-assets`(832M)는 **시드 CDN(d3578f)의 오리진이다** — 캐릭터 스탠딩·시드 썸네일·배경·사운드·월드 이미지 전부. ⚠ 초기 판정("Vercel 잔재")은 오판이었고 2026-09-01 실측으로 정정. **`lucid-chat-assets-v2` R2 버킷에 병합 업로드**한다(두 CF 도메인 → assets 단일 도메인 통합 설계와 정합):
+
+```bash
+aws s3 sync lucid-chat-frontend-assets s3://lucid-chat-assets-v2 $R2 --exclude "ngrok.yml" --only-show-errors
+```
+
+- ⚠ `frontend-assets/ngrok.yml`에 ngrok authtoken이 평문 노출돼 있었다(퍼블릭 버킷) — 업로드 제외 + **ngrok 대시보드에서 해당 토큰 폐기**할 것.
 
 ## 3. VPS 셋업
 
