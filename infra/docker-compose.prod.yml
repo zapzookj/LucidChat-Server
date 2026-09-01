@@ -1,0 +1,61 @@
+# [2026-08-18 탈AWS] Vultr VPS 프로덕션 스택 — 정본 런북: docs/20_Infra_Migration_Runbook.md
+#
+# 서버 배치 경로: /opt/lucid/{docker-compose.prod.yml, Caddyfile, .env, backups/}
+# 시크릿은 같은 디렉토리의 .env 하나로 통일한다(compose 변수 보간 + app env_file 겸용).
+#   docker compose -f docker-compose.prod.yml up -d
+services:
+  app:
+    image: ghcr.io/zapzookj/lucid-chat-backend:latest
+    container_name: lucid-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # compose 내부 네트워크의 postgres 서비스가 DB 호스트 — .env의 값을 덮는다
+      DB_HOST: postgres
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: lucid-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: lucid-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

@@ -221,14 +221,18 @@ illustration:
       width: 1344     # 실측 확정(docs/09 A-1): 배경 포함 랜드스케이프, 30step/cfg4는 템플릿 동결
       height: 768
 
-# AWS S3
+# 오브젝트 스토리지 (S3 호환 — AWS S3 또는 Cloudflare R2)
+# [2026-08-18 탈AWS] S3_ENDPOINT가 비면 AWS(현행), 지정하면 R2.
+#   R2: S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com · S3_REGION=auto
+#       AWS_ACCESS_KEY/SECRET에는 R2 API 토큰 값 · CLOUDFRONT_ASSETS_URL에는 R2 커스텀 도메인.
 aws:
   s3:
-    bucket-name: "lucid-chat-assets-v2"
-    region: "ap-northeast-2"
+    bucket-name: "${S3_BUCKET:lucid-chat-assets-v2}"
+    region: "${S3_REGION:ap-northeast-2}"
     access-key: "${AWS_ACCESS_KEY}"
     secret-key: "${AWS_SECRET_KEY}"
     assets-url: "${CLOUDFRONT_ASSETS_URL}"
+    endpoint: "${S3_ENDPOINT:}"
 
 # ────────────────────────────────────────────────
 # UGC 캐릭터 생성 파이프라인 (스튜디오)

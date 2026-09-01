@@ -1,0 +1,10 @@
+# [2026-08-18 탈AWS] api.lucid-chat.com — 자동 TLS(Let's Encrypt) + SSE 스트리밍.
+# DNS는 Cloudflare에서 "DNS only"(회색 구름)로 VPS IP를 가리킨다 — 정본 런북 §5.
+api.lucid-chat.com {
+	encode zstd gzip
+
+	reverse_proxy app:8080 {
+		# SSE(채팅 스트리밍) 버퍼링 금지 — 토큰이 도착 즉시 흘러야 한다
+		flush_interval -1
+	}
+}

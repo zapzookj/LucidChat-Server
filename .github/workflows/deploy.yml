@@ -1,4 +1,6 @@
-name: Deploy backend to ECS
+# [2026-08-18 탈AWS] ECS/ECR → GHCR + Vultr SSH 배포로 전환 — 정본: docs/20 §6
+# 필요 GitHub Secrets: DEPLOY_HOST(VPS IP), DEPLOY_USER(root), DEPLOY_SSH_KEY(개인키 PEM)
+name: Deploy backend to Vultr
 
 on:
   push:
@@ -9,20 +11,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write # OIDC로 AWS 롤 assume (장기 액세스키 불필요)
   contents: read
+  packages: write # GHCR push
 
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ap-northeast-2
-  ECR_REPOSITORY: lucid-chat-backend
-  ECS_CLUSTER: lucid-cluster
-  ECS_SERVICE: lucid-chat-server-service-2z3rryhh
-  TASK_DEF_FAMILY: lucid-chat-server
-  CONTAINER_NAME: lucid-chat-container
+  IMAGE: ghcr.io/zapzookj/lucid-chat-backend
 
 jobs:
   deploy:
@@ -45,50 +42,26 @@ jobs:
           chmod +x ./gradlew
           ./gradlew clean test --tests '*Test' bootJar --no-daemon
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          role-to-assume: arn:aws:iam::063876841553:role/lucid-gha-deploy-role
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push image
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+            -t "$IMAGE:${{ github.sha }}" \
+            -t "$IMAGE:latest" .
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
 
-      # 태스크 정의는 시크릿(env 평문)을 담고 있어 리포에 두지 않는다.
-      # 배포 시점에 현재 리비전을 내려받아 이미지만 교체해 새 리비전을 등록한다.
-      - name: Download current task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "$TASK_DEF_FAMILY" \
-            --query taskDefinition > taskdef.json
-
-      - name: Render task definition with new image
-        id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
         with:
-          task-definition: taskdef.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build-image.outputs.image }}
-
-      - name: Deploy to ECS and wait for stability
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          service: ${{ env.ECS_SERVICE }}
-          wait-for-service-stability: true
-          wait-for-minutes: 10
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: /opt/lucid/deploy.sh
+          command_timeout: 10m
