@@ -2019,13 +2019,15 @@ public void refundEnergy(EnergySplit s) {
 }
 ```
 1-arg 시그니처를 남기지 말 것 — 남기면 호출부가 조용히 낡은 경로로 컴파일되어 회귀한다. 7개 호출부 전부 컴파일 에러로 드러나게 하는 것이 목적.
-3) 지연 환불 4곳(D-1.2/D-1.6/D-1.7/D-1.8)용 유료 분할분 영속: Flyway **V30**(에너지 분할 묶음 · 2026-08-26 정정 · D-33 — 앞을 V25 블록 B / V26·V27 블록 D / V28 결제 / V29 구독이 점유. 에너지 분할 3컬럼은 **한 파일에 묶고**, 착수 시점의 다음 가용 번호로 확정할 것)으로 `scene_illustrations.energy_charged_paid`, `character_creation_jobs.energy_charged_paid`, `ugc_world_creation_jobs.energy_charged_paid` (INT NOT NULL DEFAULT 0) 추가. `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)`으로 확장(CharacterCreationJob.java:339-341, UgcWorldCreationJob.java:215-217은 `+=` 누산이라 그대로 누산).
+3) 지연 환불 4곳(D-1.2/D-1.6/D-1.7/D-1.8)용 유료 분할분 영속: Flyway **V30**(→ **실제 V32** · 2026-09-02 구현. V30은 극장 워터마크가 선점)(에너지 분할 묶음 · 2026-08-26 정정 · D-33 — 앞을 V25 블록 B / V26·V27 블록 D / V28 결제 / V29 구독이 점유. 에너지 분할 3컬럼은 **한 파일에 묶고**, 착수 시점의 다음 가용 번호로 확정할 것)으로 `scene_illustrations.energy_charged_paid`, `character_creation_jobs.energy_charged_paid`, `ugc_world_creation_jobs.energy_charged_paid` (INT NOT NULL DEFAULT 0) 추가. `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)`으로 확장(CharacterCreationJob.java:339-341, UgcWorldCreationJob.java:215-217은 `+=` 누산이라 그대로 누산).
 4) 기존 행(default 0)은 전액 free 환불로 폴백 — 신규 손실만 차단하는 보수적 처리.
 5) 회귀 테스트: free=0/paid=N에서 각 환불 경로 후 paid 정확 복원 / free만 쓴 경우 paid 미증가 — 2방향 단위 테스트.
 
 **제품 결정 연동**: none — 블록 D(엔딩·업적 게이트 오프, V1 STORY 트랙 제거, 복장/장소 해금 오프)와 무관한 결제 자산 정합 문제. 오히려 docs/16이 시크릿 모드를 핵심 BM으로 승격시켰으므로 유료 에너지 소각은 환불 클레임·PG 심사 리스크로 가중된다. 단 블록 D로 V1 STORY 트랙과 레거시 캐릭터 일러 트랙이 제거되면 호출부 수가 줄어 수정 범위는 작아진다.
 
-**❓ 결정 필요**: 무료 분할분 환불이 상한을 넘길 때(예: 지연 환불 시점에 free가 이미 30) 초과분을 (a) 버릴 것인지 (b) paid로 승급시킬 것인지. (a)는 지연 환불에서 유저가 손해를 보고, (b)는 free→paid 파밍면이 생긴다. 유료 일러/UGC 잡처럼 환불이 수 분~수 시간 뒤 오는 경로에서 실제로 갈리는 문제라 정책 판단 필요.
+**✅ 답(2026-09-02 · 배치1 구현)**: **(a) 버림**으로 확정·구현(`User.refundEnergy(EnergySplit)` · V32). 근거: free는 regen이 상한까지 공짜로 채우므로 지연 환불 시점에 이미 상한이면 유저가 쓴 free분은 **이미 회복돼 있다** — 얹으면 상한 초과 순증(공짜 발행), paid 승급은 free→paid 세탁 파밍면. 아래 "(a)는 유저 손해" 서술은 regen을 빼고 센 것이다. ⚠ 단 '버킷 기준 정확 복원'은 경제적 중립이 아니다(지연 환불 대기 중 paid로 흘러간 후속 소비는 돌아오지 않음 — 구 코드도 동일, 닫으려면 에너지 원장 필요). 배포 창 회귀(구 행 paid=0 폴백이 상한 상태에서 구 코드보다 나쁨)는 V32가 비종결·미환불 행을 유료분=총액으로 1회 백필해 닫았다. 마이그레이션 번호는 V30이 아니라 **V32**.
+
+**❓ 결정 필요(원문)**: 무료 분할분 환불이 상한을 넘길 때(예: 지연 환불 시점에 free가 이미 30) 초과분을 (a) 버릴 것인지 (b) paid로 승급시킬 것인지. (a)는 지연 환불에서 유저가 손해를 보고, (b)는 free→paid 파밍면이 생긴다. 유료 일러/UGC 잡처럼 환불이 수 분~수 시간 뒤 오는 경로에서 실제로 갈리는 문제라 정책 판단 필요.
 
 ---
 
@@ -2051,7 +2053,7 @@ private void refundManualCharge(SceneIllustration s) {
 
 **수정안**
 
-`SceneIllustration`에 `energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — D-1.1과 같은 파일. 2026-08-26 정정 · D-33). 차감 지점 SceneRequestService.java:137 `u.consumeEnergy(cost)`의 반환 `EnergySplit`을 `SceneIllustration.createPending(...)`(도메인 :117-121)에 함께 저장. `refundManualCharge`에서 `user.refundEnergy(new EnergySplit(s.getEnergyCharged()-s.getEnergyChargedPaid(), s.getEnergyChargedPaid()))`. 기존 행은 paid=0 폴백.
+`SceneIllustration`에 `energyChargedPaid` 추가(Flyway **V30**(→ 실제 **V32**) 에너지 분할 묶음 — D-1.1과 같은 파일. 2026-08-26 정정 · D-33). 차감 지점 SceneRequestService.java:137 `u.consumeEnergy(cost)`의 반환 `EnergySplit`을 `SceneIllustration.createPending(...)`(도메인 :117-121)에 함께 저장. `refundManualCharge`에서 `user.refundEnergy(new EnergySplit(s.getEnergyCharged()-s.getEnergyChargedPaid(), s.getEnergyChargedPaid()))`. 기존 행은 paid=0 폴백.
 
 **제품 결정 연동**: none — 씬 일러는 §G #6에서 '일원화 후 존속'(레거시 캐릭터 일러 트랙을 흡수하는 쪽)으로 확정된 트랙이라 블록 D로 사라지지 않는다. docs/16 이미지 노드 수위 확정으로 트래픽이 늘 경로다.
 
@@ -2168,7 +2170,7 @@ public void failAndRefund(Long jobId, String reason) {
 
 **수정안**
 
-`CharacterCreationJob`에 `energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — 2026-08-26 정정 · D-33). `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)` 확장(누산 그대로). 차감 지점 전부(CharacterCreationService.java:249 base 리롤, :396 golden 리롤, :435 emotion 리롤, 단계 진입 차감들)에서 `consumeEnergy` 반환 분할분을 함께 누산. `failAndRefund`는 `user.refundEnergy(new EnergySplit(job.getEnergyCharged()-job.getEnergyChargedPaid(), job.getEnergyChargedPaid()))`. 기존 잡은 paid=0 폴백.
+`CharacterCreationJob`에 `energyChargedPaid` 추가(Flyway **V30**(→ 실제 **V32**) 에너지 분할 묶음 — 2026-08-26 정정 · D-33). `chargeEnergy(int)` → `chargeEnergy(int amount, int paidPortion)` 확장(누산 그대로). 차감 지점 전부(CharacterCreationService.java:249 base 리롤, :396 golden 리롤, :435 emotion 리롤, 단계 진입 차감들)에서 `consumeEnergy` 반환 분할분을 함께 누산. `failAndRefund`는 `user.refundEnergy(new EnergySplit(job.getEnergyCharged()-job.getEnergyChargedPaid(), job.getEnergyChargedPaid()))`. 기존 잡은 paid=0 폴백.
 
 **제품 결정 연동**: none — UGC는 docs/14 BM(25E UGC)의 핵심이라 §G 처분 대상이 아니다.
 
@@ -2197,7 +2199,7 @@ public void failAndRefund(Long jobId, String reason) {
 
 **수정안**
 
-D-1.6과 동일 패턴. `UgcWorldCreationJob.energyChargedPaid` 추가(Flyway **V30** 에너지 분할 묶음 — 2026-08-26 정정 · D-33), `chargeEnergy(int, int)` 확장, 차감 지점(UgcWorldService.java:275-278 rerollAsset, 기본 패키지 차감)에서 분할분 누산, `failAndRefund`에서 분할 환불.
+D-1.6과 동일 패턴. `UgcWorldCreationJob.energyChargedPaid` 추가(Flyway **V30**(→ 실제 **V32**) 에너지 분할 묶음 — 2026-08-26 정정 · D-33), `chargeEnergy(int, int)` 확장, 차감 지점(UgcWorldService.java:275-278 rerollAsset, 기본 패키지 차감)에서 분할분 누산, `failAndRefund`에서 분할 환불.
 
 ---
 
@@ -2227,7 +2229,9 @@ public void deleteFailedLocation(String username, Long worldId, String locationK
 
 `UgcWorldLocation`(또는 장소 추가 시 기록되는 과금 레코드)에 유료 분할분 1필드를 남기고 삭제 시 그대로 환불. 1E 단위라 별도 컬럼이 과하다고 판단되면 D-1.1의 openQuestion 정책(초과분 처리)에 따라 '분할 미상 → 전액 paid 복원' 또는 '전액 free 복원'을 **명시적으로 선택**하고 코드 주석으로 근거를 남길 것. 암묵적 현행 유지는 금지 — D-1.1 수정 후에도 유일하게 남는 시맨틱 구멍이 된다.
 
-**❓ 결정 필요**: 1E짜리 단발 환불에 분할 추적 컬럼을 붙일 가치가 있는가, 아니면 '분할 미상 환불은 paid 우선'이라는 전역 폴백 정책 하나로 덮을 것인가. 후자를 택하면 D-1.1이 막으려는 free→paid 파밍면이 이 경로로 소량 열린다(실패 장소를 반복 생성·삭제).
+**✅ 답(2026-09-02 · 배치1 구현)**: **컬럼 추적**을 택했다 — V32가 `ugc_world_locations`에 `energy_charged`·`energy_charged_paid`를 추가(다른 3 테이블과 동형으로 총액도 영속 — 삭제 시점 가격표를 총액으로 쓰면 가격 개정 사이에 유료분이 클램프로 잘린다, 적대적 리뷰 지적). 'paid 우선' 전역 폴백은 실패 장소 반복 생성·삭제 파밍면이라 배제. 구 행(총액 0)만 삭제 시점 가격표 폴백·전액 free.
+
+**❓ 결정 필요(원문)**: 1E짜리 단발 환불에 분할 추적 컬럼을 붙일 가치가 있는가, 아니면 '분할 미상 환불은 paid 우선'이라는 전역 폴백 정책 하나로 덮을 것인가. 후자를 택하면 D-1.1이 막으려는 free→paid 파밍면이 이 경로로 소량 열린다(실패 장소를 반복 생성·삭제).
 
 ---
 
@@ -2959,7 +2963,9 @@ case POSTPROCESSING -> {
 
 **제품 결정 연동**: 블록 C의 25E(6/5/11/3) 인상으로 몰수·환불액 상승. 블록 D 무관. 만약 '재개' 대신 '실패·전액 환불'을 택하면 조작자가 이미 지불한 감정 14종 GPU(원가 최대 구간, 블록 C에서 8E→11E 비중)를 통째로 버리게 되므로, 블록 C 원가 재산정과 함께 판단하는 것이 유리하다.
 
-**❓ 결정 필요**: POSTPROCESSING 좀비를 ①누끼 재개(추가 GPU 소량 발생, 유저는 캐릭터를 받음) ②실패·전액 환불(완주분 전량 폐기, 유저는 처음부터 다시) 중 어느 쪽으로 회수할 것인가? 감정 14종까지 완주한 잡이라 ①이 원가상 압도적으로 유리해 보이나, 재개 로직 구현 비용(MEDIUM)과 부분 재개 버그 리스크를 감수할지는 종원 판단.
+**✅ 답(2026-09-02 · 배치2 구현 · 안건 21 종원 확정 ①)**: **누끼 재개** — `UgcPipelineWorker.resumeCutoutStage`가 DONE이 아니면서 `CUTOUT:<tag>` 키가 없는(미제출) 컷만 재제출한다(runCutoutStage는 전량 cutting()으로 덮어 재사용 불가). 통합 스윕 `UgcJobScheduler.recoverStaleCharacterJobs`(5분, `ugc.job.stale-sweep-minutes` 기본 30)가 CONCEPT/BASE/EMOTIONS/REVIEW_WAIT/POSTPROCESSING/BINDING을 `recoverStaleJob`으로 회수. 컷오프는 별도 상수 대신 통합 스윕 기준(30분)을 쓴다 — 누끼 15회 순차 제출은 수 분이라 여유 충분.
+
+**❓ 결정 필요(원문)**: POSTPROCESSING 좀비를 ①누끼 재개(추가 GPU 소량 발생, 유저는 캐릭터를 받음) ②실패·전액 환불(완주분 전량 폐기, 유저는 처음부터 다시) 중 어느 쪽으로 회수할 것인가? 감정 14종까지 완주한 잡이라 ①이 원가상 압도적으로 유리해 보이나, 재개 로직 구현 비용(MEDIUM)과 부분 재개 버그 리스크를 감수할지는 종원 판단.
 
 ---
 
@@ -3021,7 +3027,9 @@ public void abandon(String username, Long jobId) {
 
 **제품 결정 연동**: 블록 C 25E 인상으로 포기 시 손실이 20E→25E. 블록 D 무관. 무환불 정책 자체는 docs/14 §G·§6 어디에도 재작업 금지로 지정돼 있지 않으므로 변경 가능하다.
 
-**❓ 결정 필요**: 서버 귀책(배포·크래시)으로 고착된 잡을 유저가 abandon할 때 환불할 것인가? 현행 무환불의 명분은 '이미 GPU 비용 발생'인데, 이 경우 조작자는 GPU를 이미 태웠고 유저도 산출물을 못 받는 양측 손실 상태다. 선택지: (a) 최종 구간(POSTPROCESSING/BINDING) abandon은 전액 환불 (b) 스윕이 회수 실패로 마킹한 잡만 환불 (c) 현행 유지하고 CS 수동 처리. 조작자 원가 부담과 신뢰 비용의 트레이드오프라 오너 결정이 필요하다.
+**✅ 답(2026-09-02 · 안건 21 종원 확정 (b))**: **abandon은 무환불 유지**, 서버가 스스로 실패로 마킹한 잡만 환불(스윕 `recoverStaleJob` → 복구 불가 시 `failAndRefund`). (a) '최종 구간 abandon 전액 환불'은 최종 구간까지 진행시킨 뒤 포기하는 파밍면이라 배제. D-3.1a/b/d가 닫혀 좀비 자체가 생기지 않으므로 이 안전망은 CS 수동(c)으로 충분 — 코드 무변경.
+
+**❓ 결정 필요(원문)**: 서버 귀책(배포·크래시)으로 고착된 잡을 유저가 abandon할 때 환불할 것인가? 현행 무환불의 명분은 '이미 GPU 비용 발생'인데, 이 경우 조작자는 GPU를 이미 태웠고 유저도 산출물을 못 받는 양측 손실 상태다. 선택지: (a) 최종 구간(POSTPROCESSING/BINDING) abandon은 전액 환불 (b) 스윕이 회수 실패로 마킹한 잡만 환불 (c) 현행 유지하고 CS 수동 처리. 조작자 원가 부담과 신뢰 비용의 트레이드오프라 오너 결정이 필요하다.
 
 ---
 
@@ -3462,7 +3470,9 @@ loc.markGenerating();   // updatedAt 갱신 → 다음 재시도 창이 다시 6
 
 **제품 결정 연동**: 블록 C·D 모두 무관 — docs/14 §G 21건에 세계관 빌더 항목이 없고, §5 블록 D 구현 노트에도 UGC 월드 언급이 없다. 다만 docs/14 §C #5가 '**UGC 월드 W0 flash 전환 A/B**'를 백로그로 두고 있어 LLM 프롬프트화 단가가 바뀔 여지는 있으나, 무제한 중복이라는 성질상 단가와 무관하게 수정 필요.
 
-**❓ 결정 필요**: 재시도를 ①GENERATING 전면 거부(단순·안전하나 '진짜로 멈춘' 케이스는 유저가 스스로 못 푼다 — 서버 스윕 필요) ②스테일 컷오프 후 허용(제안안 — 원 의도 보존) ③횟수 상한 후 과금 전환 중 어느 정책으로 갈 것인가? ②를 택할 경우 컷오프 값(제안 6분)이 유저 체감 대기와 GPU 낭비 사이의 트레이드오프 지점이 된다.
+**✅ 답(2026-09-02 · 배치2 구현)**: **②를 컬럼 없이 정확히 구현** — `UgcLocationInFlightRegistry`(프로세스 내 ConcurrentHashMap)에 등록된 장소(=이 JVM이 지금 만들고 있음)는 400으로 거부하고, 등록이 없는 GENERATING(서버 재시작으로 future 유실·5분 타임아웃 후 finally 해제)만 '멈춘' 것으로 보고 허용. 서비스가 디스패치 **전** 원자 선점(TOCTOU 창 폐쇄), 워커 finally가 해제, 완주 반영은 GENERATING일 때만(③ 세대 가드). `ugc_world_locations`에 타임스탬프 컬럼이 없어 시간 컷오프는 불가했고, 이 방식이 "실제로 진행 중인가"를 더 정확히 답한다. ⚠ 단일 인스턴스 전제(Vultr compose app 1대) — 다중 인스턴스 시 `generating_since` 컬럼으로 교체. ④ 횟수 상한·과금 전환은 미착수.
+
+**❓ 결정 필요(원문)**: 재시도를 ①GENERATING 전면 거부(단순·안전하나 '진짜로 멈춘' 케이스는 유저가 스스로 못 푼다 — 서버 스윕 필요) ②스테일 컷오프 후 허용(제안안 — 원 의도 보존) ③횟수 상한 후 과금 전환 중 어느 정책으로 갈 것인가? ②를 택할 경우 컷오프 값(제안 6분)이 유저 체감 대기와 GPU 낭비 사이의 트레이드오프 지점이 된다.
 
 ---
 
@@ -3605,7 +3615,9 @@ this.expiresAt = base.plusDays(30);
 
 **제품 결정 연동**: 블록 D(§G) 무관 — 구독은 docs/14 §C #5에서 "리스트가 전원 현행 유지(구독 14,900/24,900)"로 존속 확정. 오히려 블록 B가 페르소나 슬롯 3/10을 구독에 결합했고(UserPersonaService.java:153-157), docs/14 §D 행정 체크리스트가 "환불 산식" 법적 문서화·PG 가맹 심사를 요구하므로 구독 기간 정합은 런칭 전 필수. 게이트오프로 회피 불가.
 
-**❓ 결정 필요**: 티어 업그레이드(LUCID_PASS→MIDNIGHT) 시 기존 행을 deactivate하고 새 30일을 발급하는 현행 동작에서 **하위 티어 잔여 기간을 어떻게 처리할지**(소멸 / 일할 환산 이월 / 상위 티어 일수로 환산). 현재는 조용히 소멸이며 이것도 유상 자산 소각이다. docs/14 §C #5가 리스트가 현행 유지를 확정했으므로 두 티어 병존은 계속 발생한다.
+**✅ 답(2026-09-02 · 배치3 구현 · 안건 5 종원 확정 (b))**: **금액 비례 환산 이월** — `SubscriptionService.carryover(remaining, from, to) = remaining × (하위 월액 / 상위 월액)`(초 단위 절사)을 상위 티어 30일에 가산. 다운그레이드·동일가·잔여 없음은 이월 0(현행 유지 — 범위 밖). 같은 티어 재결제는 `UserSubscription.renew`가 `max(now, expiresAt) + 30일`로 잔여 보존. 새 행 INSERT 전에 기존 행 deactivate를 **saveAndFlush** — Hibernate가 INSERT를 UPDATE보다 먼저 flush하므로 V33 부분 유니크가 순간 2행을 보고 위반한다.
+
+**❓ 결정 필요(원문)**: 티어 업그레이드(LUCID_PASS→MIDNIGHT) 시 기존 행을 deactivate하고 새 30일을 발급하는 현행 동작에서 **하위 티어 잔여 기간을 어떻게 처리할지**(소멸 / 일할 환산 이월 / 상위 티어 일수로 환산). 현재는 조용히 소멸이며 이것도 유상 자산 소각이다. docs/14 §C #5가 리스트가 현행 유지를 확정했으므로 두 티어 병존은 계속 발생한다.
 
 ---
 
@@ -3640,7 +3652,9 @@ UserSubscription.java:50-52, 81 — 구독 1행이 최신 결제 1건의 주문�
 
 **제품 결정 연동**: 블록 D 무관. 단 docs/16(시크릿=핵심 BM)·docs/14 §D의 PG 가맹 심사 항목과 직결 — 환불 처리 정합성은 PG 심사·소비자 분쟁의 1차 점검 대상이다. (b)안 선택 시 이 스키마가 D-4.4의 unique index와 같은 마이그레이션(구독 묶음, V29+)에 묶인다.
 
-**❓ 결정 필요**: 갱신 이력이 있는 구독에서 **과거 회차 1건만 환불**할 때의 제품 정책: (a) 그 회차분 30일만 만료일에서 차감, (b) 구독 전체 즉시 해지, (c) 과거 회차 환불 자체를 CS에서 금지. docs/14 §D가 '환불 산식'을 법적 문서에 명시하라고 요구하므로 이 결정이 약관 문구를 좌우한다.
+**✅ 답(2026-09-02 · 배치3 구현 · 안건 6 종원 확정 (c))**: **최근 회차만 환불 허용** — `RefundService.assertRefundableRound`가 구독 상품에 대해 `SubscriptionService.isCurrentRound(merchantUid)`를 PortOne 취소 **전**에 검사해 과거 회차는 400으로 거부(돈이 나가기 전). 이력 테이블(B)은 런칭 전 범위 밖 — `renew`가 merchant_uid를 최신 회차로 덮는 현행 계약을 Javadoc에 명문화했다.
+
+**❓ 결정 필요(원문)**: 갱신 이력이 있는 구독에서 **과거 회차 1건만 환불**할 때의 제품 정책: (a) 그 회차분 30일만 만료일에서 차감, (b) 구독 전체 즉시 해지, (c) 과거 회차 환불 자체를 CS에서 금지. docs/14 §D가 '환불 산식'을 법적 문서에 명시하라고 요구하므로 이 결정이 약관 문구를 좌우한다.
 
 ---
 
@@ -3671,7 +3685,9 @@ SubscriptionService.java:101-117 — `.ifPresent(...)`만 있고 **else 분기·
 
 **제품 결정 연동**: 블록 D 무관. docs/14 §D 행정(PG 가맹·환불 산식 명시)과 직결하고, docs/16이 시크릿 3종 결제를 핵심 BM으로 올렸으므로 시크릿 패스 회수(RefundService.java:93-94)의 동일 패턴까지 같은 커밋에서 처리하는 것이 이득.
 
-**❓ 결정 필요**: 회수 실패 시 환불 자체를 막을지(= PortOne 취소 전에 회수 대상 존재를 선검증) 여부. 선검증으로 바꾸면 '돈도 혜택도 잃을 위험'을 기각한 기존 순서 근거(RefundService.java:27-30 주석)와 충돌하므로 오너 판단 필요.
+**✅ 답(2026-09-02 · 배치3 구현 · 안건 6 종원 확정 (나))**: 예측 가능한 미발견(구독 과거 회차)만 선검증으로 막고, 그 외 회수 실패는 **환불·REFUNDED 전이·감사로그를 유지한 채 예외로 승격** — 회수 3경로(`deactivateByMerchantUid`·`revoke24hPassByMerchantUid`·`revokePermanentUnlockByMerchantUid`)가 boolean을 돌려주고, false면 감사 액션 `REFUND_CLAWBACK_FAILED`(REFUND_EXECUTE 아님) + `log.error` + `ClawbackFailedException`(ErrorCode `REFUND_CLAWBACK_FAILED` → 409, `@Transactional(noRollbackFor)`라 롤백 없음). '유저 유리' 원칙(RefundService 주석)은 유지하고 관리자가 사실을 모르는 상태만 없앴다.
+
+**❓ 결정 필요(원문)**: 회수 실패 시 환불 자체를 막을지(= PortOne 취소 전에 회수 대상 존재를 선검증) 여부. 선검증으로 바꾸면 '돈도 혜택도 잃을 위험'을 기각한 기존 순서 근거(RefundService.java:27-30 주석)와 충돌하므로 오너 판단 필요.
 
 ---
 
@@ -3712,7 +3728,9 @@ CREATE UNIQUE INDEX uq_sub_user_active ON user_subscriptions(user_id) WHERE acti
 
 **제품 결정 연동**: 블록 D 무관. 다만 **블록 B가 이미 V25를 소비했다는 사실이 docs/13 배치3 지시서를 무효화**하므로(그 뒤 V26·V27은 블록 D, V28은 결제가 더 가져갔다 — 2026-08-26 정정 · D-33), 배치3 착수 시 버전 번호를 반드시 재확인할 것. 또 블록 B가 페르소나 슬롯을 구독에 결합했지만 슬롯 판정은 `User.subscriptionTier`(UserPersonaService.java:153-157)를 읽으므로 이 결함의 500 폭발 반경에는 들어가지 않는다.
 
-**❓ 결정 필요**: 프로드 DB에 이미 중복 활성 행이 존재할 경우 **어느 행을 살릴지**: (a) 만료일이 가장 먼 행(위 SQL 기본값·유저 유리), (b) 최신 결제 행. 그리고 (a)로 정리해 죽는 행에 대해 보상(에너지/기간 이월)을 할지. 마이그레이션 실행 전 `SELECT user_id, count(*) FROM user_subscriptions WHERE active GROUP BY 1 HAVING count(*)>1`로 실제 존재 여부부터 확인 필요.
+**✅ 답(2026-09-02 · 배치3 구현 · 안건 3 종원 확정)**: 프로드 구독 행은 실유저가 아니라 베타·본인 테스트분 → 보상 불요. **V33** `uq_sub_user_active (user_id) WHERE active` 부분 유니크 + 인덱스 생성 전제조건으로 (a) 만료일 최장 1행만 남기는 정리 **가드**(중복 없으면 0행). 테이블이 Hibernate 산물이라 `to_regclass` 존재 검사 DO 블록. 번호는 V29가 아니라 **V33**(V29 극장 분기·V30 워터마크·V31 CHECK·V32 에너지 분할이 선점).
+
+**❓ 결정 필요(원문)**: 프로드 DB에 이미 중복 활성 행이 존재할 경우 **어느 행을 살릴지**: (a) 만료일이 가장 먼 행(위 SQL 기본값·유저 유리), (b) 최신 결제 행. 그리고 (a)로 정리해 죽는 행에 대해 보상(에너지/기간 이월)을 할지. 마이그레이션 실행 전 `SELECT user_id, count(*) FROM user_subscriptions WHERE active GROUP BY 1 HAVING count(*)>1`로 실제 존재 여부부터 확인 필요.
 
 ---
 

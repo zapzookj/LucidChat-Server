@@ -26,7 +26,7 @@
 
 **`B-5.2`는 코드 완료·스위치 대기** — §C 참조.
 
-마이그레이션 **V28**(orders.imp_uid unique) · **V29**(theater_branch_choices unique) · **V30**(theater 과금 워터마크) 추가. 전부 멱등·nullable. **다음 세션 신규 번호는 V31부터.**
+마이그레이션 **V28**(orders.imp_uid unique) · **V29**(theater_branch_choices unique) · **V30**(theater 과금 워터마크) 추가. 전부 멱등·nullable. **다음 세션 신규 번호는 V31부터.** → <sub>2026-09-02 정정: V31(chat_rooms CHECK)·**V32**(에너지 분할)·**V33**(구독 부분 유니크)·**V34**(orders.status CHECK — PAID_UNDELIVERED)·**V35**(구독 회차 스냅샷·이월 출처·tier 정합)까지 점유. **신규는 V36부터** — 착수 전 `git ls-files src/main/resources/db/migration | sort -V | tail -3` + 로컬 `flyway_schema_history`를 둘 다 볼 것(이번 세션에 V31 중복 사고 있었음, 메모리 `bash-initial-cwd-trap`).</sub>
 
 ---
 
@@ -108,3 +108,44 @@ FE 자기 치유(`ErrorCode.UNPAID_BATCH` → `loadNextBatch()` 1회 재시도)�
   ⚠ 8080은 종원의 IntelliJ 세션이 쓰고 있을 수 있다 — 포트를 바꿔 확인하라
 - FE `npm run build` 통과 · `not exported` 경고 0 · **신규 lint 에러 0**
 - **실행 검증 한계**: AWS 정지로 프로드 확인 0. FE dev 서버 모듈 로드 실증만 있다
+
+---
+
+## G. 2026-09-02 세션 — 버그픽스 2차 (배치 1~3 + 안건 4) · **로컬 커밋 대기**
+
+> 읽는 순서는 그대로: 이 문서 → [`../19_Register_Rejudgment.md`](../19_Register_Rejudgment.md) → [`decisions_confirmed.md`](decisions_confirmed.md). 상태 정본 [`rejudgment_delta.md`](rejudgment_delta.md)는 D-1·D-3·D-4 행이 갱신됐고, 레지스터의 ❓ 9건에 **✅ 답** 줄이 붙었다.
+
+### G-1. 한 일 (전부 워킹트리 — 커밋은 종원 지시 후)
+
+| 배치 | 내용 | 마이그레이션 | 검증 |
+|---|---|---|---|
+| **1 · D-1.1~1.8 에너지 분할 환불** | `EnergySplit` 반환·`refundEnergy(EnergySplit)`·1-arg 삭제(§2-6)·지연 환불 4경로 유료분 영속·배포 창 백필·free<0 클램프 | **V32** | 리뷰 4관점(P2 1건 수용) · 유닛 13건 |
+| **2 · D-3.1a/1b/1d/2a/2b/3/4/5 UGC 좀비 잡** | 통합 스테일 스윕(`recoverStaleCharacterJobs`→`recoverStaleJob`) · 404=NOT_FOUND 분리 + compare-and-drop 주입 · 부분 누끼 재개 · 리롤 화이트리스트 + 유실 자가치유(5분) · 장소 in-flight 레지스트리 · 씬 렌더 부활 차단 · fal future 타임아웃 · 스케줄러 풀 3 | — (`ugc.job.stale-sweep-minutes`·`external-hard-stale-minutes` 노브) | 리뷰 4관점 · 유닛 8건 |
+| **3 · D-4.1~4.5 구독 정합 + 안건 5·6** | 잔여 보존 갱신 + **회차 스냅샷**(더블 결제 환불 시 이전 회차 보존) · 금액 비례 이월 + **이월 출처**(상위 주문 환불 → 이전 행 복원, 원천 회차 환불 사전 거부) · **다운그레이드 거부**(관리자 지급 예외) · User 행 락 · List degrade · 회수 3경로 boolean → `REFUND_CLAWBACK_FAILED` 409 | **V33**(부분 유니크) · **V35**(스냅샷 4컬럼 + tier 정합) | 리뷰 · 유닛 17건 |
+| **안건 4 · 지급 실패 결제 처분 (b)+(c)** | `PAID_UNDELIVERED` · 결제 확정 TX-A / 지급 TX-B / 사유 TX-C 분리 · **OSIV refresh**(P0) · 종결 주문 웹훅 무시(REFUNDED→FAILED 차단) · `PAYMENT_DELIVERY_PENDING` 409 + FE '결제 완료·지급 대기' + 재시도 · 스케줄러 자동 재지급(15분·24h) · 관리자 `POST /admin/payments/orders/{uid}/redeliver` · 매출 집계에 미지급 확정금 포함 | **V34**(CHECK 동기화 — Hibernate CHECK 실측 §2-7) | 유닛 10건 |
+
+유닛 **30클래스 / 182건 녹색** · 8081 실기동 V32~V34 확인(V35는 이 문서 작성 직후 재기동 확인 — G-4). FE `npm run build` 통과(Front·Admin).
+
+### G-2. ★ 다음 세션이 가장 먼저 확인할 것
+
+1. **커밋 분리** — 인덱스 = 배치 1(D-1 + V32)만 스테이지돼 있다. 워킹트리 = 배치 2·3·안건 4·문서. 순서: ① V32 스키마 커밋 ② D-1 코드 커밋(인덱스) ③ V33·V34·V35 스키마 커밋 ④ 배치 2 코드 ⑤ 배치 3+안건 4 코드 ⑥ 문서. 파일 집합이 겹치는 곳(worker·UgcWorldService 등)은 인덱스 커밋 후 파일 단위 add.
+2. **롤백 절차 (V33·V34 이후)** — 앱 이미지만 되돌리면 (a) 구 코드의 티어 변경이 flush 순서(INSERT→UPDATE)로 `uq_sub_user_active` 위반 → 500, (b) `PAID_UNDELIVERED` 행이 있으면 구 enum 역직렬화 실패로 어드민 주문 목록·감시 스캔이 죽는다. 롤백 전: `DROP INDEX IF EXISTS uq_sub_user_active;` + `SELECT count(*) FROM orders WHERE status='PAID_UNDELIVERED'`가 0(재지급·환불로 소진)인지 확인. V32·V35 컬럼은 남겨도 무해.
+3. **프로드 배포 후 실측** — `flyway_schema_history` v35 · `orders_status_check` 6값 · `uq_sub_user_active` 존재 · `SELECT id,free_energy,paid_energy FROM users WHERE free_energy<0 OR paid_energy<0`(0건 기대).
+4. `theater.paid-batch-gate-enforced=false` 관측 모드 유지(§C-1 조건 그대로 — 이제 Vultr 로그로 확인).
+
+### G-3. 이 세션의 교훈 (★ 반복 금지)
+
+- **세션 첫 Bash의 cwd를 믿지 마라.** 첫 `git log`가 실제 리포와 다른 체크아웃을 보여줘 V31 중복 마이그레이션을 만들었다 → 부팅 실패로 발견. 첫 호출에서 절대경로 `cd` + HEAD를 시스템 스냅샷과 대조(메모리 `bash-initial-cwd-trap`).
+- **enum 값 추가 = Hibernate CHECK 동기화(§2-7)는 실측으로 확정했다** — `orders_status_check`가 있었다(V34). "Flyway CREATE 이력 없음 ≠ CHECK 없음".
+- **OSIV(open-in-view 기본 true)에서 TransactionTemplate으로 TX를 쪼개면 두 번째 TX의 `FOR UPDATE` 조회가 스테일 managed 인스턴스를 돌려준다** — 락 뒤 `em.refresh` 필수. 단일 @Transactional 시절엔 없던 회귀 유형.
+- **정확한 역연산 ≠ 경제적 중립** — 버킷 기준 복원은 지연 환불 대기 중 paid로 흘러간 소비를 되돌리지 않는다(원장 없이는 불가). 결정 사항으로 기록.
+- **가드 원칙이 이번에도 두 번 작동했다** — '리롤 in-flight 400'이 유실 케이스에서 유저를 30분 가두는 것(자가치유 5분으로 완화), '최신 회차 환불 = 행 전체 비활성화'가 더블 결제 유저의 이전 회차를 지우는 것(스냅샷으로 회차분만 회수).
+- 세션 한도가 리뷰 반박 패널을 3번 죽였다 — 패널 없이 렌즈 발견을 직접 판정할 때는 **코드로 재확인한 것만** 수용했다(위 표의 P0·P1 전부 코드 대조 완료).
+
+### G-4. 남은 것
+
+- **E-1 잔여 P1**: D-2.a/g · D-6.4/6.5(스트림 보상·로그 유실) · D-5.1~5.4(극장 prefetch 오프바이원) · E-4.3/4.4 · E-5.1.b/5.2.a/5.2.b · E-1.1/1.2/1.2b · B-6.1(안건 17-① 대기) · E-6.4 · E-7.1.a · D-2.k(ModelsLab status 실측 대기) → **약 22건**
+- 결정불요 잔여: D-9 · D-18(웹훅 시크릿 필수화) · D-23 · D-24 · D-29 일부
+- 안건 미착수: 16(씬 일러 좌표계) · 18(승급 히스테리시스, V36~) · 11 후속(동적 배경 일원화) · 9-A′(V2 STORY 나이 게이트) · 9-E(age 백필 — **null 유예 유지**로 결정)
+- FE 보조: D-3.4 ③ 낙관 잠금(StudioCreateFlow) · 신규 400 6종 문구 노출은 확인됨(조용히 멈추는 곳 없음)
+- 종원 결정 대기: **안건 17-①**(극장 리롤 — 추천 세션당 3회 상한) · **17-②**(§C#6 경계 명문화) · 다운그레이드 '거부'(이번 구현) vs '경고 후 허용'

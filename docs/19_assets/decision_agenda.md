@@ -64,6 +64,8 @@
 
 **이 답 없이 막히는 것** — 배치 1B(DB 무결성) · 배치 2(결제 개통). docs/18 §3-A 결제 정합 3종(B-1.1/1.2/1.3)과 같은 커밋 단위 — PG 심사 제출 전 선행.
 
+> **✅ 2026-09-02 구현 (b)+(c)** — `OrderStatus.PAID_UNDELIVERED` 신설(**V34**로 `orders_status_check` 동기화 — Hibernate CHECK 실측, §2-7). `PaymentService`가 단일 @Transactional을 버리고 TX-A(잠금·검증·`markPaid`→PAID_UNDELIVERED 커밋) → TX-B(`deliverProduct`→`markDelivered`→PAID) → 실패 시 TX-C(사유 `failed_reason` + 감사로그 `PAYMENT_UNDELIVERED`) + `DeliveryFailedException`(INTERNAL_ERROR → 웹훅 503 재시도 / confirm 500 안내문구). 재시도(/confirm 재호출·웹훅)는 PAID_UNDELIVERED를 보고 PortOne 재검증 없이 지급만 다시 한다. 캐시 무효화는 커밋 뒤로 빼 Redis 순단이 지급을 되돌리지 않게 했다. `RefundService`는 미지급 주문을 회수 없이 취소한다. (c) `prepareOrder`가 시크릿 2종의 대상 캐릭터 실존을 결제 전 확인(자격은 계정 단위 해금이라 미검사). 감시 스케줄러 스캔 A가 PAID_UNDELIVERED를 '기록된 미지급'으로 관측(5분 유예). 재지급 큐 **UI**는 런칭 후(확정대로).
+
 **선행 조사** — 없음 — AWS 무관, 코드만으로 확정 가능
 
 <sub>근거: 신규결함 #16(PaymentService.java:202-204 · SecretModeService.java:163-165·223-225) · B-1.1 인접</sub>
@@ -78,6 +80,8 @@
 
 **이 답 없이 막히는 것** — 배치 1B(D-4 구독 정합 3건) · docs/18 §1-B terms_of_service_draft.md TODO 21건 중 환불 산식 항목.
 
+> **✅ 2026-09-02 구현 (b)** — `SubscriptionService.carryover` = 잔여 × (하위 월액/상위 월액), 상위 티어 30일에 가산(V35 `carried_from_id`·`carried_seconds`로 출처 기록 → 상위 주문 환불 시 이전 행 복원). **다운그레이드**는 "범위 밖"이었으나 적대적 리뷰가 '상위 구독 활성 중 하위 구매 1클릭 실수로 최대 24,900원치 무경고 소각'을 지적해 **서버 거부(400 "N일 남아 있어요 — 만료 후 변경") + FE 카드 잠금**으로 구현했다(관리자 지급은 예외). ⚠ 종원 확인 대기: 거부 유지 vs 경고 후 허용.
+
 **선행 조사** — 없음 — AWS 무관
 
 <sub>근거: D-4.1(UserSubscription.java:78-83 · SubscriptionService.java:57-66 · PaymentService.java:246-251)</sub>
@@ -91,6 +95,8 @@
 **추천** — (c)+(나). 근거: UserSubscription.renew(:79-83)가 merchantUid를 덮어쓰기 때문에 과거 회차 merchantUid로는 findByMerchantUid가 아무것도 못 찾고, RefundService.clawback → SubscriptionService.deactivateByMerchantUid(:103)의 .ifPresent가 조용히 통과해 '돈은 돌려주고 구독은 살아 있는' 상태가 지금 무성으로 만들어진다. 같은 무성 패턴이 시크릿 회수 2경로(RefundService.java:93-94)에도 있으므로 한 커밋으로 묶는다. (a)는 런칭 전에 낼 값어치가 없는 스키마 비용이고, RefundService.java:27-30이 명문화한 '유저 유리' 원칙은 유지하되 관리자가 사실을 모르는 상태만 없애는 것이 최소 정합이다.
 
 **이 답 없이 막히는 것** — 배치 1B(D-4 구독 정합) · 배치 6(어드민 환불 도구) · docs/18 §1-B 약관 환불 조항 문구.
+
+> **✅ 2026-09-02 구현 (c)+(나)** — 과거 회차·이월 원천 회차는 `SubscriptionService.assertRefundableRound`가 PortOne 취소 **전** 400 거부. 최신 회차는 V35 스냅샷으로 **그 회차분만** 회수(적대적 리뷰 P1: 종전 구현은 행 전체를 꺼 더블 결제 유저가 이전 회차까지 잃었다). 회수 미발견은 감사로그 `REFUND_CLAWBACK_FAILED` + 409 예외(롤백 없음). 관리자 지급은 `merchantUid=null`로 유료 회차 키를 덮지 않는다(P2). 어드민 화면은 409를 '환불 완료·회수 실패' 안내로 처리하고 목록을 갱신한다.
 
 **선행 조사** — 없음 — AWS 무관
 
@@ -460,7 +466,9 @@ EnergyRegenScheduler가 벌크 UPDATE만 하고 갱신된 유저 목록을 돌�
 
 `D-1.1 시그니처 + 호출부 7곳(배치 3) · User.java:166·187 · 환불 선례 UgcWorldService.java:488-502`
 
-초과분 paid 승급이나 paid 우선 폴백은 deleteFailedLocation의 무조건 1E 환불과 결합해 free→paid 전환 파밍이 성립하고, 폐기는 유저 손실이라 정합해가 하나뿐이다. V29 EnergySplit 마이그레이션이 이미 배치 3에 예정돼 추적 컬럼의 한계 비용도 낮다. 오버로드를 남기면 호출부가 조용히 낡은 경로로 컴파일된다(CLAUDE.md §2-6) — 컴파일러가 호출부를 전수로 드러내는 것이 유일한 검증 수단이다.
+초과분 paid 승급이나 paid 우선 폴백은 deleteFailedLocation의 무조건 1E 환불과 결합해 free→paid 전환 파밍이 성립하고, ~~폐기는 유저 손실이라~~ 정합해가 하나뿐이다. ~~V29~~ EnergySplit 마이그레이션이 이미 배치 3에 예정돼 추적 컬럼의 한계 비용도 낮다. 오버로드를 남기면 호출부가 조용히 낡은 경로로 컴파일된다
+
+> **✅ 2026-09-02 구현·정정** — 구현 완료(V32 · `EnergySplit` · 호출부 8곳). D-1.1 ❓(상한 초과분)는 **(a) 버림**으로 확정했다: "폐기는 유저 손실"은 **틀린 서술**이다 — free는 regen이 상한까지 공짜로 채우므로 지연 환불 시점에 이미 상한이면 그 free분은 이미 회복돼 있고, 얹으면 상한 초과 순증(공짜 발행)이다. 적대적 리뷰 2렌즈가 독립 검토해 정상 유저 손해 경로 없음을 확인. 배포 시점 진행 중 행은 V32가 유료분=총액으로 1회 백필(구 코드 대비 회귀 방지). 근거 전문: [`../17_assets/defect_register.md`](../17_assets/defect_register.md) D-1.1 "✅ 답".(CLAUDE.md §2-6) — 컴파일러가 호출부를 전수로 드러내는 것이 유일한 검증 수단이다.
 
 ### D-23. [P2 · SMALL] final_result 전송 실패 시 환불하지 않고 방 재조회로 복구 + TX 밖 지연 역참조를 지역변수로 걷어냄
 
