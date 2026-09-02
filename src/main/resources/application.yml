@@ -6,6 +6,12 @@ app:
     bootstrap-usernames: zapzook
 
 spring:
+  task:
+    scheduling:
+      # [적대적 리뷰 P3] @Scheduled 12건이 기본 1스레드를 공유했다 — UGC 스테일 스윕(bind S3 승격·누끼 15건 동기 제출)이
+      #   돌면 1분 폴러·결제 미지급 감시·에너지 리젠·구독 만료가 함께 밀린다. 스윕과 폴러가 서로를 막지 않게 3.
+      pool:
+        size: ${SCHEDULING_POOL_SIZE:3}
   # 기본으로 local과 characters 프로필을 함께 실행하도록 설정
   profiles:
     active: local, characters, worlds, v2
@@ -274,6 +280,10 @@ ugc:
     stage-auto-retries: 2     # 스테이지 자동 재시도(무과금)
     emotion-max-retries: 3    # 감정 컷 개별 재시도 상한
     poll-fallback-seconds: 15 # webhook 유실 대비 폴링 주기 (웹훅 미구성 로컬에서도 체감 지연 최소화 — 2026-07-20 60→15)
+    # [D-3.1a/b/d] 캐릭터 잡 통합 스테일 스윕 — 무진행 PROCESSING/POSTPROCESSING/BINDING 잡 회수 기준(월드 stale-sweep-minutes 동형)
+    stale-sweep-minutes: ${UGC_JOB_STALE_SWEEP_MINUTES:30}
+    # [D-3.2b] 폴러 위임 만료 — 미결 RunPod 키가 있어도 이 시간 무진행이면 스윕이 키를 실패 주입(재시도 예산 소진 시 환불)
+    external-hard-stale-minutes: ${UGC_JOB_EXTERNAL_HARD_STALE_MINUTES:90}
   runpod:
     api-key: ${UGC_RUNPOD_API_KEY:}
     endpoint-id: ${UGC_RUNPOD_ENDPOINT_ID:}

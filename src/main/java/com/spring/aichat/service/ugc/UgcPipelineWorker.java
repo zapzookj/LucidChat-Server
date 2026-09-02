@@ -255,6 +255,9 @@ public class UgcPipelineWorker {
             .thenCompose(pass1 -> poseEditClient.edit(new PoseEditClient.EditRequest(
                 promptAssembler.qwenBackgroundPrompt(bgColor), promptAssembler.qwenNegative(),
                 pass1.imageUrl(), null)))
+            // [적대적 리뷰 P3] 스윕 창(staleMinutes)을 넘겨 살아남는 future가 없게 — '키 없는 DERIVING = 죽은 체인'을 불변식으로.
+            //   타임아웃은 err 분기로 들어가 후보 실패 경로(예산 소진 시 정상 실패)를 탄다.
+            .orTimeout(qwenTimeoutMinutes(), java.util.concurrent.TimeUnit.MINUTES)
             .whenComplete((pass2, err) -> {
                 if (err != null) {
                     log.warn("[UGC-WORKER] 스탠딩 후보 Qwen 파생 실패: jobId={}, idx={}, {}",
@@ -429,6 +432,7 @@ public class UgcPipelineWorker {
         StructuredConcept.EmotionPromptOverride override = concept.emotionPromptFor(tag.name());
         poseEditClient.edit(new PoseEditClient.EditRequest(
                 promptAssembler.qwenEmotionPrompt(tag, personaHint, override), promptAssembler.qwenNegative(), baseUrl, fixedSeed))
+            .orTimeout(qwenTimeoutMinutes(), java.util.concurrent.TimeUnit.MINUTES)   // [적대적 리뷰 P3] 스윕 창 내 강제 종료
             .whenComplete((result, err) -> {
                 if (err != null) {
                     log.warn("[UGC-WORKER] Qwen 감정 파생 실패: jobId={}, tag={}, {}", jobId, tag, err.getMessage());
@@ -892,9 +896,19 @@ public class UgcPipelineWorker {
     private void recordExternalJob(Long jobId, String key, String runpodId) {
         mutateJob(jobId, j -> {
             Map<String, String> scratch = json.readScratch(j.getExternalJobsJson());
-            scratch.put(key, runpodId);
+            String prev = scratch.put(key, runpodId);
+            if (prev != null && !prev.equals(runpodId)) {
+                // [D-3.4 ②] 같은 키를 덮으면 선발 체인이 폴링 추적에서 빠진다 — 세대 경합을 관측 가능하게
+                log.warn("[UGC-WORKER] externalJobs 키 덮어씀(세대 경합): jobId={}, key={}, {} → {}",
+                    jobId, key, prev, runpodId);
+            }
             j.updateExternalJobs(json.writeScratch(scratch));
         });
+    }
+
+    /** [D-3.2a] 죽은 외부 id를 스크래치에서 제거 — 재제출이 같은 키로 새 id를 기록하기 전까지 폴러가 재폴링하지 않게. */
+    public void dropExternalJob(Long jobId, String key) {
+        mutateJob(jobId, j -> removeExternalJob(j, key));
     }
 
     private void removeExternalJob(CharacterCreationJob job, String key) {
@@ -911,6 +925,266 @@ public class UgcPipelineWorker {
     /** 폴러가 내부 스크래치(K_*) 키를 RunPod id로 오인하지 않도록 하는 판별. */
     public static boolean isExternalJobKey(String key) {
         return !key.startsWith(SCRATCH_KEY_PREFIX);
+    }
+
+    /** fal(Qwen) future 상한 — 스테일 스윕 창보다 짧게(여유 5분, 최소 5분). 큐 혼잡으로 무기한 대기하던 체인을 실패 경로로 보낸다. */
+    private long qwenTimeoutMinutes() {
+        return Math.max(5, props.job().staleMinutes() - 5);
+    }
+
+    /** externalJobs 키 해석 결과 — "GOLDEN" | "BASE_REFINE:0" | "EMOTION_REFINE:JOY" | "CUTOUT:JOY". */
+    public record ExternalKey(UgcStage stage, String token) {}
+
+    /** externalJobs 키 → (스테이지, 토큰). 규약 밖 키는 null (폴러·스윕 공용). */
+    public static ExternalKey parseExternalKey(String key) {
+        if (key == null || !isExternalJobKey(key)) return null;
+        try {
+            int idx = key.indexOf(':');
+            if (idx < 0) return new ExternalKey(UgcStage.valueOf(key), null);
+            return new ExternalKey(UgcStage.valueOf(key.substring(0, idx)), key.substring(idx + 1));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [D-3.1a/b/d · D-3.2a/b] 스테일 회수 — 서버 재시작·크래시로 유실된 in-flight 구간 복구
+    //  (월드 트랙 UgcWorldPipelineWorker.recoverStaleJob 동형. 종전 캐릭터 트랙은 CONCEPT_PROCESSING만
+    //   실패·환불했고 BINDING·POSTPROCESSING·fal(Qwen) 구간은 어느 리스트에도 없어 영구 좀비였다 —
+    //   동시 1잡 정책 때문에 그 유저는 신규 생성까지 영구 차단됐고 유일한 탈출구가 무환불 abandon이었다.)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 스케줄러가 N분 무진행 잡에 호출.
+     *
+     * <ul>
+     *   <li>외부 키가 <b>없는</b> 미결 항목(Qwen future 유실·누끼 미제출·BINDING 유실)은 즉시 재제출·재실행
+     *       (무과금 — 자동 재시도). 30분 무진행 잡의 키 없는 DERIVING은 살아 있는 future일 확률이 0에 가깝다(Qwen ~1분).</li>
+     *   <li>외부 키가 <b>있는</b> 항목은 폴러 담당 — 단 {@code hardStale}(폴러 위임 만료, D-3.2b)이면 '결과 소실'로
+     *       주입해 스테이지별 재시도 예산으로 흘린다(소진 시에만 실패·환불). 종전엔 키가 존재하기만 하면 30일이든 스킵했다.</li>
+     *   <li>CONCEPT_PROCESSING(LLM 동기 구간)은 복구 수단이 없어 실패·전액 환불(안건 21 (b): 서버가 실패로 마킹한 잡만 환불).</li>
+     * </ul>
+     * 재제출 후 {@code touchRecovery}로 다음 스윕 창까지 같은 잡의 중복 재제출을 막는다.
+     */
+    public void recoverStaleJob(Long jobId, boolean hardStale) {
+        CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
+        if (job == null || job.getStatus().isTerminal()) return;
+
+        Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+        List<String> pendingKeys = scratch.keySet().stream().filter(UgcPipelineWorker::isExternalJobKey).toList();
+        boolean touched;
+        switch (job.getStatus()) {
+            case CONCEPT_PROCESSING -> {
+                if (pendingKeys.isEmpty()) {
+                    if (job.getStructuredConceptJson() != null) {
+                        // [적대적 리뷰 P3] Stage0 산출은 커밋됐고 황금샷 제출(또는 리롤 제출)만 유실된 창 — 저장된 컨셉에서
+                        //   재제출한다(runGoldenReroll: 상태 가드·APPEARANCE_EDIT 처리 내장). 전액 환불로 완주분을 버리지 않는다.
+                        log.info("[UGC-WORKER] 스테일 CONCEPT_PROCESSING — 저장된 컨셉으로 황금샷 재제출: jobId={}", jobId);
+                        runGoldenReroll(jobId);
+                        touched = true;
+                        break;
+                    }
+                    // 순수 Stage0 LLM 구간 유실 — 외부 키도 산출도 없어 재부착 불가. 기존 정책(2026-07-21) 유지.
+                    log.warn("[UGC-WORKER] 스테일 CONCEPT_PROCESSING 회수 (LLM 구간 유실): jobId={}", jobId);
+                    failAndRefund(jobId, "컨셉 처리 시간 초과 — 사용한 에너지는 환불되었어요.");
+                    return;
+                }
+                touched = false;   // GOLDEN 키 있음 — 폴러 담당 (hardStale이면 아래에서 주입)
+            }
+            case BASE_PROCESSING -> touched = resubmitLostBaseCandidates(job, scratch);
+            case EMOTIONS_PROCESSING, REVIEW_WAIT -> touched = resubmitLostEmotionDerivations(job, scratch);
+            case POSTPROCESSING -> touched = resumeCutoutStage(job, scratch);
+            case BINDING -> {
+                // [D-3.1a] toBinding 커밋 후 bind()(자기호출이라 호출 스레드 동기 실행)가 죽은 상태 — 재실행.
+                //   bind는 상태 가드 + uniqueSlug + 단일 TX(Character 저장·toReady)라 멱등(고아 slug 1개 비용).
+                log.info("[UGC-WORKER] 스테일 BINDING 재실행: jobId={}", jobId);
+                bind(jobId);
+                return;
+            }
+            default -> { return; }   // GACHA_WAIT / BASE_WAIT — 순수 유저 대기, TTL 스윕 담당
+        }
+
+        if (hardStale && !pendingKeys.isEmpty()) {
+            for (String key : pendingKeys) {
+                injectLostExternalJob(jobId, key, scratch.get(key),
+                    "폴러 위임 만료 — " + props.job().hardStaleMinutes() + "분 무진행");
+            }
+            touched = true;
+        }
+        if (touched) {
+            mutateJob(jobId, CharacterCreationJob::touchRecovery);
+        }
+    }
+
+    /**
+     * [D-3.2a/b] 소실된 외부 잡을 정상 실패 경로로 주입 — 키를 먼저 지워(죽은 id 재폴링 방지) 스테이지별
+     * 실패 핸들러에 합성 FAILED를 넘긴다. GOLDEN→스테이지 재시도, BASE/EMOTION→컷 단위 재시도, CUTOUT→컷 재시도;
+     * 각각 예산 소진 시에만 failAndRefund. 블랭킷 failAndRefund보다 완주분을 보존한다.
+     */
+    public void injectLostExternalJob(Long jobId, String key, String observedRunpodId, String reason) {
+        ExternalKey parsed = parseExternalKey(key);
+        // [적대적 리뷰 P3] compare-and-drop — 호출자가 관측한 id가 아직 그 키에 있을 때만 제거·주입한다. 그 사이 웹훅이
+        //   같은 키를 COMPLETED로 처리해 키를 지웠거나 재제출이 새 id를 기록했다면 이 주입은 낡은 세대다: 그대로 흘리면
+        //   방금 READY가 된 컷을 handleEmotionFailure가 DERIVING으로 되돌려 Qwen+WF-2를 다시 태운다.
+        boolean dropped = Boolean.TRUE.equals(txTemplate.execute(tx -> {
+            CharacterCreationJob j = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (j == null) return false;
+            Map<String, String> scratch = json.readScratch(j.getExternalJobsJson());
+            String current = scratch.get(key);
+            if (current == null || (observedRunpodId != null && !observedRunpodId.equals(current))) return false;
+            scratch.remove(key);
+            j.updateExternalJobs(json.writeScratch(scratch));
+            return true;
+        }));
+        if (!dropped) {
+            log.info("[UGC-WORKER] 소실 주입 스킵(키가 이미 바뀜·제거됨): jobId={}, key={}, observed={}", jobId, key, observedRunpodId);
+            return;
+        }
+        if (parsed == null) {
+            log.warn("[UGC-WORKER] 규약 밖 externalJobs 키 제거만: jobId={}, key={}", jobId, key);
+            return;
+        }
+        log.warn("[UGC-WORKER] 외부 잡 소실 주입: jobId={}, key={}, reason={}", jobId, key, reason);
+        onComfyEvent(jobId, parsed.stage(), parsed.token(), UgcComfyClient.JobStatus.lost(key, reason));
+    }
+
+    /** [D-3.1d] BASE_PROCESSING — 외부 키 없는 미정착 후보(Qwen 2패스 유실·WF-2 제출 직전 유실) 재파생. */
+    private boolean resubmitLostBaseCandidates(CharacterCreationJob job, Map<String, String> scratch) {
+        List<BaseCandidate> candidates = json.readBaseCandidates(job.getBaseCandidatesJson());
+        List<Integer> lost = pendingBaseIndices(candidates, scratch);
+        if (lost.isEmpty()) {
+            // [적대적 리뷰 P2] toBaseProcessing/restartBaseGeneration 커밋 후 runBaseStage(후보 배치 append)가 뜨기 전에
+            //   죽은 창 — 미정착 후보가 0이고 외부 키도 없으면 스윕이 영구 no-op이었다(유료 베이스 리롤 포함).
+            boolean anyUnsettled = candidates.stream()
+                .anyMatch(c -> !(c.is(BaseCandidate.READY) || c.is(BaseCandidate.FAILED)));
+            boolean anyRefineKey = scratch.keySet().stream()
+                .anyMatch(k -> k.startsWith(UgcStage.BASE_REFINE.name() + ":"));
+            if (!anyUnsettled && !anyRefineKey) {
+                log.info("[UGC-WORKER] 스테일 BASE_PROCESSING — 후보 배치 미부착, runBaseStage 재기동: jobId={}", job.getId());
+                runBaseStage(job.getId());   // 자기호출=동기. 상태 가드 + 락 TX라 멱등
+                return true;
+            }
+            return false;
+        }
+        for (int index : lost) {
+            log.info("[UGC-WORKER] 스테일 스탠딩 후보 재파생: jobId={}, idx={}", job.getId(), index);
+            try {
+                submitBaseCandidate(job.getId(), index);
+            } catch (RuntimeException e) {
+                // [적대적 리뷰 P2] 동기 구간(presign·fal.subscribe) 예외를 예산 없는 5분 루프로 두지 않는다 — 후보 실패 경로로
+                log.warn("[UGC-WORKER] 스테일 후보 재파생 실패 → 후보 실패 경로: jobId={}, idx={}, {}", job.getId(), index, e.getMessage());
+                try { handleBaseCandidateFailure(job.getId(), index); } catch (RuntimeException ignored) { /* 다음 스윕 */ }
+            }
+        }
+        return true;
+    }
+
+    /** [D-3.1d] EMOTIONS_PROCESSING·REVIEW_WAIT(리롤) — 외부 키 없는 DERIVING/REFINING 감정 재파생. */
+    private boolean resubmitLostEmotionDerivations(CharacterCreationJob job, Map<String, String> scratch) {
+        List<EmotionTag> lost = pendingEmotionTags(json.readEmotions(job.getEmotionAssetsJson()), scratch);
+        if (lost.isEmpty()) return false;
+        if (job.getStatus() == CreationJobStatus.EMOTIONS_PROCESSING) {
+            deriveEmotionPromptsSafely(job.getId());   // 연출 산출 전 유실이면 먼저 (멱등)
+        }
+        // 최초 파생은 베이스 seed 고정(캐릭터 일관성), 리롤(REVIEW_WAIT)은 원래 의도대로 새 seed
+        Long seed = job.getStatus() == CreationJobStatus.REVIEW_WAIT ? null : job.getBaseEditSeed();
+        for (EmotionTag tag : lost) {
+            log.info("[UGC-WORKER] 스테일 감정 재파생: jobId={}, tag={}, status={}", job.getId(), tag, job.getStatus());
+            try {
+                submitEmotionDerivation(job.getId(), tag, seed);
+            } catch (RuntimeException e) {
+                // [적대적 리뷰 P2] 동기 구간 예외 → 컷 실패 경로(재시도 예산 → 소진 시 FAILED/복귀) — 무기한 5분 루프 차단
+                log.warn("[UGC-WORKER] 스테일 감정 재파생 실패 → 컷 실패 경로: jobId={}, tag={}, {}", job.getId(), tag, e.getMessage());
+                try { handleEmotionFailure(job.getId(), tag); } catch (RuntimeException ignored) { /* 다음 스윕 */ }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * [D-3.1b] POSTPROCESSING — 미제출 누끼만 재제출. {@link #runCutoutStage}는 진입 시 15컷 전체를 cutting()으로
+     * 덮고 전량 제출하므로 재사용 불가(이미 DONE인 컷의 cutoutKey를 날린다) — 부분 재개 전용.
+     */
+    private boolean resumeCutoutStage(CharacterCreationJob job, Map<String, String> scratch) {
+        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+        List<EmotionTag> lost = pendingCutoutTags(emotions, scratch);
+        if (lost.isEmpty()) return false;
+        mutateJob(job.getId(), j -> {
+            Map<EmotionTag, EmotionAssetState> m = json.readEmotions(j.getEmotionAssetsJson());
+            for (EmotionTag tag : lost) {
+                EmotionAssetState s = m.get(tag);
+                if (s != null && !s.is(EmotionAssetState.CUTTING)) m.put(tag, s.cutting());
+            }
+            j.updateEmotionAssets(json.writeEmotions(m));
+        });
+        for (EmotionTag tag : lost) {
+            log.info("[UGC-WORKER] 스테일 누끼 재제출: jobId={}, tag={}", job.getId(), tag);
+            try {
+                submitCutout(job.getId(), tag, emotions.get(tag).key());
+            } catch (RuntimeException e) {
+                // [적대적 리뷰 P2] S3 download·RunPod submit 동기 예외 — 컷 재시도 예산(withRetry)으로 흘린다.
+                //   RETRY면 다음 스윕이 다시 제출(예산 3회 ≈ 15분), EXHAUSTED면 실패·환불. 원본 runCutoutStage는
+                //   같은 예외를 failAndRefund로 즉시 종결했는데 재개 경로만 무기한이었다.
+                log.warn("[UGC-WORKER] 스테일 누끼 재제출 실패: jobId={}, tag={}, {}", job.getId(), tag, e.getMessage());
+                noteCutoutSubmitFailure(job.getId(), tag, e.getMessage());
+            }
+        }
+        return true;
+    }
+
+    /** 누끼 제출 자체가 실패했을 때의 예산 판정 — onCutoutResult 실패 분기와 같은 TX 규칙(withRetry → RETRY/EXHAUSTED). */
+    private void noteCutoutSubmitFailure(Long jobId, EmotionTag tag, String error) {
+        String verdict = txTemplate.execute(tx -> {
+            CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (job == null || job.getStatus() != CreationJobStatus.POSTPROCESSING) return "IGNORE";
+            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            EmotionAssetState state = emotions.get(tag);
+            if (state == null) return "IGNORE";
+            int next = state.retryCount() + 1;
+            if (next > props.job().emotionRetries()) return "EXHAUSTED";
+            emotions.put(tag, state.withRetry(next));
+            job.updateEmotionAssets(json.writeEmotions(emotions));
+            return "RETRY";
+        });
+        if ("EXHAUSTED".equals(verdict)) {
+            failAndRefund(jobId, "누끼 처리 실패: " + tag + " — " + error);
+        }
+    }
+
+    /** 미정착(READY/FAILED 아님)이면서 BASE_REFINE 키가 없는 후보 인덱스 — 순수 판정(테스트 대상). */
+    static List<Integer> pendingBaseIndices(List<BaseCandidate> candidates, Map<String, String> scratch) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            BaseCandidate c = candidates.get(i);
+            if (c.is(BaseCandidate.READY) || c.is(BaseCandidate.FAILED)) continue;
+            if (scratch.containsKey(externalKey(UgcStage.BASE_REFINE, String.valueOf(i)))) continue;
+            out.add(i);
+        }
+        return out;
+    }
+
+    /** DERIVING/REFINING이면서 EMOTION_REFINE 키가 없는 감정 — 순수 판정(테스트 대상). */
+    static List<EmotionTag> pendingEmotionTags(Map<EmotionTag, EmotionAssetState> emotions, Map<String, String> scratch) {
+        List<EmotionTag> out = new ArrayList<>();
+        for (Map.Entry<EmotionTag, EmotionAssetState> e : emotions.entrySet()) {
+            EmotionAssetState s = e.getValue();
+            if (!(s.is(EmotionAssetState.DERIVING) || s.is(EmotionAssetState.REFINING))) continue;
+            if (scratch.containsKey(externalKey(UgcStage.EMOTION_REFINE, e.getKey().name()))) continue;
+            out.add(e.getKey());
+        }
+        return out;
+    }
+
+    /** DONE이 아니면서 CUTOUT 키가 없는(미제출) 감정 — 순수 판정(테스트 대상). 원본 key가 없는 컷은 제출 불가라 제외. */
+    static List<EmotionTag> pendingCutoutTags(Map<EmotionTag, EmotionAssetState> emotions, Map<String, String> scratch) {
+        List<EmotionTag> out = new ArrayList<>();
+        for (Map.Entry<EmotionTag, EmotionAssetState> e : emotions.entrySet()) {
+            EmotionAssetState s = e.getValue();
+            if (s.is(EmotionAssetState.DONE) || s.key() == null) continue;
+            if (scratch.containsKey(externalKey(UgcStage.CUTOUT, e.getKey().name()))) continue;
+            out.add(e.getKey());
+        }
+        return out;
     }
 
     private String webhookUrl(Long jobId, UgcStage stage, String token) {

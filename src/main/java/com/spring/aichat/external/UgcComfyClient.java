@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
@@ -134,9 +135,15 @@ public class UgcComfyClient {
                 .retrieve()
                 .body(String.class);
             return parseStatusPayload(jobId, objectMapper.readTree(responseStr));
+        } catch (HttpClientErrorException.NotFound e) {
+            // [D-3.2a] 404 = 외부 잡 결과 소실(RunPod 보존 기간 경과 퍼지·엔드포인트 교체). 종전엔 아래 catch가
+            //   일시 오류와 같은 "ERROR"로 합성해 폴러가 영구 스킵했고(키도 안 지움), 스윕은 키 존재만 보고
+            //   위임해 데드락이 됐다. 영구 실패를 별도 상태로 올려 폴러가 실패 이벤트로 전환할 수 있게 한다.
+            log.warn("[UGC-COMFY] status 404 — 외부 잡 결과 소실: jobId={}", jobId);
+            return new JobStatus(jobId, JobStatus.NOT_FOUND, List.of(), "외부 잡 결과 소실(404)", null, null);
         } catch (Exception e) {
             log.warn("[UGC-COMFY] status poll failed: jobId={}, {}", jobId, e.getMessage());
-            return new JobStatus(jobId, "ERROR", List.of(), e.getMessage(), null, null);
+            return new JobStatus(jobId, JobStatus.TRANSIENT_ERROR, List.of(), e.getMessage(), null, null);
         }
     }
 
@@ -240,9 +247,25 @@ public class UgcComfyClient {
      */
     public record JobStatus(String jobId, String status, List<OutputImage> images,
                             String error, Long delayTime, Long executionTime) {
+        /** [D-3.2a] 클라이언트 합성 상태 — RunPod가 보내는 값이 아니다. 일시 오류(네트워크·5xx): 다음 주기 재시도. */
+        public static final String TRANSIENT_ERROR = "ERROR";
+        /** [D-3.2a] 클라이언트 합성 상태 — /status 404: 외부 결과 소실 확정(영구). 폴러가 실패 이벤트로 전환한다. */
+        public static final String NOT_FOUND = "NOT_FOUND";
+
         public boolean completed() { return "COMPLETED".equalsIgnoreCase(status); }
         public boolean failed() { return "FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status) || "TIMED_OUT".equalsIgnoreCase(status); }
         public boolean inFlight() { return "IN_QUEUE".equalsIgnoreCase(status) || "IN_PROGRESS".equalsIgnoreCase(status); }
+        public boolean transientError() { return TRANSIENT_ERROR.equalsIgnoreCase(status); }
+        public boolean notFound() { return NOT_FOUND.equalsIgnoreCase(status); }
+
+        /**
+         * [D-3.2a/2b] 소실된 외부 잡을 파이프라인의 정상 실패 경로로 주입하기 위한 합성 FAILED —
+         * {@code onComfyEvent}가 스테이지별 재시도 예산(무과금)으로 재제출하고, 소진 시에만 실패·환불한다.
+         * 블랭킷 failAndRefund보다 완주분을 보존한다(감정 14종을 다 그린 잡의 누끼 1건이 사라졌다고 전부 버리지 않는다).
+         */
+        public static JobStatus lost(String jobId, String reason) {
+            return new JobStatus(jobId, "FAILED", List.of(), reason, null, null);
+        }
     }
 
     public record OutputImage(String filename, String type, String data) {}

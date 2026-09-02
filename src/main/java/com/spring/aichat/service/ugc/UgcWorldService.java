@@ -69,6 +69,8 @@ public class UgcWorldService {
     private final UgcWorldJobJson json;
     private final RedisCacheService cacheService;
     private final TransactionTemplate txTemplate;
+    /** [D-3.5] 사후 장소 배경 생성 in-flight 레지스트리 — 여기서 선점, 워커 finally가 해제. */
+    private final UgcLocationInFlightRegistry locationInFlight;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  컨셉 제출 (W0)
@@ -484,12 +486,40 @@ public class UgcWorldService {
                 UgcWorldLocation.createGenerating(worldId, key, displayName, description, order, charge)).getId();
         });
         cacheService.evictUserProfile(username);
-        worker.generateAddedLocationBackground(worldId, locationId);
+        dispatchLocationBackground(worldId, locationId);
         return locationRepository.findById(locationId)
             .map(UgcWorldLocation::getLocationKey).orElse(null);
     }
 
-    /** 배경 생성 재시도 — 무료 (FAILED 또는 멈춘 GENERATING 복구). READY는 거부. */
+    /**
+     * [D-3.5] 배경 생성 디스패치 — 워커 호출 <b>전</b>에 in-flight를 원자적으로 선점한다. 선점 실패 = 같은 장소의
+     * 생성이 이 프로세스에서 이미 진행 중(동시 재시도 2건이 TX 검사를 함께 통과한 TOCTOU 창) → 두 번째는 조용히
+     * 스킵한다(행은 이미 GENERATING이고 첫 번째가 완주한다 — 400을 던지면 커밋된 상태와 어긋난 응답이 된다).
+     * 비동기 디스패치 자체가 실패하면 즉시 해제해 그 장소가 영구 잠기지 않게 한다.
+     */
+    private void dispatchLocationBackground(Long worldId, Long locationId) {
+        if (!locationInFlight.tryAcquire(locationId)) {
+            log.info("[UGC-WORLD] 장소 배경 생성 이미 진행 중 — 디스패치 스킵: worldId={}, locationId={}", worldId, locationId);
+            return;
+        }
+        try {
+            worker.generateAddedLocationBackground(worldId, locationId);
+        } catch (RuntimeException e) {
+            locationInFlight.release(locationId);
+            throw e;
+        }
+    }
+
+    /**
+     * 배경 생성 재시도 — 무료 (FAILED 또는 <b>멈춘</b> GENERATING 복구). READY는 거부.
+     *
+     * <p>[D-3.5 · docs/17_assets/defect_register.md §D-3.5] 종전엔 '멈춘' 판정이 없어 방금 시작한 GENERATING도
+     * 통과했다 — 레이트리밋(5초 2회) 안에서 무과금 LLM 프롬프트화 + fal 배경 생성이 완주 전까지 12~120회 중복됐고
+     * (유저 에너지는 줄지 않아 억지력 0), 실패 장소 삭제 환불(1E)과 결합하면 순 0E 외부 호출 N회였다.
+     * 이 프로세스가 실제로 만들고 있는 장소({@link UgcLocationInFlightRegistry})는 거부하고, 레지스트리에 없는
+     * GENERATING(서버 재시작으로 future 유실·5분 타임아웃 후 정리)만 '멈춘' 것으로 보고 허용한다 — 원 의도 보존.
+     * 레지스터 ❓(①전면 거부 / ②컷오프 / ③횟수 상한)에 대한 답: 컬럼 없이 ②를 정확히 구현하는 형태.
+     */
     public void retryLocation(String username, Long worldId, String locationKey) {
         Long locationId = txTemplate.execute(tx -> {
             ownedWorldOrThrow(username, worldId);
@@ -500,10 +530,13 @@ public class UgcWorldService {
             if (loc.is(UgcWorldLocation.READY)) {
                 throw new BadRequestException("이미 완성된 장소예요.");
             }
+            if (locationInFlight.isInFlight(loc.getId())) {
+                throw new BadRequestException("아직 만드는 중이에요. 잠시 후 다시 시도해 주세요.");
+            }
             loc.markGenerating();
             return loc.getId();
         });
-        worker.generateAddedLocationBackground(worldId, locationId);
+        dispatchLocationBackground(worldId, locationId);
     }
 
     /** 실패 장소 삭제 — 1E 환불 (생성 실패 귀책은 파이프라인). */

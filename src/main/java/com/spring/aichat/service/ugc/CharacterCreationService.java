@@ -417,6 +417,9 @@ public class CharacterCreationService {
      * 감정 1컷 리롤. FAILED 컷 = 무료 재시도 / READY 컷 = 유저 발의 리롤(과금).
      * NEUTRAL은 스타 토폴로지 원점(베이스)이라 리롤 불가 — 파생 14종의 일관성이 깨진다.
      */
+    /** [적대적 리뷰 P3] 키 없는 DERIVING/REFINING을 '유실'로 판정하는 무진행 시간(분) — Qwen ~1분 대비 여유. */
+    private static final int LOST_REROLL_MINUTES = 5;
+
     public void rerollEmotion(String username, Long jobId, EmotionTag tag) {
         if (tag == EmotionTag.NEUTRAL) {
             throw new BadRequestException("기본 표정은 다시 뽑을 수 없어요.");
@@ -429,6 +432,26 @@ public class CharacterCreationService {
             EmotionAssetState state = emotions.get(tag);
             if (state == null) {
                 throw new BadRequestException("알 수 없는 감정 컷입니다.");
+            }
+            // [D-3.4] in-flight 가드 — 월드 rerollAsset(UgcWorldService)의 GENERATING 가드와 동형. 감정 리롤만 잡을
+            //   REVIEW_WAIT에 둔 채 재제출하므로 requireStatus가 가드 역할을 못 했고, 레이트리밋(5초 2회)은 더블클릭을
+            //   통과시켜 2E 이중 과금 + fal/WF-2 중복 제출 + 같은 스크래치 키 덮어쓰기로 선발 체인이 유실됐다.
+            //   lockOwnedJob의 비관적 락 안이라 동시 요청 2건은 직렬화되어 두 번째가 확실히 걸린다.
+            if (!state.isRerollable()) {
+                // [적대적 리뷰 P3] 유실 자가치유 — 외부 키(WF-2 진행 중)가 없고 잡이 N분 무진행이면 Qwen future가 서버 재시작으로
+                //   죽은 것이다(Qwen ~1분). 종전엔 30분 스테일 스윕까지 유저가 400에 갇혔고, 다른 컷 리롤이 updatedAt을 갱신하면
+                //   더 밀렸다. 무과금으로 같은 컷을 재제출한다(상태는 DERIVING 유지). 키가 있으면 진짜 진행 중 — 거부 유지.
+                boolean keyless = !json.readScratch(job.getExternalJobsJson())
+                    .containsKey(UgcPipelineWorker.externalKey(UgcStage.EMOTION_REFINE, tag.name()));
+                boolean stale = job.getUpdatedAt() != null
+                    && job.getUpdatedAt().isBefore(java.time.LocalDateTime.now().minusMinutes(LOST_REROLL_MINUTES));
+                if (keyless && stale) {
+                    log.warn("[UGC] 리롤 유실 자가치유(무과금 재제출): username={}, jobId={}, tag={}", username, jobId, tag);
+                    job.touchRecovery();
+                    return false;   // 과금 없음 — 아래 runEmotionReroll이 재제출
+                }
+                throw new BadRequestException("이미 다시 만드는 중이에요. 완료 후 시도해 주세요. (" + LOST_REROLL_MINUTES
+                    + "분 넘게 그대로면 다시 눌러 주세요 — 자동 복구됩니다)");
             }
             boolean free = state.is(EmotionAssetState.FAILED);
             if (!free) {

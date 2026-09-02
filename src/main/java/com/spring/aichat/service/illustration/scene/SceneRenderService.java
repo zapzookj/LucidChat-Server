@@ -282,6 +282,13 @@ public class SceneRenderService {
 
     void render(Long illustrationId, ScenePromptAssembler.ScenePrompt prompt,
                 Long roomId, int turnIndex) {
+        // [D-3.3 ①] 제출 *전* 종결 확인 — 큐 대기 중 스윕이 FAILED+환불한 행이면 RunPod 제출 자체를 막는다.
+        //   쓰기 빈의 터미널 가드만으로는 결과만 버리고 GPU 비용은 그대로 나간다. UgcPipelineWorker.submitRefine의
+        //   '제출 직전 터미널 재확인'과 같은 패턴.
+        if (repository.findById(illustrationId).map(SceneIllustration::isTerminal).orElse(true)) {
+            log.info("[SCENE-RENDER] 종결 행 렌더 스킵(스윕 회수분): illustrationId={}", illustrationId);
+            return;
+        }
         if (!comfyClient.configured()) {
             writeService.failRender(illustrationId, "illustration.scene.runpod 미설정");
             return;

@@ -28,12 +28,19 @@ public class SceneRenderWriteService {
 
     @Transactional
     public void markSubmitted(Long illustrationId, String providerRequestId) {
-        repository.findById(illustrationId).ifPresent(s -> s.markSubmitted(providerRequestId));
+        // [D-3.3] 터미널 가드 — 렌더 풀 큐(core 2·queue 32·건당 최장 12분)에서 수십 분 대기하던 태스크가 깨어나
+        //   inFlightView의 20분 스테일 스윕이 이미 FAILED+환불한 행을 GENERATING→COMPLETED로 부활시켰다.
+        //   energyRefunded=true는 남으므로 유저는 환불도 받고 일러도 받았다(순 5E에 일러 2장·GPU 2회).
+        repository.findById(illustrationId)
+            .filter(s -> !s.isTerminal())
+            .ifPresent(s -> s.markSubmitted(providerRequestId));
     }
 
     @Transactional
     public void completeRender(Long illustrationId, String publicUrl) {
-        repository.findById(illustrationId).ifPresent(s -> s.complete(publicUrl));
+        repository.findById(illustrationId)
+            .filter(s -> !s.isTerminal())      // [D-3.3] 스윕이 종결한 행의 부활 차단
+            .ifPresent(s -> s.complete(publicUrl));
     }
 
     @Transactional

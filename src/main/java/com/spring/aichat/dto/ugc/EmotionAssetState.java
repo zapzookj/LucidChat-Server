@@ -96,6 +96,16 @@ public record EmotionAssetState(String status, String key, String cutoutKey, int
         return key != null && !history.isEmpty();
     }
 
+    /**
+     * [D-3.4] 유저 리롤 수용 가능 상태 — READY(유료 리롤)·FAILED(무료 재시도)만. DERIVING/REFINING(진행 중)은
+     * 거부한다: 진행 중 재리롤은 2E 이중 과금 + fal/WF-2 중복 제출 + 동일 스크래치 키 덮어쓰기로 선발 체인을
+     * 유실시킨다(월드 rerollAsset의 GENERATING 가드와 동형 — 캐릭터 트랙만 빠져 있었다). CUTTING/DONE은
+     * REVIEW_WAIT에서 나타나지 않지만 화이트리스트라 함께 거부된다.
+     */
+    public boolean isRerollable() {
+        return is(READY) || is(FAILED);
+    }
+
     public boolean is(String s) {
         return s.equals(status);
     }

@@ -69,6 +69,8 @@ public class UgcWorldPipelineWorker {
     private final RedisCacheService cacheService;
     private final NotificationService notificationService;
     private final TransactionTemplate txTemplate;
+    /** [D-3.5] 사후 장소 배경 생성 in-flight 레지스트리 — 서비스가 선점, 이 워커가 finally에서 해제. */
+    private final UgcLocationInFlightRegistry locationInFlight;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  W0 (컨셉 구조화 → 편집 대기)
@@ -374,6 +376,15 @@ public class UgcWorldPipelineWorker {
      */
     @Async
     public void generateAddedLocationBackground(Long worldId, Long locationId) {
+        try {
+            generateAddedLocationBackgroundInner(worldId, locationId);
+        } finally {
+            // [D-3.5] 완료·실패·타임아웃·조기 return 어느 경우든 해제 — 해제 누락은 그 장소의 재시도를 영구 차단한다
+            locationInFlight.release(locationId);
+        }
+    }
+
+    private void generateAddedLocationBackgroundInner(Long worldId, Long locationId) {
         UgcWorld world = worldRepository.findById(worldId).orElse(null);
         UgcWorldLocation loc = locationRepository.findById(locationId).orElse(null);
         if (world == null || loc == null || !loc.is(UgcWorldLocation.GENERATING)) return;
@@ -397,15 +408,19 @@ public class UgcWorldPipelineWorker {
                 result.imageUrl(), worldId, loc.getLocationKey());
 
             String finalBgPrompt = bgPrompt;
+            // [D-3.5 ③] 세대 가드 — GENERATING일 때만 완주 반영. 늦게 도착한 구세대 결과가 신세대 상태를 덮지 않는다.
             txTemplate.executeWithoutResult(tx ->
-                locationRepository.findById(locationId).ifPresent(l ->
-                    l.markReady(finalBgPrompt, assetService.publicUrl(storedKey))));
+                locationRepository.findById(locationId)
+                    .filter(l -> l.is(UgcWorldLocation.GENERATING))
+                    .ifPresent(l -> l.markReady(finalBgPrompt, assetService.publicUrl(storedKey))));
             log.info("[UGC-WORLD] ✅ 사후 장소 배경 완성: worldId={}, key={}", worldId, loc.getLocationKey());
         } catch (Exception e) {
             log.warn("[UGC-WORLD] 사후 장소 배경 생성 실패: worldId={}, locationId={}, {}",
                 worldId, locationId, e.getMessage());
             txTemplate.executeWithoutResult(tx ->
-                locationRepository.findById(locationId).ifPresent(UgcWorldLocation::markFailed));
+                locationRepository.findById(locationId)
+                    .filter(l -> l.is(UgcWorldLocation.GENERATING))
+                    .ifPresent(UgcWorldLocation::markFailed));
         }
     }
 

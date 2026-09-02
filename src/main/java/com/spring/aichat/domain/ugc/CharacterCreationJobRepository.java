@@ -44,4 +44,10 @@ public interface CharacterCreationJobRepository extends JpaRepository<CharacterC
      * 폴링 폴백이 못 잡는 구간의 서버 재시작 유실 감지 (N분 무진행).
      */
     List<CharacterCreationJob> findByStatusAndUpdatedAtBefore(CreationJobStatus status, LocalDateTime cutoff);
+
+    /**
+     * [D-3.1a/b/d] 캐릭터 잡 통합 스테일 스윕 — 월드 트랙 {@code findByStatusInAndUpdatedAtBefore}와 동형.
+     * 종전엔 단수 상태(CONCEPT_PROCESSING)만 조회해 BINDING·POSTPROCESSING·fal 구간 유실이 영구 좀비가 됐다.
+     */
+    List<CharacterCreationJob> findByStatusInAndUpdatedAtBefore(Collection<CreationJobStatus> statuses, LocalDateTime cutoff);
 }

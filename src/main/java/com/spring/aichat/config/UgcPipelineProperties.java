@@ -55,7 +55,7 @@ public record UgcPipelineProperties(
 ) {
     public UgcPipelineProperties {
         if (energy == null) energy = new Energy(null, null, null, null, null, null, null, null);
-        if (job == null) job = new Job(null, null, null, null);
+        if (job == null) job = new Job(null, null, null, null, null, null);
         if (runpod == null) runpod = new Runpod(null, null, null, null);
         if (qwen == null) qwen = new Qwen(null, null, null, null);
         if (generation == null) generation = new Generation(null, null, null, null, null);
@@ -108,9 +108,22 @@ public record UgcPipelineProperties(
     }
 
     /** 잡 수명·재시도 정책. */
-    public record Job(Integer waitTtlHours, Integer stageAutoRetries, Integer emotionMaxRetries, Integer pollFallbackSeconds) {
+    public record Job(Integer waitTtlHours, Integer stageAutoRetries, Integer emotionMaxRetries, Integer pollFallbackSeconds,
+                      Integer staleSweepMinutes, Integer externalHardStaleMinutes) {
         /** *_WAIT 상태 방치 만료(시간). */
         public int ttlHours() { return waitTtlHours != null ? waitTtlHours : 72; }
+        /**
+         * [D-3.1a/b/d] 캐릭터 잡 통합 스테일 스윕 기준(분) — PROCESSING/POSTPROCESSING/BINDING 잡이 이 시간
+         * 무진행이면 회수(재제출·재실행·실패환불)한다. Stage0 재시도 최악 소요(~7분)·감정 14종 파생(수 분~십수 분)의
+         * 여유 배수. 종전 CONCEPT_STALE_MINUTES(30)를 승계.
+         */
+        public int staleMinutes() { return staleSweepMinutes != null ? staleSweepMinutes : 30; }
+        /**
+         * [D-3.2b] 폴러 위임 만료(분) — 미결 RunPod 키가 있어도 이 시간 넘게 무진행이면 '폴러가 처리할 수 없는
+         * 키'로 보고 스윕이 키를 실패로 주입한다(재시도 예산 → 소진 시 실패·환불). RunPod 최장 큐 대기 + 여유.
+         * 종전에는 키가 존재하기만 하면 30일이든 무조건 스킵해 폴러의 영구 ERROR 스킵과 데드락을 이뤘다.
+         */
+        public int hardStaleMinutes() { return externalHardStaleMinutes != null ? externalHardStaleMinutes : 90; }
         /** 스테이지 단위 자동 재시도 횟수(무과금). */
         public int autoRetries() { return stageAutoRetries != null ? stageAutoRetries : 2; }
         /** 감정 컷 개별 재시도 상한 — 초과 시 해당 컷만 FAILED 마킹하고 진행. */

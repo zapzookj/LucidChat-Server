@@ -345,6 +345,15 @@ public class CharacterCreationJob {
         this.requestedUgcWorldId = requestedUgcWorldId;
     }
 
+    /**
+     * [D-3.1a/b/d] 스테일 스윕이 재제출·재부착을 한 뒤 updatedAt을 갱신해 다음 스윕 창(staleMinutes)까지
+     * 같은 잡의 중복 재제출을 막는다 — 월드 트랙 {@link UgcWorldCreationJob#touchRecovery}와 동형
+     * (더티 마킹용 명시 갱신, @PreUpdate가 최종값 확정).
+     */
+    public void touchRecovery() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
     /** 리롤·단계 진입 등 추가 과금 누적 — 총액과 유료분을 함께 누산한다(D-1.6). */
     public void chargeEnergy(EnergySplit charge) {
         this.energyCharged += charge.total();

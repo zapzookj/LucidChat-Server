@@ -10,7 +10,6 @@ import com.spring.aichat.domain.ugc.WorldCreationJobStatus;
 import com.spring.aichat.external.UgcComfyClient;
 import com.spring.aichat.service.ugc.UgcJobJson;
 import com.spring.aichat.service.ugc.UgcPipelineWorker;
-import com.spring.aichat.service.ugc.UgcStage;
 import com.spring.aichat.service.ugc.UgcWorldPipelineWorker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +25,12 @@ import java.util.Map;
  *
  * <ol>
  *   <li><b>폴링 폴백</b> (1분): webhook 유실 대비 — PROCESSING 잡의 미결 RunPod 잡을 /status로
- *       재확인해 {@link UgcPipelineWorker#onComfyEvent}에 공급 (이벤트 경로 공용·멱등).</li>
+ *       재확인해 {@link UgcPipelineWorker#onComfyEvent}에 공급 (이벤트 경로 공용·멱등).
+ *       [D-3.2a] /status 404(결과 소실)는 일시 오류와 구분해 실패 이벤트로 전환한다.</li>
  *   <li><b>TTL 만료</b> (10분): {@code *_WAIT} 72h 방치 잡을 EXPIRED 종결 (무환불 정책).</li>
+ *   <li><b>스테일 스윕</b> (5분): [D-3.1a/b/d · D-3.2b] 무진행 PROCESSING/POSTPROCESSING/BINDING 잡을
+ *       {@link UgcPipelineWorker#recoverStaleJob}으로 회수 — 월드 트랙과 동형. 종전엔 CONCEPT_PROCESSING만
+ *       봤고 키가 있으면 무조건 폴러에 위임해 폴러의 영구 ERROR 스킵과 데드락을 이뤘다.</li>
  * </ol>
  */
 @Slf4j
@@ -50,6 +53,20 @@ public class UgcJobScheduler {
         CreationJobStatus.GACHA_WAIT,
         CreationJobStatus.BASE_WAIT,
         CreationJobStatus.REVIEW_WAIT
+    );
+
+    /**
+     * [D-3.1a/b/d] 캐릭터 잡 스테일 스윕 대상 — 월드 {@link #WORLD_STALE_STATUSES}와 동형.
+     * REVIEW_WAIT는 리롤 in-flight(Qwen future) 유실 케이스 — 미결 감정이 없으면 회수가 no-op이라 포함 무비용.
+     * GACHA_WAIT/BASE_WAIT는 순수 유저 대기라 TTL 스윕 담당.
+     */
+    private static final List<CreationJobStatus> CHAR_STALE_STATUSES = List.of(
+        CreationJobStatus.CONCEPT_PROCESSING,
+        CreationJobStatus.BASE_PROCESSING,
+        CreationJobStatus.EMOTIONS_PROCESSING,
+        CreationJobStatus.REVIEW_WAIT,
+        CreationJobStatus.POSTPROCESSING,
+        CreationJobStatus.BINDING
     );
 
     /** [세계관 빌더] *_WAIT TTL 만료 대상. */
@@ -90,13 +107,24 @@ public class UgcJobScheduler {
                 if (!UgcPipelineWorker.isExternalJobKey(entry.getKey())) continue; // K_* 내부 키 스킵
                 try {
                     UgcComfyClient.JobStatus status = comfyClient.getStatus(entry.getValue());
-                    if (status.inFlight() || "ERROR".equals(status.status())) continue;
+                    // 일시 오류(네트워크·5xx 합성 ERROR)는 다음 주기 재시도 — 장기화는 스테일 스윕의 하드 컷오프가 회수.
+                    //   ⚠ 여기서 ERROR를 실패로 흘리면 폴 실패 1회가 재시도 예산을 태운다(retryStageOrFail) — 그래서 스킵.
+                    if (status.inFlight() || status.transientError()) continue;
 
-                    ParsedKey parsed = parseKey(entry.getKey());
-                    if (parsed == null) continue;
+                    UgcPipelineWorker.ExternalKey parsed = UgcPipelineWorker.parseExternalKey(entry.getKey());
+                    if (parsed == null) {
+                        log.warn("[UGC-POLL] 알 수 없는 externalJobs 키: {}", entry.getKey());
+                        continue;
+                    }
+                    if (status.notFound()) {
+                        // [D-3.2a] 404 = 결과 퍼지 확정. 종전엔 ERROR와 동일 취급으로 영구 스킵 + 키 잔존 → D-3.2b 데드락.
+                        log.warn("[UGC-POLL] 외부 잡 결과 소실(404): jobId={}, key={}", job.getId(), entry.getKey());
+                        worker.injectLostExternalJob(job.getId(), entry.getKey(), entry.getValue(), "외부 잡 결과 소실(404)");
+                        continue;
+                    }
                     log.info("[UGC-POLL] 폴백 이벤트 공급: jobId={}, key={}, status={}",
                         job.getId(), entry.getKey(), status.status());
-                    worker.onComfyEvent(job.getId(), parsed.stage(), parsed.tag(), status);
+                    worker.onComfyEvent(job.getId(), parsed.stage(), parsed.token(), status);
                 } catch (Exception e) {
                     log.warn("[UGC-POLL] 폴링 실패: jobId={}, key={} — {}", job.getId(), entry.getKey(), e.getMessage());
                 }
@@ -130,28 +158,33 @@ public class UgcJobScheduler {
         }
     }
 
-    /** [2026-07-21] 캐릭터 잡 LLM 구간 스테일 판정(분) — Stage0 재시도 최악 소요(~7분)의 여유 배수. */
-    private static final int CONCEPT_STALE_MINUTES = 30;
-
     /**
-     * [2026-07-21 리뷰 픽스] 캐릭터 잡 CONCEPT_PROCESSING 스테일 스윕 — Stage0/외형 재구조화
-     * LLM 구간은 외부 잡 id가 없어 폴링 폴백이 못 잡는다. 서버 재시작으로 @Async가 유실되면
-     * 영구 고착(동시 1잡 정책으로 신규 생성까지 차단)이므로 30분 무진행 시 실패·전액 환불.
-     * 미결 RunPod 잡(GOLDEN)이 있으면 폴링 폴백 담당이므로 스킵.
-     * (BASE/EMOTIONS의 fal(Qwen) 구간 유실은 별도 태스크 — requestId 선확보 이관 예정)
+     * [D-3.1a/b/d · D-3.2b] 캐릭터 잡 통합 스테일 스윕 — N분(기본 30) 무진행 잡을
+     * {@link UgcPipelineWorker#recoverStaleJob}으로 회수한다(외부 키 없는 유실분은 즉시 재제출·재실행,
+     * 키 있는 항목은 폴러 담당). 하드 컷오프(기본 90분)를 넘긴 잡은 미결 키까지 '결과 소실'로 주입한다 —
+     * 종전 {@code recoverStaleConceptJobs}는 CONCEPT_PROCESSING만 보고 키가 있으면 무조건 위임해,
+     * 폴러의 영구 ERROR 스킵과 함께 '키의 존재'를 근거로 서로 미루는 데드락을 이뤘다.
      */
     @Scheduled(fixedRate = 5 * 60 * 1000)
-    public void recoverStaleConceptJobs() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(CONCEPT_STALE_MINUTES);
+    public void recoverStaleCharacterJobs() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime staleCutoff = now.minusMinutes(props.job().staleMinutes());
+        LocalDateTime hardCutoff = now.minusMinutes(props.job().hardStaleMinutes());
         List<CharacterCreationJob> stale =
-            jobRepository.findByStatusAndUpdatedAtBefore(CreationJobStatus.CONCEPT_PROCESSING, cutoff);
+            jobRepository.findByStatusInAndUpdatedAtBefore(CHAR_STALE_STATUSES, staleCutoff);
         for (CharacterCreationJob job : stale) {
-            boolean hasPendingExternal = json.readScratch(job.getExternalJobsJson()).keySet().stream()
-                .anyMatch(UgcPipelineWorker::isExternalJobKey);
-            if (hasPendingExternal) continue; // WF-1 제출됨 — 폴링 폴백이 복구
-            log.warn("[UGC-POLL] 스테일 CONCEPT_PROCESSING 회수 (LLM 구간 유실): jobId={}", job.getId());
-            worker.failAndRefund(job.getId(), "컨셉 처리 시간 초과 — 사용한 에너지는 전액 환불되었어요.");
+            boolean hardStale = isHardStale(job.getUpdatedAt(), hardCutoff);
+            try {
+                worker.recoverStaleJob(job.getId(), hardStale);
+            } catch (Exception e) {
+                log.warn("[UGC-POLL] 캐릭터 스테일 복구 실패: jobId={} — {}", job.getId(), e.getMessage());
+            }
         }
+    }
+
+    /** 폴러 위임 만료 판정 — updatedAt이 없으면(이론상 불가) 보수적으로 만료 아님. 순수 판정(테스트 대상). */
+    static boolean isHardStale(LocalDateTime updatedAt, LocalDateTime hardCutoff) {
+        return updatedAt != null && updatedAt.isBefore(hardCutoff);
     }
 
     /**
@@ -171,22 +204,4 @@ public class UgcJobScheduler {
             }
         }
     }
-
-    // externalJobs 키 규약: "GOLDEN" | "BASE_REFINE:0" | "EMOTION_REFINE:JOY" | "CUTOUT:JOY"
-    private ParsedKey parseKey(String key) {
-        try {
-            int idx = key.indexOf(':');
-            if (idx < 0) {
-                return new ParsedKey(UgcStage.valueOf(key), null);
-            }
-            return new ParsedKey(
-                UgcStage.valueOf(key.substring(0, idx)),
-                key.substring(idx + 1));
-        } catch (IllegalArgumentException e) {
-            log.warn("[UGC-POLL] 알 수 없는 externalJobs 키: {}", key);
-            return null;
-        }
-    }
-
-    private record ParsedKey(UgcStage stage, String tag) {}
 }
