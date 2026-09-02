@@ -111,11 +111,13 @@ FE 자기 치유(`ErrorCode.UNPAID_BATCH` → `loadNextBatch()` 1회 재시도)�
 
 ---
 
-## G. 2026-09-02 세션 — 버그픽스 2차 (배치 1~3 + 안건 4) · **로컬 커밋 대기**
+## G. 2026-09-02 세션 — 버그픽스 2차 (배치 1~3 + 안건 4) · **로컬 6커밋 완료 · 미푸시**
+
+> aichat `2253f0c`(V32) → `e7f9c33`(D-1) → `a2b81ac`(V33·V34·V35) → `b2eec30`(배치 2) → `2f0bc8b`(배치 3+안건 4) → `25381a1`(문서) · FE `72f6a18` · Admin `b9df1ff`. **푸시·Vultr 배포는 다음 세션** — 배포 전 §G-2 ②③.
 
 > 읽는 순서는 그대로: 이 문서 → [`../19_Register_Rejudgment.md`](../19_Register_Rejudgment.md) → [`decisions_confirmed.md`](decisions_confirmed.md). 상태 정본 [`rejudgment_delta.md`](rejudgment_delta.md)는 D-1·D-3·D-4 행이 갱신됐고, 레지스터의 ❓ 9건에 **✅ 답** 줄이 붙었다.
 
-### G-1. 한 일 (전부 워킹트리 — 커밋은 종원 지시 후)
+### G-1. 한 일 (종원 지시로 로컬 커밋 완료 — 위 해시)
 
 | 배치 | 내용 | 마이그레이션 | 검증 |
 |---|---|---|---|
@@ -128,7 +130,7 @@ FE 자기 치유(`ErrorCode.UNPAID_BATCH` → `loadNextBatch()` 1회 재시도)�
 
 ### G-2. ★ 다음 세션이 가장 먼저 확인할 것
 
-1. **커밋 분리** — 인덱스 = 배치 1(D-1 + V32)만 스테이지돼 있다. 워킹트리 = 배치 2·3·안건 4·문서. 순서: ① V32 스키마 커밋 ② D-1 코드 커밋(인덱스) ③ V33·V34·V35 스키마 커밋 ④ 배치 2 코드 ⑤ 배치 3+안건 4 코드 ⑥ 문서. 파일 집합이 겹치는 곳(worker·UgcWorldService 등)은 인덱스 커밋 후 파일 단위 add.
+1. **푸시·배포** — 3리포 로컬 커밋은 끝났다(스키마/코드 분리, 위 해시). `git push origin master` ×3 → CI/CD(GHCR+SSH) 배포 → ③ 실측. 프로드 배포 시 Flyway가 V32~V35를 순서대로 적용한다(전부 멱등).
 2. **롤백 절차 (V33·V34 이후)** — 앱 이미지만 되돌리면 (a) 구 코드의 티어 변경이 flush 순서(INSERT→UPDATE)로 `uq_sub_user_active` 위반 → 500, (b) `PAID_UNDELIVERED` 행이 있으면 구 enum 역직렬화 실패로 어드민 주문 목록·감시 스캔이 죽는다. 롤백 전: `DROP INDEX IF EXISTS uq_sub_user_active;` + `SELECT count(*) FROM orders WHERE status='PAID_UNDELIVERED'`가 0(재지급·환불로 소진)인지 확인. V32·V35 컬럼은 남겨도 무해.
 3. **프로드 배포 후 실측** — `flyway_schema_history` v35 · `orders_status_check` 6값 · `uq_sub_user_active` 존재 · `SELECT id,free_energy,paid_energy FROM users WHERE free_energy<0 OR paid_energy<0`(0건 기대).
 4. `theater.paid-batch-gate-enforced=false` 관측 모드 유지(§C-1 조건 그대로 — 이제 Vultr 로그로 확인).
