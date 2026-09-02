@@ -2,6 +2,7 @@ package com.spring.aichat.service.story;
 
 import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoomRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.service.cache.RedisCacheService;
@@ -53,6 +54,8 @@ class ChatStreamServiceV2CompensationTest {
     @InjectMocks private ChatStreamServiceV2 service;
 
     private User user;
+    /** [D-1.4] TX-1 차감이 돌려준 분할 — 보상은 총액이 아니라 이 값으로 되돌린다. */
+    private EnergySplit charge;
 
     @BeforeEach
     void setUp() {
@@ -62,8 +65,28 @@ class ChatStreamServiceV2CompensationTest {
 
         // freeEnergy 기본 30 → TX-1 차감 시뮬레이션으로 28
         user = User.local(USERNAME, "pw", "nick", "tester@test.com");
-        user.consumeEnergy(ENERGY_COST);
+        charge = user.consumeEnergy(ENERGY_COST);
         assertEquals(28, user.getEnergy());
+        assertEquals(new EnergySplit(ENERGY_COST, 0), charge);
+    }
+
+    // ━━━━━━━━━━ [D-1.4] 분할 환불 — 유료분 정확 복원 ━━━━━━━━━━
+
+    @Test
+    @DisplayName("compensateEnergy: free=0/paid 차감분은 paid로 정확히 돌아온다 (free로 흡수돼 소각되지 않음)")
+    void compensateEnergy_restoresPaidPortionExactly() {
+        User paidUser = User.local("paid", "pw", "nick", "paid@test.com");
+        paidUser.consumeEnergy(30);          // free 소진 → free=0
+        paidUser.chargePaidEnergy(10);       // paid=10
+        EnergySplit paidCharge = paidUser.consumeEnergy(4);   // free=0 → 전부 paid
+        assertEquals(new EnergySplit(0, 4), paidCharge);
+        assertEquals(6, paidUser.getPaidEnergy());
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(paidUser));
+
+        service.compensateEnergy(USER_ID, paidCharge, USERNAME);
+
+        assertEquals(10, paidUser.getPaidEnergy(), "구 refundEnergy(int)는 free로 4를 채워 paid가 6에 머물렀다");
+        assertEquals(0, paidUser.getFreeEnergy());
     }
 
     // ━━━━━━━━━━ 결함 1: compensateEnergy — 유저 직접 조회 ━━━━━━━━━━
@@ -73,7 +96,7 @@ class ChatStreamServiceV2CompensationTest {
     void compensateEnergy_refundsViaUserRepository() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
 
-        service.compensateEnergy(USER_ID, ENERGY_COST, USERNAME);
+        service.compensateEnergy(USER_ID, charge, USERNAME);
 
         assertEquals(30, user.getEnergy());
         verify(userRepository).findById(USER_ID);
@@ -88,7 +111,7 @@ class ChatStreamServiceV2CompensationTest {
     void compensateEnergy_userMissing_doesNotThrow() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
-        assertDoesNotThrow(() -> service.compensateEnergy(USER_ID, ENERGY_COST, USERNAME));
+        assertDoesNotThrow(() -> service.compensateEnergy(USER_ID, charge, USERNAME));
 
         verify(userRepository, never()).save(any());
         verify(cacheService).evictUserProfile(USERNAME);
@@ -100,7 +123,7 @@ class ChatStreamServiceV2CompensationTest {
     @DisplayName("compensateFullRollback: LLM/파싱 실패 경로에서 로그 삭제 + 에너지 환불을 모두 수행한다")
     void compensateFullRollback_refundsEnergy() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, ENERGY_COST, "log-1");
+        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, charge, "log-1");
 
         service.compensateFullRollback(ctx);
 
@@ -115,7 +138,7 @@ class ChatStreamServiceV2CompensationTest {
     void compensateFullRollback_logDeleteFails_stillRefunds() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         doThrow(new RuntimeException("mongo down")).when(chatLogRepository).deleteById("log-1");
-        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, ENERGY_COST, "log-1");
+        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, charge, "log-1");
 
         assertDoesNotThrow(() -> service.compensateFullRollback(ctx));
 
@@ -125,15 +148,15 @@ class ChatStreamServiceV2CompensationTest {
     }
 
     @Test
-    @DisplayName("compensateFullRollback: 오프닝 경로(energyCost=0, savedUserLogId=null)는 삭제 없이 잔액 불변")
+    @DisplayName("compensateFullRollback: 오프닝 경로(energy=ZERO, savedUserLogId=null)는 삭제 없이 잔액 불변")
     void compensateFullRollback_openingPath_zeroCostNoop() {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, 0, null);
+        var ctx = new ChatStreamServiceV2.RollbackContext(USER_ID, USERNAME, EnergySplit.ZERO, null);
 
         service.compensateFullRollback(ctx);
 
         verify(chatLogRepository, never()).deleteById(anyString());
-        assertEquals(28, user.getEnergy());  // refundEnergy(0)은 내부 가드로 no-op
+        assertEquals(28, user.getEnergy());  // refundEnergy(ZERO)는 내부 가드로 no-op
         verify(cacheService).evictUserProfile(USERNAME);
     }
 }

@@ -15,6 +15,7 @@ import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.heroine.ChatRoomHeroine;
 import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -125,10 +126,12 @@ public class ChatStreamServiceV2 {
     //  inner records
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    // [D-1.4] energyCost(int) → energy(EnergySplit): TX-1 차감의 free/paid 분할을 실어 보상이
+    //   정확히 되돌린다. 총액만 들고 다니면 compensateEnergy가 유료분을 free로 흡수시켰다.
     private record JpaPreResult(ChatRoom room, Long userId, long logCount,
-                                String username, int energyCost) {}
+                                String username, EnergySplit energy) {}
 
-    record RollbackContext(Long userId, String username, int energyCost,
+    record RollbackContext(Long userId, String username, EnergySplit energy,
                            String savedUserLogId) {}
 
     /**
@@ -192,10 +195,10 @@ public class ChatStreamServiceV2 {
                 ChatRoom room = chatRoomRepository.findWithMemberAndWorldById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
                 int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
-                room.getUser().consumeEnergy(cost);
+                EnergySplit charge = room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), charge);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -221,13 +224,13 @@ public class ChatStreamServiceV2 {
                     buildUserLog(roomId, userMessage, actionType, request.actionPayload()));
                 savedUserLogId = savedLog.getId();
             } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장에 실패했습니다.");
                 return;
             }
 
             RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedUserLogId);
+                jpa.userId(), jpa.username(), jpa.energy(), savedUserLogId);
 
             // ── 6. V2 라우팅 — 시작 화자 결정 ──
             WorldRoutingService.RoutingResult routing = routingService.route(jpa.room(), userMessage);
@@ -324,8 +327,8 @@ public class ChatStreamServiceV2 {
 
             Long userId = room.getUser().getId();
             String username = room.getUser().getUsername();
-            // 에너지 미소모 / 유저 로그 미영속 → 롤백은 사실상 no-op (energy=0, userLog=null)
-            RollbackContext rollbackCtx = new RollbackContext(userId, username, 0, null);
+            // 에너지 미소모 / 유저 로그 미영속 → 롤백은 사실상 no-op (energy=ZERO, userLog=null)
+            RollbackContext rollbackCtx = new RollbackContext(userId, username, EnergySplit.ZERO, null);
 
             // 오프닝 화자 — 시작 장소에 있는 히로인을 자연스럽게 등장(없으면 AMBIENT). route("")는 빈 입력에 안전.
             WorldRoutingService.RoutingResult routing = routingService.route(room, "");
@@ -1274,12 +1277,13 @@ public class ChatStreamServiceV2 {
         } catch (Exception ignored) {}
     }
 
-    void compensateEnergy(Long userId, int amount, String username) {
+    /** [D-1.4] TX-1 차감의 free/paid 분할을 그대로 되돌린다 — 총액 환불은 유료분을 free로 흡수시켰다. */
+    void compensateEnergy(Long userId, EnergySplit charge, String username) {
         try {
             txTemplate.execute(status -> {
                 User user = userRepository.findById(userId)
                     .orElseThrow(() -> new NotFoundException("User not found"));
-                user.refundEnergy(amount);
+                user.refundEnergy(charge);
                 userRepository.save(user);
                 return null;
             });
@@ -1294,8 +1298,8 @@ public class ChatStreamServiceV2 {
             try { chatLogRepository.deleteById(ctx.savedUserLogId()); }
             catch (Exception e) { log.warn("[V2-ROLLBACK] log delete failed: {}", e.getMessage()); }
         }
-        // 오프닝 경로는 energyCost=0 → refundEnergy 내부 가드로 no-op (프로필 캐시 evict는 항상 수행).
-        compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
+        // 오프닝 경로는 energy=ZERO → refundEnergy 내부 가드로 no-op (프로필 캐시 evict는 항상 수행).
+        compensateEnergy(ctx.userId(), ctx.energy(), ctx.username());
     }
 
     /**

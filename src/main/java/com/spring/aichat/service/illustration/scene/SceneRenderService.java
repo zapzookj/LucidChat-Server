@@ -5,6 +5,7 @@ import com.spring.aichat.config.SceneIllustrationProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.illustration.SceneIllustration;
 import com.spring.aichat.domain.illustration.SceneIllustrationRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import com.spring.aichat.external.SceneComfyClient;
 
@@ -181,11 +182,11 @@ public class SceneRenderService {
      */
     public SceneView submitManual(Long roomId, List<Character> cast,
                                   AiJsonOutput.SceneIllustrationSpec spec, int turnIndex,
-                                  boolean sfw, Long requestedBy, int energyCharged) {
+                                  boolean sfw, Long requestedBy, EnergySplit charge) {
         SceneRenderPlan plan = planRender(cast, spec, sfw);
         SceneIllustration pending = repository.save(SceneIllustration.pendingManual(
             roomId, turnIndex, plan.sceneHash(), plan.prompt().fullPrompt(),
-            requestedBy, energyCharged));
+            requestedBy, charge));
         try {
             sceneRenderExecutor.execute(() -> render(pending.getId(), plan.prompt(), roomId, turnIndex));
         } catch (java.util.concurrent.RejectedExecutionException e) {

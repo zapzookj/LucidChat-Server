@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.ugc;
 
+import com.spring.aichat.domain.user.EnergySplit;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -83,6 +84,14 @@ public class UgcWorldCreationJob {
     @Column(name = "energy_charged", nullable = false)
     private int energyCharged = 0;
 
+    /**
+     * [D-1.7 · V32] {@link #energyCharged} 누산 중 유료(paid) 분할분 누산. fal 전용 트랙이라 스테일 스윕
+     * 환불이 정상 운용 경로(application.yml ugc.world 주석)인데, 총액 환불은 그때마다 유료분을 소각했다.
+     * 구 행 0 = 전액 free 폴백.
+     */
+    @Column(name = "energy_charged_paid", nullable = false)
+    private int energyChargedPaid = 0;
+
     /** 현재 스테이지 자동 재시도 카운트 (스테이지 진입 시 리셋). */
     @Column(name = "retry_count", nullable = false)
     private int retryCount = 0;
@@ -120,14 +129,16 @@ public class UgcWorldCreationJob {
     //  생성
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /** @param charge 기본 패키지 차감의 free/paid 분할 — {@code User.consumeEnergy}의 반환값 */
     public static UgcWorldCreationJob start(Long userId, String requestedName, String moodHint,
-                                            String conceptInputRaw, int energyCharged) {
+                                            String conceptInputRaw, EnergySplit charge) {
         UgcWorldCreationJob job = new UgcWorldCreationJob();
         job.userId = userId;
         job.requestedName = requestedName;
         job.moodHint = moodHint;
         job.conceptInputRaw = conceptInputRaw;
-        job.energyCharged = energyCharged;
+        job.energyCharged = charge.total();
+        job.energyChargedPaid = charge.fromPaid();
         job.status = WorldCreationJobStatus.CONCEPT_PROCESSING;
         return job;
     }
@@ -211,9 +222,15 @@ public class UgcWorldCreationJob {
         this.externalJobsJson = externalJobsJson;
     }
 
-    /** 리롤 등 추가 과금 누적. */
-    public void chargeEnergy(int amount) {
-        this.energyCharged += amount;
+    /** 리롤 등 추가 과금 누적 — 총액과 유료분을 함께 누산한다(D-1.7). */
+    public void chargeEnergy(EnergySplit charge) {
+        this.energyCharged += charge.total();
+        this.energyChargedPaid += charge.fromPaid();
+    }
+
+    /** [D-1.7] 실패 환불용 분할 복원 — 구 행(paid=0)은 전액 free. */
+    public EnergySplit chargedSplit() {
+        return EnergySplit.of(energyCharged, energyChargedPaid);
     }
 
     public int incrementRetry() {

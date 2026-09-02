@@ -7,6 +7,7 @@ import com.spring.aichat.domain.chat.*;
 import com.spring.aichat.domain.enums.*;
 import com.spring.aichat.domain.world.World;
 import com.spring.aichat.domain.world.WorldRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -139,13 +140,15 @@ public class ChatStreamService {
     //  TX 간 데이터 전달 DTO
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    // [D-1.5] energyCost(int) → energy(EnergySplit): TX-1 차감의 free/paid 분할을 실어 보상이
+    //   정확히 되돌린다. 이 record를 SSE 엔트리 4곳이 공유하므로 필드 1개로 전 경로가 닫힌다.
     private record JpaPreResult(
         ChatRoom room, Long userId, long logCount,
-        String username, int energyCost
+        String username, EnergySplit energy
     ) {}
 
     private record RollbackContext(
-        Long userId, String username, int energyCost, String savedUserLogId
+        Long userId, String username, EnergySplit energy, String savedUserLogId
     ) {}
 
     /** LLM 결과 파싱 후 중간 데이터 */
@@ -207,10 +210,10 @@ public class ChatStreamService {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
                 int cost = boostModeResolver.resolveEnergyCost(room.getChatMode(), room.getUser());
-                room.getUser().consumeEnergy(cost);
+                EnergySplit charge = room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), charge);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -231,13 +234,13 @@ public class ChatStreamService {
                     ChatLogDocument.user(roomId, userMessage));
                 savedUserLogId = savedLog.getId();
             } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장에 실패했습니다.");
                 return;
             }
 
             RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedUserLogId);
+                jpa.userId(), jpa.username(), jpa.energy(), savedUserLogId);
 
             // [Phase 5.5-EV] 유저 개입인지 판단 (디렉터 모드 중 유저가 직접 채팅)
             boolean isUserIntervention = jpa.room().isEventActive();
@@ -515,10 +518,10 @@ public class ChatStreamService {
                 }
 
                 int cost = 1; // 지켜보기 비용
-                room.getUser().consumeEnergy(cost);
+                EnergySplit charge = room.getUser().consumeEnergy(cost);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), charge);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -536,13 +539,13 @@ public class ChatStreamService {
                     ChatLogDocument.hiddenSystem(roomId, watchPrompt));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
                 return;
             }
 
             RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+                jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
 
@@ -643,10 +646,10 @@ public class ChatStreamService {
             JpaPreResult jpa = txTemplate.execute(status -> {
                 ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId)
                     .orElseThrow(() -> new NotFoundException("채팅방이 존재하지 않습니다."));
-                room.getUser().consumeEnergy(TIME_SKIP_ENERGY_COST);
+                EnergySplit charge = room.getUser().consumeEnergy(TIME_SKIP_ENERGY_COST);
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.getUser().getUsername(), TIME_SKIP_ENERGY_COST);
+                    room.getUser().getUsername(), charge);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -657,13 +660,13 @@ public class ChatStreamService {
                     ChatLogDocument.hiddenSystem(roomId, TIME_SKIP_PROMPT));
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
                 return;
             }
 
             RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+                jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
 
@@ -1152,12 +1155,13 @@ public class ChatStreamService {
         }
     }
 
-    private void compensateEnergy(Long userId, int cost, String username) {
+    /** [D-1.5] TX-1 차감의 free/paid 분할을 그대로 되돌린다 — 총액 환불은 유료분을 free로 흡수시켰다. */
+    private void compensateEnergy(Long userId, EnergySplit charge, String username) {
         try {
             txTemplate.execute(status -> {
                 User user = userRepository.findById(userId)
                     .orElseThrow(() -> new NotFoundException("User not found"));
-                user.refundEnergy(cost);
+                user.refundEnergy(charge);
                 userRepository.save(user);
                 return null;
             });
@@ -1172,7 +1176,7 @@ public class ChatStreamService {
             try { chatLogRepository.deleteById(ctx.savedUserLogId()); }
             catch (Exception ex) { log.error("User msg delete FAILED", ex); }
         }
-        compensateEnergy(ctx.userId(), ctx.energyCost(), ctx.username());
+        compensateEnergy(ctx.userId(), ctx.energy(), ctx.username());
     }
 
     /**
@@ -1379,7 +1383,7 @@ public class ChatStreamService {
                 int cost = isBranchResponse
                     ? directorService.resolveBranchCost(roomId, chosenIndex).orElse(1)
                     : 1;
-                room.getUser().consumeEnergy(cost);
+                EnergySplit charge = room.getUser().consumeEnergy(cost);
 
                 if (isAway) {
                     room.updateEventStatus("ONGOING");
@@ -1394,7 +1398,7 @@ public class ChatStreamService {
 
                 long logCount = chatLogRepository.countByRoomId(roomId);
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
-                    room.getUser().getUsername(), cost);
+                    room.getUser().getUsername(), charge);
             });
             cacheService.evictUserProfile(jpa.username());
 
@@ -1422,13 +1426,13 @@ public class ChatStreamService {
                 }
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
-                compensateEnergy(jpa.userId(), jpa.energyCost(), jpa.username());
+                compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
                 return;
             }
 
             RollbackContext rollbackCtx = new RollbackContext(
-                jpa.userId(), jpa.username(), jpa.energyCost(), savedLogId);
+                jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
 

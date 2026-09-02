@@ -803,8 +803,10 @@ public class UgcPipelineWorker {
             if (job == null || job.getStatus().isTerminal()) return;
             job.fail(reason);
 
-            int refund = job.getEnergyCharged();
-            if (refund > 0) {
+            // [D-1.6] 누산된 free/paid 분할로 복원 — 총액 환불은 단계 진입 후 수 분~수 시간 뒤라
+            //   유료분이 free로 흡수돼 소각됐다(최대 20E+, 비구독 상한 30 대비 거의 전량).
+            var refund = job.chargedSplit();
+            if (!refund.isZero()) {
                 userRepository.findById(job.getUserId()).ifPresent(user -> {
                     user.refundEnergy(refund);
                     userRepository.save(user);

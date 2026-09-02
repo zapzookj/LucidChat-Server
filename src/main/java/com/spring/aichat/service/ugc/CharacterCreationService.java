@@ -7,6 +7,7 @@ import com.spring.aichat.domain.ugc.CharacterCreationJob;
 import com.spring.aichat.domain.ugc.CharacterCreationJobRepository;
 import com.spring.aichat.domain.ugc.CreationJobStatus;
 import com.spring.aichat.domain.ugc.UgcWorldRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.ugc.BaseCandidate;
@@ -149,10 +150,10 @@ public class CharacterCreationService {
             }
             // [2026-08-04 단계 과금] 선차감 20 → 시작 단계 6만 차감 (이후 단계 진입 시 각각 차감)
             int cost = props.energy().stageStart();
-            user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
+            EnergySplit charge = user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
             userRepository.save(user);
 
-            CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, cost);
+            CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, charge);
             job.markStagedBilling(); // 신규 잡은 전부 단계 과금 — null=레거시 선차감 잡
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
             job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
@@ -247,9 +248,8 @@ public class CharacterCreationService {
 
             int cost = props.energy().baseReroll();
             User user = findUser(username);
-            user.consumeEnergy(cost);
+            job.chargeEnergy(user.consumeEnergy(cost));
             userRepository.save(user);
-            job.chargeEnergy(cost);
             job.restartBaseGeneration();
         });
         cacheService.evictUserProfile(username);
@@ -398,9 +398,8 @@ public class CharacterCreationService {
 
             int cost = props.energy().goldenReroll();
             User user = findUser(username);
-            user.consumeEnergy(cost);
+            job.chargeEnergy(user.consumeEnergy(cost));
             userRepository.save(user);
-            job.chargeEnergy(cost);
             job.restartGoldenGeneration();
             Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
             scratch.put(UgcPipelineWorker.APPEARANCE_EDIT_KEY, effectiveBlock);
@@ -435,9 +434,8 @@ public class CharacterCreationService {
             if (!free) {
                 int cost = props.energy().emotionReroll();
                 User user = findUser(username);
-                user.consumeEnergy(cost);
+                job.chargeEnergy(user.consumeEnergy(cost));
                 userRepository.save(user);
-                job.chargeEnergy(cost);
             }
             worker.resetEmotionForReroll(job, tag);
             return !free;
@@ -532,13 +530,14 @@ public class CharacterCreationService {
                                       int cost, String insufficientMessage) {
         if (!job.isStagedBilling()) return false; // 레거시 선차감 잡 — 이미 20 지불 완료
         User user = findUser(username);
+        EnergySplit charge;
         try {
-            user.consumeEnergy(cost); // 기존 차감 경로 재사용 — 부족 시 차감 전 예외
+            charge = user.consumeEnergy(cost); // 기존 차감 경로 재사용 — 부족 시 차감 전 예외
         } catch (InsufficientEnergyException e) {
             throw new BadRequestException(insufficientMessage);
         }
         userRepository.save(user);
-        job.chargeEnergy(cost); // 환불 정산 기준 누적 — failAndRefund가 전액 환불에 그대로 사용
+        job.chargeEnergy(charge); // 환불 정산 기준 누적(총액+유료분) — failAndRefund가 분할 환불에 그대로 사용
         return true;
     }
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.SceneIllustrationProperties;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.illustration.SceneIllustration;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.dto.chat.AiJsonOutput;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,9 +91,12 @@ class SceneManualRequestTest {
     @DisplayName("MANUAL 행: 차감액 존재+미환불일 때만 환불 대상 — markRefunded 후 멱등 차단")
     void manualRefundGuard() {
         SceneIllustration manual = SceneIllustration.pendingManual(
-            1L, 7, "hash", "prompt", 42L, 5);
+            1L, 7, "hash", "prompt", 42L, new EnergySplit(2, 3));
         assertEquals("MANUAL", manual.getTriggerSource());
         assertEquals(5, manual.getEnergyCharged());
+        // [D-1.2] 유료분이 행에 남고 환불 분할이 그대로 복원된다
+        assertEquals(3, manual.getEnergyChargedPaid());
+        assertEquals(new EnergySplit(2, 3), manual.chargedSplit());
         assertTrue(manual.refundableOnFail());
 
         manual.markRefunded();

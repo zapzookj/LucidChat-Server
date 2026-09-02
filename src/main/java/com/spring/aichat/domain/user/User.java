@@ -35,6 +35,7 @@ import java.util.Set;
  * - 비구독자: 5배 에너지 소모 / 구독자: 일반 비용으로 Pro 모델
  *
  * [Phase 5.1] refundEnergy 추가 — LLM 호출 실패 시 에너지 롤백
+ * [D-1.1] consumeEnergy가 {@link EnergySplit}을 반환하고 refundEnergy는 그 분할을 그대로 되돌린다
  */
 public class User {
 
@@ -162,8 +163,13 @@ public class User {
         return this.subscriptionTier != null ? 100 : 30;
     }
 
-    /** 에너지 차감: free 우선 -> paid 폴백 */
-    public void consumeEnergy(int amount) {
+    /**
+     * 에너지 차감: free 우선 -> paid 폴백.
+     *
+     * @return 실제로 free/paid에서 얼마씩 나갔는지 — 환불은 반드시 이 값으로 되돌린다
+     *         ({@link #refundEnergy(EnergySplit)}). 환불 경로가 없는 호출부는 무시해도 된다.
+     */
+    public EnergySplit consumeEnergy(int amount) {
         // [docs/17 §F #1 · docs/19 §F D-6] 음수 방어 — 전 차감 경로의 뿌리 착취면.
         //   음수가 들어오면 아래 total < amount 검사를 통과한 뒤 paidEnergy -= (음수) 로
         //   에너지가 '발행'된다. 클라이언트가 비용을 지정하던 경로가 이 구멍을 태웠다(docs/13 B-3).
@@ -175,27 +181,39 @@ public class User {
             throw new InsufficientEnergyException(
                 "에너지가 부족합니다. (보유: " + total + ", 필요: " + amount + ")");
         }
-        if (this.freeEnergy >= amount) {
-            this.freeEnergy -= amount;
-        } else {
-            int remaining = amount - this.freeEnergy;
-            this.freeEnergy = 0;
-            this.paidEnergy -= remaining;
-        }
+        // [적대적 리뷰 P3] free_energy < 0 행(과거 lost-update 잔재 가능 — users 테이블에 CHECK 없음)에서
+        //   min(음수, amount)가 음수 분할을 만들어 EnergySplit 생성자 IAE → 그 유저의 모든 차감 경로가 500으로
+        //   막힌다(regen이 0 이상으로 올릴 때까지). 0으로 클램프해 그 요청은 paid에서 전액 내고, 음수 free는
+        //   손대지 않는다(regen이 자연 치유). 구 코드는 free를 0으로 만들며 paid에서 |음수|만큼 더 떼어 갔다.
+        int fromFree = Math.max(0, Math.min(this.freeEnergy, amount));
+        int fromPaid = amount - fromFree;
+        this.freeEnergy -= fromFree;
+        this.paidEnergy -= fromPaid;
+        return new EnergySplit(fromFree, fromPaid);
     }
 
     /**
-     * [Phase 5.1] 에너지 환불 (LLM 호출 실패 시 롤백용)
+     * [D-1.1 · docs/17_assets/defect_register.md §D-1.1] 에너지 환불 — {@link #consumeEnergy(int)}의
+     * <b>정확한</b> 역연산. 유료분은 paid로 그대로, 무료분은 free로 상한까지.
      *
-     * consumeEnergy의 역연산: freeEnergy 우선 복구 (max까지) → 초과분은 paidEnergy로.
-     * 차감 직후 동일 요청 내에서만 호출되므로, 정확한 복원이 보장됨.
+     * <p>구 {@code refundEnergy(int amount)}(free 우선 채우고 초과분을 paid로)는 삭제했다 —
+     * 지연 환불에서 유료 에너지가 free로 흡수돼 소각됐고(free는 regen이 공짜로 채우므로 가치 0),
+     * 반대로 paid 우선으로 뒤집으면 free→paid 승급 파밍면이 생긴다. 1-arg 오버로드를 남기지 않는
+     * 이유는 호출부가 조용히 낡은 경로로 컴파일되는 것을 막기 위해서다(CLAUDE.md §2-6).
+     *
+     * <p>free 상한 초과분은 <b>버린다</b>. 지연 환불 시점에 이미 상한이면 스케줄러가 그 사이
+     * free를 채운 것이므로 유저가 쓴 free분은 이미 회복돼 있다 — 얹으면 상한 초과 순증(공짜 발행),
+     * paid로 돌리면 파밍면. 같은 요청 안의 즉시 환불은 regen 창(10분 틱)을 만날 일이 사실상 없다.
+     *
+     * <p>⚠ '정확한 역연산'은 <b>버킷 기준</b>이지 경제적 중립이 아니다. 지연 환불을 기다리는 동안 유저가
+     * 후속 소비로 free를 소진하고 paid까지 썼다면, 환불은 원래 버킷(free)으로 돌아오므로 결과적으로
+     * 그 사이 쓴 paid는 돌아오지 않는다(손실 상한 = 해당 요청의 free 차감분). 구 코드도 같은 결과였고,
+     * 닫으려면 유저 단위 에너지 원장(차감/환불 이벤트)으로 반사실 잔액을 재계산해야 한다 — 범위 밖.
      */
-    public void refundEnergy(int amount) {
-        if (amount <= 0) return;
-        int freeSpace = getFreeEnergyMax() - this.freeEnergy;
-        int toFree = Math.min(amount, freeSpace);
-        this.freeEnergy += toFree;
-        this.paidEnergy += (amount - toFree);
+    public void refundEnergy(EnergySplit split) {
+        if (split == null || split.isZero()) return;
+        this.paidEnergy += split.fromPaid();
+        this.freeEnergy = Math.min(getFreeEnergyMax(), this.freeEnergy + split.fromFree());
     }
 
     /** 자연 에너지 회복 (구독 티어에 따른 max 적용) */

@@ -55,11 +55,13 @@ public class SceneRenderWriteService {
     private void refundManualCharge(SceneIllustration s) {
         try {
             userRepository.findById(s.getRequestedBy()).ifPresentOrElse(user -> {
-                user.refundEnergy(s.getEnergyCharged());
+                // [D-1.2] 행에 영속된 free/paid 분할로 복원 — 총액 환불은 콜백 시점 free가 낮으면
+                //   유료분을 free로 흡수해 소각했다(씬 일러는 이 절 최대 단가).
+                user.refundEnergy(s.chargedSplit());
                 s.markRefunded();
                 cacheService.evictUserProfile(user.getUsername());
-                log.info("[SCENE-RENDER] 수동 요청 실패 환불: illustrationId={} userId={} amount={}",
-                    s.getId(), s.getRequestedBy(), s.getEnergyCharged());
+                log.info("[SCENE-RENDER] 수동 요청 실패 환불: illustrationId={} userId={} split={}",
+                    s.getId(), s.getRequestedBy(), s.chargedSplit());
             }, () -> log.error("[SCENE-RENDER] 환불 대상 유저 없음: illustrationId={} userId={}",
                 s.getId(), s.getRequestedBy()));
         } catch (Exception e) {

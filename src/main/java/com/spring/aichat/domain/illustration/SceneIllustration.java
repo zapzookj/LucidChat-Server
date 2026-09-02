@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.illustration;
 
+import com.spring.aichat.domain.user.EnergySplit;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -76,6 +77,13 @@ public class SceneIllustration {
     @Column(name = "energy_charged", nullable = false)
     private int energyCharged = 0;
 
+    /**
+     * [D-1.2 · V32] {@link #energyCharged} 중 유료(paid) 분할분. 렌더 실패 콜백은 요청 후 수십 초~수 분
+     * 뒤라 총액만으로 환불하면 유료분이 free로 흡수돼 소각됐다. 구 행은 0 = 전액 free 폴백.
+     */
+    @Column(name = "energy_charged_paid", nullable = false)
+    private int energyChargedPaid = 0;
+
     /** 환불 완료 여부 — failRender 환불의 멱등 가드. */
     @Column(name = "energy_refunded", nullable = false)
     private boolean energyRefunded = false;
@@ -111,15 +119,23 @@ public class SceneIllustration {
 
     /**
      * [2026-07-31 에픽 B] 수동 요청 행 — 유저가 명시 요청·에너지 차감. 실패 시 failRender가
-     * energyCharged를 requestedBy에게 환불한다(energyRefunded 멱등 가드).
+     * {@link #chargedSplit()}을 requestedBy에게 환불한다(energyRefunded 멱등 가드).
+     *
+     * @param charge 차감 시점의 free/paid 분할 — {@code User.consumeEnergy}의 반환값을 그대로 넘긴다
      */
     public static SceneIllustration pendingManual(Long chatRoomId, int turnIndex, String sceneHash,
-                                                  String positivePrompt, Long requestedBy, int energyCharged) {
+                                                  String positivePrompt, Long requestedBy, EnergySplit charge) {
         SceneIllustration s = pending(chatRoomId, turnIndex, sceneHash, positivePrompt);
         s.triggerSource = "MANUAL";
         s.requestedBy = requestedBy;
-        s.energyCharged = energyCharged;
+        s.energyCharged = charge.total();
+        s.energyChargedPaid = charge.fromPaid();
         return s;
+    }
+
+    /** [D-1.2] 환불용 분할 복원 — 구 행(paid=0)은 전액 free. */
+    public EnergySplit chargedSplit() {
+        return EnergySplit.of(energyCharged, energyChargedPaid);
     }
 
     /** 디덥 스킵 행 — 직전 완료 일러를 그대로 가리킨다(씬 네비게이션에서 턴별 매핑 유지). */

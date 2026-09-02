@@ -8,6 +8,7 @@ import com.spring.aichat.domain.ugc.UgcWorldLocation;
 import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
 import com.spring.aichat.domain.ugc.UgcWorldRepository;
 import com.spring.aichat.domain.ugc.WorldCreationJobStatus;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.ugc.UgcWorldDtos;
@@ -99,11 +100,11 @@ public class UgcWorldService {
                 throw new BadRequestException("이미 진행 중인 세계관 생성이 있어요. 완료하거나 정리한 뒤 다시 시도해 주세요.");
             }
             int cost = props.world().basePackage();
-            user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
+            EnergySplit charge = user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
             userRepository.save(user);
 
             UgcWorldCreationJob job = jobRepository.save(
-                UgcWorldCreationJob.start(user.getId(), name, moodHint, concept, cost));
+                UgcWorldCreationJob.start(user.getId(), name, moodHint, concept, charge));
             return job.getId();
         });
 
@@ -274,9 +275,8 @@ public class UgcWorldService {
             if (!free) {
                 int cost = props.world().reroll();
                 User user = findUser(username);
-                user.consumeEnergy(cost);
+                job.chargeEnergy(user.consumeEnergy(cost));
                 userRepository.save(user);
-                job.chargeEnergy(cost);
             }
             worker.resetAssetForReroll(job, token);
             return !free;
@@ -472,7 +472,8 @@ public class UgcWorldService {
             String key = WorldConceptStructuringService.normalizeLocationKey(displayName, existing.size(), used);
             int order = existing.stream().mapToInt(UgcWorldLocation::getDisplayOrder).max().orElse(-1) + 1;
 
-            owner.consumeEnergy(props.world().reroll()); // 1E — 부족 시 차감 전 예외
+            // [D-1.8] 분할을 행에 남긴다 — 실패 장소 삭제 환불(deleteFailedLocation)이 그대로 되돌린다.
+            EnergySplit charge = owner.consumeEnergy(props.world().reroll()); // 1E — 부족 시 차감 전 예외
             userRepository.save(owner);
 
             // [안건 20 = (A)] 승인 후 장소 추가 → 재검수 회귀. updateTexts만 회귀시키고
@@ -480,7 +481,7 @@ public class UgcWorldService {
             locked.markNeedsRereview();
 
             return locationRepository.save(
-                UgcWorldLocation.createGenerating(worldId, key, displayName, description, order)).getId();
+                UgcWorldLocation.createGenerating(worldId, key, displayName, description, order, charge)).getId();
         });
         cacheService.evictUserProfile(username);
         worker.generateAddedLocationBackground(worldId, locationId);
@@ -518,7 +519,10 @@ public class UgcWorldService {
             }
             locationRepository.delete(loc);
             User user = findUser(username);
-            user.refundEnergy(props.world().reroll());
+            // [D-1.8] 추가 시점에 영속한 (총액, 유료분) 분할 그대로 복원(레지스터 D-1.8 ❓ 답: 컬럼 추적을 택했다).
+            //   인자는 총액 컬럼이 없던 배포 이전 구 행(총액 0)에만 쓰는 폴백 = 현재 가격표. paid 우선 폴백은
+            //   금지 — 실패 장소 반복 생성·삭제로 free→paid 세탁이 열린다.
+            user.refundEnergy(loc.chargedSplit(props.world().reroll()));
             userRepository.save(user);
         });
         cacheService.evictUserProfile(username);

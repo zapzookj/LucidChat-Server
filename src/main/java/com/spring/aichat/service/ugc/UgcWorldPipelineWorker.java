@@ -420,8 +420,9 @@ public class UgcWorldPipelineWorker {
             if (job == null || job.getStatus().isTerminal()) return;
             job.fail(reason);
 
-            int refund = job.getEnergyCharged();
-            if (refund > 0) {
+            // [D-1.7] 누산된 free/paid 분할로 복원 ({@link UgcPipelineWorker#failAndRefund} 동형).
+            var refund = job.chargedSplit();
+            if (!refund.isZero()) {
                 userRepository.findById(job.getUserId()).ifPresent(user -> {
                     user.refundEnergy(refund);
                     userRepository.save(user);
@@ -458,7 +459,7 @@ public class UgcWorldPipelineWorker {
 
         switch (job.getStatus()) {
             case CONCEPT_PROCESSING ->
-                failAndRefund(jobId, "세계관 구조화 시간 초과 — 에너지는 전액 환불되었어요.");
+                failAndRefund(jobId, "세계관 구조화 시간 초과 — 사용한 에너지는 환불되었어요.");
             case ILLUSTRATING -> {
                 Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
                 if (scratch.isEmpty()) {

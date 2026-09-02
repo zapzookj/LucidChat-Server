@@ -10,6 +10,7 @@ import com.spring.aichat.domain.chat.ChatRoomRepository;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.heroine.CharacterPresence;
 import com.spring.aichat.domain.heroine.CharacterPresenceRepository;
+import com.spring.aichat.domain.user.EnergySplit;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.chat.AiJsonOutput;
@@ -131,11 +132,12 @@ public class SceneRequestService {
             }
 
             // ── 3. 에너지 차감 (짧은 TX) — InsufficientEnergyException은 그대로 전파 ──
-            txTemplate.execute(status -> {
+            // [D-1.3] 분할분을 이 스코프에 들고 있다가 동기 실패 환불에 그대로 되돌린다(DB 영속 불요).
+            // [D-1.2] 비동기 렌더 실패 환불은 행(energy_charged_paid)에 영속 — submitManual로 전달.
+            EnergySplit charge = txTemplate.execute(status -> {
                 User u = userRepository.findById(user.getId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found"));
-                u.consumeEnergy(cost);
-                return null;
+                return u.consumeEnergy(cost);
             });
             // [리뷰픽스] 캐시 무효화 실패는 표시 문제일 뿐 — 차감 커밋 후 예외로 렌더·환불이
             // 모두 증발하지 않도록 스왈로우
@@ -158,17 +160,17 @@ public class SceneRequestService {
                     directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw,
                         room.isPersonaUserMale());   // [페르소나] 유저 성별 스냅샷 반영
                 return renderService.submitManual(
-                    roomId, cast, spec, turnIndex, sfw, user.getId(), cost);
+                    roomId, cast, spec, turnIndex, sfw, user.getId(), charge);
             } catch (SceneRenderService.RenderPoolSaturatedException e) {
                 // [리뷰픽스 이중 환불] failRender가 행 기반 멱등 환불을 이미 완료 — 여기서 재환불 금지
                 log.warn("[SCENE-REQUEST] 렌더 풀 포화(환불은 failRender가 완료): roomId={}", roomId);
                 throw new BusinessException(ErrorCode.CONFLICT,
                     "지금은 씬 일러 요청이 몰려 있어요. 잠시 후 다시 시도해 주세요. 에너지는 환불됐어요.");
             } catch (BusinessException e) {
-                refund(user.getId(), cost, username);
+                refund(user.getId(), charge, username);
                 throw e;
             } catch (Exception e) {
-                refund(user.getId(), cost, username);
+                refund(user.getId(), charge, username);
                 log.warn("[SCENE-REQUEST] 수동 요청 실패(환불 완료): roomId={} {}", roomId, e.getMessage());
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "씬 일러 생성에 실패했어요. 에너지는 환불됐어요.");
             }
@@ -242,16 +244,19 @@ public class SceneRequestService {
         return room.getCurrentUserLocationKey();
     }
 
-    /** 동기 실패 환불 — 유저 id 직접 조회(V2 보상 경로의 room 경유 조회 버그 재발 방지). */
-    private void refund(Long userId, int amount, String username) {
+    /**
+     * 동기 실패 환불 — 유저 id 직접 조회(V2 보상 경로의 room 경유 조회 버그 재발 방지).
+     * [D-1.3] 차감 시점의 분할을 그대로 되돌린다 — 총액 환불은 유료분을 free로 흡수시켰다.
+     */
+    private void refund(Long userId, EnergySplit charge, String username) {
         try {
             txTemplate.execute(status -> {
-                userRepository.findById(userId).ifPresent(u -> u.refundEnergy(amount));
+                userRepository.findById(userId).ifPresent(u -> u.refundEnergy(charge));
                 return null;
             });
             cacheService.evictUserProfile(username);
         } catch (Exception e) {
-            log.error("[SCENE-REQUEST] 환불 실패 userId={} amount={}: {}", userId, amount, e.getMessage());
+            log.error("[SCENE-REQUEST] 환불 실패 userId={} split={}: {}", userId, charge, e.getMessage());
         }
     }
 }
