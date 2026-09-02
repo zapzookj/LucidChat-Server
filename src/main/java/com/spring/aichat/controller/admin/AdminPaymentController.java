@@ -24,6 +24,20 @@ public class AdminPaymentController {
 
     private final AdminPaymentService adminPaymentService;
     private final RefundService refundService;
+    private final com.spring.aichat.service.payment.PaymentService paymentService;
+    private final com.spring.aichat.service.audit.AuditLogService auditLogService;
+
+    /**
+     * [안건 4 (b) · 적대적 리뷰 P1] 미지급(PAID_UNDELIVERED) 주문 재지급 — 스케줄러 자동 재시도(15분·24h)와 같은 경로.
+     * 지급이 끝났으면 PAID, 여전히 실패면 PAID_UNDELIVERED + failed_reason 갱신으로 돌아온다(예외 아님).
+     */
+    @PostMapping("/orders/{merchantUid}/redeliver")
+    public AdminOrderResponse redeliver(@PathVariable String merchantUid, Authentication auth) {
+        boolean delivered = paymentService.redeliver(merchantUid, "ADMIN:" + auth.getName());
+        auditLogService.record(auth.getName(), "PAYMENT_REDELIVER", "ORDER", merchantUid,
+            delivered ? "관리자 재지급 — 지급 완료" : "관리자 재지급 시도 — 실패(PAID_UNDELIVERED 유지)");
+        return adminPaymentService.getOrder(merchantUid);
+    }
 
     @GetMapping("/orders")
     public List<AdminOrderResponse> userOrders(@RequestParam Long userId) {

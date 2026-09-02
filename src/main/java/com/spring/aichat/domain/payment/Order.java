@@ -76,14 +76,21 @@ public class Order {
         return o;
     }
 
+    /**
+     * 결제 대금 확정 — PortOne 검증을 통과한 순간. [안건 4 (b)] 상태는 {@code PAID_UNDELIVERED}로 들어간다:
+     * "돈은 확정, 지급은 아직". 지급 트랜잭션이 {@link #markDelivered()}로 PAID를 찍는다.
+     * 그래서 PAID = 지급까지 완료가 단일 진실이고, 지급 실패는 롤백돼 사라지지 않고 이 상태로 남는다.
+     */
     public void markPaid(String impUid) {
         if (this.status != OrderStatus.PENDING) throw new IllegalStateException("Only PENDING can be PAID. Current: " + this.status);
         this.impUid = impUid;
-        this.status = OrderStatus.PAID;
+        this.status = OrderStatus.PAID_UNDELIVERED;
         this.paidAt = LocalDateTime.now();
     }
 
     public void markFailed(String reason) {
+        // [적대적 리뷰 P1] PENDING에서만 — 종전엔 가드가 없어 환불된 주문에 재시도·취소 웹훅이 오면 REFUNDED→FAILED로 덮였다
+        if (this.status != OrderStatus.PENDING) throw new IllegalStateException("Only PENDING can be FAILED. Current: " + this.status);
         this.status = OrderStatus.FAILED;
         this.failedReason = reason;
     }
@@ -93,7 +100,24 @@ public class Order {
     }
 
     public void markRefunded() {
-        if (this.status != OrderStatus.PAID) throw new IllegalStateException("Only PAID can be REFUNDED. Current: " + this.status);
+        // [안건 4] PAID_UNDELIVERED도 환불 가능 — 돈은 확정됐고 지급만 안 된 주문은 회수 없이 취소만 하면 된다
+        if (!this.status.isPaidMoney()) throw new IllegalStateException("Only PAID/PAID_UNDELIVERED can be REFUNDED. Current: " + this.status);
         this.status = OrderStatus.REFUNDED;
+    }
+
+    /**
+     * [안건 4 (b)] 지급 실패 사유 기록 — 상태는 PAID_UNDELIVERED 그대로(지급 TX가 롤백된 뒤 별도 TX에서 호출).
+     * 사유는 failed_reason에 200자 절삭(컬럼 상한). 관리자 미지급 큐·감시 스케줄러가 읽는다.
+     */
+    public void recordDeliveryFailure(String reason) {
+        if (this.status != OrderStatus.PAID_UNDELIVERED) throw new IllegalStateException("Delivery failure only on PAID_UNDELIVERED. Current: " + this.status);
+        this.failedReason = reason == null ? null : reason.substring(0, Math.min(200, reason.length()));
+    }
+
+    /** [안건 4 (b)] 지급 완료 — PAID_UNDELIVERED → PAID (최초 지급·재지급 공용). */
+    public void markDelivered() {
+        if (this.status != OrderStatus.PAID_UNDELIVERED) throw new IllegalStateException("Only PAID_UNDELIVERED can be delivered. Current: " + this.status);
+        this.status = OrderStatus.PAID;
+        this.failedReason = null;
     }
 }

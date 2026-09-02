@@ -17,6 +17,16 @@ public enum ErrorCode {
     PAYMENT_ALREADY_PROCESSED,
     PAYMENT_VERIFICATION_FAILED,
     ORDER_NOT_FOUND,
+    /**
+     * [D-4.3 · 안건 6 (나)] 환불은 PortOne에서 완료됐고 주문도 REFUNDED로 기록됐으나 <b>혜택 회수 대상을 찾지 못했다</b>.
+     * 트랜잭션은 롤백하지 않는다(유저 유리 원칙) — 대신 관리자가 사실을 모른 채 지나가지 않도록 예외로 올린다.
+     */
+    REFUND_CLAWBACK_FAILED,
+    /**
+     * [안건 4 (b)] 결제는 확정(PAID_UNDELIVERED)됐으나 재화 지급이 실패해 재시도 대기 중. FE는 이 코드를 '결제 실패'가
+     * 아니라 '결제 완료 · 지급 대기'로 그리고 /confirm 재호출 버튼을 보여야 한다(재구매 유도 = 이중 결제).
+     */
+    PAYMENT_DELIVERY_PENDING,
 
     // Phase 5: Verification
     VERIFICATION_TOKEN_FAILED,

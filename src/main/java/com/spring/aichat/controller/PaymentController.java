@@ -148,6 +148,13 @@ public class PaymentController {
             log.warn("[WEBHOOK] Missing required fields. payload={}", payload);
             return ResponseEntity.ok(Map.of("status", "ignored", "reason", "missing fields"));
         }
+        // [적대적 리뷰 P1] paid 외 상태(cancelled·failed·ready) 웹훅은 지급 경로에 넣지 않는다 — 환불 뒤 오는
+        //   cancelled 웹훅이 PortOne 재조회로 REFUNDED 주문을 흔드는 경로를 입구에서 끊는다(서비스에도 2차 가드 있음).
+        Object payloadStatus = payload.get("status");
+        if (payloadStatus != null && !"paid".equalsIgnoreCase(String.valueOf(payloadStatus))) {
+            log.info("[WEBHOOK] Ignored non-paid status={} | impUid={}, merchantUid={}", payloadStatus, impUid, merchantUid);
+            return ResponseEntity.ok(Map.of("status", "ignored", "reason", "status " + payloadStatus));
+        }
 
         // [적대적 리뷰 P1 · 웹훅 재시도 계약]
         //   기존 구현은 catch(Exception) 후 무조건 200 {status:ok}였다. PortOne V1은 **비200일 때만**

@@ -33,6 +33,8 @@ public class GlobalExceptionHandler {
             case WORLD_LOCATION_MISSING -> 500; // 서버 결함 (시드 누락)
             case PREMIUM_REQUIRED -> 402;
             case PERSONA_UNDERAGE -> 403;   // [블록 B] FE 프로필 나이 수정 제안 모달 트리거
+            case REFUND_CLAWBACK_FAILED -> 409;   // [D-4.3] 환불은 됐으나 혜택 회수 대상 없음 — 관리자에게 명시
+            case PAYMENT_DELIVERY_PENDING -> 409; // [안건 4] 결제 확정·지급 대기 — FE '지급 다시 시도' 트리거 (5xx 알람 축 분리)
             default -> 500;
         };
 

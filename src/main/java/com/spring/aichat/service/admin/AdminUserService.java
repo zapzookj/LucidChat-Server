@@ -68,7 +68,9 @@ public class AdminUserService {
         SubscriptionType tier = parseTier(tierName);
         // SubscriptionService 를 통해 UserSubscription(active) 을 함께 생성 —
         // 그래야 구독 만료 스케줄러(clearExpiredSubscriptionTiers)가 되돌리지 않는다.
-        subscriptionService.activateSubscription(user, tier, "ADMIN_GRANT_" + System.currentTimeMillis());
+        // [적대적 리뷰 P2] merchantUid=null = 관리자 지급 — 유료 회차 키를 덮지 않는다(덮으면 그 유료 회차 환불이 '과거 회차'로
+        //   거부됐다). 지급 사실은 아래 감사로그가 남긴다. null은 다운그레이드 거부도 면제한다.
+        subscriptionService.activateSubscription(user, tier, null);
         auditLogService.record(actor, "SUBSCRIPTION_GRANT", "USER", String.valueOf(userId),
             String.format("구독 %s 부여 (사유: %s)", tier.name(), reason));
         return AdminUserDetail.from(loadUser(userId));

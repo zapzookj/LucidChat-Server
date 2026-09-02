@@ -1,9 +1,11 @@
 package com.spring.aichat.domain.user;
 
 import com.spring.aichat.domain.enums.AuthProvider;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +18,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByCiHash(String ciHash);
 
     Optional<User> findByUsername(String username);
+
+    /**
+     * [D-4.5] 유저 행 비관적 쓰기 잠금 — 구독 활성화(read-then-write)의 유저 단위 직렬화용.
+     * 구독 행이 없는 유저는 잠글 구독 행이 없어 레이스가 남으므로, 항상 존재하는 User 행을 잠근다.
+     * 주문 단위 락(findByMerchantUidForUpdate)은 서로 다른 merchant_uid 2건을 직렬화하지 못한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> findByIdForUpdate(@Param("id") Long id);
     Optional<User> findByEmail(String email);
     Optional<User> findByProviderAndProviderId(AuthProvider provider, String providerId);
 

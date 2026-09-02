@@ -58,6 +58,37 @@ public class UndeliveredPaymentScheduler {
 
     /** 조회는 OrderRepository의 전용 쿼리 메서드를 쓴다 — 이 저장소에 EntityManager 직접 사용 선례가 없다. */
     private final com.spring.aichat.domain.payment.OrderRepository orderRepository;
+    /** [안건 4 · 적대적 리뷰 P1] 자동 재지급 진입점. */
+    private final com.spring.aichat.service.payment.PaymentService paymentService;
+
+    /** 자동 재지급 상한 — 결제 확정 후 이 시간이 지난 미지급은 로그만(운영 개입 대상). 15분 주기라 최대 ~96회. */
+    private static final int REDELIVER_WINDOW_HOURS = 24;
+
+    /**
+     * [안건 4 · 적대적 리뷰 P1] 스캔 C — PAID_UNDELIVERED 자동 재지급. 종전엔 유일한 자동 경로가 PortOne 웹훅
+     * 재시도(≤5회, 수 분)뿐이라 /confirm 시점의 순단(Redis·DB)이 같은 시각의 웹훅에서도 재현되면 예산이 소진된 뒤
+     * 영구 미지급이었고, 유저 문구는 '자동 재지급'을 약속했다. 이제 그 약속의 주체가 이 스캔이다.
+     * @Transactional을 걸지 않는다 — 재지급은 PaymentService가 TransactionTemplate으로 자기 TX를 연다
+     * (readOnly 외부 TX에 합류하면 쓰기가 죽는다).
+     */
+    @Scheduled(fixedRate = 15 * 60 * 1000, initialDelay = 5 * 60 * 1000)
+    public void redeliverUndelivered() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Order> rows = orderRepository.findUndelivered(now.minusMinutes(5), PageRequest.of(0, DETAIL_LIMIT));
+        if (rows.isEmpty()) return;
+        int ok = 0, failed = 0, aged = 0;
+        for (Order o : rows) {
+            if (o.getPaidAt() != null && o.getPaidAt().isBefore(now.minusHours(REDELIVER_WINDOW_HOURS))) {
+                aged++;
+                log.error("[UNDELIVERED] 자동 재지급 창({}h) 초과 — 운영 개입 필요: merchantUid={}, product={}, amount={}, paidAt={}, reason={}",
+                    REDELIVER_WINDOW_HOURS, o.getMerchantUid(), o.getProductType(), o.getAmount(), o.getPaidAt(), o.getFailedReason());
+                continue;
+            }
+            boolean delivered = paymentService.redeliver(o.getMerchantUid(), "SCHEDULER");
+            if (delivered) ok++; else failed++;
+        }
+        log.warn("[UNDELIVERED] 자동 재지급: 성공 {} · 실패(다음 주기) {} · 창 초과 {}", ok, failed, aged);
+    }
 
     /** 15분 주기. 기동 직후 5분은 건너뛴다(부팅 직후 DB/커넥션 풀 안정화 전 스캔 회피). */
     @Scheduled(fixedRate = 15 * 60 * 1000, initialDelay = 5 * 60 * 1000)
@@ -74,14 +105,17 @@ public class UndeliveredPaymentScheduler {
      * 전이하므로, 제외하지 않으면 정상 환불 건이 전부 오탐으로 올라온다.
      */
     private void scanImpUidWithoutDelivery() {
+        // [안건 4 (b)] PAID_UNDELIVERED는 이제 정상 경로가 남기는 '기록된 미지급'이다 — 트립와이어가 아니라 재지급 큐.
+        //   지급 TX가 막 진행 중인 직전 결제(수 초)를 오탐하지 않도록 5분 전 확정분만 본다.
         List<Order> rows = orderRepository.findImpUidWithoutDelivery(
-            PageRequest.of(0, DETAIL_LIMIT + 1));
+            LocalDateTime.now().minusMinutes(5), PageRequest.of(0, DETAIL_LIMIT + 1));
 
         if (rows.isEmpty()) return;
 
-        log.error("[UNDELIVERED] ★ imp_uid는 있으나 PAID/REFUNDED가 아닌 주문 {}건{} — "
-                + "결제는 성립했는데 지급도 환불도 안 된 상태다. 주문 상태 불변식 위반이므로 "
-                + "수동 DB 조작 또는 회귀를 의심하라.",
+        log.error("[UNDELIVERED] ★ 결제 확정(imp_uid)됐으나 지급이 안 된 주문 {}건{} — "
+                + "PAID_UNDELIVERED = 지급 실패가 기록된 주문(안건 4): /confirm 재호출·웹훅 재시도가 재지급하며, "
+                + "남아 있으면 관리자 재지급 또는 환불(RefundService는 미지급 주문을 회수 없이 취소한다). "
+                + "그 외 상태는 주문 상태 불변식 위반 — 수동 DB 조작 또는 회귀를 의심하라.",
             Math.min(rows.size(), DETAIL_LIMIT), rows.size() > DETAIL_LIMIT ? "+" : "");
 
         rows.stream().limit(DETAIL_LIMIT).forEach(o ->

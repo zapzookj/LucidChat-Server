@@ -12,8 +12,11 @@ import com.spring.aichat.dto.payment.*;
 import com.spring.aichat.exception.BusinessException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.external.PortOneClient;
+import com.spring.aichat.service.audit.AuditLogService;
 import com.spring.aichat.service.cache.RedisCacheService;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,6 +47,22 @@ public class PaymentService {
     private final RedisCacheService cacheService;
     private final SecretModeService secretModeService;
     private final SubscriptionService subscriptionService;
+    /**
+     * [안건 4 (b) · decisions_confirmed §A #4] 결제 확정(TX-A)과 재화 지급(TX-B)을 <b>별도 트랜잭션</b>으로 쪼개기 위한
+     * 템플릿. 종전 단일 @Transactional은 deliverProduct가 던지면 markPaid까지 롤백돼 '돈은 나갔는데 지급도 환불도
+     * 기록도 없는' PENDING 주문을 남겼다(웹훅 재시도까지 실패하면 30분 뒤 EXPIRED로 소멸).
+     */
+    private final TransactionTemplate txTemplate;
+    /** 지급 실패 감사로그(PAYMENT_UNDELIVERED) — 사고가 기록으로 남게. */
+    private final AuditLogService auditLogService;
+    /**
+     * [적대적 리뷰 P0 · OSIV] spring.jpa.open-in-view 기본값(true)이라 같은 HTTP 요청의 TX-A·TX-B가 EntityManager를
+     * 공유한다. TX-A에서 로드한 Order는 커밋 뒤에도 managed로 남고, TX-B의 {@code SELECT … FOR UPDATE}는 락은 잡지만
+     * 이미 managed인 인스턴스를 재수화 없이 돌려준다(영속성 컨텍스트 repeatable-read, Order에 @Version 없음).
+     * → 웹훅과 /confirm이 동시에 오면 두 번째 요청의 TX-B가 DB는 PAID인데 메모리의 PAID_UNDELIVERED를 보고
+     *   deliverProduct를 한 번 더 실행한다(에너지 2배·구독 2회 renew). 락 획득 직후 {@code refresh}로 DB 상태를 강제한다.
+     */
+    private final EntityManager entityManager;
 
     // ─────────────────────────────────────────────
     // Step 1: 사전 주문 생성
@@ -89,6 +108,9 @@ public class PaymentService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "target character ID required for secret unlock");
             }
+            // [안건 4 (c)] 지급 시점(createPermanentUnlock)에야 확인하던 캐릭터 실존을 결제 *전*에 확인 — 발생 창 축소.
+            //   자격(secretEligible)은 검사하지 않는다: 해금은 계정 단위(안건 8)라 현재 방 캐릭터의 자격과 무관하다.
+            secretModeService.assertTargetCharacterExists(request.targetCharacterId());
             // [적대적 리뷰 P1 · 안건 8 확정] 중복 구매 가드를 **계정 단위**로 맞춘다.
             //   접근 판정(canAccessSecretMode → hasAnyPermanentUnlock)은 이미 user-global인데
             //   이 가드만 캐릭터 단위라, 캐릭터 A로 영구해금을 산 유저가 캐릭터 B 방에서
@@ -107,6 +129,7 @@ public class PaymentService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                     "target character ID required for secret pass");
             }
+            secretModeService.assertTargetCharacterExists(request.targetCharacterId());   // [안건 4 (c)] 동형
             // [적대적 리뷰 P1 · 안건 8] 영구해금 동형 — 24h 패스도 접근 판정이 계정 단위다
             //   (hasAnyActive24hPass). 이미 접근이 열려 있는데 또 파는 것은 무가치 결제다.
             //   영구해금 보유자에게 24h 패스를 파는 것도 마찬가지로 막는다.
@@ -131,18 +154,25 @@ public class PaymentService {
     // Step 3a: 클라이언트 사후 검증 (/confirm)
     // ─────────────────────────────────────────────
 
-    @Transactional
+    /**
+     * [안건 4 (b)] TX-A(잠금·검증·결제 확정 커밋) → TX-B(지급). 메서드 자체는 트랜잭션이 아니다 —
+     * 확정이 커밋된 뒤에 지급이 실패해야 PAID_UNDELIVERED가 남는다. 검증 단계 예외는 종전처럼 롤백·전파.
+     */
     public PaymentResultResponse confirmPayment(String username, ConfirmPaymentRequest request) {
-        Order order = orderRepository.findByMerchantUidForUpdate(request.merchantUid())
-            .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND,
-                "Order not found: " + request.merchantUid()));
+        VerifyStep step = txTemplate.execute(tx -> {
+            Order order = orderRepository.findByMerchantUidForUpdate(request.merchantUid())
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND,
+                    "Order not found: " + request.merchantUid()));
 
-        if (!order.getUser().getUsername().equals(username)) {
-            log.warn("[PAYMENT] Ownership mismatch: uid={}, user={}", request.merchantUid(), username);
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Order ownership mismatch");
-        }
+            if (!order.getUser().getUsername().equals(username)) {
+                log.warn("[PAYMENT] Ownership mismatch: uid={}, user={}", request.merchantUid(), username);
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Order ownership mismatch");
+            }
 
-        return verifyAndDeliver(order, request.impUid(), "CLIENT");
+            return verifyAndMarkPaid(order, request.impUid(), "CLIENT");
+        });
+        if (step.terminal() != null) return step.terminal();
+        return deliverPaidOrder(request.merchantUid(), "CLIENT");
     }
 
     // ─────────────────────────────────────────────
@@ -213,51 +243,182 @@ public class PaymentService {
      *       주문은 PAID인데 재화는 없고, 재시도는 PAID 멱등 분기에 막혀 영구 미지급이 된다.</li>
      * </ul>
      */
-    @Transactional
     public WebhookOutcome processWebhook(String impUid, String merchantUid) {
-        Order order = orderRepository.findByMerchantUidForUpdate(merchantUid)
-            .orElse(null);
+        // [안건 4 (b)] TX-A — 잠금·검증·결제 확정 커밋. 확정 실패(markFailed)는 콜백 *안*에서 삼켜 값으로 돌려야
+        //   커밋된다(콜백 밖으로 예외가 나가면 TransactionTemplate이 롤백한다 — 종전 @Transactional에서 같은 클래스
+        //   내부 호출을 catch하던 것과 달리 여기서는 경계가 실제 TX 경계다).
+        WebhookStep a = txTemplate.execute(tx -> {
+            Order order = orderRepository.findByMerchantUidForUpdate(merchantUid)
+                .orElse(null);
 
-        if (order == null) {
-            // 재시도 무의미: 우리가 발급한 적 없는 merchant_uid는 다음 시도에도 없다.
-            log.warn("[WEBHOOK] Order not found: merchantUid={}, impUid={}", merchantUid, impUid);
-            return WebhookOutcome.ORDER_NOT_FOUND;
-        }
-
-        boolean alreadyPaidBefore = order.getStatus() == OrderStatus.PAID;
-
-        try {
-            verifyAndDeliver(order, impUid, "WEBHOOK");
-        } catch (RuntimeException e) {
-            if (isWebhookRetryable(e)) {
-                log.error("[WEBHOOK] RETRYABLE FAILURE — 5xx로 응답해 PortOne 재시도를 유도한다 | "
-                    + "uid={}, impUid={}, code={}", merchantUid, impUid, errorCodeOf(e), e);
-                throw e; // ★ 롤백까지 함께 필요하므로 값이 아니라 예외로 올린다.
+            if (order == null) {
+                // 재시도 무의미: 우리가 발급한 적 없는 merchant_uid는 다음 시도에도 없다.
+                log.warn("[WEBHOOK] Order not found: merchantUid={}, impUid={}", merchantUid, impUid);
+                return WebhookStep.settled(WebhookOutcome.ORDER_NOT_FOUND);
             }
-            if (e instanceof BusinessException be
-                && be.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PROCESSED) {
-                log.info("[WEBHOOK] Already processed (idempotent): uid={}", merchantUid);
-                return WebhookOutcome.ALREADY_PROCESSED;
-            }
-            // 확정 실패. markFailed() 기록을 커밋하기 위해 예외를 삼키고 값으로 종결한다.
-            log.error("[WEBHOOK] TERMINAL FAILURE — 재시도해도 결과가 같으므로 200으로 종결 | "
-                    + "uid={}, impUid={}, code={}, error={}",
-                merchantUid, impUid, errorCodeOf(e), e.getMessage());
-            return WebhookOutcome.NOT_DELIVERED;
-        }
 
-        if (alreadyPaidBefore) {
-            return WebhookOutcome.ALREADY_PROCESSED;
-        }
-        if (order.getStatus() != OrderStatus.PAID) {
-            // PortOne status != "paid" 경로 — verifyAndDeliver가 markFailed 후 *정상 반환*한다.
-            //   예외가 없으므로 위 catch에 걸리지 않는다. 여기서 별도로 걸러야 200 "ok"로
-            //   오보고되지 않는다.
-            log.warn("[WEBHOOK] Not delivered (PortOne status not paid): uid={}, orderStatus={}",
-                merchantUid, order.getStatus());
-            return WebhookOutcome.NOT_DELIVERED;
-        }
+            // PAID = 지급까지 완료. PAID_UNDELIVERED는 '이미'가 아니라 재지급 대상이라 여기 안 들어간다.
+            boolean alreadyPaidBefore = order.getStatus() == OrderStatus.PAID;
+            if (order.getStatus() == OrderStatus.REFUNDED || order.getStatus() == OrderStatus.FAILED) {
+                // [적대적 리뷰 P1] 환불·실패로 종결된 주문의 재시도/취소 웹훅 — PortOne 조회 없이 200 종결
+                log.info("[WEBHOOK] Already settled ({}) — ignored: uid={}", order.getStatus(), merchantUid);
+                return WebhookStep.settled(WebhookOutcome.ALREADY_PROCESSED);
+            }
+
+            VerifyStep v;
+            try {
+                v = verifyAndMarkPaid(order, impUid, "WEBHOOK");
+            } catch (RuntimeException e) {
+                if (isWebhookRetryable(e)) {
+                    log.error("[WEBHOOK] RETRYABLE FAILURE — 5xx로 응답해 PortOne 재시도를 유도한다 | "
+                        + "uid={}, impUid={}, code={}", merchantUid, impUid, errorCodeOf(e), e);
+                    throw e; // ★ 롤백까지 함께 필요하므로 값이 아니라 예외로 올린다.
+                }
+                if (e instanceof BusinessException be
+                    && be.getErrorCode() == ErrorCode.PAYMENT_ALREADY_PROCESSED) {
+                    log.info("[WEBHOOK] Already processed (idempotent): uid={}", merchantUid);
+                    return WebhookStep.settled(WebhookOutcome.ALREADY_PROCESSED);
+                }
+                // 확정 실패. markFailed() 기록을 커밋하기 위해 예외를 삼키고 값으로 종결한다.
+                log.error("[WEBHOOK] TERMINAL FAILURE — 재시도해도 결과가 같으므로 200으로 종결 | "
+                        + "uid={}, impUid={}, code={}, error={}",
+                    merchantUid, impUid, errorCodeOf(e), e.getMessage());
+                return WebhookStep.settled(WebhookOutcome.NOT_DELIVERED);
+            }
+
+            if (alreadyPaidBefore) {
+                return WebhookStep.settled(WebhookOutcome.ALREADY_PROCESSED);
+            }
+            if (v.terminal() != null) {
+                // PortOne status != "paid" 경로 — verifyAndMarkPaid가 markFailed 후 *정상 반환*한다.
+                //   예외가 없으므로 위 catch에 걸리지 않는다. 여기서 별도로 걸러야 200 "ok"로
+                //   오보고되지 않는다.
+                log.warn("[WEBHOOK] Not delivered (PortOne status not paid): uid={}, orderStatus={}",
+                    merchantUid, order.getStatus());
+                return WebhookStep.settled(WebhookOutcome.NOT_DELIVERED);
+            }
+            return WebhookStep.deliver();
+        });
+        if (a.outcome() != null) return a.outcome();
+
+        // TX-B — 지급. 실패하면 deliverPaidOrder가 PAID_UNDELIVERED를 기록한 뒤 DeliveryFailedException(INTERNAL_ERROR)을
+        //   던진다 → 컨트롤러 503 → PortOne 재시도 → 다음 웹훅은 PAID_UNDELIVERED를 보고 지급만 다시 시도한다.
+        deliverPaidOrder(merchantUid, "WEBHOOK");
         return WebhookOutcome.DELIVERED;
+    }
+
+    /** TX-A 결과 — outcome이 있으면 종결(200), null이면 TX-B(지급)로 진행. */
+    private record WebhookStep(WebhookOutcome outcome) {
+        static WebhookStep settled(WebhookOutcome outcome) { return new WebhookStep(outcome); }
+        static WebhookStep deliver() { return new WebhookStep(null); }
+    }
+
+    /** 검증 단계 결과 — terminal이 있으면 그대로 응답, null이면 지급 필요(방금 확정됐거나 PAID_UNDELIVERED 재시도). */
+    private record VerifyStep(PaymentResultResponse terminal) {
+        static VerifyStep terminal(PaymentResultResponse r) { return new VerifyStep(r); }
+        static VerifyStep deliver() { return new VerifyStep(null); }
+    }
+
+    /**
+     * [안건 4 (b)] 지급 실패 — 결제는 확정됐고(PAID_UNDELIVERED 커밋) 재화만 못 받았다.
+     * 웹훅 분류표에서 '재시도'(503 → PortOne 재시도)이고, /confirm에는 409 + {@code PAYMENT_DELIVERY_PENDING}으로 간다 —
+     * FE가 이 코드로 '결제 실패'가 아니라 '결제 완료 · 지급 대기'를 그리고 재시도 버튼(/confirm 재호출)을 보여야
+     * 유저가 재구매(이중 결제)하지 않는다(적대적 리뷰 P1). 자동 재시도는 {@code UndeliveredPaymentScheduler}가 15분마다 한다.
+     */
+    public static class DeliveryFailedException extends BusinessException {
+        public DeliveryFailedException(String merchantUid, Throwable cause) {
+            super(ErrorCode.PAYMENT_DELIVERY_PENDING,
+                "결제는 완료됐고 재화 지급이 지연되고 있어요. 자동으로 다시 지급을 시도하며, '지급 다시 시도'를 누르거나 "
+                    + "잠시 후 확인해 주세요. 계속 반영되지 않으면 고객센터로 문의해 주세요. (주문번호 " + merchantUid + ")", cause);
+        }
+    }
+
+    /**
+     * [적대적 리뷰 P1/P2] 재지급 — 스케줄러·관리자용 공개 진입점. PAID_UNDELIVERED면 지급만 다시 시도하고,
+     * 실패는 삼켜(failed_reason 갱신은 deliverPaidOrder가 함) false를 돌려준다. PAID/REFUNDED 등은 true(할 일 없음).
+     */
+    public boolean redeliver(String merchantUid, String caller) {
+        try {
+            deliverPaidOrder(merchantUid, caller);
+            return true;
+        } catch (DeliveryFailedException e) {
+            return false;
+        }
+    }
+
+    /**
+     * TX-B — 재화 지급. PAID_UNDELIVERED → deliverProduct → PAID. 동시 진입(웹훅+/confirm)은 행 잠금으로 직렬화되고
+     * 두 번째는 PAID를 보고 멱등 반환한다. 실패하면 TX-B는 통째로 롤백(부분 지급 없음)되고, TX-C가 사유·감사로그를
+     * 남긴 뒤 {@link DeliveryFailedException}을 던진다 — 상태는 PAID_UNDELIVERED 그대로라 재시도가 지급만 다시 한다.
+     */
+    private PaymentResultResponse deliverPaidOrder(String merchantUid, String caller) {
+        PaymentResultResponse result;
+        String username;
+        try {
+            record Delivered(PaymentResultResponse result, String username) {}
+            Delivered d = txTemplate.execute(tx -> {
+                Order order = orderRepository.findByMerchantUidForUpdate(merchantUid)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND, "Order not found: " + merchantUid));
+                // [P0 · OSIV] 락은 잡혔지만 인스턴스는 TX-A(같은 요청)의 것일 수 있다 — DB 상태로 강제 갱신
+                entityManager.refresh(order);
+                if (order.getStatus() == OrderStatus.PAID) {
+                    log.info("[PAYMENT:{}] Already delivered (concurrent): uid={}", caller, merchantUid);
+                    return new Delivered(buildResult(order, "Already processed"), null);
+                }
+                if (order.getStatus() == OrderStatus.REFUNDED) {
+                    // 지급 전에 관리자가 환불한 미지급 주문 — 재시도를 유도할 이유가 없다(예외면 503 루프)
+                    log.info("[PAYMENT:{}] Refunded before delivery — nothing to deliver: uid={}", caller, merchantUid);
+                    return new Delivered(buildResult(order, "Refunded before delivery"), null);
+                }
+                if (order.getStatus() != OrderStatus.PAID_UNDELIVERED) {
+                    throw new IllegalStateException("deliverPaidOrder on " + order.getStatus() + ": " + merchantUid);
+                }
+                deliverProduct(order);
+                order.markDelivered();
+                orderRepository.save(order);
+
+                log.info("[PAYMENT:{}] Confirmed: uid={}, product={}, amount={}",
+                    caller, order.getMerchantUid(), order.getProductType().name(), order.getAmount());
+                return new Delivered(buildResult(order, "Payment confirmed"), order.getUser().getUsername());
+            });
+            result = d.result();
+            username = d.username();
+        } catch (RuntimeException e) {
+            recordDeliveryFailure(merchantUid, caller, e);
+            throw new DeliveryFailedException(merchantUid, e);
+        }
+        // 캐시 무효화는 커밋 *뒤* — Redis 순단이 성공한 지급을 되돌리거나(롤백) 재지급을 유발하면 안 된다.
+        //   실패해도 표시 문제일 뿐(SceneRequestService의 같은 판단). 지급이 커밋된 뒤라 삼킨다.
+        if (username != null) {
+            try {
+                cacheService.evictUserProfile(username);
+            } catch (Exception e) {
+                log.warn("[PAYMENT:{}] 프로필 캐시 무효화 실패 (무해 — 지급은 커밋됨): uid={}, {}", caller, merchantUid, e.getMessage());
+            }
+        }
+        return result;
+    }
+
+    /** TX-C — 지급 실패 사유·감사로그. 이 기록마저 실패해도 상태(PAID_UNDELIVERED)는 이미 커밋돼 있으므로 로그로만 남긴다. */
+    private void recordDeliveryFailure(String merchantUid, String caller, RuntimeException cause) {
+        log.error("[PAYMENT:{}] DELIVERY FAILED — order left PAID_UNDELIVERED for retry | uid={}, error={}",
+            caller, merchantUid, cause.getMessage(), cause);
+        try {
+            txTemplate.executeWithoutResult(tx ->
+                orderRepository.findByMerchantUidForUpdate(merchantUid)
+                    .map(o -> { entityManager.refresh(o); return o; })   // [P0 · OSIV] TX-B 롤백 뒤 메모리 상태는 신뢰 불가
+                    .filter(o -> o.getStatus() == OrderStatus.PAID_UNDELIVERED)
+                    .ifPresent(o -> {
+                        o.recordDeliveryFailure(cause.getMessage());
+                        orderRepository.save(o);
+                        auditLogService.record("SYSTEM", "PAYMENT_UNDELIVERED", "ORDER", merchantUid,
+                            String.format("지급 실패 %s(%,d원) user=%s caller=%s — %s. 재시도 대기(PAID_UNDELIVERED)",
+                                o.getProductType().name(), o.getAmount(), o.getUser().getUsername(), caller,
+                                cause.getMessage()));
+                    }));
+        } catch (Exception recordErr) {
+            log.error("[PAYMENT:{}] failed to record delivery failure | uid={}", caller, merchantUid, recordErr);
+        }
     }
 
     /**
@@ -290,6 +451,8 @@ public class PaymentService {
     private static boolean isWebhookRetryable(RuntimeException e) {
         // ★ 순서 주의: PortOneLookupException은 BusinessException의 하위 타입이라 먼저 봐야 한다.
         if (e instanceof PortOneLookupException) return true;
+        // [안건 4] 지급 실패 = 결제는 확정, 재화만 미지급 → PortOne 재시도가 PAID_UNDELIVERED를 보고 지급만 다시 한다.
+        if (e instanceof DeliveryFailedException) return true;
         if (e instanceof BusinessException be) {
             return switch (be.getErrorCode()) {
                 case EXTERNAL_API_ERROR, INTERNAL_ERROR -> true;
@@ -309,11 +472,26 @@ public class PaymentService {
     // 공통 검증 + 지급 로직
     // ─────────────────────────────────────────────
 
-    private PaymentResultResponse verifyAndDeliver(Order order, String impUid, String caller) {
+    /**
+     * 검증 + 결제 확정(markPaid → PAID_UNDELIVERED). 지급은 하지 않는다 — 호출측 TX-A가 커밋한 뒤 TX-B가 지급한다.
+     * (종전 verifyAndDeliver에서 지급을 떼어 낸 것. 검증 분기·예외는 그대로다.)
+     */
+    private VerifyStep verifyAndMarkPaid(Order order, String impUid, String caller) {
 
         if (order.getStatus() == OrderStatus.PAID) {
             log.info("[PAYMENT:{}] Already PAID (idempotent): uid={}", caller, order.getMerchantUid());
-            return buildResult(order, "Already processed");
+            return VerifyStep.terminal(buildResult(order, "Already processed"));
+        }
+        if (order.getStatus() == OrderStatus.PAID_UNDELIVERED) {
+            // [안건 4 (b)] 결제는 이미 확정 — PortOne 재검증 없이 지급만 다시 시도한다
+            log.info("[PAYMENT:{}] PAID_UNDELIVERED — retrying delivery only: uid={}", caller, order.getMerchantUid());
+            return VerifyStep.deliver();
+        }
+        if (order.getStatus() == OrderStatus.REFUNDED || order.getStatus() == OrderStatus.FAILED) {
+            // [적대적 리뷰 P1] 종결 주문은 PortOne을 다시 보지 않는다 — 환불된 주문에 재시도·취소 웹훅이 오면
+            //   status='cancelled'를 받아 markFailed로 REFUNDED→FAILED를 덮어썼다(환불 합계·CS 이력 파손).
+            log.info("[PAYMENT:{}] Already settled ({}) — ignoring: uid={}", caller, order.getStatus(), order.getMerchantUid());
+            return VerifyStep.terminal(buildResult(order, "Already settled"));
         }
 
         // [C-2.l · docs/17_assets/defect_register.md §C-2.l · 선례 NiceApiClient.getAccessToken]
@@ -409,7 +587,7 @@ public class PaymentService {
             orderRepository.save(order);
             log.warn("[PAYMENT:{}] Not paid: uid={}, portOneStatus={}",
                 caller, order.getMerchantUid(), portOneStatus);
-            return buildResult(order, "Payment not completed");
+            return VerifyStep.terminal(buildResult(order, "Payment not completed"));
         }
 
         if (paidAmount != order.getAmount()) {
@@ -433,7 +611,7 @@ public class PaymentService {
         //   지급(deliverProduct) *전에* saveAndFlush 해서 제약 위반을 먼저 터뜨린다 — 커밋 시점
         //   flush였다면 이미 재화가 나간 뒤에 롤백이 걸린다(에너지·구독은 같은 TX라 함께 되돌아가지만
         //   Redis 캐시·외부 호출은 되돌릴 수단이 없다).
-        order.markPaid(impUid);
+        order.markPaid(impUid);   // → PAID_UNDELIVERED: 돈은 확정, 지급은 TX-B
         try {
             orderRepository.saveAndFlush(order);
         } catch (DataIntegrityViolationException e) {
@@ -442,14 +620,9 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
                 "impUid already consumed by another order: " + impUid);
         }
-        deliverProduct(order);
-        orderRepository.save(order);
-        cacheService.evictUserProfile(order.getUser().getUsername());
-
-        log.info("[PAYMENT:{}] Confirmed: uid={}, product={}, amount={}",
+        log.info("[PAYMENT:{}] Payment settled (awaiting delivery): uid={}, product={}, amount={}",
             caller, order.getMerchantUid(), order.getProductType().name(), order.getAmount());
-
-        return buildResult(order, "Payment confirmed");
+        return VerifyStep.deliver();
     }
 
     // ─────────────────────────────────────────────

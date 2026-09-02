@@ -262,6 +262,16 @@ public class SecretModeService {
     /**
      * 영구 해금 레코드 생성
      */
+    /**
+     * [안건 4 (c)] 결제 착수(prepareOrder) 시점의 대상 캐릭터 실존 확인 — 지급 시점(activate24hPass /
+     * createPermanentUnlock)에야 NOT_FOUND가 나던 것을 돈이 나가기 전으로 당긴다. 자격은 보지 않는다(해금은 계정 단위).
+     */
+    public void assertTargetCharacterExists(Long characterId) {
+        if (characterId == null || !characterRepository.existsById(characterId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "Character not found: " + characterId);
+        }
+    }
+
     public void createPermanentUnlock(User user, Long characterId, String merchantUid) {
         if (hasPermanentUnlock(user.getId(), characterId)) {
             log.warn("[SECRET] Already unlocked: userId={}, charId={}", user.getId(), characterId);
@@ -293,23 +303,36 @@ public class SecretModeService {
 
     /** 24h 패스 회수 — RDB 레코드 삭제 + Redis 캐시 무효화. */
     @Transactional
-    public void revoke24hPassByMerchantUid(String merchantUid) {
-        secretPassRepository.findByMerchantUid(merchantUid).ifPresent(pass -> {
+    /**
+     * @return 회수 대상이 있어 실제로 회수했으면 true. [D-4.3] 종전 {@code ifPresent}는 미발견을 무성으로 삼켜
+     *         '돈은 돌려주고 혜택은 남는' 상태를 감사로그 "환불 완료" 밑에 숨겼다 — RefundService가 false를 승격한다.
+     */
+    public boolean revoke24hPassByMerchantUid(String merchantUid) {
+        return secretPassRepository.findByMerchantUid(merchantUid).map(pass -> {
             Long userId = pass.getUser().getId();
             Long charId = pass.getCharacter().getId();
             secretPassRepository.delete(pass);
             cacheService.evict(buildPassCacheKey(userId, charId));
             log.info("[SECRET] 24h pass revoked (refund): merchantUid={}, userId={}, charId={}",
                 merchantUid, userId, charId);
+            return true;
+        }).orElseGet(() -> {
+            log.error("[SECRET] 24h pass clawback target NOT FOUND: merchantUid={}", merchantUid);
+            return false;
         });
     }
 
     /** 영구 해금 회수 — RDB 레코드 삭제. */
     @Transactional
-    public void revokePermanentUnlockByMerchantUid(String merchantUid) {
-        secretUnlockRepository.findByMerchantUid(merchantUid).ifPresent(unlock -> {
+    /** @return 회수 대상이 있어 실제로 회수했으면 true ([D-4.3] — 위 24h 패스와 동일 계약). */
+    public boolean revokePermanentUnlockByMerchantUid(String merchantUid) {
+        return secretUnlockRepository.findByMerchantUid(merchantUid).map(unlock -> {
             secretUnlockRepository.delete(unlock);
             log.info("[SECRET] Permanent unlock revoked (refund): merchantUid={}", merchantUid);
+            return true;
+        }).orElseGet(() -> {
+            log.error("[SECRET] Permanent unlock clawback target NOT FOUND: merchantUid={}", merchantUid);
+            return false;
         });
     }
 
@@ -321,9 +344,9 @@ public class SecretModeService {
      * 미드나잇 패스 구독 여부
      */
     private boolean hasMidnightPass(Long userId) {
-        return subscriptionRepository.findByUser_IdAndActiveTrue(userId)
-            .map(sub -> sub.getType() == SubscriptionType.LUCID_MIDNIGHT_PASS && !sub.isExpired())
-            .orElse(false);
+        // [D-4.5] List 조회 — 활성 2행이어도 500 대신 '하나라도 미드나잇이면 통과'로 degrade
+        return subscriptionRepository.findByUser_IdAndActiveTrueOrderByExpiresAtDesc(userId).stream()
+            .anyMatch(sub -> sub.getType() == SubscriptionType.LUCID_MIDNIGHT_PASS && !sub.isExpired());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

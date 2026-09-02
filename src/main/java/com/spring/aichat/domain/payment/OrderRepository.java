@@ -55,8 +55,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * 빼지 않으면 정상 환불 건이 전부 오탐으로 올라온다.
      */
     @Query("SELECT o FROM Order o WHERE o.impUid IS NOT NULL "
-        + "AND o.status NOT IN ('PAID', 'REFUNDED') ORDER BY o.createdAt DESC")
-    List<Order> findImpUidWithoutDelivery(org.springframework.data.domain.Pageable pageable);
+        + "AND o.status NOT IN ('PAID', 'REFUNDED') AND o.paidAt < :settledBefore ORDER BY o.createdAt DESC")
+    List<Order> findImpUidWithoutDelivery(@Param("settledBefore") LocalDateTime settledBefore,
+                                          org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * [안건 4 (b)] 지급 실패 주문 — 관리자 재지급 큐·감시 스케줄러용. paidAt 기준 정렬(오래된 미지급이 먼저).
+     * {@code settledBefore}로 '지급 TX가 아직 진행 중인' 직전 결제(ms~초)를 거른다.
+     */
+    @Query("SELECT o FROM Order o WHERE o.status = 'PAID_UNDELIVERED' AND o.paidAt < :settledBefore ORDER BY o.paidAt ASC")
+    List<Order> findUndelivered(@Param("settledBefore") LocalDateTime settledBefore,
+                                org.springframework.data.domain.Pageable pageable);
 
     /**
      * 검증 실패로 FAILED 확정됐지만 PortOne 쪽에는 실제 결제가 존재하는 주문.
@@ -72,13 +81,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                           org.springframework.data.domain.Pageable pageable);
 
     // [Phase 6] 매출 집계 (paidAt 기준). status 문자열 리터럴은 기존 JPQL 관례를 따름.
-    @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status = 'PAID' AND o.paidAt >= :from AND o.paidAt < :to")
+    //   [안건 4 · 적대적 리뷰 P3] 매출 = '확정된 돈' 기준 — PAID_UNDELIVERED도 paidAt이 찍힌 확정 결제이므로 포함.
+    //   빼면 그 주문의 환불은 환불액에 잡혀 순매출(paid - refunded)이 그만큼 음수로 기운다.
+    @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status IN ('PAID', 'PAID_UNDELIVERED') AND o.paidAt >= :from AND o.paidAt < :to")
     long sumPaidBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("SELECT COALESCE(SUM(o.amount), 0) FROM Order o WHERE o.status = 'REFUNDED' AND o.paidAt >= :from AND o.paidAt < :to")
     long sumRefundedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     @Query("SELECT o.productType, COUNT(o), COALESCE(SUM(o.amount), 0) FROM Order o " +
-        "WHERE o.status = 'PAID' AND o.paidAt >= :from AND o.paidAt < :to GROUP BY o.productType")
+        "WHERE o.status IN ('PAID', 'PAID_UNDELIVERED') AND o.paidAt >= :from AND o.paidAt < :to GROUP BY o.productType")
     List<Object[]> revenueByProductBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }
