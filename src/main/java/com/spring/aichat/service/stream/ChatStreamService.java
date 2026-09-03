@@ -121,6 +121,19 @@ public class ChatStreamService {
     // [Phase 5.5-Fix-IT] 속마음 히스토리 포함 윈도우 — 최근 N개 ASSISTANT 메시지에만 속마음 포함
     private static final int INNER_THOUGHT_HISTORY_WINDOW = 3;
 
+    /**
+     * [E-5.1.b] {@code eventContext} 길이 상한.
+     *
+     * <p>이 값은 SYSTEM 롤 로그로 <b>영구</b> 저장되고 이후 <b>매 턴</b> role="system"으로 재주입되며
+     * (:1348), 유저가 지울 수도 없다({@code ChatService:409-411}). 상한이 없으면 임의 길이 텍스트가
+     * 방의 모든 후속 턴에 부착돼 토큰 비용이 무한 증폭된다.
+     *
+     * <p>레지스터 수정안은 300을 제안했으나 <b>500</b>으로 잡는다 — 300은 정상 분기 카드 문구를
+     * 자를 수 있다는 지적이 있었고, 프로드 나레이션 길이 분포(Mongo)를 아직 실측하지 못했다.
+     * 절단이 실제로 일어나면 아래 WARN이 남으므로 그 빈도를 보고 조이거나 풀 것.
+     */
+    private static final int EVENT_CONTEXT_MAX = 500;
+
     /** [Phase 5.5-EV] SYSTEM_DIRECTOR 프롬프트 (지켜보기 시 LLM에 주입) */
     private static final String SYSTEM_DIRECTOR_PROMPT = """
         [SYSTEM_DIRECTOR] 유저는 아직 개입하지 않고 상황을 숨죽여 지켜보고 있습니다.
@@ -1099,6 +1112,21 @@ public class ChatStreamService {
     }
 
     /**
+     * [E-5.1.b] {@code eventContext} 길이 상한 적용.
+     *
+     * <p>400으로 <b>거부하지 않고</b> 절단 + WARN으로 둔다 — 이 값은 서버가 발급한 분기 오퍼에서
+     * 오는 것이 정상이라 상한에 걸리는 것 자체가 비정상 경로이고, 여기서 거부하면 서버가 긴
+     * 나레이션을 생성한 날 정상 유저가 통째로 막힌다(CLAUDE.md §D — 착취를 막기 전에 정상 유저를
+     * 막는가를 먼저 묻는다). 절단은 은폐가 아니다: 로그가 남고 그 빈도가 상한 재조정의 근거가 된다.
+     */
+    private String capEventContext(Long roomId, String raw) {
+        if (raw == null || raw.length() <= EVENT_CONTEXT_MAX) return raw;
+        log.warn("✂️ [EVENT-CTX] 길이 상한 초과 — 절단 | roomId={} | {}자 → {}자",
+            roomId, raw.length(), EVENT_CONTEXT_MAX);
+        return raw.substring(0, EVENT_CONTEXT_MAX);
+    }
+
+    /**
      * [D-6.5 · D-6.4] 지켜보기·시간넘기기·자동응답(AWAY/BRANCH) 3경로의 ASSISTANT 저장.
      *
      * <p>종전에는 {@code chatLogRepository.save}를 직접 부르고 예외를 삼켰다. 같은 클래스가
@@ -1434,6 +1462,16 @@ public class ChatStreamService {
         boolean isAway = "AWAY".equalsIgnoreCase(directiveType);
         boolean isBranchResponse = "BRANCH".equalsIgnoreCase(directiveType);
 
+        // [E-5.1.b] eventContext는 클라이언트가 완전히 제어하는 문자열인데(StoryController:99
+        //   AutoRespondRequest — 검증 애노테이션 0개) SYSTEM 롤 로그로 영구 저장되고 매 턴
+        //   role="system"으로 재주입된다(:1348). PromptInjectionGuard가 "채팅은 user role이라
+        //   위험도가 낮다"는 전제로 감지만 하도록 설계됐는데(:183-188) 이 경로는 그 전제가
+        //   성립하지 않는다. 게다가 유저가 SYSTEM 로그를 지울 수도 없다(ChatService:409-411).
+        //   ⚠ 파라미터는 TX-1 람다가 캡처하므로(setDirectorInterlude) 재대입할 수 없다 —
+        //     진입부에서 정제한 별도 지역변수를 만들어 **모든 소비처**를 그것으로 바꾼다.
+        //     람다 안의 setDirectorInterlude도 LLM에 흘러가므로 반드시 포함해야 한다.
+        final String safeEventContext = capEventContext(roomId, eventContext);
+
         // [D-2.g] ★ 이 경로가 가장 비싸다 — BRANCH 이벤트 카드는 최대 4E다.
         //   종전 최외곽 catch에는 보상이 전혀 없어, 차감 후 TX-2 전에 예외가 나면 4E가 통째로
         //   소멸하는데 프론트는 환불된 것처럼 보였다. 상세는 sendMessageStream의 같은 선언 주석.
@@ -1467,9 +1505,9 @@ public class ChatStreamService {
                 }
 
                 // [Bug Fix] BRANCH 카드 선택 시: constraint로 detail 적용
-                if (isBranchResponse && eventContext != null && !eventContext.isBlank()) {
-                    room.setDirectorInterlude(eventContext,
-                        "상황: " + eventContext + " — 이 상황에 자연스럽게 반응하세요.");
+                if (isBranchResponse && safeEventContext != null && !safeEventContext.isBlank()) {
+                    room.setDirectorInterlude(safeEventContext,
+                        "상황: " + safeEventContext + " — 이 상황에 자연스럽게 반응하세요.");
                 }
 
                 long logCount = chatLogRepository.countByRoomId(roomId);
@@ -1480,12 +1518,29 @@ public class ChatStreamService {
             rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
+            // [E-5.1.b] 인젝션 감지·적재. sendMessageStream(:222)과 같은 '감지 + 기록' 정책을 쓴다.
+            //   ⚠ 레지스터는 "이 경로는 SYSTEM 롤이라 CRITICAL이면 **차단**해야 한다"고 권고하면서도
+            //     오탐 시 UX 손상을 이유로 ❓결정 필요로 남겼다. 차단은 새 거부면이라 종원 판단
+            //     전까지 넣지 않는다 — 우선 적재해 실제 감지율을 관측한다.
+            //     (안건 13 (나) 'hiddenSystem 복귀'도 같은 묶음의 미확정 항목이다.)
+            if (isBranchResponse && safeEventContext != null && !safeEventContext.isBlank()) {
+                PromptInjectionGuard.InjectionCheckResult evtInj =
+                    injectionGuard.checkChatMessage(safeEventContext, jpa.username());
+                if (evtInj.detected()) {
+                    log.warn("⚠️ [INJECTION] eventContext 감지 | severity={} | roomId={} | user={}",
+                        evtInj.severity(), roomId, jpa.username());
+                    moderationEventService.recordInjection(
+                        jpa.userId(), jpa.username(), roomId, "EVENT",
+                        evtInj.severity().name(), evtInj.matchedPattern(), safeEventContext);
+                }
+            }
+
             // ── MongoDB: 숨겨진 시스템 메시지 저장 (LLM 컨텍스트용) ──
             String systemMessage;
             if (isAway) {
                 systemMessage = "[SYSTEM_DIRECTOR] 유저가 자리를 비웠습니다. 캐릭터는 혼자(또는 NPC와) 행동합니다.";
-            } else if (isBranchResponse && eventContext != null) {
-                systemMessage = "[NARRATION] " + eventContext;
+            } else if (isBranchResponse && safeEventContext != null) {
+                systemMessage = "[NARRATION] " + safeEventContext;
             } else {
                 systemMessage = "[SYSTEM_DIRECTOR] 상황이 발생했습니다. 캐릭터는 자연스럽게 반응합니다.";
             }
@@ -1495,9 +1550,9 @@ public class ChatStreamService {
                 // [Bug Fix A] BRANCH 나레이션은 visible로 저장 (새로고침 시 히스토리에 표시)
                 // AWAY/INTERLUDE/TRANSITION은 hidden (LLM 컨텍스트 전용)
                 ChatLogDocument savedLog;
-                if (isBranchResponse && eventContext != null) {
+                if (isBranchResponse && safeEventContext != null) {
                     savedLog = chatLogRepository.save(
-                        ChatLogDocument.system(roomId, eventContext));
+                        ChatLogDocument.system(roomId, safeEventContext));
                 } else {
                     savedLog = chatLogRepository.save(
                         ChatLogDocument.hiddenSystem(roomId, systemMessage));
