@@ -318,8 +318,14 @@ public class TheaterCommandClassifier {
 
         CommandVerdict verdict;
         try {
-            verdict = CommandVerdict.valueOf(verdictStr.trim());
+            // [E-4.3] 대소문자·공백 정규화 — LLM이 "allowed_other"처럼 돌려주면 valueOf가 터지고
+            //   그 턴이 통째로 REJECTED_UNCLEAR가 된다(정상 명령어를 거부).
+            verdict = CommandVerdict.valueOf(verdictStr.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
+            // [E-4.3] 파싱 실패를 반드시 남긴다 — 안 남기면 '진짜 거부'와 '응답 형식 오류'가
+            //   REJECTED_UNCLEAR 한 값으로 뭉개져, 아래에서 약속한 '거부 분포로 오탐률 관측'이
+            //   원리적으로 불가능해진다.
+            log.warn("🎬 [COMMAND-CLF] verdict 파싱 실패 → REJECTED_UNCLEAR | raw='{}'", verdictStr);
             verdict = CommandVerdict.REJECTED_UNCLEAR;
         }
         // [E-4.3] 바로 위에서 판정한 verdict를 버리고 ALLOWED_OTHER를 하드코딩하고 있었다 —

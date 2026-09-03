@@ -111,7 +111,9 @@ public class TheaterIntermissionService {
             User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
             user.consumeEnergy(ChatModePolicy.INTERMISSION_EXTRA_ENERGY_COST);
-            // [INT-3] 차감 즉시 프로필 캐시 무효화 — 없으면 /users/me가 차감 전 잔량을 돌려준다.
+            // [INT-3] 차감 직후 프로필 캐시 evict — 다른 20개 소비 지점과 관례를 맞춘다.
+            //   ⚠ 현재는 없어도 관측 증상이 없다(UserService:53 overlayFreshEnergy · D-21이
+            //   캐시 HIT에도 에너지를 DB 실값으로 덮는다). 그 오버레이 제거 시 필요해진다.
             cacheService.evictUserProfile(username);
         } else {
             state.consumeIntermissionStamina();

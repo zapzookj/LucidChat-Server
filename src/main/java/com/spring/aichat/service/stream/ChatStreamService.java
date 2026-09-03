@@ -404,7 +404,7 @@ public class ChatStreamService {
                     log.info("🛡️ [BG-GUARD] Same dynamic location (canonical_key) — transition suppressed | curKey={} | roomId={}",
                         jpa.room().getCurrentDynamicCanonicalKey(), roomId);
                 } else {
-                    String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    String timeOfDay = resolveBgTimeOfDay(jpa.room(), parsed.lastTime()); // [E-4.16b]
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
                     // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
@@ -726,7 +726,7 @@ public class ChatStreamService {
                     log.info("🛡️ [BG-GUARD] TimeSkip same dynamic location (canonical_key) — transition suppressed | curKey={} | roomId={}",
                         jpa.room().getCurrentDynamicCanonicalKey(), roomId);
                 } else {
-                    String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    String timeOfDay = resolveBgTimeOfDay(jpa.room(), parsed.lastTime()); // [E-4.16b]
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
                     // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
@@ -1495,7 +1495,7 @@ public class ChatStreamService {
             if (parsed.newLocationName() != null && !parsed.newLocationName().isBlank()) {
                 if (jpa.room().getCurrentDynamicLocationName() == null
                     || !isSameDynamicLocation(jpa.room(), parsed)) {
-                    String timeOfDay = parsed.lastTime() != null ? parsed.lastTime() : "DAY";
+                    String timeOfDay = resolveBgTimeOfDay(jpa.room(), parsed.lastTime()); // [E-4.16b]
                     final String canonicalKey = parsedCanonicalKey(parsed);
                     final World world = resolveWorldOrNull(jpa.room());
                     // [블록 B 리뷰픽스 P1] 배경 트랙도 게이트 경유 — raw 플래그는 자격 소실
@@ -1596,6 +1596,37 @@ public class ChatStreamService {
      * 응답에 실어 보냄 → 프론트가 매번 전환 컴포넌트를 띄움. canonical_key 기준으로
      * 비교하면 의미가 같은 장소를 정확히 인식하여 전환 응답 자체를 생략할 수 있다.
      */
+    /**
+     * [E-4.16b] 배경 캐시 해시의 <b>timeOfDay 축</b>을 '방에 실제로 남는 값'과 일치시킨다.
+     *
+     * <p>종전에는 세 배경 블록이 모두 {@code parsed.lastTime() != null ? parsed.lastTime() : "DAY"}로
+     * 해시했다. 그런데 {@link ChatRoom#updateSceneState}는 timeOfDay가 <b>null이거나 enum에 없는 값이면
+     * 방을 갱신하지 않는다</b>(:645 try/catch). 신규 방 기본값은 {@code NIGHT}(:349)다.
+     * 즉 LLM이 {@code time}을 생략한 턴에는 <b>캐시 행이 DAY로 구워지고 방에는 NIGHT가 남아</b>,
+     * {@code ChatService}의 백필 조회({@code room.getCurrentTimeOfDay()} 기준)가 영구히 빗나갔다.
+     * E-4.16이 canonicalKey 축을 맞췄어도 이 축이 어긋나면 '새로고침 후 배경 미표시'는 그대로다.
+     *
+     * <p>수용 규칙을 {@code updateSceneState}와 <b>정확히 같게</b> 맞춘다 — 거기서 받아들여지지 않는
+     * 값(대소문자 불일치 포함)은 방에 남지 않으므로 캐시 키에도 쓰면 안 된다. 규칙이 갈리면
+     * 종류만 바뀐 같은 버그가 된다.
+     *
+     * <p>{@code room}은 배경 블록이 쓰는 {@code jpa.room()}(TX 이전 스냅샷)이다. LLM이 값을 안 줬거나
+     * 잘못 준 경우 방은 갱신되지 않으므로, 이 스냅샷의 값이 곧 <b>영속될 값</b>과 같다.
+     *
+     * <p>V2(ChatStreamServiceV2)는 {@code mapDayPartToTimeOfDay(room.getCurrentDayPart())}로 방에서
+     * 파생하므로 애초에 이 어긋남이 없다 — V1 전용 결함이다.
+     */
+    private static String resolveBgTimeOfDay(ChatRoom room, String parsedTime) {
+        if (parsedTime != null) {
+            try {
+                return com.spring.aichat.domain.enums.TimeOfDay.valueOf(parsedTime).name();
+            } catch (IllegalArgumentException ignored) {
+                // updateSceneState도 이 값을 버린다 → 방의 현재 값이 그대로 남는다
+            }
+        }
+        return room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "DAY";
+    }
+
     private boolean isSameDynamicLocation(ChatRoom room, ParsedLlmResult parsed) {
         String curKey = room.getCurrentDynamicCanonicalKey();
         String inKey  = parsedCanonicalKey(parsed);

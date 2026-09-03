@@ -144,9 +144,12 @@ public class TheaterService {
             //   전까지 같은 batchId를 계속 반환하므로, 배치를 받은 뒤 새로고침·재진입 한 번이면
             //   B-5.1의 무조건 과금이 같은 배치에 1E를 또 물린다 — 착취를 막다 정상 유저를 친
             //   회귀다(CLAUDE.md §D). 워터마크가 이미 판별 정보를 들고 있으므로 새 상태가 필요 없다.
-            //   착취면은 그대로 닫혀 있다: **미지불** 배치는 HIT든 MISS든 여전히 과금된다.
+            //   **미지불** 배치는 HIT든 MISS든 여전히 과금된다.
             //   면제를 HIT에 한정하는 이유 — MISS는 실제 LLM 재생성이라 면제하면
             //   난입(invalidateBatchesFrom)으로 캐시를 비우고 무한 무료 리롤을 돌릴 수 있다.
+            //   ★ 이 면제는 prefetch의 워터마크 가드(:214)와 **짝**이다 — 그 가드가 없으면
+            //     prefetch가 지불된 배치 N을 새 LLM 롤로 덮어쓰고(D-5.1/5.2의 키 어긋남),
+            //     여기서 0E로 내주게 되어 무료 리롤이 열린다. 한쪽만 지우지 마라.
             //   잔여(극장 사용량 0이라 보류): 지불한 배치를 소비하기 전에 난입하거나 BATCH_TTL(6h)이
             //   지나면 MISS로 떨어져 한 번 더 과금된다. 그 경우는 실제 LLM 비용이 발생한다.
             Integer paidWatermark = state.getLastPaidBatchId();
@@ -211,7 +214,30 @@ public class TheaterService {
                 return CompletableFuture.completedFuture(null);
             }
 
+            // ★ [INT-1 짝 가드] 이미 지불한 배치 위에는 절대 생성하지 않는다.
+            //   TheaterBatchGenerator는 putBatch(roomId, state.getCurrentBatchId()) = **N**에 쓰는데
+            //   (:318), 바로 아래 중복 가드는 existsBatch(roomId, N+1)을 본다 — 키가 어긋나 있다(D-5.1/5.2).
+            //   putBatch는 NX가 아니라 무조건 SET이므로(TheaterBatchCacheService:152) 이 메서드가
+            //   성공하면 **이미 1E를 지불한 배치 N을 새 LLM 롤로 덮어쓴다**. 거기에 INT-1의
+            //   '지불한 배치는 재과금 생략'이 붙으면 유저는 그 새 배치를 0E로 받아 간다 =
+            //   무료 리롤. FE가 재생 70%에서 triggerPrefetch를 자동 발사하므로(useTheaterStream.js:136)
+            //   '70%까지 보고 새로고침' 반복만으로 돌아간다.
+            //   현재는 D-5.6(이 메서드가 @Async인데 @Transactional이 없어 detached LAZY 역참조로
+            //   100% 실패)이 우연히 막고 있을 뿐이다 — 그 우연에 과금 정합을 걸어 두지 않는다.
+            //   ⚠ 이 가드가 들어가면 prefetch는 사실상 상시 no-op이 되지만 **잃는 것이 없다**:
+            //     N+1 키는 어떤 경로로도 생기지 않아 지연 단축 효과가 원래 0이었다.
+            //   근본 수정(저장 키를 N+1로)은 requestNextBatch·onBatchConsumed의 조회 키까지
+            //   전수로 흔들므로 별도 커밋으로 미룬다(D-5.1/5.2).
+            Integer paidWatermark = state.getLastPaidBatchId();
+            if (paidWatermark != null && state.getCurrentBatchId() <= paidWatermark) {
+                log.debug("🎭 [PREFETCH] Skipped — 지불된 배치 덮어쓰기 방지 | roomId={} | current={} | watermark={}",
+                    roomId, state.getCurrentBatchId(), paidWatermark);
+                return CompletableFuture.completedFuture(null);
+            }
+
             int nextBatchId = state.getCurrentBatchId() + 1;
+            // ⚠ 이 키는 어떤 경로로도 생성되지 않는다 — 생성기는 N에 쓴다(D-5.1/5.2). 위 워터마크
+            //   가드가 실질 방어이고, 이 줄은 근본 수정 후에 의미를 갖는다.
             if (batchCache.existsBatch(roomId, nextBatchId)) {
                 log.debug("🎭 [PREFETCH] Already cached | roomId={} | nextBatchId={}", roomId, nextBatchId);
                 return CompletableFuture.completedFuture(null);
@@ -562,8 +588,10 @@ public class TheaterService {
             .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다: " + username));
         int cost = ChatMode.THEATER.getBaseCost();
         user.consumeEnergy(cost);
-        // [INT-3] 차감 즉시 프로필 캐시를 떨군다 — 안 하면 /users/me가 차감 전 잔량을 돌려줘
-        //   유저 화면의 에너지가 실제보다 많게 표시된다(다른 20개 소비 지점은 전부 이렇게 한다).
+        // [INT-3] 차감 직후 프로필 캐시 evict — 다른 20개 소비 지점과 관례를 맞춘다.
+        //   ⚠ 현재는 이게 없어도 관측 증상이 없다: UserService:53의 overlayFreshEnergy(D-21)가
+        //   캐시 HIT에도 에너지 4필드를 매 호출 DB 실값으로 덮기 때문이다. 그 오버레이를
+        //   걷어내는 날에 필요해지므로 넣어 둔다 — '없으면 지금 당장 깨진다'는 뜻이 아니다.
         cacheService.evictUserProfile(username);
     }
 }
