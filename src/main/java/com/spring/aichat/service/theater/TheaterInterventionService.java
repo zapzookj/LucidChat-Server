@@ -34,10 +34,12 @@ import java.util.UUID;
  * Theater 감상 흐름을 일시 중단하고 유저가 직접 아바타로 대화한 뒤 복귀.
  *
  * [토큰 관리]
- * 난입 토큰은 Theater 모듈 내부에서 Redis로 직접 관리 (외부 RedisCacheService 의존 없음).
+ * 난입 토큰은 Theater 모듈 내부에서 Redis로 <b>직접</b> 관리한다(StringRedisTemplate).
+ * <sub>[INT-3] 프로필 캐시 무효화 목적으로 RedisCacheService를 주입하지만, 토큰 관리는
+ * 종전대로 이 클래스가 직접 한다 — 두 용도를 섞지 않는다.</sub>
  *
  * [에너지]
- * User 엔티티의 consumeEnergy() 직접 호출.
+ * User 엔티티의 consumeEnergy() 직접 호출 + 차감 직후 프로필 캐시 evict.
  */
 @Slf4j
 @Service
@@ -51,6 +53,8 @@ public class TheaterInterventionService {
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    // [INT-3] 에너지 차감 후 /users/me 프로필 캐시 무효화 (극장 축 누락분).
+    private final com.spring.aichat.service.cache.RedisCacheService cacheService;
 
     private static final String INT_TOKEN_KEY = "theater:intervention:token:";
     private static final Duration TOKEN_TTL = Duration.ofHours(1);
@@ -72,6 +76,8 @@ public class TheaterInterventionService {
         User user = userRepository.findByUsername(username)
             .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
         user.consumeEnergy(ChatModePolicy.INTERVENTION_ENERGY_COST);
+        // [INT-3] 차감 즉시 프로필 캐시 무효화 — 없으면 /users/me가 차감 전 잔량을 돌려준다.
+        cacheService.evictUserProfile(username);
 
         // 체크포인트
         Map<String, Object> checkpoint = new HashMap<>();

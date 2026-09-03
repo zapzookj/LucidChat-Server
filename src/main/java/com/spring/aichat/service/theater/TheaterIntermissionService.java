@@ -43,6 +43,8 @@ public class TheaterIntermissionService {
     private final TheaterHeroineAffectionRepository affectionRepository;
     private final TheaterDirectorNoteRepository directorNoteRepository;
     private final UserRepository userRepository;
+    // [INT-3] 에너지 차감 후 /users/me 프로필 캐시 무효화 (극장 축 누락분).
+    private final com.spring.aichat.service.cache.RedisCacheService cacheService;
 
     private final Random random = new Random();
 
@@ -109,6 +111,8 @@ public class TheaterIntermissionService {
             User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
             user.consumeEnergy(ChatModePolicy.INTERMISSION_EXTRA_ENERGY_COST);
+            // [INT-3] 차감 즉시 프로필 캐시 무효화 — 없으면 /users/me가 차감 전 잔량을 돌려준다.
+            cacheService.evictUserProfile(username);
         } else {
             state.consumeIntermissionStamina();
         }

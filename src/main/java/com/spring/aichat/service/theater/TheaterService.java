@@ -50,6 +50,8 @@ public class TheaterService {
     private final TheaterBatchCacheService batchCache;
     private final TheaterDirectorEngine directorEngine;
     private final UserRepository userRepository;
+    // [INT-3] 에너지 차감 후 /users/me 프로필 캐시 무효화 — 극장 축만 이 관례에서 빠져 있었다.
+    private final com.spring.aichat.service.cache.RedisCacheService cacheService;
     /**
      * [적대적 리뷰 P1-1 / P1-4] LOCATION 선행 술어 + 미확정 분기 가드의 단일 소유자.
      * 이 술어를 여기와 로비와 분기 오퍼가 각자 들고 있던 것이 P1-1의 원인이었다.
@@ -136,13 +138,28 @@ public class TheaterService {
         Optional<SceneBatch> cached = batchCache.getBatch(roomId, batchId);
         if (cached.isPresent()) {
             log.info("🎭 [THEATER] Batch cache HIT | roomId={} | batchId={}", roomId, batchId);
-            // [B-5.1] 캐시 HIT도 반드시 과금한다 — 전용 prefetch가 미리 데워 둔 배치를
+            // [B-5.1] 캐시 HIT도 과금한다 — 전용 prefetch가 미리 데워 둔 배치를
             //   유저가 실제로 '받아 가는' 지점이 여기이기 때문이다.
-            chargeBatchEnergy(username);
-            // [B-5.2] 과금 워터마크 전진. 차감 **직후**에 둔다 — 같은 트랜잭션이므로
-            //   에너지 부족(InsufficientEnergyException)이면 여기까지 오지 못하고,
-            //   이후 어떤 실패로 롤백되면 차감과 워터마크가 함께 되돌아간다.
-            state.markBatchPaid(batchId);
+            // [INT-1] ★ 단 **이미 지불한 배치**는 제외한다. /next-batch는 소비(/batch-consumed)
+            //   전까지 같은 batchId를 계속 반환하므로, 배치를 받은 뒤 새로고침·재진입 한 번이면
+            //   B-5.1의 무조건 과금이 같은 배치에 1E를 또 물린다 — 착취를 막다 정상 유저를 친
+            //   회귀다(CLAUDE.md §D). 워터마크가 이미 판별 정보를 들고 있으므로 새 상태가 필요 없다.
+            //   착취면은 그대로 닫혀 있다: **미지불** 배치는 HIT든 MISS든 여전히 과금된다.
+            //   면제를 HIT에 한정하는 이유 — MISS는 실제 LLM 재생성이라 면제하면
+            //   난입(invalidateBatchesFrom)으로 캐시를 비우고 무한 무료 리롤을 돌릴 수 있다.
+            //   잔여(극장 사용량 0이라 보류): 지불한 배치를 소비하기 전에 난입하거나 BATCH_TTL(6h)이
+            //   지나면 MISS로 떨어져 한 번 더 과금된다. 그 경우는 실제 LLM 비용이 발생한다.
+            Integer paidWatermark = state.getLastPaidBatchId();
+            if (paidWatermark == null || batchId > paidWatermark) {
+                chargeBatchEnergy(username);
+                // [B-5.2] 과금 워터마크 전진. 차감 **직후**에 둔다 — 같은 트랜잭션이므로
+                //   에너지 부족(InsufficientEnergyException)이면 여기까지 오지 못하고,
+                //   이후 어떤 실패로 롤백되면 차감과 워터마크가 함께 되돌아간다.
+                state.markBatchPaid(batchId);
+            } else {
+                log.info("🎭 [THEATER] Batch already paid — 재과금 생략 | roomId={} | batchId={} | watermark={}",
+                    roomId, batchId, paidWatermark);
+            }
             return cached.get();
         }
 
@@ -545,5 +562,8 @@ public class TheaterService {
             .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다: " + username));
         int cost = ChatMode.THEATER.getBaseCost();
         user.consumeEnergy(cost);
+        // [INT-3] 차감 즉시 프로필 캐시를 떨군다 — 안 하면 /users/me가 차감 전 잔량을 돌려줘
+        //   유저 화면의 에너지가 실제보다 많게 표시된다(다른 20개 소비 지점은 전부 이렇게 한다).
+        cacheService.evictUserProfile(username);
     }
 }

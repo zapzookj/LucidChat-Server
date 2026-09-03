@@ -88,6 +88,8 @@ public class TheaterBranchService {
      * 복붙으로 두면 다음 수정 때 또 어긋난다.
      */
     private final TheaterProgressGateService gateService;
+    // [INT-3] 에너지 차감 후 /users/me 프로필 캐시 무효화 (극장 축 누락분).
+    private final com.spring.aichat.service.cache.RedisCacheService cacheService;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 장소 선택 분기 (LOCATION)
@@ -624,6 +626,8 @@ public class TheaterBranchService {
             User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new NotFoundException("유저를 찾을 수 없습니다."));
             user.consumeEnergy(energyCost);
+            // [INT-3] 차감 즉시 프로필 캐시 무효화 — 없으면 /users/me가 차감 전 잔량을 돌려준다.
+            cacheService.evictUserProfile(username);
         }
 
         // [버그픽스 B-4.d] 컨텍스트도 서버 원본(오퍼 발급 시 배치 branchSignal에서 확정)만 쓴다.
