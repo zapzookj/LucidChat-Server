@@ -271,7 +271,12 @@ public class ChatService {
                 String dynamicLocationName = room.getCurrentDynamicLocationName();
                 if (dynamicLocationName != null && !dynamicLocationName.isBlank() && dynamicBgUrl == null) {
                     String timeOfDay = room.getCurrentTimeOfDay() != null ? room.getCurrentTimeOfDay().name() : "DAY";
-                    String cacheHash = com.spring.aichat.domain.illustration.BackgroundCache.computeHash(dynamicLocationName, timeOfDay);
+                    // [E-4.16] 캐시 행은 BackgroundCache.create가 canonicalKey로 해시한다(:154).
+                    //   여기서 구 2-인자 폼(canonicalKey=null → locationName 직해싱)을 쓰면 키가 어긋나
+                    //   조회가 항상 빗나가고 → 새로고침 후 동적 배경이 영구 미표시가 된다.
+                    //   방에 canonicalKey가 없는 구 방은 3-인자 폼의 폴백이 종전과 같은 해시를 만든다.
+                    String cacheHash = com.spring.aichat.domain.illustration.BackgroundCache.computeHash(
+                        room.getCurrentDynamicCanonicalKey(), timeOfDay, dynamicLocationName);
                     dynamicBgUrl = backgroundCacheRepository.findByCacheHash(cacheHash)
                         .map(cache -> {
                             // ChatRoom에도 캐싱하여 다음 조회 시 DB 히트 방지

@@ -112,14 +112,11 @@ public class BackgroundCache {
         return sha256(normalize(source) + "_" + normalize(timeOfDay));
     }
 
-    /**
-     * 구버전 호환 — locationName + timeOfDay 직해싱.
-     * 신규 코드에서는 사용 금지. 호출 전부 신 시그니처로 이행 권장.
-     */
-    @Deprecated
-    public static String computeHash(String locationName, String timeOfDay) {
-        return computeHash(null, timeOfDay, locationName);
-    }
+    // [E-4.16 · CLAUDE.md §2-6] 구버전 2-인자 오버로드를 제거했다.
+    //   유일한 호출부였던 ChatService의 배경 백필이 canonicalKey를 빠뜨려 캐시 조회가
+    //   100% 빗나가고 있었다. 오버로드를 남기면 같은 실수가 조용히 재발한다 —
+    //   지워야 컴파일러가 호출부를 전수로 드러낸다. canonicalKey가 없는 구 데이터는
+    //   3-인자 폼의 fallbackLocationName 폴백이 종전과 동일한 해시를 만든다.
 
     private static String sha256(String raw) {
         try {
