@@ -7223,7 +7223,7 @@ case SYSTEM -> messages.add(
 );
 ```
 
-⑤ 영구성: ChatService.java:409-411 `if (doc.getRole() == ChatRole.SYSTEM) throw ... "시스템 메시지는 삭제할 수 없습니다."` — 유저가 지울 수도 없다.
+⑤ 영구성: ChatService.java의 SYSTEM 삭제 가드 `if (doc.getRole() == ChatRole.SYSTEM) throw ... "시스템 메시지는 삭제할 수 없습니다."` — 유저가 지울 수도 없다. <sub>⟳2026-09-04: 원 표기 `:409-411`은 실측 **:415**로 드리프트했다. 이 좌표가 코드 주석으로 그대로 옮겨가 재발했으므로 **심볼 참조로 교체**한다 — 라인 번호는 편집마다 밀린다.</sub>
 
 ⑥ 설계 전제 붕괴: PromptInjectionGuard.java:184-188 주석 — "채팅 메시지는 user role로 전달되므로 system prompt보다 위험도가 낮다. 차단하면 UX가 크게 저하되므로, 감지 + 로깅만 수행." 이 경로는 user role이 아니라 **system role**이라 그 전제가 성립하지 않는다.
 
