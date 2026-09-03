@@ -102,6 +102,29 @@ public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument,
         return findByRoomIdAndHiddenNot(roomId, true, pageable);
     }
 
+    /**
+     * [안건 16 (b) · E-1.8a/8b] hidden 제외 로그 수 — 씬 일러 {@code turnIndex}의 좌표계.
+     *
+     * <p>{@link #countByRoomId}(hidden <b>포함</b>)로 turnIndex를 매기고 있었는데, 프론트가
+     * 그것과 맞붙이는 {@code ChatLogResponse.ordinal}은 {@link #findByRoomIdAndHiddenFalse}
+     * 기준(hidden <b>제외</b>)이었다. 축이 다르니 디렉터·시간넘기기·이벤트를 쓴 방일수록
+     * turnIndex가 부풀어 ① K-윈도우 복원 판정({@code lastTurnIndex >= logTotal - K})이
+     * 항상 참이 되어 오래된 씬이 재입장마다 풀블리드로 부활하고, ② 히스토리→씬 점프(goToTurn)가
+     * 엉뚱한 씬으로 간다. 저장 축을 ordinal과 같게 맞추면 프론트는 코드 변경 없이 정상화된다.
+     *
+     * <p>{@code HiddenNot(true)} = {@code {$ne: true}} — hidden 필드가 없는 구 문서도 포함해
+     * 위 페이지네이션 질의와 정확히 같은 모집단을 센다.
+     * Covered by: idx_room_created
+     */
+    long countByRoomIdAndHiddenNot(Long roomId, boolean hidden);
+
+    /**
+     * [안건 16 (b) · E-4.7] 방의 최신 <b>가시</b> 로그 — '씬당 1회' 게이트의 시각 기준점.
+     * hidden 로그를 기준으로 삼으면 유저가 못 본 SYSTEM_DIRECTOR 주입만으로 게이트가 풀린다.
+     * Covered by: idx_room_created
+     */
+    Optional<ChatLogDocument> findTop1ByRoomIdAndHiddenNotOrderByCreatedAtDesc(Long roomId, boolean hidden);
+
     // [Phase 6] 품질 대시보드 — 평가/사유 집계 (idx_rating_created 활용)
     Page<ChatLogDocument> findByRatingOrderByCreatedAtDesc(String rating, Pageable pageable);
 

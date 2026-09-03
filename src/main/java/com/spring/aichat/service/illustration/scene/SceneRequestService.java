@@ -73,16 +73,34 @@ public class SceneRequestService {
         boolean ready = renderService.ready();
         Boolean alreadyDrawn = null;
         if (ready && roomId != null) {
-            int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
-            alreadyDrawn = manualAlreadyDrawn(roomId, turnIndex);
+            alreadyDrawn = manualAlreadyDrawn(roomId);
         }
         return new SceneAvailability(ready, props.energyCostOrDefault(), alreadyDrawn);
     }
 
-    /** [2026-08-07 씬당 1회] 같은 턴의 비-FAILED 수동 렌더 존재 — 서버 권위 판정의 단일 지점. */
-    private boolean manualAlreadyDrawn(Long roomId, int turnIndex) {
-        return illustrationRepository.existsByChatRoomIdAndTurnIndexAndTriggerSourceAndStatusNot(
-            roomId, turnIndex, "MANUAL", "FAILED");
+    /**
+     * [2026-08-07 씬당 1회 · 안건 16 (b)로 좌표계 비의존화] 현재 장면에서 이미 수동 씬을
+     * 소비했는가 — 서버 권위 판정의 단일 지점.
+     *
+     * <p>판정: <b>이 방의 최신 가시 로그보다 나중에 만들어진</b> MANUAL 비-FAILED 렌더가 있는가.
+     * 종전에는 {@code turnIndex}(= 로그 개수)를 키로 삼았는데, V2 리셋이 로그를 전부 지우면
+     * 턴 좌표가 0부터 다시 세어지는 반면 씬 일러는 갤러리 보존 정책상 남아, 새 회차가 이전
+     * 회차의 행에 걸려 5E 구매가 409로 오차단됐다(E-4.7).
+     *
+     * <p>로그가 0건이면(리셋 직후·신규 방) 비교 기준이 없다 → <b>개방</b>한다. 여기서 막으면
+     * 리셋 직후가 정확히 그 상태라 종류만 바뀐 같은 버그가 된다.
+     *
+     * <p>대화가 이어지면 최신 로그가 렌더보다 새로워져 자연 해제되는 성질은 종전과 같다.
+     * 로그 영속이 비동기라 렌더보다 늦게 착지하면 게이트가 한 번 더 열릴 수 있는데,
+     * 이 게이트는 <b>유료 구매의 상한</b>이지 손실 방지 장치가 아니므로 그 방향의 오차는
+     * 유저를 세우지 않는다(반대로 잠그면 5E를 못 쓴다).
+     */
+    private boolean manualAlreadyDrawn(Long roomId) {
+        return chatLogRepository.findTop1ByRoomIdAndHiddenNotOrderByCreatedAtDesc(roomId, true)
+            .map(lastLog -> illustrationRepository
+                .existsByChatRoomIdAndTriggerSourceAndStatusNotAndCreatedAtAfter(
+                    roomId, "MANUAL", "FAILED", lastLog.getCreatedAt()))
+            .orElse(false);
     }
 
     public SceneRenderService.SceneView requestManual(String username, Long roomId) {
@@ -121,12 +139,15 @@ public class SceneRequestService {
 
             boolean sfw = !resolveSecretMode(room);
             int cost = props.energyCostOrDefault();
-            int turnIndex = (int) chatLogRepository.countByRoomId(roomId);
+            // [안건 16 (b) · E-1.8a/8b] turnIndex는 프론트의 ChatLogResponse.ordinal과 같은 축이어야
+            //   한다 — ordinal은 hidden 제외 기준이므로 여기도 hidden 제외로 센다.
+            //   (종전 countByRoomId는 hidden 포함이라 디렉터·시간넘기기·이벤트를 쓴 방에서 축이 어긋났다.)
+            int turnIndex = (int) chatLogRepository.countByRoomIdAndHiddenNot(roomId, true);
 
-            // ── [2026-08-07 씬당 1회] 같은 턴(새 로그 없음)의 수동 재요청 차단 — 차감 전 ──
-            // FAILED(자동 환불 완료)는 제외 — 실패 재시도 허용. 대화가 진행돼 로그가 쌓이면
-            // turnIndex가 달라져 자연 해제. 종원 확정: 한 장면당 1회 생성.
-            if (manualAlreadyDrawn(roomId, turnIndex)) {
+            // ── [2026-08-07 씬당 1회] 같은 장면의 수동 재요청 차단 — 차감 전 ──
+            // FAILED(자동 환불 완료)는 제외 — 실패 재시도 허용. 대화가 이어지면 최신 로그가
+            // 렌더보다 새로워져 자연 해제. 종원 확정: 한 장면당 1회 생성.
+            if (manualAlreadyDrawn(roomId)) {
                 throw new BusinessException(ErrorCode.CONFLICT,
                     "이 장면은 이미 그렸어요. 대화를 이어간 뒤 다시 요청해 주세요.");
             }
