@@ -40,6 +40,7 @@ public class UgcCharacterService {
     private final UgcWorldRepository ugcWorldRepository; // [세계관 빌더] 연결 검증·이름 해석
     private final UgcVlmPrefilterService vlmPrefilterService; // [P0 PoC-5] 공개 신청 이미지 자문 스캔
     private final UgcRoutineGenerationService routineGenerationService; // [P2 STORY 개방 1단] 루틴 자동생성
+    private final UgcModerationService moderationService; // [E-5.2.a] 텍스트 수정 경로 하드 키워드 게이트
 
     // ── 공개 심사 경로 ──
 
@@ -107,6 +108,12 @@ public class UgcCharacterService {
         UgcTextLimits.requireMax(req.tagline(), UgcTextLimits.TAGLINE_MAX, "한 줄 소개");
         UgcTextLimits.requireMax(req.tone(), UgcTextLimits.TONE_MAX, "말투");
 
+        // [E-5.2.a] 하드 키워드 게이트가 이 수정 경로에만 없었다 — 생성 4곳
+        // (CharacterCreationService:133/135/273/391)과 페르소나 2곳(UserPersonaService:187/189)에는
+        // 전부 있다. 게이트가 없으면 심사를 통과시킨 뒤 personality/firstGreeting을 갈아끼워
+        // 생성 게이트를 통과한 적 없는 문장을 프롬프트에 넣을 수 있다.
+        assertChangedTextsAllowed(character, req);
+
         boolean revertedToReview = character.updateUgcTexts(
             req.name(), req.tagline(), req.personality(), req.tone(), req.firstGreeting());
         // [안건 20 (A) · decisions_confirmed §B #20] 승인 후 심사 대상 필드 수정 → PENDING_PUBLIC 자동 회귀.
@@ -118,6 +125,40 @@ public class UgcCharacterService {
         // [2026-07-31 난이도] 무료 편집 — 무효값·null은 유지(NORMAL도 명시값)
         var difficulty = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(req.difficulty());
         if (difficulty != null) character.updateDifficulty(difficulty);
+    }
+
+    /**
+     * [E-5.2.a] '변경된 값만' 하드 키워드 검사.
+     *
+     * <p>★ 5필드를 통째로 검사하면 안 된다. {@code StudioPage.jsx:586-603}이 editForm을 기존 값으로
+     * 프리필해 5필드를 항상 함께 PATCH하는데, personality·tone·firstGreeting은 Stage 0 LLM 산출물이라
+     * {@link UgcModerationService#assertRawConceptAllowed}를 통과한 적이 없다(생성 시 검사되는 것은
+     * 유저 원문과 구조화 산출의 minorSignal·age뿐이다). 따라서 기존 문장에 '중학생 때부터 알던
+     * 소꿉친구' 같은 표현이 하나만 있어도 그 캐릭터는 이름 한 글자조차 못 고치는 <b>영구 편집 불가</b>
+     * 상태가 되고, 400 문구는 어느 필드가 문제인지도 알려주지 않는다 — 착취를 막으려다 정상 유저를
+     * 세우는 전형이다(CLAUDE.md §D).
+     *
+     * <p>판정 규칙은 {@link Character#updateUgcTexts}와 동일하게 맞춘다(비-null · 비-blank ·
+     * 현재값과 상이). 규칙이 갈리면 '검사는 통과했는데 저장은 안 되는'(또는 그 반대) 비대칭이 생긴다.
+     * tagline의 blank=삭제는 검사 대상이 아니다 — 지우는 데 키워드 검사가 필요 없다.
+     *
+     * <p>실측(2026-09-03 프로드): 기존 UGC 15건의 personality/tone/first_greeting/tagline에
+     * 하드 키워드 0건 — 지금 잠기는 캐릭터는 없다. 다만 LLM 산출 텍스트는 구조적으로 이 게이트
+     * 밖이므로 델타 검사가 아니면 언제든 재발한다.
+     */
+    private void assertChangedTextsAllowed(Character character, UgcDtos.UpdateTextsRequest req) {
+        assertIfChanged(req.name(), character.getName());
+        assertIfChanged(req.tagline(), character.getTagline());
+        assertIfChanged(req.personality(), character.getPersonality());
+        assertIfChanged(req.tone(), character.getTone());
+        assertIfChanged(req.firstGreeting(), character.getFirstGreeting());
+    }
+
+    /** 값이 실제로 바뀔 때만 원문 게이트를 태운다. 규칙은 Character.updateUgcTexts와 1:1. */
+    private void assertIfChanged(String next, String current) {
+        if (next == null || next.isBlank()) return;
+        if (next.equals(current)) return;
+        moderationService.assertRawConceptAllowed(next);
     }
 
     // ── [세계관 빌더] 세계관 연결/변경 (에셋 무관 — 무료, 카드 메뉴 소급 연결) ──
