@@ -49,9 +49,27 @@ grep -c "legacy.get" src/main/java/.../AchievementService.java
 
 ## 2. 이 저장소 고유의 함정
 
+### 2-0. ★ prod의 `ddl-auto`는 `validate`가 아니라 **`update`다** (2026-09-03 실측 정정)
+
+`application-prod.yml:24`는 `ddl-auto: validate`라고 적혀 있지만, Vultr `.env`의
+`SPRING_JPA_HIBERNATE_DDL_AUTO=update`가 compose `env_file`로 주입돼 **그 값을 덮는다.**
+실행 중인 컨테이너에서 실측한 결과다:
+
+```bash
+ssh -i ~/.ssh/lucid_deploy root@141.164.37.146 \
+  "docker exec lucid-app printenv | grep DDL_AUTO"   # → SPRING_JPA_HIBERNATE_DDL_AUTO=update
+```
+
+이게 바꾸는 것:
+
+- **스키마 안전망이 없다.** validate라면 엔티티↔스키마 불일치가 부팅에서 잡히지만, update는 **조용히 ALTER한다.** 엔티티에 필드를 하나 추가하면 Flyway 없이도 프로드 컬럼이 생긴다 — §2-1이 말하는 "V2/Theater 테이블이 Hibernate로 생성됐다"가 과거형이 아니라 **현재도 그렇다**는 뜻이다.
+- 반대로 **마이그레이션 누락이 배포를 죽이지 않는다.** V32~V35처럼 컬럼이 빠져도 Hibernate가 만들어 부팅은 된다 — 그래서 "부팅했으니 스키마가 맞다"는 판정이 성립하지 않는다.
+- **§2-7의 CHECK 함정은 그대로다.** update도 **기존 CHECK를 갱신하지 않는다.** 이유만 바뀌었지 결론은 같다.
+- yml만 보고 `validate`라고 단정하지 마라. **환경변수가 최종 권위다.**
+
 ### 2-1. Flyway — 컬럼을 엔티티에서 떼기 전에 NOT NULL을 먼저 풀어라
 
-- prod는 `ddl-auto: validate`(`application-prod.yml`). validate는 **매핑되지 않은 잉여 컬럼을 문제 삼지 않으므로** 엔티티 필드만 떼도 부팅은 된다.
+- <s>prod는 `ddl-auto: validate`</s> → **§2-0 참조: 실제로는 `update`다.** 어느 쪽이든 **매핑되지 않은 잉여 컬럼을 문제 삼지 않으므로** 엔티티 필드만 떼도 부팅은 된다(아래 논리는 그대로 유효).
 - 그러나 **NOT NULL + DEFAULT 없음** 컬럼은 필드를 떼는 순간 신규 INSERT가 NOT NULL 위반으로 죽는다.
 - V2/Theater 계열 테이블 상당수가 **Flyway가 아니라 Hibernate `ddl-auto=update`로 생성**됐다(`chat_room_heroines` 등). 즉 DEFAULT가 없다.
 - **선행 마이그레이션으로 `DROP NOT NULL`만 먼저 하고, 실제 `DROP COLUMN`은 다음 릴리즈로 미룬다**(롤백 여지). 선례: `V26__drop_bpm_not_null.sql`.
@@ -91,7 +109,7 @@ Hibernate 6.2+(Boot 3.4.2 = Hibernate 6.6)는 `@Enumerated(EnumType.STRING)` 컬
 
 - 즉 enum에 값을 추가하면 **컴파일 통과·부팅 성공·테스트 녹색인 채로** 신규 값 저장만 런타임에 죽는다(`PSQLException: ... _check 제약 조건을 위반`). 2026-08-29에 `Location` 5종 추가(안건 11 (a))가 정확히 이렇게 터졌다 — 해당 캐릭터의 **모든 응답이 500**. 수정: `V31__chat_rooms_location_check_sync.sql`.
 - **"Flyway에 CREATE TABLE 이력이 없다 = CHECK가 없다"는 오판이다.** Hibernate가 만든 테이블일수록 CHECK가 붙어 있다. 반드시 실측하라.
-- prod는 `validate` — **validate는 CHECK를 검증하지 않는다.** 배포해도 경고 하나 없이 런타임에만 재현된다.
+- prod는 **`update`다(§2-0 — yml의 `validate`는 환경변수에 덮인다)**. `update`도 **기존 CHECK를 갱신하지 않고**, 애초에 CHECK를 검증하지도 않는다. 배포해도 경고 하나 없이 런타임에만 재현된다 — validate였을 때와 결론이 같다.
 
 ```bash
 # 실측: 특정 컬럼의 CHECK 제약 정의

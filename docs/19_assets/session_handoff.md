@@ -151,3 +151,77 @@ FE 자기 치유(`ErrorCode.UNPAID_BATCH` → `loadNextBatch()` 1회 재시도)�
 - 안건 미착수: 16(씬 일러 좌표계) · 18(승급 히스테리시스, V36~) · 11 후속(동적 배경 일원화) · 9-A′(V2 STORY 나이 게이트) · 9-E(age 백필 — **null 유예 유지**로 결정)
 - FE 보조: D-3.4 ③ 낙관 잠금(StudioCreateFlow) · 신규 400 6종 문구 노출은 확인됨(조용히 멈추는 곳 없음)
 - 종원 결정 대기: **안건 17-①**(극장 리롤 — 추천 세션당 3회 상한) · **17-②**(§C#6 경계 명문화) · 다운그레이드 '거부'(이번 구현) vs '경고 후 허용'
+
+---
+
+## H. 2026-09-03 세션 — 배포 + 버그픽스 3차 (배치 2 완료 · 배치 1 착수)
+
+> 읽는 순서는 그대로: 이 문서 → [`../19_Register_Rejudgment.md`](../19_Register_Rejudgment.md) → [`decisions_confirmed.md`](decisions_confirmed.md).
+> **착수 계획 정본: [`round3_plan.md`](round3_plan.md) · 배포 절차: [`round3_preflight.md`](round3_preflight.md)**
+
+### H-0. ★★ 배포 완료 — 3리포 master = origin = 프로드 동기
+
+§G의 미푸시 9커밋(BE 7 · FE 1 · Admin 1)을 **푸시 순서 FE → Admin → BE**로 배포했다.
+Flyway가 V32~V35를 순서대로 적용(72ms) · `Started AichatApplication in 25.824s` · **부팅 후 ERROR 0건**.
+
+배포 후 실측 전량 통과: `flyway v35` · `orders_status_check` **6값**(PAID_UNDELIVERED 포함) ·
+`uq_sub_user_active` 존재 · 구독 스냅샷 4컬럼 · V32 에너지 분할 8컬럼 · 음수 에너지 0건.
+
+롤백 좌표: 이미지 `sha256:e082a46…` + **`lucid-rollback:pre-v32-v35` 태그를 프로드에 박아 뒀다**
+(`deploy.sh`가 성공 시 `docker image prune -f`로 구 이미지를 지우기 때문). 백업 1회 수행(R2).
+
+### H-1. ★★★ 프로드 실측 — 계획의 전제를 바꾼 3가지
+
+| # | 실측 | 함의 |
+|---|---|---|
+| 1 | **`ddl-auto`가 `validate`가 아니라 `update`** — `.env`의 `SPRING_JPA_HIBERNATE_DDL_AUTO=update`가 yml을 덮는다(컨테이너 `printenv`로 확정) | **스키마 안전망이 없다.** Hibernate가 프로드 스키마를 조용히 ALTER한다. "부팅했으니 스키마가 맞다"가 성립하지 않는다. CLAUDE.md **§2-0 신설**로 정정 |
+| 2 | **실사용이 거의 없다** — `orders` 0 · `theater_states` **0** · `user_illustrations` 0 · 활성 구독 2 · users 10 · 7일 내 활동 유저 **1명**. 라이브 축은 SANDBOX 24방 · STORY 6방 · UGC 월드 6 · 씬 일러 9 | 극장 축(D-5.x · E-4.4 · INT-1/2 · B-6.1) 실피해 **현재 0**. 우선순위는 SANDBOX/STORY/UGC/씬일러로 이동 |
+| 3 | **`PORTONE_WEBHOOK_SECRET`이 `.env`에 키 자체가 없다** — `PaymentController:201-208`이 prod fail-closed | **결제 웹훅이 1차 배포분부터 전량 막혀 있다.** `orders` 0건이라 아직 무해하나 **런칭 전 필수 주입**(PortOne 콘솔 값 ↔ 종원 작업). `MODELSLAB_WEBHOOK_SECRET`은 키는 있고 값이 빈 문자열 → 현재 fail-open |
+
+부수 확정:
+- **D-5.6(극장 prefetch 전량 실패)을 코드로 확정**했다 — `prefetchNextBatchAsync`가 `@Async`인데 `@Transactional`이 없고, `theaterPrefetchExecutor`에 `TaskDecorator`가 없으며(코드베이스 전체 0건), `open-in-view=true`(프로드 부팅 로그가 재확인)라 async 스레드에는 세션이 없다. `decideNextSpeakerHeroine`이 **모든 경로에서** detached 엔티티의 LAZY `character`를 역참조한다. → **계획서 §6-1 ①(프로드 로그 grep)은 불필요**해졌다(극장 플레이 0건이라 애초에 로그도 없다). 배치 4는 노브 1줄로 확정.
+- **9-A′ 불변식 성립 확인** — `story_available=true`인 UGC 6건이 **전부** `ugc_world_id`를 갖고, 공식 월드에 붙은 UGC 5건은 전부 `story_available=false`. 【C】 무회귀.
+
+### H-2. 이번 세션이 닫은 것 (8건 · 6커밋)
+
+| 커밋 | 결함 | 축 |
+|---|---|---|
+| `07ae9da` | **E-4.16** 동적 배경 캐시 키 정합 — `ChatService:274`가 `@Deprecated` 2인자 폼(canonicalKey 누락)을 쓰는 유일 호출부였다. 오버로드 제거(§2-6) | 🔴 SANDBOX 24방 |
+| `81adb50` | **E-5.2.a** UGC 텍스트 수정 경로 하드 키워드 게이트 — **변경된 값만** 검사 | 🔴 UGC |
+| `a734815` | **INT-1**(캐시 HIT 재과금 — 1차 B-5.1 회귀) · **INT-3**(evict 누락 극장 4서비스) · **E-4.3**(분류기 verdict 폐기) | ⚪ 극장 |
+| `271b9b3` + Admin `0278fef` | **E-6.4** 어드민 UGC 공개 철회 배선 — BE 엔드포인트는 완비돼 있었고 DTO에 `source`·`visibility`가 없어 SPA가 대상을 못 가렸다 | 🔴 운영 |
+| `3dbac03` | **안건 16 (b)** = **E-4.7**(리셋 후 5E 구매 409 오차단) + **E-1.8a/8b**(turnIndex↔ordinal 축 불일치). 게이트를 시각 기준 비의존 판정으로, 저장 축을 hidden 제외로. 마이그레이션 불요, **FE 변경 0** | 🔴 씬 일러 |
+| FE `51a2dd1` | **E-1.2 · E-1.2b** 토큰 갱신 뮤텍스 일원화(`refreshLock.js` 신설) — axios/SSE 별개 뮤텍스 경합에 의한 **전 기기 강제 로그아웃**, V2 STORY의 갱신 **100% 실패**(httpOnly 쿠키인데 localStorage를 읽었다) | 🔴 전 유저 |
+
+### H-3. ★ 계획서(`round3_plan.md`)를 4곳 정정했다
+
+1. **INT-3는 2곳이 아니라 4곳** — `consumeEnergy` 전수 grep으로 극장 4서비스가 통째로 evict를 안 함을 확인.
+2. **E-4.16의 "`updateDynamicBackground`도 3인자로"는 불필요** — 2인자 폼은 `:547` 주석대로 canonicalKey를 의도적으로 보존한다.
+3. **E-4.3의 "UNCLEAR는 통과시켜라"는 채택하지 않았다** — 거부 비용이 0E(차감 안 함)이고, LLM 호출 실패 경로가 이미 거부하므로 봐주면 새 비대칭이 생긴다. 근거를 코드 주석에 남겼다.
+4. **안건 16은 FE 변경이 필요 없다** — 레지스터 E-1.8b:4574대로 BE에서 축을 맞추면 `goToTurn`·K-윈도우가 코드 변경 없이 정상화된다. 계획서의 "소비처 3~4곳 동시 변경"은 FE 우회안을 택했을 때의 조건이었다.
+
+### H-4. ★★ 이번 세션의 교훈
+
+- **`vite build` 통과가 검증이 아니라는 §3이 또 증명됐다.** `UseStoryV2Stream`에서 `BASE_URL` 정의를 걷어냈는데 `:75`가 아직 쓰고 있었다 — 빌드는 **경고 하나 없이 exit 0**. 그대로 나갔으면 V2 STORY 스트림 전체가 런타임에 죽었다. **dev 서버에서 모듈을 실제 import해 평가**하는 검증이 잡았다.
+- **문서 좌표를 믿지 마라 — 파일이 이사했다.** 계획서·레지스터의 `src/hooks/UseChatStream.js`는 실제로 `src/api/`다.
+- **에이전트 보고를 grep으로 재확인한 것이 3건에서 값을 했다**(H-3). 특히 "N곳"류 개수는 javadoc 언급이 섞이기 쉽다 — 내 첫 집계도 6곳이었으나 실제 호출은 4곳이었다.
+- **세션 도중 브랜치가 바뀔 수 있다.** aichat·FE 워킹트리가 세션 중 `feature/diorama`로 넘어가 있었다. 파일이 "없다"고 나오면 `git branch --show-current`부터 의심하라. 워킹트리를 안 건드리고 조사하려면 `git show <ref>:path` / `git archive <ref> | tar -x`.
+
+### H-5. 남은 것
+
+- **배치 1 잔여**: E-1.1(극장 finalize 실패 시 무증상 정지) · INT-4(`TheaterPlayPage.onError` 토스트 부재) · F2(로비·극장 성인인증 배선 — `SECRET_PRODUCTS_ENABLED` 켜는 날 미드나잇 패스 구매 무반응) · D-29b(死 memo)
+- **배치 2 잔여**: **D-18**(웹훅 fail-closed) — `MODELSLAB_WEBHOOK_SECRET`이 빈 값이라 지금 전환하면 씬 일러 웹훅이 전량 401. **종원이 값을 넣은 뒤** 착수
+- **배치 3**(스트림 보상·로그·나레이션) — `ChatStreamService`(1680줄)가 5개 결함군의 교차점. **단독 세션**으로 잡을 것
+- **배치 4**(극장) — D-5.6 확정으로 `THEATER_PREFETCH_ENABLED=false` 1줄 + E-4.4(V36 불요) + INT-2. 극장 사용량 0이라 우선순위 낮음
+- **배치 5** — 안건 18(**V36**) · E-7.1.a(OAuth email UNIQUE 500) · 9-A′【C】【D】
+- **안건 16 잔여**: 리셋 후 재입장 시 이전 회차 씬이 K-윈도우에서 여전히 'recent'로 뜬다(logTotal이 0으로 돌아가므로). 회차 분리는 `playthroughSeq` 컬럼(마이그레이션) 또는 시간 기준 FE 판정이 필요 — 확정안의 '마이그레이션 불요' 제약 밖이라 **별도 안건**
+- **E-1.2 잔여**: 모듈 스코프 뮤텍스라 **다중 탭 401은 여전히 뚫린다**. BroadcastChannel 또는 서버측 '직전 RT 유예창'(계획서 §4 결정 7) 필요
+- **종원 결정 대기**: 계획서 §4의 7건(17-① 극장 리롤 — 추천 **(0) 주석만 정정·P1 강등** / 17-② 경계 명문화 / 다운그레이드 유지 / 레거시 CG 동결 / 안건 18 형태 / 시크릿 구매 동선 / RT 유예창)
+
+### H-6. 검증 베이스라인 (이 시점 실측)
+
+- `compileJava` 통과 · 유닛 **30클래스 / 182건 / 실패·에러 0**
+- **로컬 실기동** `Started AichatApplication in 24.658s` — 파생 쿼리 3종(Mongo 2 · JPA 1) 해석 확인
+- FE `vite build` 통과 · `not exported` 0건 · **dev 서버 모듈 평가 4/4** · **뮤텍스 기능 검증**(동시 5건 → refresh 1회)
+- Admin `vite build` 통과 · `not exported` 0건 · 모듈 평가 확인
+- **신규 마이그레이션 번호는 V36부터** (git + 프로드 `flyway_schema_history` 양쪽 대조)
