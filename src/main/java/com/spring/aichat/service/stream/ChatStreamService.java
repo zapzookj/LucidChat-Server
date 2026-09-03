@@ -624,7 +624,7 @@ public class ChatStreamService {
             }
             committed = true;   // [D-2.b] 이후 구간은 보상 면제
 
-            String assistantLogId = saveAssistantLog(roomId, parsed);
+            String assistantLogId = saveAssistantLog(roomId, jpa.room().getChatMode(), parsed);
             cacheService.evictRoomInfo(roomId);
 
             sendFinalResult(emitter, response, false, assistantLogId, false, null);
@@ -763,7 +763,7 @@ public class ChatStreamService {
             }
             committed = true;   // [D-2.b] 이후 구간은 보상 면제
 
-            String assistantLogId = saveAssistantLog(roomId, parsed);
+            String assistantLogId = saveAssistantLog(roomId, jpa.room().getChatMode(), parsed);
             cacheService.evictRoomInfo(roomId);
 
             //   // ★ [Phase 5.5-Illust] 시간 넘기기에서도 장소 전환 가능 ★
@@ -1098,16 +1098,32 @@ public class ChatStreamService {
             && secretModeService.canAccessSecretMode(room.getUser(), room.getCharacter().getId());
     }
 
-    private String saveAssistantLog(Long roomId, ParsedLlmResult parsed) {
-        try {
-            ChatLogDocument assistantLog = ChatLogDocument.assistantWithThought(
-                roomId, parsed.cleanJson(), parsed.combinedDialogue(),
-                parsed.mainEmotion(), null, parsed.innerThought(), parsed.scenesJson());
-            return chatLogRepository.save(assistantLog).getId();
-        } catch (Exception e) {
-            log.error("⚠️ ASSISTANT log save failed | roomId={}", roomId, e);
-            return null;
-        }
+    /**
+     * [D-6.5 · D-6.4] 지켜보기·시간넘기기·자동응답(AWAY/BRANCH) 3경로의 ASSISTANT 저장.
+     *
+     * <p>종전에는 {@code chatLogRepository.save}를 직접 부르고 예외를 삼켰다. 같은 클래스가
+     * {@link ChatLogPersister}를 <b>이미 주입받고 있는데</b> 정상 경로(:369-383)만 그것을 썼다.
+     * 그래서 이 3경로에서만 3회 지수백오프 재시도와 deadletter 보존이 통째로 빠졌고,
+     * 저장이 실패하면 SSE는 정상 전송되는데 로그만 사라져
+     * <b>history 누락 · 다음 LLM 컨텍스트 손실 · 새로고침 시 응답 영구 손실</b>이 됐다
+     * ({@code ChatLogPersister} 클래스 주석이 명시한 피해 그대로).
+     * 특히 이벤트 카드 선택의 실질 경로가 자동응답이라 트래픽이 가장 많다(D-6.4).
+     *
+     * <p>부가: 종전에는 {@code parsed.innerThought()}를 <b>무조건</b> 넘겨 정상 경로가 통과시키는
+     * {@code ChatModePolicy.supportsInnerThought} 게이트도 함께 우회했다. 그래서 모드를 인자로 받는다
+     * — §2-6대로 구 2-인자 오버로드는 남기지 않는다(컴파일러가 호출부를 전수로 드러내야 한다).
+     */
+    private String saveAssistantLog(Long roomId, ChatMode mode, ParsedLlmResult parsed) {
+        String inner = ChatModePolicy.supportsInnerThought(mode) ? parsed.innerThought() : null;
+        ChatLogDocument doc = ChatLogDocument.assistantWithThought(
+            roomId, parsed.cleanJson(), parsed.combinedDialogue(),
+            parsed.mainEmotion(), null, inner, parsed.scenesJson());
+        ChatLogDocument saved = chatLogPersister.saveWithRetry(doc);
+        if (saved != null) return saved.getId();
+
+        log.error("⚠️ [CHAT-LOG] ASSISTANT_LOG_PERSIST_FAILED — deadlettered | roomId={} | mode={}",
+            roomId, mode);
+        return null;
     }
 
     /**
@@ -1609,7 +1625,7 @@ public class ChatStreamService {
             // [Phase 6-Illust] illustration_scene_hint 영속화
             applyParsedToRoom(roomId, parsed);
 
-            String assistantLogId = saveAssistantLog(roomId, parsed);
+            String assistantLogId = saveAssistantLog(roomId, jpa.room().getChatMode(), parsed);
             cacheService.evictRoomInfo(roomId);
 
             sendFinalResult(emitter, response, false, assistantLogId, false, locationTransition);
