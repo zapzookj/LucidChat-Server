@@ -337,7 +337,7 @@ public class TheaterCommandClassifier {
         //      여기만 통과시키면 '응답이 오면 관대, 안 오면 엄격'이라는 새 비대칭이 생긴다.
         //   ② 거부 비용이 0이다: TheaterDirectorNoteService:189-194가 거부 시 에너지를
         //      차감하지 않고(:198 주석) 안내 문구만 돌려준다 — 유저는 표현만 바꿔 즉시 재시도한다.
-        //      정상 유저를 '세우는' 가드가 아니다(CLAUDE.md §D 기준 통과).
+        //      정상 유저를 '세우는' 가드가 아니다(docs/17 §D · 전역 하네스 기준 통과).
         //   배포 후 '🎬 [CMD] rejected' 로그의 verdict 분포로 오탐률을 관측할 것.
         return new ClassificationResult(verdict, reason);
     }

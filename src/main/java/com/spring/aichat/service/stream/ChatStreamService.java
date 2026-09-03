@@ -125,8 +125,12 @@ public class ChatStreamService {
      * [E-5.1.b] {@code eventContext} 길이 상한.
      *
      * <p>이 값은 SYSTEM 롤 로그로 <b>영구</b> 저장되고 이후 <b>매 턴</b> role="system"으로 재주입되며
-     * (:1348), 유저가 지울 수도 없다({@code ChatService:409-411}). 상한이 없으면 임의 길이 텍스트가
-     * 방의 모든 후속 턴에 부착돼 토큰 비용이 무한 증폭된다.
+     * ({@code buildMessageHistory}의 {@code case SYSTEM}), 유저가 지울 수도 없다
+     * ({@code ChatService}의 SYSTEM 삭제 가드). 상한이 없으면 임의 길이 텍스트가 히스토리
+     * 윈도우({@code findTop20ByRoomIdOrderByCreatedAtDesc} = 최근 20건)에 계속 실려 토큰 비용을 키운다.
+     * <sub>※ 종전 주석의 "방의 모든 후속 턴에 영구 부착 → 무한 증폭"은 과장이었다 — 20건을 벗어나면
+     * 프롬프트에서 빠지고 MemoryService 요약으로만 잔존한다. 상한의 정당성은 그대로지만,
+     * 이 과장을 근거로 CRITICAL 차단(= 새 거부면)을 정당화하지 마라.</sub>
      *
      * <p>레지스터 수정안은 300을 제안했으나 <b>500</b>으로 잡는다 — 300은 정상 분기 카드 문구를
      * 자를 수 있다는 지적이 있었고, 프로드 나레이션 길이 분포(Mongo)를 아직 실측하지 못했다.
@@ -1116,21 +1120,26 @@ public class ChatStreamService {
      *
      * <p>400으로 <b>거부하지 않고</b> 절단 + WARN으로 둔다 — 이 값은 서버가 발급한 분기 오퍼에서
      * 오는 것이 정상이라 상한에 걸리는 것 자체가 비정상 경로이고, 여기서 거부하면 서버가 긴
-     * 나레이션을 생성한 날 정상 유저가 통째로 막힌다(CLAUDE.md §D — 착취를 막기 전에 정상 유저를
+     * 나레이션을 생성한 날 정상 유저가 통째로 막힌다(docs/17 §D · 전역 하네스 — 착취를 막기 전에 정상 유저를
      * 막는가를 먼저 묻는다). 절단은 은폐가 아니다: 로그가 남고 그 빈도가 상한 재조정의 근거가 된다.
      */
     private String capEventContext(Long roomId, String raw) {
         if (raw == null || raw.length() <= EVENT_CONTEXT_MAX) return raw;
+        // 서로게이트 페어(이모지·확장 한자)를 쪼개지 않는다 — 반쪽 서로게이트는 유효한 UTF-8이
+        //   아니라서 Mongo 저장·JSON 직렬화에서 치환문자가 되거나 인코딩 예외로 번진다.
+        int end = EVENT_CONTEXT_MAX;
+        if (Character.isHighSurrogate(raw.charAt(end - 1))) end--;
         log.warn("✂️ [EVENT-CTX] 길이 상한 초과 — 절단 | roomId={} | {}자 → {}자",
-            roomId, raw.length(), EVENT_CONTEXT_MAX);
-        return raw.substring(0, EVENT_CONTEXT_MAX);
+            roomId, raw.length(), end);
+        return raw.substring(0, end);
     }
 
     /**
      * [D-6.5 · D-6.4] 지켜보기·시간넘기기·자동응답(AWAY/BRANCH) 3경로의 ASSISTANT 저장.
      *
      * <p>종전에는 {@code chatLogRepository.save}를 직접 부르고 예외를 삼켰다. 같은 클래스가
-     * {@link ChatLogPersister}를 <b>이미 주입받고 있는데</b> 정상 경로(:369-383)만 그것을 썼다.
+     * {@link ChatLogPersister}를 <b>이미 주입받고 있는데</b> 정상 경로(sendMessageStream의
+     * {@code chatLogPersister.saveWithRetry} 호출부)만 그것을 썼다.
      * 그래서 이 3경로에서만 3회 지수백오프 재시도와 deadletter 보존이 통째로 빠졌고,
      * 저장이 실패하면 SSE는 정상 전송되는데 로그만 사라져
      * <b>history 누락 · 다음 LLM 컨텍스트 손실 · 새로고침 시 응답 영구 손실</b>이 됐다
@@ -1275,6 +1284,36 @@ public class ChatStreamService {
             catch (Exception ex) { log.error("User msg delete FAILED", ex); }
         }
         compensateEnergy(ctx.userId(), ctx.energy(), ctx.username());
+    }
+
+    /**
+     * [D-2.g 보강] 자동응답 보상 시 <b>TX-1이 커밋한 방 상태</b>도 되돌린다.
+     *
+     * <p>{@code sendAutoDirectorResponse}의 TX-1은 에너지만 차감하는 게 아니라
+     * {@code room.setDirectorInterlude(...)}까지 <b>커밋</b>한다. 그런데 해제
+     * ({@code clearDirectorInterlude})는 호출부 3곳이 전부 TX-2 람다 안이라 보상 경로에서는
+     * 실행되지 않는다. {@code compensateFullRollback}은 에너지와 유저 로그만 되돌린다.
+     *
+     * <p>그래서 보상이 켜진 뒤 이런 불균형이 생긴다 — BRANCH 4E를 <b>전액 환불</b>했는데 분기
+     * constraint는 방에 장전된 채 남아, 다음 <b>1E 일반 턴</b>이 그것을
+     * {@code CharacterPromptAssembler}의 최우선 지시로 실행한다. 보상 이전에는 '4E 지불 +
+     * constraint 잔존'으로 균형이 맞았으므로, <b>이 배치가 만든 불균형</b>이다.
+     *
+     * <p>AWAY의 {@code eventStatus="ONGOING"}·{@code topicConcluded=false}는 <b>되돌리지 않는다</b> —
+     * 직전 값을 캡처해 두지 않아 복원값을 추측하게 되고, 그 상태는 유저가 다음 발화로 자연 해소된다
+     * (개입 시 RESOLVED 판정). 되돌리는 것이 확실한 BRANCH만 처리한다.
+     */
+    private void compensateDirectorState(Long roomId, boolean isBranchResponse) {
+        if (!isBranchResponse) return;
+        try {
+            txTemplate.execute(status -> {
+                chatRoomRepository.findById(roomId).ifPresent(ChatRoom::clearDirectorInterlude);
+                return null;
+            });
+        } catch (Exception ex) {
+            // 보상 헬퍼는 절대 던지지 않는다 — 던지면 최외곽 catch가 다시 보상해 이중 환불이 된다.
+            log.error("[COMPENSATE] 분기 constraint 해제 실패 | roomId={}", roomId, ex);
+        }
     }
 
     /**
@@ -1464,9 +1503,9 @@ public class ChatStreamService {
 
         // [E-5.1.b] eventContext는 클라이언트가 완전히 제어하는 문자열인데(StoryController:99
         //   AutoRespondRequest — 검증 애노테이션 0개) SYSTEM 롤 로그로 영구 저장되고 매 턴
-        //   role="system"으로 재주입된다(:1348). PromptInjectionGuard가 "채팅은 user role이라
+        //   role="system"으로 재주입된다(buildMessageHistory의 case SYSTEM). PromptInjectionGuard가 "채팅은 user role이라
         //   위험도가 낮다"는 전제로 감지만 하도록 설계됐는데(:183-188) 이 경로는 그 전제가
-        //   성립하지 않는다. 게다가 유저가 SYSTEM 로그를 지울 수도 없다(ChatService:409-411).
+        //   성립하지 않는다. 게다가 유저가 SYSTEM 로그를 지울 수도 없다(ChatService의 SYSTEM 삭제 가드).
         //   ⚠ 파라미터는 TX-1 람다가 캡처하므로(setDirectorInterlude) 재대입할 수 없다 —
         //     진입부에서 정제한 별도 지역변수를 만들어 **모든 소비처**를 그것으로 바꾼다.
         //     람다 안의 setDirectorInterlude도 LLM에 흘러가므로 반드시 포함해야 한다.
@@ -1518,7 +1557,7 @@ public class ChatStreamService {
             rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
-            // [E-5.1.b] 인젝션 감지·적재. sendMessageStream(:222)과 같은 '감지 + 기록' 정책을 쓴다.
+            // [E-5.1.b] 인젝션 감지·적재. sendMessageStream의 인젝션 검사와 같은 감지+기록 정책을 쓴다.
             //   ⚠ 레지스터는 "이 경로는 SYSTEM 롤이라 CRITICAL이면 **차단**해야 한다"고 권고하면서도
             //     오탐 시 UX 손상을 이유로 ❓결정 필요로 남겼다. 차단은 새 거부면이라 종원 판단
             //     전까지 넣지 않는다 — 우선 적재해 실제 감지율을 관측한다.
@@ -1691,9 +1730,12 @@ public class ChatStreamService {
         } catch (Exception e) {
             // [D-2.g] ★ TX-2 커밋 전 예외는 보상한다 — BRANCH는 최대 4E다.
             if (!committed && rollbackCtx != null) {
-                log.warn("↩️ [COMPENSATE] 자동응답 TX-2 커밋 전 예외 — 차감 되돌림 | type={} | roomId={}",
+                log.warn("↩️ [COMPENSATE] 자동응답 TX-2 커밋 전 예외 — 차감·유저로그 되돌림 | type={} | roomId={}",
                     directiveType, roomId);
                 compensateFullRollback(rollbackCtx);
+                // TX-1이 커밋한 분기 constraint도 해제한다 — 안 하면 전액 환불된 4E 분기가
+                //   다음 1E 턴에 최우선 지시로 실행된다. AWAY의 eventStatus는 복원하지 않는다(헬퍼 주석).
+                compensateDirectorState(roomId, isBranchResponse);
             }
             log.error("❌ Director auto-respond error | type={} | roomId={} | committed={}",
                 directiveType, roomId, committed, e);

@@ -60,8 +60,25 @@ public class RedisCacheService {
         return Optional.ofNullable(redisTemplate.opsForValue().get(key));
     }
 
+    /**
+     * 캐시 무효화. <b>절대 예외를 밖으로 던지지 않는다.</b>
+     *
+     * <p>종전에는 {@code redisTemplate.delete} 한 줄이라 Redis 순단이 호출자에게 그대로 전파됐다.
+     * 같은 클래스의 배경 캐시 메서드({@code getBackgroundCache}·{@code setBackgroundCache})는
+     * 이미 전부 감싸고 있어 정책이 불일치했다.
+     *
+     * <p>★ 이것이 실제로 위험해진 계기 — 보상 경로: {@code ChatStreamService.compensateEnergy}가
+     * 환불 TX를 커밋한 <b>뒤</b> try 밖에서 {@code evictUserProfile}을 부른다. 여기서 예외가 터지면
+     * 스트림의 최외곽 catch로 올라가고, 그 catch는 {@code committed == false}를 보고
+     * <b>같은 차감을 한 번 더 환불</b>한다(= 에너지 발행). 캐시 무효화 실패로 돈이 새면 안 된다.
+     * 무효화가 실패해도 다음 TTL 만료나 다음 evict가 정리하므로 삼키는 편이 맞다.
+     */
     public void evict(String key) {
-        redisTemplate.delete(key);
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("[CACHE] evict 실패 — 무시하고 진행 | key={} | err={}", key, e.getMessage());
+        }
     }
 
     // Phase 5: TTL-based string storage for verification/payment sessions
