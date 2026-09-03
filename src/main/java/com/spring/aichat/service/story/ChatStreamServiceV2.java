@@ -162,6 +162,14 @@ public class ChatStreamServiceV2 {
         String userMessage = request.message() != null ? request.message() : "";
         String actionType = request.actionType();
 
+        // [D-2.a] 최외곽 catch가 보상 판정을 할 수 있도록 호이스팅한다.
+        //   종전에는 이 catch에 보상이 없어, 차감(TX-1) 이후 TX-2 전에 예외가 나면 2~10E가
+        //   무보상으로 소멸하고 유저 로그만 남았다(다음 턴 프롬프트에 '유저가 두 번 말하고
+        //   캐릭터는 침묵'한 히스토리가 들어간다). V1 4경로와 같은 처방.
+        //   ⚠ jpa는 TX-2 람다가 캡처하므로 호이스팅 금지 — rollbackCtx만 옮긴다.
+        RollbackContext rollbackCtx = null;
+        boolean committed = false;
+
         try {
             // ── 1. Content Moderation ──
             ChatRoom roomForCheck = chatRoomRepository.findWithMemberAndWorldById(roomId)
@@ -200,6 +208,8 @@ public class ChatStreamServiceV2 {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.getUser().getUsername(), charge);
             });
+            // [D-2.a] 차감 직후 보상 컨텍스트 확보 (로그 id는 아래에서 갱신).
+            rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
             // ── 3. Prompt Injection Check ──
@@ -229,7 +239,8 @@ public class ChatStreamServiceV2 {
                 return;
             }
 
-            RollbackContext rollbackCtx = new RollbackContext(
+            // [D-2.a] 로그 id 확정 → 보상 컨텍스트 갱신.
+            rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energy(), savedUserLogId);
 
             // ── 6. V2 라우팅 — 시작 화자 결정 ──
@@ -256,6 +267,8 @@ public class ChatStreamServiceV2 {
                 sendSseError(emitter, "TX_ERROR", "응답 처리 중 오류가 발생했습니다.");
                 return;
             }
+            // [D-2.a] ★ 여기부터 보상 면제 — TX-2 커밋 = 유저가 응답·스탯·로그를 이미 받았다.
+            committed = true;
 
             // ── 9. MongoDB ASSISTANT 저장 ──
             String assistantLogId = persistAssistantLog(roomId, parsed);
@@ -281,7 +294,13 @@ public class ChatStreamServiceV2 {
             triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, parsed.aiOutput());
 
         } catch (Exception e) {
-            log.error("❌ [V2-STREAM] Unexpected error | roomId={}", roomId, e);
+            // [D-2.a] TX-2 커밋 전 예외는 보상한다 — 종전엔 이 catch에 보상이 전혀 없어
+            //   2~10E가 무보상 소멸하고 고아 USER 로그만 남았다. 커밋 이후는 면제(이중 지급 방지).
+            if (!committed && rollbackCtx != null) {
+                log.warn("↩️ [COMPENSATE] V2 TX-2 커밋 전 예외 — 차감·유저로그 되돌림 | roomId={}", roomId);
+                compensateFullRollback(rollbackCtx);
+            }
+            log.error("❌ [V2-STREAM] Unexpected error | roomId={} | committed={}", roomId, committed, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
         }
     }

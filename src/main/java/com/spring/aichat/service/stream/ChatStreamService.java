@@ -173,6 +173,12 @@ public class ChatStreamService {
         long totalStart = System.currentTimeMillis();
         log.info("⏱ [STREAM-PERF] ====== sendMessageStream START ====== roomId={}", roomId);
 
+        // [D-2.b] 최외곽 catch가 보상 판정을 할 수 있도록 호이스팅한다. 상세는 그 catch의 주석.
+        //   ⚠ jpa(JpaPreResult)는 TX-2 람다가 캡처하므로 절대 호이스팅하지 마라 — effectively final을
+        //     잃어 컴파일이 깨진다. rollbackCtx는 어떤 람다에도 캡처되지 않아 재대입이 안전하다(전수 확인).
+        RollbackContext rollbackCtx = null;
+        boolean committed = false;
+
         try {
             // ── [V2 분리] STORY 모드는 ChatStreamServiceV2가 담당 — 방어적 가드 ──
             ChatRoom modeCheck = chatRoomRepository.findById(roomId)
@@ -215,6 +221,11 @@ public class ChatStreamService {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.getUser().getUsername(), charge);
             });
+            // [D-2.b] 차감이 커밋된 **직후** 보상 컨텍스트를 세운다. 종전에는 이 지점이 로그 저장
+            //   이후(아래)라, 차감 ~ 로그 저장 사이(evict·인젝션 검사)의 예외가 최외곽 catch로 새어
+            //   무보상으로 끝났다. savedUserLogId는 아직 없으므로 null — compensateFullRollback이
+            //   null을 이미 검사한다.
+            rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
             // ── Prompt Injection Check ──
@@ -239,7 +250,8 @@ public class ChatStreamService {
                 return;
             }
 
-            RollbackContext rollbackCtx = new RollbackContext(
+            // [D-2.b] 로그 id가 확정됐으니 보상 컨텍스트를 갱신한다(위에서 이미 에너지분은 세워 뒀다).
+            rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energy(), savedUserLogId);
 
             // [Phase 5.5-EV] 유저 개입인지 판단 (디렉터 모드 중 유저가 직접 채팅)
@@ -346,6 +358,10 @@ public class ChatStreamService {
                 sendSseError(emitter, "TX_ERROR", "응답 처리 중 오류가 발생했습니다.");
                 return;
             }
+            // [D-2.b] ★ 여기서부터 보상 면제. TX-2가 커밋됐다 = 유저가 대금에 상응하는 것
+            //   (응답·스탯·로그)을 이미 받았다는 뜻이고, 이후의 결손은 '전달'뿐이다.
+            //   이 플래그가 없으면 최외곽 catch가 그 구간까지 환불해 이중 지급이 된다.
+            committed = true;
 
             // ── MongoDB: ASSISTANT 저장 ──
             // [Phase6/Tier3 / C-9] 단순 try-catch → ChatLogPersister(retry + deadletter)로 위임.
@@ -485,11 +501,22 @@ public class ChatStreamService {
             triggerPostProcessing(roomId, jpa.userId(), jpa.logCount() + 1, effectiveSecretMode, jpa.room().getChatMode());
 
         } catch (Exception e) {
-            // [docs/19 §F D-23 · 계약] TX-2 커밋 이후 구간이다 — **여기서 환불하지 않는다.**
-            //   TX-2가 커밋됐다는 것은 유저가 대금에 상응하는 것(응답·스탯·로그)을 이미 받았다는 뜻이고,
-            //   결손은 '전달'뿐이다. 여기에 보상을 넣으면 이중 지급이자 전송 실패를 유도하는 무료 획득면이 된다.
-            //   (레지스터 D-2.b의 미결 안건이었고 '환불하지 않는다'로 종결됐다. 되돌리지 말 것.)
-            log.error("❌ Unexpected error | roomId={}", roomId, e);
+            // [docs/19 §F D-23 · 계약] TX-2 **커밋 이후**라면 환불하지 않는다 — 유저가 대금에 상응하는 것
+            //   (응답·스탯·로그)을 이미 받았고 결손은 '전달'뿐이다. 거기에 보상을 넣으면 이중 지급이자
+            //   전송 실패를 유도하는 무료 획득면이 된다.
+            //
+            // [D-2.b 정정 2026-09-04] ★ 종전 주석은 "여기는 TX-2 커밋 이후 구간이다"라고 단언했으나
+            //   **사실이 아니었다.** 이 catch가 감싸는 try는 :176에서 시작해 TX-1(차감)·evict·인젝션
+            //   검사·resolveSecretMode를 전부 포함한다. 즉 차감은 됐는데 TX-2까지 못 간 구간의 예외가
+            //   여기로 새어 **무보상**으로 끝났다(로그 저장 실패만 자체 보상이 있었다).
+            //   레지스터의 '환불하지 않는다' 결론은 **커밋 이후 구간에 한정**된 것이지 이 catch 전체가
+            //   아니다. 그 서술 하나 때문에 이 결함이 '결정으로 종결됨'으로 두 세션을 살아남았다.
+            //   → committed 플래그로 두 구간을 가른다. 커밋 전이면 보상, 이후면 면제.
+            if (!committed && rollbackCtx != null) {
+                log.warn("↩️ [COMPENSATE] TX-2 커밋 전 예외 — 차감·유저로그 되돌림 | roomId={}", roomId);
+                compensateFullRollback(rollbackCtx);
+            }
+            log.error("❌ Unexpected error | roomId={} | committed={}", roomId, committed, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
         }
     }
@@ -501,6 +528,10 @@ public class ChatStreamService {
     @Async
     public void sendDirectorWatchStream(Long roomId, SseEmitter emitter) {
         log.info("👀 [DIRECTOR-WATCH] START | roomId={}", roomId);
+
+        // [D-2.b] 4개 스트림 경로 공통 — 상세는 sendMessageStream의 같은 선언 주석 참조.
+        RollbackContext rollbackCtx = null;
+        boolean committed = false;
 
         try {
             // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
@@ -523,6 +554,8 @@ public class ChatStreamService {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.getUser().getUsername(), charge);
             });
+            // [D-2.b] 차감 직후 보상 컨텍스트 확보 (로그 id는 아래에서 갱신).
+            rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
             // ── [Director] 강화된 지켜보기 프롬프트 ──
@@ -544,7 +577,8 @@ public class ChatStreamService {
                 return;
             }
 
-            RollbackContext rollbackCtx = new RollbackContext(
+            // [D-2.b] 로그 id 확정 → 보상 컨텍스트 갱신 (에너지분은 차감 직후 이미 세워 뒀다).
+            rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
@@ -588,6 +622,7 @@ public class ChatStreamService {
                 sendSseError(emitter, "TX_ERROR", "지켜보기 처리 실패");
                 return;
             }
+            committed = true;   // [D-2.b] 이후 구간은 보상 면제
 
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
@@ -598,7 +633,13 @@ public class ChatStreamService {
             log.info("👀 [DIRECTOR-WATCH] DONE | roomId={}", roomId);
 
         } catch (Exception e) {
-            log.error("❌ Director watch error | roomId={}", roomId, e);
+            // [D-2.g/D-2.b] TX-2 커밋 전 예외는 보상한다 — 종전엔 이 catch에 보상이 아예 없어
+            //   차감만 되고 아무것도 못 받는 구간이 있었다.
+            if (!committed && rollbackCtx != null) {
+                log.warn("↩️ [COMPENSATE] 지켜보기 TX-2 커밋 전 예외 — 차감 되돌림 | roomId={}", roomId);
+                compensateFullRollback(rollbackCtx);
+            }
+            log.error("❌ Director watch error | roomId={} | committed={}", roomId, committed, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "지켜보기 처리 중 오류 발생");
         }
     }
@@ -631,6 +672,10 @@ public class ChatStreamService {
     public void sendTimeSkipStream(Long roomId, SseEmitter emitter) {
         log.info("⏭ [TIME_SKIP] START | roomId={}", roomId);
 
+        // [D-2.b] 4개 스트림 경로 공통 — 상세는 sendMessageStream의 같은 선언 주석 참조.
+        RollbackContext rollbackCtx = null;
+        boolean committed = false;
+
         try {
             // [Phase 5.5-Sep] 시간 넘기기: 스토리 모드 전용
             // [2026-07-30 리뷰픽스] findById → fetch join — 철회 가드가 LAZY 밖에서 안전하게 동작
@@ -651,6 +696,8 @@ public class ChatStreamService {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.getUser().getUsername(), charge);
             });
+            // [D-2.b] 차감 직후 보상 컨텍스트 확보 (로그 id는 아래에서 갱신).
+            rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
             // ── MongoDB: 시간 넘기기 시스템 메시지 저장 (프론트 미노출) ──
@@ -665,7 +712,8 @@ public class ChatStreamService {
                 return;
             }
 
-            RollbackContext rollbackCtx = new RollbackContext(
+            // [D-2.b] 로그 id 확정 → 보상 컨텍스트 갱신 (에너지분은 차감 직후 이미 세워 뒀다).
+            rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
@@ -713,6 +761,7 @@ public class ChatStreamService {
                 sendSseError(emitter, "TX_ERROR", "시간 넘기기 처리 실패");
                 return;
             }
+            committed = true;   // [D-2.b] 이후 구간은 보상 면제
 
             String assistantLogId = saveAssistantLog(roomId, parsed);
             cacheService.evictRoomInfo(roomId);
@@ -781,7 +830,12 @@ public class ChatStreamService {
             log.info("⏭ [TIME_SKIP] DONE | roomId={}", roomId);
 
         } catch (Exception e) {
-            log.error("❌ Time skip error | roomId={}", roomId, e);
+            // [D-2.g/D-2.b] TX-2 커밋 전 예외는 보상한다.
+            if (!committed && rollbackCtx != null) {
+                log.warn("↩️ [COMPENSATE] 시간 넘기기 TX-2 커밋 전 예외 — 차감 되돌림 | roomId={}", roomId);
+                compensateFullRollback(rollbackCtx);
+            }
+            log.error("❌ Time skip error | roomId={} | committed={}", roomId, committed, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "시간 넘기기 처리 중 오류 발생");
         }
     }
@@ -1364,6 +1418,12 @@ public class ChatStreamService {
         boolean isAway = "AWAY".equalsIgnoreCase(directiveType);
         boolean isBranchResponse = "BRANCH".equalsIgnoreCase(directiveType);
 
+        // [D-2.g] ★ 이 경로가 가장 비싸다 — BRANCH 이벤트 카드는 최대 4E다.
+        //   종전 최외곽 catch에는 보상이 전혀 없어, 차감 후 TX-2 전에 예외가 나면 4E가 통째로
+        //   소멸하는데 프론트는 환불된 것처럼 보였다. 상세는 sendMessageStream의 같은 선언 주석.
+        RollbackContext rollbackCtx = null;
+        boolean committed = false;
+
         try {
             // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
             ChatRoom accessCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -1400,6 +1460,8 @@ public class ChatStreamService {
                 return new JpaPreResult(room, room.getUser().getId(), logCount,
                     room.getUser().getUsername(), charge);
             });
+            // [D-2.g] 차감 직후 보상 컨텍스트 확보 (로그 id는 아래에서 갱신).
+            rollbackCtx = new RollbackContext(jpa.userId(), jpa.username(), jpa.energy(), null);
             cacheService.evictUserProfile(jpa.username());
 
             // ── MongoDB: 숨겨진 시스템 메시지 저장 (LLM 컨텍스트용) ──
@@ -1431,7 +1493,8 @@ public class ChatStreamService {
                 return;
             }
 
-            RollbackContext rollbackCtx = new RollbackContext(
+            // [D-2.b] 로그 id 확정 → 보상 컨텍스트 갱신 (에너지분은 차감 직후 이미 세워 뒀다).
+            rollbackCtx = new RollbackContext(
                 jpa.userId(), jpa.username(), jpa.energy(), savedLogId);
 
             boolean effectiveSecretMode = resolveSecretMode(jpa.room());
@@ -1481,6 +1544,7 @@ public class ChatStreamService {
                 sendSseError(emitter, "TX_ERROR", "자동 응답 처리 실패");
                 return;
             }
+            committed = true;   // [D-2.g] 이후 구간은 보상 면제
 
             // [docs/19 §F D-8] 가격표 소비는 TX-2 커밋 이후다.
             //   resolveBranchCost 안에서 evict하면 Redis가 DB 롤백을 안 따라가므로,
@@ -1554,7 +1618,14 @@ public class ChatStreamService {
             log.info("🎬 [DIRECTOR-AUTO-RESPOND] DONE | type={} | roomId={}", directiveType, roomId);
 
         } catch (Exception e) {
-            log.error("❌ Director auto-respond error | type={} | roomId={}", directiveType, roomId, e);
+            // [D-2.g] ★ TX-2 커밋 전 예외는 보상한다 — BRANCH는 최대 4E다.
+            if (!committed && rollbackCtx != null) {
+                log.warn("↩️ [COMPENSATE] 자동응답 TX-2 커밋 전 예외 — 차감 되돌림 | type={} | roomId={}",
+                    directiveType, roomId);
+                compensateFullRollback(rollbackCtx);
+            }
+            log.error("❌ Director auto-respond error | type={} | roomId={} | committed={}",
+                directiveType, roomId, committed, e);
             sendSseError(emitter, "UNEXPECTED_ERROR", "자동 응답 처리 중 오류 발생");
         }
     }
