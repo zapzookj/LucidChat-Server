@@ -390,6 +390,28 @@ public class TheaterService {
         ChatRoom room = getOwnedRoom(roomId, username);
         TheaterState state = getState(roomId);
 
+        // ★ [E-4.4] 멱등 가드. 종전에는 소유권만 검사하고 곧장 부작용으로 들어갔다 —
+        //   요청 본문도 배치 ID도 없어 '유효한 챕터 종료 시점인가'를 검증할 수단 자체가 없었고,
+        //   POST /chapter-end 반복만으로 ① completeChapter가 챕터를 계속 올리고(무한 스킵)
+        //   ② 인터미션 스태미나가 매번 리필됐다.
+        //
+        //   판정 술어: completeChapter()가 scenesInCurrentChapter를 0으로 리셋한다 —
+        //   즉 **0이면 이미 마감한 것**이다. 마이그레이션도 새 컬럼도 필요 없다.
+        //   ⚠ '목표 씬 미달 거부'를 쓰지 않는 이유: chapterTargetScenes는 LLM 산출값이라
+        //     목표에 못 미친 채 정상 종료하는 경우가 실재한다 — 그걸 막으면 정상 유저가 갇힌다.
+        //
+        //   CHAPTER_ALREADY_FINALIZED는 FE가 **자기 치유**하는 코드다(에러 토스트 아님).
+        //   응답이 유실된 재시도가 정확히 여기로 오는데, 거기서 세우면 '마무리하는 중…'에
+        //   영구히 갇힌다(E-1.1의 증상). FE 복구 경로를 같은 커밋에서 배선했다.
+        if (state.isInIntermission()) {
+            throw new BusinessException(ErrorCode.CHAPTER_ALREADY_FINALIZED,
+                "이미 인터미션에 들어와 있어요.");
+        }
+        if (state.getScenesInCurrentChapter() <= 0) {
+            throw new BusinessException(ErrorCode.CHAPTER_ALREADY_FINALIZED,
+                "이 챕터는 이미 마무리됐어요.");
+        }
+
         int finishedAct = state.getCurrentAct().getNumber();
         int finishedChapter = state.getCurrentChapter();
 

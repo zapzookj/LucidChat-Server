@@ -35,6 +35,14 @@ public class GlobalExceptionHandler {
             case PERSONA_UNDERAGE -> 403;   // [블록 B] FE 프로필 나이 수정 제안 모달 트리거
             case REFUND_CLAWBACK_FAILED -> 409;   // [D-4.3] 환불은 됐으나 혜택 회수 대상 없음 — 관리자에게 명시
             case PAYMENT_DELIVERY_PENDING -> 409; // [안건 4] 결제 확정·지급 대기 — FE '지급 다시 시도' 트리거 (5xx 알람 축 분리)
+            // [E-4.4] 이미 마감된 챕터에 chapter-end 재요청 — FE가 자기 치유하는 코드다.
+            case CHAPTER_ALREADY_FINALIZED -> 409;
+            // ★ 아래 둘은 ErrorCode에는 있었는데 이 switch에 없어 **default로 500이 나가고 있었다**
+            //   (바로 위 STORY_V2_ROOM_EXISTS 주석이 경고한 그 함정에 정작 이 둘이 걸려 있었다).
+            //   FE는 status가 아니라 응답 본문의 errorCode로 분기하므로 동작은 했으나,
+            //   클라이언트 귀책 충돌이 5xx로 집계돼 서버 알람 축을 오염시킨다.
+            case STALE_CLIENT_STATE -> 409;       // [H-22] 클라 세션 상태가 서버 기준과 어긋남
+            case UNPAID_BATCH -> 409;             // [B-5.2] 미과금 배치 소비 시도 — FE가 loadNextBatch로 자기 치유
             default -> 500;
         };
 
