@@ -277,3 +277,97 @@ Flyway가 V32~V35를 순서대로 적용(72ms) · `Started AichatApplication in 
 표본 감사는 수정됨/잔존 각 12건 이상을 재확인했고 각 1건씩 오판정을 잡아 반영했다.
 **내가 직접 코드로 대조한 것은 16건**(수정됨 13 · 잔존 P1 3)이다. 나머지는 에이전트 판정 + 표본 감사 단계이며,
 각 행의 `evidence` 인용이 근거로 남아 있다. **착수 직전 해당 심볼 grep은 여전히 권장한다.**
+
+---
+
+## I. 2026-09-04 세션 — 배치 3 + 잔여 P1 + ★배포 파이프라인 장애 해결
+
+### I-1. ★★ 배포가 막혀 있던 진짜 원인 — SSH 무차별 대입이 CI를 튕기고 있었다
+
+배치 3을 푸시했는데 컨테이너가 교체되지 않았다. 진단 순서와 결론:
+
+| 단계 | 결과 | 진단 방법 |
+|---|---|---|
+| 워크플로 트리거 | ✅ | docs-only 푸시는 `paths-ignore`로 정상 스킵됨을 실측 |
+| 빌드·테스트·GHCR 푸시 | ✅ | **`docker manifest inspect ghcr.io/.../lucid-chat-backend:<sha>`** — 해당 커밋 이미지가 GHCR에 존재 |
+| SSH 배포 | ❌ | Actions 로그: `ssh: handshake failed: ... read: connection reset by peer` |
+
+**원인**: `sshd`의 `maxstartups 10:30:100`(기본값)이 미인증 연결 10개를 넘으면 확률적으로 드롭한다.
+root 패스워드 인증이 열려 있어 무차별 대입이 하루 **7천 건** 쏟아졌고, 그 슬롯 포화에 러너 연결이 걸렸다.
+초 단위로 확정한 증거 — 배포 실패 `00:14:02`, 로그 `00:14:56 exited MaxStartups throttling after 00:00:54, 1 connections dropped`
+(56초 − 54초 = **02초 시작**, 드롭 1건 = 러너).
+
+즉 **보안 노출이 원인이고 배포 실패는 증상**이었다. 두 문제가 하나였다.
+※ 첫 진단("시크릿/키 파싱 실패")은 **틀렸다** — `connection reset by peer`는 연결이 성립한 **뒤**라 시크릿 단계보다 뒤다.
+auth.log에 `Accepted publickey`가 없다고 "접속 시도조차 없다"고 읽은 것이 오독이었다(핸드셰이크 전 드롭은 그 줄을 남기지 않는다).
+
+**해결(종원 실행 — 보안 설정은 에이전트가 만지지 않는다)**:
+`sed`로 `/etc/ssh/sshd_config`를 고쳤는데 안 먹었다. 두 겹에 막혀 있었다 —
+① `Include /etc/ssh/sshd_config.d/*.conf`가 **12번 줄**이라 `50-cloud-init.conf`의 `yes`가
+   66번 줄의 `no`를 이긴다(**OpenSSH는 먼저 읽은 값이 이긴다**).
+② `/etc/cloud/cloud.cfg.d/95_ds-vultr.cfg`의 `ssh_pwauth: 1`이 재부팅마다 그 파일을 다시 쓴다.
+→ **`00-hardening.conf`**(사전순으로 `50-`보다 먼저)에 `PasswordAuthentication no` +
+  `PermitRootLogin prohibit-password`를 넣어 두 겹을 모두 통과. fail2ban도 설치·활성.
+결과 실측: `passwordauthentication no` · `permitrootlogin without-password` · fail2ban 1 IP 차단 ·
+MaxStartups 드롭 0건.
+
+### I-2. 배치 3 (스트림 보상·로그·나레이션)
+
+| 커밋 | 결함 |
+|---|---|
+| `5eed974` | **D-2.a · D-2.b · D-2.g** — 스트림 5경로 무보상 창 차단(`committed` 플래그로 TX-2 커밋 전/후 분리) |
+| `cb7a49f` | **D-6.5 · D-6.4** — ASSISTANT 저장을 `ChatLogPersister`(3회 백오프+deadletter)로 일원화 + 속마음 게이트 |
+| `f57d705` | **E-5.1.b(부분)** — eventContext 500자 절단 + 인젝션 적재 |
+| `8b3364f` | 적대적 검토 반영 (아래 I-3) |
+
+**★ D-2.b가 두 세션을 살아남은 이유는 주석이 틀렸기 때문이다.** 최외곽 catch에
+"여기는 TX-2 커밋 이후 구간 — 레지스터 D-2.b는 '환불하지 않는다'로 종결됐다. 되돌리지 말 것"이라
+적혀 있었으나, 그 catch가 감싸는 try는 `:176`부터 시작해 **차감을 포함**한다. 레지스터의 결론은
+*커밋 이후 구간에 한정*된 것이었다. 나도 그 주석을 읽고 스킵할 뻔했다.
+
+### I-3. 적대적 검토가 잡은 것 — **내 변경이 만든 새 실패 모드 2개**
+
+1. **이중 환불** — `compensateEnergy`가 환불 TX 커밋 **뒤** try 밖에서 `evictUserProfile`을 부르는데
+   `RedisCacheService.evict`에 try/catch가 없었다. Redis 순단 → 예외가 **새로 만든** 최외곽 catch로 →
+   `committed=false` → 같은 차감을 **한 번 더 환불**. 배치 이전엔 그 catch가 `log.error` 한 줄이라
+   물리적으로 불가능했던 경로다. → `evict`를 감쌌다(3개 무효화 헬퍼가 전부 위임하므로 20여 호출부가 함께 닫힌다).
+2. **전액 환불했는데 분기가 살아남음** — TX-1이 `setDirectorInterlude`를 커밋하는데 해제 호출부 3곳이
+   전부 TX-2 람다 안이라 보상 경로에서 실행되지 않는다. BRANCH 4E 전액 환불 후에도 constraint가
+   장전돼 다음 **1E 턴**이 그 분기를 최우선 지시로 실행한다. → `compensateDirectorState` 신설(BRANCH만;
+   AWAY는 직전 값을 캡처하지 않아 복원값을 추측하게 되므로 의도적으로 제외하고 경계를 주석에 남겼다).
+
+**★ 그리고 주석 좌표 10건이 틀렸다** — 이 저장소가 가장 비싸게 치는 실패를 또 냈다.
+`CLAUDE.md §D`(**CLAUDE.md에 §D는 없다** — §1~§5뿐) 4곳 · 재주입 `:1348`→실제 1409 ·
+인젝션 `:222`→246 · persister `:369-383`→390 · `ChatService:409-411`→415 ·
+"모든 후속 턴 영구 부착 → **무한 증폭**"→ `findTop20` = **최근 20건 윈도우**(과장).
+→ **라인 번호를 심볼 참조로 교체**했다. 숫자를 고치는 것으로는 재발을 못 막는다(매 편집마다 밀리는 게 원인).
+원장(`defect_register.md`)에도 같은 좌표가 있어 함께 고쳤다 — 안 고치면 코드↔원장을 순환한다.
+
+### I-4. 잔여 P1 추가 처리
+
+| 커밋 | 결함 |
+|---|---|
+| `e870c0e` + FE `6725a4d` | **E-7.1.a · E-7.1.b** — OAuth 이메일 UNIQUE 충돌 500 영구 로그인 불가 |
+| `1e50243` | **INT-6**(미등재 신규) — V2 액션 파라미터 주입면 |
+
+- **E-7.1.a**: `@Transactional`이 **자기호출이라 무효**였다(protected + `this.`). `SocialUserUpsertService`로
+  분리해 실제 적용 + INSERT 전 `findByEmail` 검사. 충정책은 확정분 §B #19 **(B)** 리다이렉트.
+  레이스는 `DataIntegrityViolationException`을 **TX 밖에서** 받아 `REQUIRES_NEW` 재조회 —
+  같은 TX 안 재조회는 rollback-only로 죽는다.
+- **FE에 쿼리 파싱이 아예 없었다** — 서버는 진작 `account_suspended`·`unknown_provider`로
+  리다이렉트하고 있었는데 화면이 안 읽어 **두 경로 모두 조용히 실패**해 왔다. 함께 닫았다.
+- **INT-6**: `actionType`·`toLocationKey`가 원문 그대로 `[ACTION:]` SYSTEM 로그로 영속되고
+  히스토리 조립이 그것만 예외적으로 **재주입**한다. 게다가 모더레이션·인젝션 스캔이 **둘 다**
+  `!userMessage.isBlank()` 게이트라 `message=""`면 두 스캔을 통째로 우회한다.
+  → 화이트리스트 정규화 + 개행/대괄호 제거 + 120자 절단(서로게이트 보호) + `ACTION_V2` 적재.
+  **거부면은 만들지 않았다.**
+
+### I-5. 남은 것
+
+- **진짜 잔존 P1 3건**: `E-4.4`(극장 finalizeChapter 멱등 가드 — 마이그레이션 불요) ·
+  `E-1.1`(극장 finalize 실패 무증상 정지, FE) · `B-6.1`(안건 17-① 대기) — **전부 극장 축, 프로드 사용량 0**
+- **E-5.1.b 잔여 2건 = 종원 결정 대기**: ① 안건 13 (나) `hiddenSystem` 복귀(= '[Bug Fix A] 새로고침 시
+  히스토리 표시'를 되돌리는 UX 회귀) ② CRITICAL 인젝션 시 차단 vs 로깅만
+- **P2 44 · P3 34** — 이번 스코프(P0/P1+자산손실 P2) 밖. 런칭 기준 재확인 필요
+- **`PORTONE_WEBHOOK_SECRET` 부재** → 결제 웹훅 fail-closed. `orders` 0건이라 아직 무해하나 **런칭 전 필수**
+- **`MODELSLAB_WEBHOOK_SECRET` 빈 값** → D-18(웹훅 fail-closed 전환) 착수 선행 조건
