@@ -403,6 +403,24 @@ public class ChatService {
     //  개별 대화 삭제
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    /**
+     * 개별 대화 삭제.
+     *
+     * <p>[안건 13 재확정 2026-09-04 · 종원] SYSTEM 로그 삭제 금지를 <b>visible 여부로 좁힌다.</b>
+     *
+     * <p>종전에는 role이 SYSTEM이면 무조건 막았다. 그런데 BRANCH 이벤트 나레이션은
+     * {@code ChatLogDocument.system(...)} = <b>visible</b>로 저장돼 유저 화면에 그대로 보인다.
+     * 즉 <b>보이는데 지울 수 없는</b> 비대칭이었다 — 유저·캐릭터 메시지는 지워지는데 그것만 안 됐다.
+     *
+     * <p>안건 13은 원래 이 오염을 {@code hiddenSystem} 복귀로 풀려 했으나
+     * ({@code decisions_confirmed.md} §B #13 (나)) <b>철회했다</b>. 나레이션이 히스토리에서 사라지면
+     * "캐릭터 대사1 → 캐릭터 대사2"가 부자연스럽게 이어져 맥락이 끊기기 때문이다
+     * (그것이 애초 '[Bug Fix A] visible 저장'의 이유였다).
+     * 화면에 보이는 것은 <b>보이는 채로 두되 지울 수 있게</b> 하는 것이 옳은 해법이다.
+     *
+     * <p>hidden SYSTEM은 계속 막는다 — {@code [SYSTEM_DIRECTOR]}·{@code TIME_SKIP}·{@code [ACTION:]}처럼
+     * 유저에게 보이지도 않는 LLM 배관이고, 지울 수단을 열면 화면에 없는 것을 지우는 셈이 된다.
+     */
     public void deleteSingleChatLog(String logId, Long roomId) {
         ChatLogDocument doc = chatLogRepository.findById(logId)
             .orElseThrow(() -> new NotFoundException("채팅 로그를 찾을 수 없습니다."));
@@ -411,13 +429,13 @@ public class ChatService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "해당 채팅방의 로그가 아닙니다.");
         }
 
-        if (doc.getRole() == ChatRole.SYSTEM) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "시스템 메시지는 삭제할 수 없습니다.");
+        if (doc.getRole() == ChatRole.SYSTEM && doc.isHidden()) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "내부 시스템 메시지는 삭제할 수 없습니다.");
         }
 
         chatLogRepository.deleteById(logId);
-        log.info("🗑️ [DELETE] Single log deleted: logId={}, roomId={}, role={}",
-            logId, roomId, doc.getRole());
+        log.info("🗑️ [DELETE] Single log deleted: logId={}, roomId={}, role={}, hidden={}",
+            logId, roomId, doc.getRole(), doc.isHidden());
     }
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [Phase 5.5-IT] 속마음 해금
