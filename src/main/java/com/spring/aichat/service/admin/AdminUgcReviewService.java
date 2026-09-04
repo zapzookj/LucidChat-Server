@@ -255,6 +255,10 @@ public class AdminUgcReviewService {
         StructuredConcept concept = json.readConcept(job.getStructuredConceptJson());
         String personaHint = (concept.personaTags() == null || concept.personaTags().isEmpty())
             ? null : String.join(", ", concept.personaTags());
+        // [E-6.1.a] 잡의 성별을 실제 파이프라인(UgcPipelineWorker.isMaleJob)과 같은 출처에서 읽는다.
+        //   종전엔 무성별 오버로드를 타 남캐를 1girl 앵커로 재구성해 보여줬다 — 심사자가 보는 것과
+        //   실제 제출된 것이 달랐다.
+        boolean male = job.getGenderOrDefault().isMale();
 
         return new UgcReviewDtos.PromptInspection(
             job.getId(),
@@ -262,12 +266,16 @@ public class AdminUgcReviewService {
             concept.personaTags(),
             concept.sceneTags(),
             job.getBgColor(),
-            promptAssembler.goldenShotPositive(concept.appearanceTags(), concept.personaTags(), concept.sceneTags()),
-            promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.NEUTRAL, job.getBgColor()),
-            promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY, job.getBgColor()),
+            job.getGenderOrDefault().name(),
+            male,
+            workflowFactory.maleLoraStrengthOrNull(male),
+            promptAssembler.goldenShotPositive(concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male),
+            promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.NEUTRAL, job.getBgColor(), male),
+            promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY, job.getBgColor(), male),
             // [2026-07-21 재구성] 감정 표정 포함 구성 — JOY 예시로 실구성 확인
+            // (faceDetailWildcard는 파이프라인도 무성별 오버로드를 쓴다 — UgcPipelineWorker:366. 일치.)
             promptAssembler.faceDetailWildcard(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY),
-            workflowFactory.templateNegative(),
+            workflowFactory.templateNegative(male),
             promptAssembler.qwenPosePrompt(concept.basePose()),
             promptAssembler.qwenBackgroundPrompt(job.getBgColor()),
             promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint,

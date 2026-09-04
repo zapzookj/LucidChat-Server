@@ -67,14 +67,14 @@ class UgcPromptAssemblerTest {
     @DisplayName("WF-2 배경 보색: 어텐션 가중치 부여 (기본 1.3, 노브 반영)")
     void bgEmphasisWeights() {
         String positive = assembler.refinePositive(
-            List.of("silver hair"), List.of(), EmotionTag.NEUTRAL, "light gray");
+            List.of("silver hair"), List.of(), EmotionTag.NEUTRAL, "light gray", false);
         assertThat(positive).contains("(simple background:1.2)");
         assertThat(positive).contains("(light gray background:1.3)");
         assertThat(positive).contains("(flat lighting:1.1)");
 
         UgcPromptAssembler tuned = new UgcPromptAssembler(new UgcPipelineProperties(
             null, null, null, null, new UgcPipelineProperties.Generation(null, null, 1.45, null, null), null, null, null));
-        assertThat(tuned.refinePositive(List.of(), List.of(), EmotionTag.NEUTRAL, "muted teal"))
+        assertThat(tuned.refinePositive(List.of(), List.of(), EmotionTag.NEUTRAL, "muted teal", false))
             .contains("(muted teal background:1.45)");
     }
 

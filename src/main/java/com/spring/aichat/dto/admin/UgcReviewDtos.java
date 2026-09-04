@@ -90,6 +90,15 @@ public final class UgcReviewDtos {
         List<String> personaTags,
         List<String> sceneTags,
         String bgColor,
+        /**
+         * [E-6.1.a] 이 잡의 성별(FEMALE/MALE). 아래 프롬프트가 어느 앵커로 재구성됐는지의 근거다 —
+         * 종전엔 잡의 성별을 무시하고 전부 1girl 앵커로 보여줬다.
+         */
+        String gender,
+        /** [E-6.1.b] Male_Type LoRA 체인 여부 — 남캐 잡이면 항상 주입된다(화면엔 표시가 없었다). */
+        boolean maleLoraChained,
+        /** [E-6.1.b] Male_Type LoRA 강도 노브 실값. 여캐면 null. */
+        Double maleLoraStrength,
         /** WF-1 positive (황금샷) */
         String goldenShotPositive,
         /** WF-2 positive — NEUTRAL(베이스) 예시 */

@@ -195,10 +195,19 @@ public class UgcWorkflowFactory {
      * 미학 유도는 Stage0 브리프 담당 — 이 경로는 비상용 수동 개입 전용.
      */
     private void appendMaleNegative(ObjectNode wf) {
-        String extra = props.generation().maleNegativeOrNull();
-        if (extra == null) return;
+        if (props.generation().maleNegativeOrNull() == null) return;
         String base = wf.path("13").path("inputs").path("text").asText();
-        inputs(wf, "13").put("text", base + ", " + extra);
+        inputs(wf, "13").put("text", withMaleNegative(base));
+    }
+
+    /**
+     * [E-6.1.b] 남캐 네거티브 결합 규칙의 단일 출처. 실제 워크플로 주입(appendMaleNegative)과
+     * 어드민 인스펙션(templateNegative(true))이 같은 문자열을 내도록 여기 하나만 쓴다 —
+     * 종전엔 인스펙션이 템플릿 원본만 읽어 남캐 잡의 화면 표시가 실제와 달랐다.
+     */
+    private String withMaleNegative(String base) {
+        String extra = props.generation().maleNegativeOrNull();
+        return extra == null ? base : base + ", " + extra;
     }
 
     /**
@@ -246,9 +255,23 @@ public class UgcWorkflowFactory {
         return seedRandom.nextLong() & Long.MAX_VALUE;
     }
 
-    /** [어드민 프롬프트 인스펙션] 템플릿 동결 네거티브 (wf2 node 13 — wf1과 동일 값). */
-    public String templateNegative() {
-        return wf2Template.path("13").path("inputs").path("text").asText();
+    /**
+     * [어드민 프롬프트 인스펙션] 템플릿 동결 네거티브 (wf2 node 13 — wf1과 동일 값).
+     * <p>[E-6.1.b] 남캐 잡이면 실제 제출과 동일하게 male-negative 노브를 이어붙인다.
+     * §2-6대로 무인자 오버로드는 남기지 않는다 — 호출부가 조용히 여캐 값으로 컴파일되면
+     * 인스펙션 화면이 다시 거짓이 된다.
+     */
+    public String templateNegative(boolean male) {
+        String base = wf2Template.path("13").path("inputs").path("text").asText();
+        return male ? withMaleNegative(base) : base;
+    }
+
+    /**
+     * [E-6.1.b] 인스펙션용 — Male_Type LoRA 강도 노브 실값. 여캐면 null(=체인 없음).
+     * 삼항에 원시 double과 null을 섞으면 언박싱 NPE가 나므로 명시 박싱한다.
+     */
+    public Double maleLoraStrengthOrNull(boolean male) {
+        return male ? Double.valueOf(props.generation().maleLoraStrengthOrDefault()) : null;
     }
 
     private JsonNode load(String classpath) {

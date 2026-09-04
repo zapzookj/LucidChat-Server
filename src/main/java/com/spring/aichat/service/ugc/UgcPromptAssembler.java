@@ -162,14 +162,13 @@ public class UgcPromptAssembler {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * WF-1 = 프리픽스 + 1girl, solo + 외형 태그 + 성격·무드 태그 + 씬 연출 태그.
+     * WF-1 = 프리픽스 + 성별 앵커 + 외형 태그 + 성격·무드 태그 + 씬 연출 태그.
      * (중복 태그는 1회만 — LLM이 1girl/solo를 포함해도 안전. 검증 원본 프롬프트도 성격 태그를 포함했다.)
+     * <p>[2026-08-04 남캐] male이면 1boy + male focus(여캐 편향 억제 실측 태그).
+     * <p>[E-6.1.a · §2-6] 무성별 3인자 오버로드는 제거했다 — 어드민 인스펙션이 그 오버로드를 타
+     * 남캐를 1girl 앵커로 재구성해 보여주고 있었다. 오버로드를 남기면 다음 호출부가 조용히
+     * male=false로 컴파일된다.
      */
-    public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags, List<String> sceneTags) {
-        return goldenShotPositive(appearanceTags, personaTags, sceneTags, false);
-    }
-
-    /** [2026-08-04 남캐] 성별 앵커 분기 — male이면 1boy + male focus(여캐 편향 억제 실측 태그). */
     public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags,
                                      List<String> sceneTags, boolean male) {
         StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(anchor(male));
@@ -181,15 +180,10 @@ public class UgcPromptAssembler {
     }
 
     /**
-     * WF-2 = 프리픽스 + 1girl, solo + 외형 태그 + 성격·무드 태그 + 자세 고정 태그 + 감정 태그 + 배경 지시.
+     * WF-2 = 프리픽스 + 성별 앵커 + 외형 태그 + 성격·무드 태그 + 자세 고정 태그 + 감정 태그 + 배경 지시.
      * 씬·소품 태그 절대 포함 금지.
+     * <p>[2026-08-04 남캐] 성별 앵커 분기. [E-6.1.a · §2-6] 무성별 4인자 오버로드는 제거했다.
      */
-    public String refinePositive(List<String> appearanceTags, List<String> personaTags,
-                                 EmotionTag emotion, String bgColor) {
-        return refinePositive(appearanceTags, personaTags, emotion, bgColor, false);
-    }
-
-    /** [2026-08-04 남캐] 성별 앵커 분기 버전. */
     public String refinePositive(List<String> appearanceTags, List<String> personaTags,
                                  EmotionTag emotion, String bgColor, boolean male) {
         StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(anchor(male));
