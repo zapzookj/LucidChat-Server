@@ -84,7 +84,14 @@ public final class UgcWorldDtos {
         LocalDateTime expiresAt
     ) {}
 
-    /** 완성 월드 뷰 — 목록에서는 locations=null, 상세에서만 포함. */
+    /**
+     * 완성 월드 뷰 — 목록에서는 locations=null, 상세에서만 포함.
+     *
+     * @param publicCharacterCount [E-5.3.b] 이 월드에 연결된 <b>공개 중인</b> 캐릭터 수. 상세에서만 채우고
+     *        목록은 null(월드마다 카운트 쿼리를 돌리지 않는다). 월드 텍스트 수정·장소 추가는 이 캐릭터들을
+     *        재심사 대기로 되돌려 <b>탐색에서 사라지고 타 유저의 진행 중 대화가 끊긴다</b> —
+     *        1E짜리 조작의 파괴적 부작용을 확인창에서 숨기면 안 되므로 FE가 고지할 재료로 내려준다.
+     */
     public record UgcWorldView(
         Long worldId,
         String name,
@@ -94,7 +101,8 @@ public final class UgcWorldDtos {
         String thumbnailUrl,
         String reviewStatus,
         LocalDateTime createdAt,
-        List<WorldLocationView> locations
+        List<WorldLocationView> locations,
+        Long publicCharacterCount
     ) {}
 
     /** status: READY / GENERATING(사후 추가 배경 생성 중) / FAILED(무료 재시도 또는 삭제+환불). */

@@ -33,7 +33,7 @@ class UgcWorkflowFactoryTest {
     @Test
     @DisplayName("WF-1: 계약 경로(positive/seed×2/batch/prefix)가 치환된다")
     void goldenShot_substitutesContractPaths() {
-        ObjectNode wf = factory.buildGoldenShot("1girl, silver hair", "job_7_golden", 111L, 222L);
+        ObjectNode wf = factory.buildGoldenShot("1girl, silver hair", "job_7_golden", 111L, 222L, false);
 
         assertThat(wf.path("12").path("inputs").path("text").asText()).isEqualTo("1girl, silver hair");
         assertThat(wf.path("11").path("inputs").path("seed").asLong()).isEqualTo(111L);
@@ -45,7 +45,7 @@ class UgcWorkflowFactoryTest {
     @Test
     @DisplayName("WF-1: 동결값 불변 — KSampler(euler/simple/30/4/1.0), 자산 파일명 (a)세트, 해상도 1024")
     void goldenShot_frozenValuesUntouched() {
-        ObjectNode wf = factory.buildGoldenShot("p", "x", 1L, 2L);
+        ObjectNode wf = factory.buildGoldenShot("p", "x", 1L, 2L, false);
 
         JsonNode ks = wf.path("11").path("inputs");
         assertThat(ks.path("steps").asInt()).isEqualTo(30);
@@ -68,7 +68,7 @@ class UgcWorkflowFactoryTest {
     @Test
     @DisplayName("WF-1 FaceDetailer: 종원 결정(2026-07-17) — FIELD_SPEC 값 cfg 4 / denoise 0.4 채택")
     void goldenShot_faceDetailerFollowsFieldSpecDecision() {
-        ObjectNode wf = factory.buildGoldenShot("p", "x", 1L, 2L);
+        ObjectNode wf = factory.buildGoldenShot("p", "x", 1L, 2L, false);
 
         JsonNode fd = wf.path("17").path("inputs");
         assertThat(fd.path("cfg").asDouble()).isEqualTo(4);       // Export 원본 8 → 결정값 4
@@ -84,7 +84,7 @@ class UgcWorkflowFactoryTest {
     @Test
     @DisplayName("WF-2: 계약 경로(image/positive/seed×2/prefix) 치환 + 검증 동결값(denoise 0.4, wildcard) 불변")
     void refine_substitutesContractPaths() {
-        ObjectNode wf = factory.buildRefine("job_7_base.png", "1girl, neutral expression", null, "job_7_refine", 11L, 22L);
+        ObjectNode wf = factory.buildRefine("job_7_base.png", "1girl, neutral expression", null, "job_7_refine", 11L, 22L, false);
 
         assertThat(wf.path("19").path("inputs").path("image").asText()).isEqualTo("job_7_base.png");
         assertThat(wf.path("12").path("inputs").path("text").asText()).isEqualTo("1girl, neutral expression");
@@ -110,7 +110,7 @@ class UgcWorkflowFactoryTest {
         UgcWorkflowFactory tunedFactory = new UgcWorkflowFactory(new ObjectMapper(), tuned);
         tunedFactory.loadTemplates();
 
-        ObjectNode wf = tunedFactory.buildRefine("a.png", "p", null, "x", 1L, 2L);
+        ObjectNode wf = tunedFactory.buildRefine("a.png", "p", null, "x", 1L, 2L, false);
         assertThat(wf.path("11").path("inputs").path("denoise").asDouble()).isEqualTo(0.35);
         // FaceDetailer denoise는 별개 값 — 노브의 영향을 받지 않는다
         assertThat(wf.path("17").path("inputs").path("denoise").asDouble()).isEqualTo(0.4);
@@ -160,7 +160,7 @@ class UgcWorkflowFactoryTest {
     @DisplayName("WF-2: 얼굴 와일드카드 지정 시 FaceDetailer wildcard가 치환된다 (2026-07-20 얼굴 일관성 픽스)")
     void refine_faceWildcardOverrides() {
         ObjectNode wf = factory.buildRefine("a.png", "p",
-            "detailed beautiful eyes, glowing ice blue eyes, long silver hair", "x", 1L, 2L);
+            "detailed beautiful eyes, glowing ice blue eyes, long silver hair", "x", 1L, 2L, false);
         assertThat(wf.path("17").path("inputs").path("wildcard").asText())
             .isEqualTo("detailed beautiful eyes, glowing ice blue eyes, long silver hair");
     }
@@ -187,12 +187,12 @@ class UgcWorkflowFactoryTest {
     @Test
     @DisplayName("템플릿 원본은 build 호출로 오염되지 않는다 (deepCopy 보증)")
     void templatesAreNotMutatedByBuilds() {
-        factory.buildGoldenShot("polluted", "polluted", 9L, 9L);
-        factory.buildRefine("polluted.png", "polluted", "polluted wildcard", "polluted", 9L, 9L);
+        factory.buildGoldenShot("polluted", "polluted", 9L, 9L, false);
+        factory.buildRefine("polluted.png", "polluted", "polluted wildcard", "polluted", 9L, 9L, false);
         factory.buildCutout("polluted.png", "polluted");
 
-        ObjectNode fresh1 = factory.buildGoldenShot("clean", "clean_prefix", 1L, 1L);
-        ObjectNode fresh2 = factory.buildRefine("clean.png", "clean", null, "clean_prefix", 1L, 1L);
+        ObjectNode fresh1 = factory.buildGoldenShot("clean", "clean_prefix", 1L, 1L, false);
+        ObjectNode fresh2 = factory.buildRefine("clean.png", "clean", null, "clean_prefix", 1L, 1L, false);
         ObjectNode fresh3 = factory.buildCutout("clean.png", "clean_prefix");
 
         assertThat(fresh1.path("12").path("inputs").path("text").asText()).isEqualTo("clean");
@@ -217,11 +217,11 @@ class UgcWorkflowFactoryTest {
         long wf1TemplateSamplerSeed = 115778582371004L;
         long wf1TemplateDetailerSeed = 234962801777585L;
 
-        ObjectNode wf = factory.buildGoldenShot("p", "x");
+        ObjectNode wf = factory.buildGoldenShot("p", "x", false);
         assertThat(wf.path("11").path("inputs").path("seed").asLong()).isNotEqualTo(wf1TemplateSamplerSeed);
         assertThat(wf.path("17").path("inputs").path("seed").asLong()).isNotEqualTo(wf1TemplateDetailerSeed);
 
-        ObjectNode refine = factory.buildRefine("a.png", "p", null, "x");
+        ObjectNode refine = factory.buildRefine("a.png", "p", null, "x", false);
         assertThat(refine.path("11").path("inputs").path("seed").asLong()).isNotEqualTo(681642381538195L);
         assertThat(refine.path("17").path("inputs").path("seed").asLong()).isNotEqualTo(650907528861058L);
     }

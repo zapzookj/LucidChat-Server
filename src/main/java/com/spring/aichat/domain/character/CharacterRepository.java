@@ -64,4 +64,11 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
      */
     List<Character> findByUgcWorldIdAndVisibility(Long ugcWorldId,
         com.spring.aichat.domain.enums.CharacterVisibility visibility);
+
+    /**
+     * [E-5.3.b] 월드 상세 화면이 '이 수정으로 공개 캐릭터 N개가 내려간다'를 고지하기 위한 카운트.
+     * 파괴적 부작용을 확인창에서 숨기면 유저는 1E짜리 조작으로 라이브 콘텐츠를 잃는다.
+     */
+    long countByUgcWorldIdAndVisibility(Long ugcWorldId,
+        com.spring.aichat.domain.enums.CharacterVisibility visibility);
 }

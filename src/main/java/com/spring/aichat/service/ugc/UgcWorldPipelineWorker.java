@@ -68,6 +68,8 @@ public class UgcWorldPipelineWorker {
     private final UgcWorldJobJson json;
     private final RedisCacheService cacheService;
     private final NotificationService notificationService;
+    /** [E-5.3.b] 장소가 READY가 되는 순간 = 심사 대상이 실제로 늘어나는 순간의 회귀 트리거. */
+    private final UgcReviewRevertService reviewRevertService;
     private final TransactionTemplate txTemplate;
     /** [D-3.5] 사후 장소 배경 생성 in-flight 레지스트리 — 서비스가 선점, 이 워커가 finally에서 해제. */
     private final UgcLocationInFlightRegistry locationInFlight;
@@ -412,7 +414,15 @@ public class UgcWorldPipelineWorker {
             txTemplate.executeWithoutResult(tx ->
                 locationRepository.findById(locationId)
                     .filter(l -> l.is(UgcWorldLocation.GENERATING))
-                    .ifPresent(l -> l.markReady(finalBgPrompt, assetService.publicUrl(storedKey))));
+                    .ifPresent(l -> {
+                        l.markReady(finalBgPrompt, assetService.publicUrl(storedKey));
+                        // [E-5.3.b · 적대적 검토 반영] 심사 대상이 실제로 늘어나는 지점이 여기다 —
+                        //   backgroundUrl이 붙는 순간부터 CharacterPromptAssembler가 이 장소를 싣는다.
+                        //   과금(addLocation) 시점이 아니라 여기서 회귀시켜야, 배경 생성이 실패해
+                        //   장소를 삭제·환불한 경우 공개 캐릭터가 애초에 내려가지 않는다.
+                        //   세대 가드 안이라 구세대 콜백의 중복 회귀도 자동으로 막힌다.
+                        reviewRevertService.revertLinkedPublicCharacters(worldId, "세계관 장소 추가");
+                    }));
             log.info("[UGC-WORLD] ✅ 사후 장소 배경 완성: worldId={}, key={}", worldId, loc.getLocationKey());
         } catch (Exception e) {
             log.warn("[UGC-WORLD] 사후 장소 배경 생성 실패: worldId={}, locationId={}, {}",

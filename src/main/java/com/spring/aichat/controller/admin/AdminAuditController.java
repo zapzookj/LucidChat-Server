@@ -54,7 +54,10 @@ public class AdminAuditController {
 
     /**
      * 값이 비어 있으면 항상 참(=조건 미적용), 아니면 해당 컬럼 일치.
-     * 빈 문자열·공백만 들어온 경우도 '미지정'으로 본다(어드민 SPA가 빈 칸을 그대로 보낸다).
+     * 빈 문자열·공백만 들어온 경우도 '미지정'으로 본다 — 어드민 SPA는 빈 값을 아예 생략하지만
+     * ({@code AuditLogPage.jsx}가 {@code if (actor.trim()) params.actor = ...} 형태), API 직타와
+     * 향후 화면 추가를 위해 blank도 방어한다.
+     * <p>참고: targetType/targetId는 아직 어드민 화면에 입력칸이 없다(API로만 도달).
      */
     private static Specification<AuditLog> eq(String field, String rawValue) {
         if (rawValue == null || rawValue.isBlank()) return (root, query, cb) -> cb.conjunction();

@@ -96,17 +96,16 @@ public class UgcWorkflowFactory {
     //  WF-1 · 황금샷 t2i (Stage 1 / 황금샷 리롤)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    public ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix) {
-        return buildGoldenShot(positivePrompt, filenamePrefix, false);
-    }
-
-    /** [2026-08-04 남캐] male이면 Male_Type LoRA를 그래프에 조건부 체인. */
+    /**
+     * [2026-08-04 남캐] male이면 Male_Type LoRA를 그래프에 조건부 체인.
+     *
+     * <p>[§2-6 · 적대적 검토 반영] 무성별 오버로드 2종(2인자 public · 4인자 패키지 프라이빗)을 제거했다.
+     * 프로덕션 호출부가 0인 채 남아 있으면 다음 사람이 무심코 호출해 <b>조용히 male=false로 컴파일</b>된다 —
+     * E-6.1.a가 정확히 그 사고였는데, 그 커밋이 §2-6을 근거로 {@code UgcPromptAssembler}의 오버로드를
+     * 지우면서 같은 함정을 이 클래스에는 남겨 뒀다. 테스트는 명시 인자를 넘긴다.
+     */
     public ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix, boolean male) {
         return buildGoldenShot(positivePrompt, filenamePrefix, newSeed(), newSeed(), male);
-    }
-
-    ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix, long samplerSeed, long detailerSeed) {
-        return buildGoldenShot(positivePrompt, filenamePrefix, samplerSeed, detailerSeed, false);
     }
 
     ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix,
@@ -128,22 +127,11 @@ public class UgcWorkflowFactory {
     //  WF-2 · i2i 리파인 (Stage 2 베이스 / Stage 3 감정 15종 공용 — positive만 다름)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    public ObjectNode buildRefine(String inputImageName, String positivePrompt,
-                                  String faceWildcard, String filenamePrefix) {
-        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix, false);
-    }
-
-    /** [2026-08-04 남캐] male이면 Male_Type LoRA를 그래프에 조건부 체인. */
+    /** [2026-08-04 남캐] male이면 Male_Type LoRA를 조건부 체인. [§2-6] 무성별 오버로드 2종은 제거했다. */
     public ObjectNode buildRefine(String inputImageName, String positivePrompt,
                                   String faceWildcard, String filenamePrefix, boolean male) {
         return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix,
             newSeed(), newSeed(), male);
-    }
-
-    ObjectNode buildRefine(String inputImageName, String positivePrompt, String faceWildcard,
-                           String filenamePrefix, long samplerSeed, long detailerSeed) {
-        return buildRefine(inputImageName, positivePrompt, faceWildcard, filenamePrefix,
-            samplerSeed, detailerSeed, false);
     }
 
     ObjectNode buildRefine(String inputImageName, String positivePrompt, String faceWildcard,

@@ -41,6 +41,8 @@ public class UgcWorldController {
     private final UgcAssetService assetService;
     private final UgcPipelineProperties props;
     private final ApiRateLimiter rateLimiter;
+    /** [E-5.3.b] 월드 상세가 '이 수정으로 내려갈 공개 캐릭터 수'를 고지하기 위한 카운트 조회. */
+    private final com.spring.aichat.service.ugc.UgcReviewRevertService reviewRevertService;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  위저드
@@ -128,7 +130,7 @@ public class UgcWorldController {
     public ResponseEntity<UgcWorldDtos.MineResponse> mine(Authentication authentication) {
         String username = authentication.getName();
         List<UgcWorldDtos.UgcWorldView> worlds = worldService.getMyWorlds(username).stream()
-            .map(w -> toWorldView(w, null))
+            .map(w -> toWorldView(w, null, null))   // 목록은 카운트 미조회(월드마다 쿼리 금지)
             .toList();
         List<UgcWorldCreationJob> active = worldService.getActiveJobs(username);
         UgcWorldDtos.WorldCreationJobView activeJob = active.isEmpty() ? null : toJobView(active.get(0));
@@ -144,7 +146,9 @@ public class UgcWorldController {
                 l.getLocationKey(), l.getDisplayName(), l.getDescription(),
                 l.getBackgroundUrl(), l.getStatus()))
             .toList();
-        return ResponseEntity.ok(toWorldView(world, locations));
+        // [E-5.3.b] 상세에서만 공개 캐릭터 수를 실어 준다 — FE 확인창이 '수정하면 N개가 내려간다'를 고지한다.
+        return ResponseEntity.ok(toWorldView(world, locations,
+            reviewRevertService.countLinkedPublicCharacters(world.getId())));
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -240,11 +244,12 @@ public class UgcWorldController {
             state.isFreeReroll());
     }
 
-    private UgcWorldDtos.UgcWorldView toWorldView(UgcWorld world, List<UgcWorldDtos.WorldLocationView> locations) {
+    private UgcWorldDtos.UgcWorldView toWorldView(UgcWorld world, List<UgcWorldDtos.WorldLocationView> locations,
+                                                  Long publicCharacterCount) {
         return new UgcWorldDtos.UgcWorldView(
             world.getId(), world.getName(), world.getIntro(), world.getLore(),
             splitMood(world.getMoodTags()), world.getThumbnailUrl(),
-            world.getReviewStatus().name(), world.getCreatedAt(), locations);
+            world.getReviewStatus().name(), world.getCreatedAt(), locations, publicCharacterCount);
     }
 
     private static List<String> splitMood(String moodCsv) {

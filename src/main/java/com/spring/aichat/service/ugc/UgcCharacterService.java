@@ -192,7 +192,14 @@ public class UgcCharacterService {
         }
 
         if (ugcWorldId != null) {
-            UgcWorld world = ugcWorldRepository.findByIdAndOwnerUserId(ugcWorldId, character.getOwnerUserId())
+            // [E-5.3.b 후속 · 적대적 검토] 월드 행을 비관적 락으로 읽는다 — UgcWorldService.updateWorld와
+            //   직렬화하기 위해서다. 락이 없으면 다음 경합이 회귀를 통째로 우회한다:
+            //     T1 updateWorld: 연결된 PUBLIC 캐릭터 조회 → (아직 연결 전이라) 0건 → lore 수정 커밋
+            //     T2 linkWorld  : world.reviewStatus를 APPROVED로 읽음(T1 커밋 전) → PUBLIC 캐릭터 연결
+            //   결과: PUBLIC 캐릭터가 **미검수 lore**를 프롬프트에 싣는다.
+            //   락은 양쪽이 다 잡아야 성립한다 — 한쪽만 잡으면 직렬화되지 않는다.
+            UgcWorld world = ugcWorldRepository.findByIdForUpdate(ugcWorldId)
+                .filter(w -> w.isOwnedBy(character.getOwnerUserId()))
                 .orElseThrow(this::hiddenNotFound); // 타인/미존재 월드 은닉
             if (character.getVisibility() == CharacterVisibility.PUBLIC
                 && world.getReviewStatus() != WorldReviewStatus.APPROVED) {
