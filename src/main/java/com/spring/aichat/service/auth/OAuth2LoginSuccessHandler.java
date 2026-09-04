@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.Authentication;
@@ -45,7 +46,8 @@ import java.util.Map;
 @Slf4j
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
-    private final UserRepository userRepository;
+    /** [E-7.1.a] upsert를 별도 빈으로 분리 — 자기호출이라 @Transactional이 안 먹던 문제를 푼다. */
+    private final SocialUserUpsertService upsertService;
     private final ChatRoomRepository chatRoomRepository;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties props;
@@ -65,18 +67,41 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
 
         // 프로바이더별 유저 Upsert
-        User user = switch (registrationId) {
-            case "google" -> upsertGoogleUser(authentication);
-            case "kakao" -> upsertKakaoUser(authentication);
-            case "naver" -> upsertNaverUser(authentication);
-            default -> {
-                log.error("[OAUTH] Unknown provider: {}", registrationId);
-                response.sendRedirect("/login?error=unknown_provider");
-                yield null;
-            }
-        };
+        // [E-7.1.b] 종전에는 이 구간에 예외 처리가 전무해, upsert가 던지면 로그인 화면 대신
+        //   원시 500 페이지가 떴다(유저는 무엇이 잘못됐는지도 모른다). 전체를 감싼다.
+        SocialUserUpsertService.UpsertResult result;
+        try {
+            result = switch (registrationId) {
+                case "google" -> upsertGoogleUser(authentication);
+                case "kakao" -> upsertKakaoUser(authentication);
+                case "naver" -> upsertNaverUser(authentication);
+                default -> {
+                    log.error("[OAUTH] Unknown provider: {}", registrationId);
+                    redirectToLoginWithError(response, "unknown_provider", null);
+                    yield null;
+                }
+            };
+        } catch (Exception e) {
+            log.error("[OAUTH] upsert 실패 | provider={}", registrationId, e);
+            redirectToLoginWithError(response, "login_failed", null);
+            return;
+        }
 
-        if (user == null) return;
+        if (result == null) return;
+
+        // [E-7.1.a] 이메일 충돌 — decisions_confirmed §B #19 (B) provider 안내 리다이렉트.
+        //   종전에는 여기서 email UNIQUE에 무방비로 INSERT해 500이 났고, 재시도해도 같은 지점에서
+        //   죽어 그 유저는 그 provider로 영구히 로그인할 수 없었다.
+        //   ⚠ 이메일 자체는 쿼리스트링에 싣지 않는다 — 개인정보가 URL·리퍼러·로그에 남는다.
+        if (result.isEmailConflict()) {
+            log.warn("[OAUTH] 이메일 충돌로 로그인 중단 | 시도={} | 기존={}",
+                registrationId, result.conflictWith());
+            redirectToLoginWithError(response, "email_in_use",
+                result.conflictWith() != null ? result.conflictWith().name().toLowerCase() : null);
+            return;
+        }
+
+        User user = result.user();
 
         // [Phase 6] 정지/차단 계정은 소셜 로그인으로도 토큰 발급 차단.
         if (user.isAccessBlocked()) {
@@ -118,26 +143,54 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
     }
 
+    /**
+     * [E-7.1.a] 로그인 실패를 화면으로 안내한다.
+     *
+     * <p>기존 {@code account_suspended} 경로와 같은 형태({@code .replacePath("/login")}).
+     * ⚠ 이메일·닉네임 등 개인정보는 절대 쿼리스트링에 싣지 않는다 — URL은 리퍼러·서버 로그·
+     * 브라우저 히스토리에 남는다. provider 이름(google/kakao/naver)만 전달한다.
+     */
+    private void redirectToLoginWithError(HttpServletResponse response, String errorCode, String provider)
+        throws IOException {
+        String query = "error=" + errorCode + (provider != null ? "&provider=" + provider : "");
+        if (successRedirect != null && !successRedirect.isBlank()) {
+            String url = UriComponentsBuilder.fromUriString(successRedirect)
+                .replacePath("/login").replaceQuery(query)
+                .build(true).toUriString();
+            response.sendRedirect(url);
+        } else {
+            // successRedirect 미설정(로컬 등) — SPA 오리진을 모르므로 상대경로로 폴백한다.
+            response.sendRedirect("/login?" + query);
+        }
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Google (OpenID Connect)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Transactional
-    protected User upsertGoogleUser(Authentication authentication) {
+    private SocialUserUpsertService.UpsertResult upsertGoogleUser(Authentication authentication) {
         OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
         String email = oidcUser.getEmail();
         String sub = oidcUser.getSubject();
         String name = oidcUser.getFullName() != null ? oidcUser.getFullName() : "유저";
+        return doUpsert(AuthProvider.GOOGLE, sub, email, name, "google_");
+    }
 
-        return userRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, sub)
-            .orElseGet(() -> {
-                String username = email != null ? email : ("google_" + sub.substring(0, 8));
-                if (userRepository.existsByUsername(username)) {
-                    username = "google_" + sub.substring(0, 12);
-                }
-                User created = User.google(username, name, email, sub);
-                return userRepository.save(created);
-            });
+    /**
+     * [E-7.1.a] upsert 위임 + 레이스 폴백.
+     *
+     * <p>동시 요청이 같은 계정을 두 번 INSERT하면 {@code DataIntegrityViolationException}이 난다.
+     * ⚠ 그 재조회를 upsert의 트랜잭션 <b>안에서</b> 하면 안 된다 — 제약 위반으로 rollback-only가
+     * 마킹돼 이후 쿼리가 그대로 죽는다. 그래서 예외를 밖으로 받아 {@code REQUIRES_NEW} 조회로 푼다.
+     */
+    private SocialUserUpsertService.UpsertResult doUpsert(AuthProvider provider, String providerId,
+                                                          String email, String nickname, String prefix) {
+        try {
+            return upsertService.upsert(provider, providerId, email, nickname, prefix);
+        } catch (DataIntegrityViolationException race) {
+            log.warn("[OAUTH] upsert 레이스 — 새 트랜잭션에서 재조회 | provider={}", provider);
+            return upsertService.findExisting(provider, providerId, email);
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -145,8 +198,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     //  응답 구조: { "id": 12345, "kakao_account": { "email": "...", "profile": { "nickname": "..." } } }
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Transactional
-    protected User upsertKakaoUser(Authentication authentication) {
+    private SocialUserUpsertService.UpsertResult upsertKakaoUser(Authentication authentication) {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         Map<String, Object> attributes = oAuth2User.getAttributes();
 
@@ -160,16 +212,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String email = (String) kakaoAccount.get("email");
         String nickname = (String) profile.getOrDefault("nickname", "유저");
 
-        return userRepository.findByProviderAndProviderId(AuthProvider.KAKAO, providerId)
-            .orElseGet(() -> {
-                String username = email != null ? email : ("kakao_" + providerId.substring(0, 8));
-                if (userRepository.existsByUsername(username)) {
-                    username = "kakao_" + providerId;
-                }
-                User created = new User();
-                setUserFields(created, username, nickname, email, AuthProvider.KAKAO, providerId);
-                return userRepository.save(created);
-            });
+        return doUpsert(AuthProvider.KAKAO, providerId, email, nickname, "kakao_");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -177,8 +220,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     //  응답 구조: { "response": { "id": "...", "email": "...", "nickname": "..." } }
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Transactional
-    protected User upsertNaverUser(Authentication authentication) {
+    private SocialUserUpsertService.UpsertResult upsertNaverUser(Authentication authentication) {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         Map<String, Object> attributes = oAuth2User.getAttributes();
 
@@ -190,33 +232,11 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String nickname = (String) naverResponse.getOrDefault("nickname",
             naverResponse.getOrDefault("name", "유저"));
 
-        return userRepository.findByProviderAndProviderId(AuthProvider.NAVER, providerId)
-            .orElseGet(() -> {
-                String username = email != null ? email : ("naver_" + providerId.substring(0, 8));
-                if (userRepository.existsByUsername(username)) {
-                    username = "naver_" + providerId;
-                }
-                User created = new User();
-                setUserFields(created, username, (String) nickname, email, AuthProvider.NAVER, providerId);
-                return userRepository.save(created);
-            });
+        return doUpsert(AuthProvider.NAVER, providerId, email, (String) nickname, "naver_");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    private void setUserFields(User user, String username, String nickname, String email,
-                               AuthProvider provider, String providerId) {
-        try {
-            java.lang.reflect.Field f;
-            f = User.class.getDeclaredField("username"); f.setAccessible(true); f.set(user, username);
-            f = User.class.getDeclaredField("nickname"); f.setAccessible(true); f.set(user, nickname);
-            f = User.class.getDeclaredField("email"); f.setAccessible(true); f.set(user, email);
-            f = User.class.getDeclaredField("provider"); f.setAccessible(true); f.set(user, provider);
-            f = User.class.getDeclaredField("providerId"); f.setAccessible(true); f.set(user, providerId);
-        } catch (Exception e) {
-            throw new IllegalStateException("소셜 유저 생성 실패", e);
-        }
-    }
+    // [E-7.1.a] setUserFields는 SocialUserUpsertService로 옮겼다 — 여기 남기면 두 벌이 갈린다(§2-6 취지).
 
     // [Phase6/Tier1A] C-3: Refresh Token 쿠키에 Secure(prod) + SameSite=Strict 적용
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {

@@ -278,8 +278,8 @@
 | E-6.3.b | 잔존 | 잔존 | P3 | ONE_LINE | E-6.3.a를 @Query/Specification 단일화로 고치면 자동 해소. 별도 수정 불요. |
 | E-6.4 | 잔존 | **수정됨** | P1 | SMALL | 어드민 HEAD 0188aba 무변경이므로 예상대로 잔존. 부적절 공개 캐릭터를 UI로 내릴 수단이 여전히 없다 — 운영 SLA 리스크(docs/16 시크릿 BM·PG 심사와 직결).  <sub>⟳재대조 2026-09-03: 잔존→수정됨 · 3차(09-03) — BE 271b9b3 + Admin 0278fef · 표의 '어드민 HEAD 0188aba 무변경' 전제가 깨졌다 — 어드민 HEAD는 0278fef("feat : UGC 공개 철회 UI + 공개 상태 배지 (aichat E-6.4)")다. `grep -rn "unpublish" src/` → Chara</sub> |
 | E-6.5 | 잔존 | 잔존 | P2 | SMALL | 어드민 무변경. '가장 오래된 100건'만 보이는 구조 그대로. |
-| E-7.1.a | 잔존 | 잔존 | P1 | MEDIUM | 블록 D 무영향. email UNIQUE 충돌 시 500 영구 잠금 경로 그대로. 자기호출로 @Transactional 미적용인 구조도 유지(:126/:149/:181 protected). |
-| E-7.1.b | 잔존 | 잔존 | P2 | SMALL | E-7.1.a와 같은 커밋으로 처리. 블록 D 무영향. |
+| E-7.1.a | 잔존 | **수정됨** | P1 | MEDIUM | 블록 D 무영향. email UNIQUE 충돌 시 500 영구 잠금 경로 그대로. 자기호출로 @Transactional 미적용인 구조도 유지(:126/:149/:181 protected).  <sub>[OK]수정 2026-09-04: SocialUserUpsertService 신설(자기호출로 @Transactional이 안 먹던 문제 해소) + INSERT 전 findByEmail 검사. 충돌 시 decisions_confirmed §B #19 (B)대로 /login?error=email_in_use&provider=... 리다이렉트(이메일은 쿼리에 싣지 않는다). 레이스는 DataIntegrityViolationException을 TX 밖에서 받아 REQUIRES_NEW 재조회로 처리 — 같은 TX 안 재조회는 rollback-only로 죽는다.</sub> |
+| E-7.1.b | 잔존 | **수정됨** | P2 | SMALL | E-7.1.a와 같은 커밋으로 처리. 블록 D 무영향.  <sub>[OK]수정 2026-09-04: 핸들러 upsert 구간 전체를 try/catch로 감싸 원시 500 대신 /login?error=login_failed 리다이렉트. FE LoginPage에 쿼리 파싱 신설 — 종전에는 파싱이 없어 account_suspended·unknown_provider도 조용히 실패했다.</sub> |
 | F-1.c | 잔존 | 잔존 | P3 | SMALL | 극장 무변경 원칙대로 블록 D가 손대지 않았다. 좌표 유효(FE 실제 코드 라인은 :137 — 레지스터 근거 본문에 이미 명시됨). |
 | F-2 | 잔존 | 잔존 | P3 | ONE_LINE | 블록 D FE diff에 TheaterIntermissionPage.jsx 미포함 — 좌표 그대로 유효. |
 | F-3.b | 잔존 | **소멸** | P3 | ONE_LINE | FE 재작성 영향권 밖 — 블록 D는 ChatPage/ChatPageV2/BiometricStatusPanel 위주였고 useInvisibleMan.js는 무변경. 소멸 아님.  <sub>⟳재대조 2026-09-03: 잔존→소멸 · 1차(08-28) — FE 65ba7da (부수 정리로 소멸, 명시 픽스 목록엔 없음) · 표의 'useInvisibleMan.js 무변경' 전제가 낡았다 — 이 파일은 65ba7da(1차, "시크릿 게이트 전파·상태창 업셀 배선·성인인증 모달")에서 재작성됐다. 현재 `grep -n "dialogueMap" src/hooks/useInvi</sub> |
