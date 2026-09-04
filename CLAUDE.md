@@ -156,10 +156,11 @@ npm run build 2>&1 | grep -i "not exported"
 | 제품 결정 (로비·페르소나·BM·레거시 처분 §G 21건) | `docs/14_ProductDecisions_Session_Handoff.md` + `14_assets/impl_spec_details.md` |
 | 시크릿 모드 전략 (핵심 BM) | `docs/16_SecretMode_Pivot_Directive.md` |
 | 버그 레지스터 (원자 245건 — 근거·수정안 **본문**) | `docs/17_assets/defect_register.md` |
-| **결함 상태·좌표 정본** (블록 D 재판정 델타 245행) | `docs/19_assets/rejudgment_delta.md` |
+| **★ 최종 버그픽스 스코프 정본** (코드 85 · 설정 18 · 결정 12) | `docs/21_FinalBugFix_Readiness.md` + `docs/21_assets/scope_ledger.md` — 2026-09-04 전수 재판정. **델타와 어긋나면 이쪽이 우선** |
+| 결함 상태·좌표 (블록 D 재판정 델타 245행) | `docs/19_assets/rejudgment_delta.md` — docs/21이 덮는다 |
 | **버그픽스 결정 안건 정본** (22건 + 결정 불요 33건) | `docs/19_assets/decision_agenda.md` · 상위 판단 `docs/19_Register_Rejudgment.md` |
 | 블록 D 회귀·미등재 신규 결함 | `docs/19_assets/blockd_regressions.md` |
-| 버그픽스 배치 계획 | `docs/17_BugFix_Session_Readiness.md` §D |
+| 버그픽스 배치 계획 | `docs/21_FinalBugFix_Readiness.md` §E (구: `docs/17_BugFix_Session_Readiness.md` §D · `docs/19_assets/round3_plan.md` §3) |
 | 런칭 행정·인프라 실행 | `docs/18_Launch_Admin_Runbook.md` (§4 결정 안건은 docs/19가 대체) |
 | 상태창 개편 설계 | `docs/17_assets/hud_redesign_mockup.html` |
 
