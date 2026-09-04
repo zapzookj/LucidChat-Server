@@ -154,11 +154,12 @@ public class HeroineMemoryService {
     //  [DELETE] 스토리 초기화 시
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** 방 전체 캐릭터의 모든 메모리 삭제 + 캐시 무효화 (캐시는 prefix 패턴이라 일괄 삭제). */
-    @Transactional
-    public void clearMemoriesForRoom(Long roomId) {
-        clearMemoriesForRoom(roomId, java.util.List.of());
-    }
+    /*
+     * [적대적 검토 반영 · §2-6] 1인자 오버로드 `clearMemoriesForRoom(Long)`를 **제거했다**.
+     * 호출부가 0인 채 남겨 두면, 다음 사람이 그쪽을 호출해 캐시 evict 없이 지우는
+     * **이 배치가 방금 고친 바로 그 버그(E-4.6)** 를 조용히 재도입한다.
+     * 캐스트를 모르는 호출자는 `List.of()`를 명시적으로 넘겨 '무효화 대상 없음'이 선택임을 드러내라.
+     */
 
     /**
      * [E-4.6] 방 메모리 전체 삭제 + <b>캐릭터별 Redis 캐시 즉시 무효화</b>.

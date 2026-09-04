@@ -192,8 +192,10 @@ public class WorldRoutingService {
             //
             //   ★ 이 게이트는 `new_dynamic_location`을 깨지 않는다. 둘은 **별개 필드**다:
             //   동적 장소는 배경 트랜지션 채널(name/canonicalKey/description)로만 흐르고
-            //   WorldLocation 행을 만들지 않는다. `character_movements.location_key`는
-            //   프롬프트 계약상 선언된 WorldLocation 키다(AiJsonOutputV2 주석 참조).
+            //   WorldLocation 행도, 유저·캐릭터의 위치 키도 만들지 않는다.
+            //   프롬프트 계약도 그렇게 적혀 있다 — StoryDirectorPromptAssemblerV2의 Section 2 운용 규칙:
+            //   "Key Locations 사이의 이동은 반드시 location_change만 사용 · new_dynamic_location은
+            //    위 목록에 없는 완전히 새로운 장소가 서사상 필요할 때만".
             if (!isDeclaredLocationKey(room, m.locationKey())) {
                 log.warn("⚠️ [MOVEMENT] 미선언 location_key — 이동 건너뜀: roomId={}, charId={}, key={}",
                     room.getId(), m.characterId(), m.locationKey());
@@ -220,10 +222,22 @@ public class WorldRoutingService {
 
     /**
      * [E-3.②.13] 이 방의 월드에 선언된 장소 키인가 — 공식·UGC 양쪽을 덮는다.
-     * 방의 현재 동적 장소(canonical key)는 허용한다(디렉터가 방금 만든 곳으로 캐릭터를 부르는 정상 흐름).
+     *
+     * <p><b>위치 키 유입구 3곳의 공용 술어다</b>: 디렉터 {@code character_movements} ·
+     * 디렉터 {@code location_change}(유저 위치) · 클라이언트 MOVE 액션. 셋 중 하나만 열어 두면
+     * 게이트가 비대칭이 되어 오히려 나쁘다 — 유저만 유령 위치로 가면 {@code p.isAt(userLocationKey)}가
+     * 전원 false가 되어 그 턴 라우팅이 통째로 정전된다(적대적 검토 지적).
+     *
+     * <p>[적대적 검토 반영] 종전에 있던 '방의 현재 동적 장소(canonical key) 허용' 분기는 **제거했다**.
+     * 두 가지 이유로 사문이었다: ① 형식이 다르다 — canonical key는 정적 브리지 경로에서
+     * {@code WORLDID__KEY}로 조립되는데({@code ChatStreamServiceV2}) movement 키는 순수 키다.
+     * ② 순서가 반대다 — 동적 장소 영속은 TX-2 커밋 <b>이후</b>(processDynamicBackground)라
+     * movement 검사 시점의 값은 언제나 이전 턴 것이다.
+     * 애초에 동적 장소는 <b>배경 트랜지션 채널</b>이라 유저·캐릭터의 위치 키가 되지 않는다
+     * (processDynamicBackground는 currentDynamicLocationName/CanonicalKey/BgUrl만 건드린다).
      */
-    private boolean isDeclaredLocationKey(ChatRoom room, String locationKey) {
-        if (locationKey.equals(room.getCurrentDynamicCanonicalKey())) return true;
+    public boolean isDeclaredLocationKey(ChatRoom room, String locationKey) {
+        if (locationKey == null || locationKey.isBlank()) return false;
         if (room.isUgcWorldStory()) {
             return room.getUgcWorldId() != null
                 && ugcWorldLocationRepository

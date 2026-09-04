@@ -42,16 +42,26 @@ public record WorldView(
      * 세팅하는 사람이 읽을 이름) ③ 중립 카피. <b>raw 키는 어느 경우에도 표시하지 않는다</b> —
      * 원문은 로그에만 남긴다(운영 중 탐지가 목적이다).
      *
-     * @param dynamicName 방의 현재 동적 장소 이름. 없으면 null.
+     * <p>★ [적대적 검토 반영] 폴백 ②는 <b>키가 실제로 그 동적 장소일 때만</b> 쓴다.
+     * 종전엔 대조 없이 {@code dynamicName}을 반환해, 아무 관계 없는 미선언 키까지 방의 동적 장소
+     * 이름으로 <b>자신 있게 오표기</b>했다 — raw 키를 보여주던 시절보다 나쁘다(그땐 오탐을 알아챌 수 있었다).
+     * 특히 동적 장소 A에 있던 캐릭터가 남은 채 디렉터가 B를 만들면, 그 캐릭터가 B의 이름으로 표시됐다.
+     *
+     * @param dynamicName        방의 현재 동적 장소 이름. 없으면 null.
+     * @param dynamicCanonicalKey 그 동적 장소의 키 — {@code locationKey}와 일치할 때만 이름을 쓴다.
      */
     public static String resolveLocationDisplay(String locationKey,
                                                 List<LocationView> locations,
-                                                String dynamicName) {
+                                                String dynamicName,
+                                                String dynamicCanonicalKey) {
         if (locationKey == null || locationKey.isBlank()) return "(위치 미상)";
         for (LocationView l : locations) {
             if (l.key().equals(locationKey)) return l.displayName();
         }
-        if (dynamicName != null && !dynamicName.isBlank()) return dynamicName;
+        if (dynamicName != null && !dynamicName.isBlank()
+            && locationKey.equals(dynamicCanonicalKey)) {
+            return dynamicName;
+        }
         return "(임시 장소)";
     }
 

@@ -14,7 +14,6 @@ import com.spring.aichat.domain.heroine.CharacterPresence;
 import com.spring.aichat.domain.heroine.CharacterPresenceRepository;
 import com.spring.aichat.domain.heroine.ChatRoomHeroine;
 import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
-import com.spring.aichat.domain.memory.MemorySummaryRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.domain.world.*;
@@ -878,7 +877,8 @@ public class StoryV2Service {
                 p.getCurrentLocationKey(),
                 // [E-3.②.14] raw 키 폴백 금지 — 단일 출처 규칙으로 위임(미선언 키면 동적 장소명 → 중립 카피)
                 WorldView.resolveLocationDisplay(
-                    p.getCurrentLocationKey(), worldView.locations(), room.getCurrentDynamicLocationName()),
+                    p.getCurrentLocationKey(), worldView.locations(),
+                    room.getCurrentDynamicLocationName(), room.getCurrentDynamicCanonicalKey()),
                 p.getLastMovedAt()
             ))
             .toList();
@@ -886,7 +886,8 @@ public class StoryV2Service {
         // [E-3.②.14] ★ 이 값이 StoryV2Header·StoryV2TopIndicator에 그대로 렌더된다 —
         //   종전엔 미선언 키일 때 영문 SCREAMING_SNAKE 토큰이 채팅 헤더에 찍혔다.
         String userLocationDisplay = WorldView.resolveLocationDisplay(
-            room.getCurrentUserLocationKey(), worldView.locations(), room.getCurrentDynamicLocationName());
+            room.getCurrentUserLocationKey(), worldView.locations(),
+            room.getCurrentDynamicLocationName(), room.getCurrentDynamicCanonicalKey());
 
         long unreadCount = notificationService.countUnread(roomId);
 

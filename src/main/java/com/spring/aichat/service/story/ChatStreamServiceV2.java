@@ -263,7 +263,7 @@ public class ChatStreamServiceV2 {
             String savedUserLogId;
             try {
                 ChatLogDocument savedLog = chatLogRepository.save(
-                    buildUserLog(roomId, userMessage, actionType, request.actionPayload()));
+                    buildUserLog(jpa.room(), userMessage, actionType, request.actionPayload()));
                 savedUserLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
@@ -493,8 +493,11 @@ public class ChatStreamServiceV2 {
                 //   `p.isAt(userLocationKey)`가 전부 false가 되어 그 방의 라우팅이 무너진다.
                 //   ⚠ 디렉터 LLM의 `new_dynamic_location`은 이 게이트와 무관하다 —
                 //     그건 서버가 만드는 값이고 여기는 **클라이언트 유입구**다. 둘을 섞지 마라.
-                //   현재 위치는 항상 허용한다(동적 장소에 있는 유저가 갇히지 않도록).
-                if (!to.equals(room.getCurrentUserLocationKey()) && !isDeclaredLocation(room, to)) {
+                //   현재 위치는 항상 허용한다(어떤 이유로든 미선언 위치에 있는 유저가 갇히지 않도록).
+                //   [적대적 검토 반영] 술어는 WorldRoutingService 한 곳으로 통일했다 —
+                //   유입구마다 술어를 복제하면 다시 갈린다.
+                if (!to.equals(room.getCurrentUserLocationKey())
+                    && !routingService.isDeclaredLocationKey(room, to)) {
                     log.warn("⚠️ [V2-ACTION] 미선언 MOVE 대상 무시: roomId={}, key={}", room.getId(), to);
                     yield null;
                 }
@@ -513,21 +516,6 @@ public class ChatStreamServiceV2 {
     }
 
     /**
-     * [E-3.②.14] 이 방의 월드에 <b>선언된</b> 장소 키인가. 공식·UGC 양쪽을 덮는다.
-     * 클라이언트 MOVE 대상 검증 전용 — 디렉터가 만드는 동적 장소에는 적용하지 않는다.
-     */
-    private boolean isDeclaredLocation(ChatRoom room, String locationKey) {
-        if (room.isUgcWorldStory()) {
-            return room.getUgcWorldId() != null
-                && ugcWorldLocationRepository
-                    .findByUgcWorldIdAndLocationKey(room.getUgcWorldId(), locationKey).isPresent();
-        }
-        return room.getWorld() != null
-            && worldLocationRepository
-                .findByWorldIdAndLocationKey(room.getWorld().getId(), locationKey).isPresent();
-    }
-
-    /**
      * [V2 액션 주입면] 액션 로그 조립.
      *
      * <p>★ 여기서 만든 문자열은 {@code ChatRole.SYSTEM}으로 <b>영속</b>되고, 히스토리 조립이
@@ -540,13 +528,23 @@ public class ChatStreamServiceV2 {
      * <p>→ 저장에 쓰는 값은 <b>정규화한 것만</b> 쓴다. 거부하지는 않는다 — 정상 유저를 막지 않는
      * 방향으로만 좁힌다(원문이 필요하면 로그에 WARN으로 남는다).
      */
-    private ChatLogDocument buildUserLog(Long roomId, String userMessage, String actionType,
+    private ChatLogDocument buildUserLog(ChatRoom room, String userMessage, String actionType,
                                          com.spring.aichat.dto.story.StoryV2Requests.ActionPayload payload) {
+        Long roomId = room.getId();
         if (actionType == null && !userMessage.isBlank()) {
             return ChatLogDocument.user(roomId, userMessage);
         }
         String safeAction = normalizeActionType(actionType);
+        // [적대적 검토 반영] MOVE 게이트가 거부한 키를 여기서 저장하면, 그 값이 `[ACTION:] to=`로 영속돼
+        //   히스토리 조립에서 **매 턴 프롬프트로 재주입**된다 — 게이트가 반쪽이 된다.
+        //   normalizeActionType이 이미 쓰는 원칙(서버가 아는 값만 원형 보존)을 위치 키에도 적용한다.
         String safeTo = payload != null ? sanitizeActionValue(payload.toLocationKey()) : null;
+        if (safeTo != null
+            && !safeTo.equals(room.getCurrentUserLocationKey())
+            && !routingService.isDeclaredLocationKey(room, safeTo)) {
+            log.warn("⚠️ [V2-ACTION] 거부된 MOVE 키는 로그에도 남기지 않는다: roomId={}", roomId);
+            safeTo = null;
+        }
         String safeMessage = sanitizeActionValue(userMessage);
 
         String sysContent = "[ACTION:" + safeAction + "]"
@@ -958,6 +956,15 @@ public class ChatStreamServiceV2 {
         for (int i = ai.scenes().size() - 1; i >= 0; i--) {
             AiJsonOutputV2.SceneV2 s = ai.scenes().get(i);
             if (s.hasLocationChange()) {
+                // [E-3.②.13/14 후속 · 적대적 검토] 유입구 3곳 중 여기만 무검증이었다.
+                //   유저만 유령 위치로 가면 `p.isAt(userLocationKey)`가 전원 false가 되어
+                //   그 턴 라우팅이 통째로 정전되고, 헤더에도 미선언 키가 표시된다.
+                //   캐릭터 이동(applyCharacterMovements)과 같은 술어·같은 처분(무시)으로 맞춘다.
+                if (!routingService.isDeclaredLocationKey(room, s.locationChange())) {
+                    log.warn("⚠️ [V2-LOC] 미선언 location_change — 유저 위치 유지: roomId={}, key={}",
+                        room.getId(), s.locationChange());
+                    return;
+                }
                 room.updateUserLocation(s.locationChange());
                 log.debug("📍 [V2-LOC] User location updated: roomId={}, → {}",
                     room.getId(), s.locationChange());
@@ -1089,16 +1096,24 @@ public class ChatStreamServiceV2 {
 
     private void processOffscreenNotifications(ChatRoom room, ParsedV2Result parsed) {
         AiJsonOutputV2 ai = parsed.aiOutput();
+
+        // [E-4.13 후속 · 적대적 검토] ★ 응답 마킹을 **생성보다 먼저** 한다.
+        //   순서가 반대면, 같은 턴에 만들어진 알림이 곧바로 respondedAt으로 덮인다
+        //   (processDirectorOutput은 발신자가 오프스크린인지 검사하지 않아, 이번 턴에 말한 캐릭터가
+        //    알림을 내는 조합이 실제로 성립한다). 종전 조회는 readAt만 봐서 그래도 토스트가 떴는데,
+        //   배치 4가 respondedAt 필터를 넣으면서 그 알림이 **한 번도 노출되지 않게** 됐다 —
+        //   내가 만든 회귀다. '이번 턴 화자가 응답한 것'은 이번 턴 **이전**의 알림이라는 뜻이므로
+        //   마킹을 앞으로 옮기는 것이 의미상으로도 맞다.
+        Set<Long> speakerIds = collectSpokeSpeakerIds(room, ai);
+        for (Long charId : speakerIds) {
+            notificationService.markRespondedByCharacter(room.getId(), charId);
+        }
+
         if (ai.hasIncomingMessages()) {
             List<OffscreenNotificationService.IncomingMessage> msgs = ai.incomingMessages().stream()
                 .map(m -> new OffscreenNotificationService.IncomingMessage(m.fromCharacterId(), m.content()))
                 .toList();
             notificationService.processDirectorOutput(room, msgs);
-        }
-        // *대사한 모든 화자*가 미응답 알림 발신자였다면 응답 마킹
-        Set<Long> speakerIds = collectSpokeSpeakerIds(room, ai);
-        for (Long charId : speakerIds) {
-            notificationService.markRespondedByCharacter(room.getId(), charId);
         }
     }
 

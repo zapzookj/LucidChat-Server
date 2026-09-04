@@ -156,7 +156,8 @@ public class OffscreenNotificationService {
     @Transactional(readOnly = true)
     public List<NotificationResponse> findUnreadForToast(Long roomId) {
         List<OffscreenNotification> rows = notificationRepository
-            .findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullOrderBySentAtDesc(roomId);
+            .findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullAndExpiresAtAfterOrderBySentAtDesc(
+                roomId, LocalDateTime.now());
         if (rows.isEmpty()) return List.of();
         Map<Long, String> nameById = resolveCharacterNames(rows);
         return rows.stream()
@@ -189,7 +190,8 @@ public class OffscreenNotificationService {
     @Transactional(readOnly = true)
     public int countUnread(Long roomId) {
         // [E-4.13] 리스트를 통째로 로드해 size()를 세던 것을 count 쿼리로 교체했다.
-        return (int) notificationRepository.countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNull(roomId);
+        return (int) notificationRepository.countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullAndExpiresAtAfter(
+            roomId, LocalDateTime.now());
     }
 
     @Transactional

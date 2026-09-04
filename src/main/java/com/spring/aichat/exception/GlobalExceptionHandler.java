@@ -129,6 +129,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.security.oauth2.jwt.JwtException.class)
     public ResponseEntity<ApiErrorResponse> handleJwt(
         org.springframework.security.oauth2.jwt.JwtException e, HttpServletRequest req) {
+        // [적대적 검토 반영] JwtEncodingException(발급 실패)까지 401로 삼키면
+        //   **서명키 설정 오류가 '재로그인 하세요'로 위장**돼 서버 결함이 알람에서 사라진다.
+        //   디코드 계열만 401이고, 인코딩 실패는 서버 귀책이므로 500이 맞다.
+        if (e instanceof org.springframework.security.oauth2.jwt.JwtEncodingException) {
+            log.error("[INTERNAL] JWT 발급 실패 — 서명키/설정 문제: uri={}", req.getRequestURI(), e);
+            return ResponseEntity.internalServerError()
+                .body(ApiErrorResponse.of(500, ErrorCode.INTERNAL_ERROR, "서버 오류가 발생했습니다.", req.getRequestURI()));
+        }
         log.info("[UNAUTHORIZED] JWT 검증 실패: uri={}, msg={}", req.getRequestURI(), e.getMessage());
         return ResponseEntity.status(401)
             .body(ApiErrorResponse.of(401, ErrorCode.UNAUTHORIZED, "다시 로그인해 주세요.", req.getRequestURI()));

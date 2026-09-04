@@ -111,7 +111,7 @@ public class StoryDirectorPromptAssemblerV2 {
         dynamicSections.add(buildSection3PresentScene(room, heroines, presenceByCharId, userLocationKey, worldLocations));
         dynamicSections.add(buildSection4CurrentSpeakerMarker(heroines, currentSpeakerId));
         dynamicSections.add(buildSection5OtherPresent(heroines, presenceByCharId, userLocationKey, currentSpeakerId));
-        dynamicSections.add(buildSection6Offscreen(heroines, presenceByCharId, userLocationKey, worldLocations));
+        dynamicSections.add(buildSection6Offscreen(room, heroines, presenceByCharId, userLocationKey, worldLocations));
         dynamicSections.add(buildSection8Memory(room.getId(), heroines, worldMemory));
 
         // 조건부 신호 인젝션
@@ -269,7 +269,7 @@ public class StoryDirectorPromptAssemblerV2 {
                                              Map<Long, CharacterPresence> presenceByCharId,
                                              String userLocationKey,
                                              List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
-        String locDisplay = resolveLocationDisplay(userLocationKey, worldLocations);
+        String locDisplay = resolveLocationDisplay(userLocationKey, room, worldLocations);
         String dayPartDisplay = room.getCurrentDayPart() != null
             ? room.getCurrentDayPart().displayName() : "?";
         String dayDisplay = room.getCurrentDay() != null
@@ -464,7 +464,7 @@ public class StoryDirectorPromptAssemblerV2 {
     //  [6] OFFSCREEN CHARACTERS — dynamic
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildSection6Offscreen(List<ChatRoomHeroine> heroines,
+    private String buildSection6Offscreen(ChatRoom room, List<ChatRoomHeroine> heroines,
                                           Map<Long, CharacterPresence> presenceByCharId,
                                           String userLocationKey,
                                           List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
@@ -483,7 +483,7 @@ public class StoryDirectorPromptAssemblerV2 {
                 .map(h -> {
                     CharacterPresence p = presenceByCharId.get(h.getCharacter().getId());
                     String locDisplay = p != null
-                        ? resolveLocationDisplay(p.getCurrentLocationKey(), worldLocations)
+                        ? resolveLocationDisplay(p.getCurrentLocationKey(), room, worldLocations)
                         : "위치 미상";
                     return "- **%s** (ID: %d, %s): 관계 %s, 호감도 %d/100".formatted(
                         h.getCharacter().getName(),
@@ -834,22 +834,25 @@ public class StoryDirectorPromptAssemblerV2 {
     /**
      * [E-3.②.14] 폴백 규칙은 {@link com.spring.aichat.service.story.WorldView#resolveLocationDisplay}에
      * 단일 출처로 두고 여기서는 위임만 한다 — 종전엔 {@code orElse(locationKey)}로 raw 영문 토큰을
-     * 한국어 프롬프트에 맨몸으로 박아 넣었고, 방 상세 DTO도 같은 폴백을 복붙하고 있었다.
-     * 미선언 키는 운영 탐지 대상이므로 <b>표시가 아니라 로그로</b> 남긴다.
+     * 한국어 프롬프트에 맨몸으로 박아 넣었다.
+     *
+     * <p>[적대적 검토 반영] ① 방의 동적 장소 이름을 <b>실제로 넘긴다</b> — 종전엔 항상 null을 넘겨
+     * 화면은 '옥상 정원'인데 프롬프트만 '(임시 장소)'가 되는 불일치가 있었다(2-arg 위임 오버로드는 §2-6대로 제거).
+     * ② 프롬프트에서는 미선언 키를 <b>라벨과 함께 병기</b>한다 — 유출 우려는 유저 화면 쪽이지
+     * LLM system 프롬프트가 아니고, 여기서 키를 지우면 미선언 장소들이 전부 '(임시 장소)'로 붕괴해
+     * 디렉터가 서로 다른 장소를 구분하지 못한다.
      */
-    private String resolveLocationDisplay(String locationKey,
+    private String resolveLocationDisplay(String locationKey, ChatRoom room,
                                           List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
-        return resolveLocationDisplay(locationKey, worldLocations, null);
-    }
-
-    private String resolveLocationDisplay(String locationKey,
-                                          List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations,
-                                          String dynamicName) {
-        String display = com.spring.aichat.service.story.WorldView
-            .resolveLocationDisplay(locationKey, worldLocations, dynamicName);
+        String display = com.spring.aichat.service.story.WorldView.resolveLocationDisplay(
+            locationKey, worldLocations,
+            room.getCurrentDynamicLocationName(), room.getCurrentDynamicCanonicalKey());
         if (locationKey != null && !locationKey.isBlank()
             && worldLocations.stream().noneMatch(l -> l.key().equals(locationKey))) {
             log.warn("[V2-PROMPT] 미선언 location_key 표시 폴백: key={} → {}", locationKey, display);
+            if ("(임시 장소)".equals(display)) {
+                return "(임시 장소: " + locationKey + ")";   // 디렉터가 장소를 구분할 수 있게 키 병기
+            }
         }
         return display;
     }

@@ -44,7 +44,8 @@ public interface OffscreenNotificationRepository extends JpaRepository<Offscreen
      * 종전엔 프롬프트는 안 보는 알림을 화면만 계속 띄우고 있었다.
      */
     List<OffscreenNotification>
-    findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullOrderBySentAtDesc(Long chatRoomId);
+    findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullAndExpiresAtAfterOrderBySentAtDesc(
+        Long chatRoomId, LocalDateTime now);
 
     /**
      * 같은 캐릭터의 가장 최근 알림 — 쿨다운(24h) 가드용.
@@ -61,7 +62,8 @@ public interface OffscreenNotificationRepository extends JpaRepository<Offscreen
     /**
      * 미확인 알림 개수 — UI 배지 표시용. [E-4.13] 위와 같은 이유로 respondedAt까지 본다.
      */
-    long countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNull(Long chatRoomId);
+    long countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullAndExpiresAtAfter(
+        Long chatRoomId, LocalDateTime now);
 
     /** 스토리 초기화 시 일괄 삭제 */
     void deleteByChatRoom_Id(Long chatRoomId);
