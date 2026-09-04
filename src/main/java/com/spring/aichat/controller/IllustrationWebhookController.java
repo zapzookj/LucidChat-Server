@@ -75,7 +75,11 @@ public class IllustrationWebhookController {
         // trackId가 "BG_..." prefix면 Secret Mode 배경, 아니면 캐릭터 일러스트
         try {
             if (trackId != null && trackId.startsWith("BG_")) {
-                backgroundGenerationService.handleModelsLabWebhookCallback(generationId, payload);
+                // [E-4.15] 배경 트랙 웹훅은 **의도적으로 무시**한다.
+                //   완결은 pollModelsLabUntilComplete가 책임지고, 캐시 행은 성공 후에만 만들어지므로
+                //   웹훅이 조회할 앵커가 애초에 없었다(핸들러는 제거됨 — 그쪽 주석 참조).
+                //   분기 자체는 남긴다 — 없애면 배경 웹훅이 캐릭터 일러 핸들러로 잘못 흘러간다.
+                log.info("[MODELSLAB-WEBHOOK] 배경 트랙 콜백 무시(폴링이 완결 담당): trackId={}", trackId);
             } else {
                 illustrationService.handleModelsLabWebhookCallback(generationId, payload);
             }

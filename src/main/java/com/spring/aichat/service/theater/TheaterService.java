@@ -314,16 +314,24 @@ public class TheaterService {
             //   이 세션에서 이미 같은 유형의 사고를 한 번 냈다 — '미확정 분기 가드'가 정상 유저를
             //   잠가 철회했다. 여기서 반복하지 않는다.
             //
-            //   거부를 기본으로 켤 수 없는 이유(실측): ECS 롤링 배포는 신·구 태스크가 동시에
-            //   트래픽을 받는 창을 만든다. 그 창에서 신 태스크가 만든 세션(워터마크 -1 — non-null이라
-            //   grandfather 대상이 아니다)이 /next-batch를 **구** 태스크로 태우면 markBatchPaid가
-            //   실행되지 않고, 이어지는 /batch-consumed가 **신** 태스크로 가면 정상 결제 유저가
-            //   거부당한다. 게다가 FE는 이 실패를 console.error로만 삼켜 **무증상 정지**가 된다
-            //   (철회했던 분기 가드가 6시간 잠금이었다면 이쪽은 무기한이다).
+            //   ⚠ [B-5.2 · 2026-09-05 실측 정정] 아래 'ECS 롤링 배포' 근거는 **더 이상 사실이 아니다.**
+            //   ~~ECS 롤링 배포는 신·구 태스크가 동시에 트래픽을 받는 창을 만든다. 그 창에서
+            //   신 태스크가 만든 세션이 /next-batch를 구 태스크로 태우면 markBatchPaid가 실행되지 않고,
+            //   이어지는 /batch-consumed가 신 태스크로 가면 정상 결제 유저가 거부당한다.~~
             //
-            //   그래서 이번 릴리즈는 **관측만** 한다. 로그로 실제 거부 대상이 0에 수렴하는 것을
-            //   확인한 뒤 THEATER_PAID_BATCH_GATE=true로 강제한다. 강제 시점에는 FE가
-            //   ErrorCode.UNPAID_BATCH를 받아 loadNextBatch()로 자기 치유하도록 이미 배선돼 있다.
+            //   AWS→Vultr 이관(docs/20) 이후 배포는 `/opt/lucid/deploy.sh`의
+            //   `docker compose -f docker-compose.prod.yml up -d app` **단일 컨테이너 recreate**다 —
+            //   신·구 혼재 창이 없다(실측). 즉 켜기를 막던 두 전제 중 하나는 이미 해소됐다.
+            //
+            //   남은 전제는 하나: 프로드 로그의 "Unpaid batch consume detected" 건수가 0에 수렴할 것.
+            //   (2026-09-05 실측 시점 0건이나, 컨테이너 기동 1시간치 로그 + theater_states 0건이라
+            //    '사용이 없어서 0'인지 '정상이라 0'인지 구분되지 않는다 — 극장 실사용이 생긴 뒤 재확인.)
+            //
+            //   오탐의 대가도 재판정해 둔다: FE가 UNPAID_BATCH를 받아 loadNextBatch()로 자기 치유하는데,
+            //   그 경로는 워터마크가 뒤처져 있어 chargeBatchEnergy가 다시 돌아 **1E가 실제로 차감된다.**
+            //   무증상 정지보다는 낫지만 0은 아니다 — 켜는 결정의 재료로 남긴다.
+            //
+            //   현재는 여전히 **관측 모드**(기본 false)다. THEATER_PAID_BATCH_GATE=true로 강제한다.
             log.warn("🎭 [THEATER] Unpaid batch consume {} | roomId={} | batchId={} | paidWatermark={}",
                 paidBatchGateEnforced ? "REJECTED" : "detected (fail-open — 관측 모드)",
                 roomId, consumedBatchId, paidWatermark);

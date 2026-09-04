@@ -52,6 +52,10 @@ public class WorldRoutingService {
     private final ChatRoomHeroineRepository heroineRepository;
     private final CharacterPresenceRepository presenceRepository;
     private final CharacterRoutineRepository routineRepository;
+    /** [E-3.②.13] 디렉터가 낸 미선언 위치 키 차단 — 공식 월드. */
+    private final com.spring.aichat.domain.world.WorldLocationRepository worldLocationRepository;
+    /** [E-3.②.13] 같은 목적 — UGC 월드. 검사 스킵으로 두면 UGC 방만 구멍이 남는다. */
+    private final com.spring.aichat.domain.ugc.UgcWorldLocationRepository ugcWorldLocationRepository;
 
     /**
      * 라우팅 결과.
@@ -182,6 +186,20 @@ public class WorldRoutingService {
         for (Movement m : movements) {
             if (m.characterId() == null || m.locationKey() == null) continue;
 
+            // [E-3.②.13] 디렉터가 낸 미선언 키는 이동을 **건너뛴다**(기존 위치 유지).
+            //   유령 위치에 두면 `p.isAt(userLocationKey)`가 전부 false가 되어 그 캐릭터가
+            //   라우팅에서 통째로 빠진다 — 제자리에 두는 편이 언제나 낫다.
+            //
+            //   ★ 이 게이트는 `new_dynamic_location`을 깨지 않는다. 둘은 **별개 필드**다:
+            //   동적 장소는 배경 트랜지션 채널(name/canonicalKey/description)로만 흐르고
+            //   WorldLocation 행을 만들지 않는다. `character_movements.location_key`는
+            //   프롬프트 계약상 선언된 WorldLocation 키다(AiJsonOutputV2 주석 참조).
+            if (!isDeclaredLocationKey(room, m.locationKey())) {
+                log.warn("⚠️ [MOVEMENT] 미선언 location_key — 이동 건너뜀: roomId={}, charId={}, key={}",
+                    room.getId(), m.characterId(), m.locationKey());
+                continue;
+            }
+
             CharacterPresence p = presenceRepository
                 .findByChatRoom_IdAndCharacterId(room.getId(), m.characterId())
                 .orElse(null);
@@ -198,6 +216,21 @@ public class WorldRoutingService {
                     room.getId(), m.characterId(), m.locationKey());
             }
         }
+    }
+
+    /**
+     * [E-3.②.13] 이 방의 월드에 선언된 장소 키인가 — 공식·UGC 양쪽을 덮는다.
+     * 방의 현재 동적 장소(canonical key)는 허용한다(디렉터가 방금 만든 곳으로 캐릭터를 부르는 정상 흐름).
+     */
+    private boolean isDeclaredLocationKey(ChatRoom room, String locationKey) {
+        if (locationKey.equals(room.getCurrentDynamicCanonicalKey())) return true;
+        if (room.isUgcWorldStory()) {
+            return room.getUgcWorldId() != null
+                && ugcWorldLocationRepository
+                    .findByUgcWorldIdAndLocationKey(room.getUgcWorldId(), locationKey).isPresent();
+        }
+        return room.getWorld() != null
+            && worldLocationRepository.existsByWorldIdAndLocationKey(room.getWorld().getId(), locationKey);
     }
 
     public record Movement(Long characterId, String locationKey) {}

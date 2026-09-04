@@ -75,8 +75,14 @@ public class ChatLogPersister {
         log.error("[CHAT-LOG] All {} retries failed, deadlettering | roomId={}",
             MAX_ATTEMPTS, doc.getRoomId(), lastException);
 
+        // [D-6.7] ★ 데드레터는 **방금 실패한 그 MongoDB**에 저장된다. Mongo 장애로 여기 온 경우
+        //   이 저장도 같이 실패하므로 안전망 전체가 무의미해진다. 저장소를 분리하는 근본 수정은
+        //   스키마 결정이 필요하므로(별도 안건), 최소한 **페이로드가 컨테이너 로그에는 남게** 한다 —
+        //   그러면 Vultr 로그에서 수동 복구가 가능하다. 이 경로는 3회 재시도 실패 후에만 도므로
+        //   로그 볼륨 리스크는 사실상 없다(개인정보 보존기간 정책과 함께 판단할 것).
+        String payloadJson = null;
         try {
-            String payloadJson = objectMapper.writeValueAsString(doc);
+            payloadJson = objectMapper.writeValueAsString(doc);
             ChatLogDeadletter deadletter = ChatLogDeadletter.builder()
                 .originalRoomId(doc.getRoomId())
                 .originalRole(doc.getRole())
@@ -87,11 +93,14 @@ public class ChatLogPersister {
                 .build();
             deadletterRepository.save(deadletter);
         } catch (JsonProcessingException jpe) {
-            log.error("[CHAT-LOG] Deadletter serialization failed — payload lost! | roomId={}",
-                doc.getRoomId(), jpe);
+            // 직렬화 자체가 실패한 경우라 payloadJson이 아직 null이다 — 원시 필드를 직접 찍는다.
+            //   여기서 hoist된 변수만 찍으면 null이라 '로그로 수동 복구 가능'이 절반만 성립한다.
+            log.error("[CHAT-LOG] Deadletter serialization failed — payload lost! | roomId={} | role={} | raw={} | clean={} | inner={}",
+                doc.getRoomId(), doc.getRole(), doc.getRawContent(), doc.getCleanContent(),
+                doc.getInnerThought(), jpe);
         } catch (Exception dle) {
-            log.error("[CHAT-LOG] Deadletter save also failed — payload lost! | roomId={}",
-                doc.getRoomId(), dle);
+            log.error("[CHAT-LOG] Deadletter save also failed — payload lost! | roomId={} | payload={}",
+                doc.getRoomId(), payloadJson, dle);
         }
 
         return null;

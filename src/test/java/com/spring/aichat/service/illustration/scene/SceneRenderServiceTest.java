@@ -62,7 +62,7 @@ class SceneRenderServiceTest {
                 new AiJsonOutput.SceneCast("유나", "heroine", "female", "neutral", "crossed arms, standing, watching")
             )));
 
-        SceneRenderService.SceneRenderPlan plan = service.planRender(List.of(mia, jun, yuna), o);
+        SceneRenderService.SceneRenderPlan plan = service.planRender(List.of(mia, jun, yuna), o, true, null);
         ScenePromptAssembler.ScenePrompt p = plan.prompt();
 
         // 다중 모드: TIPO는 씬 레이어만
@@ -84,7 +84,7 @@ class SceneRenderServiceTest {
         assertTrue(p.banTags().contains("solo") && p.banTags().contains("pink hair"), p.banTags());
 
         // 해시 결정론(+성별 포함)
-        assertEquals(plan.sceneHash(), service.planRender(List.of(mia, jun, yuna), o).sceneHash());
+        assertEquals(plan.sceneHash(), service.planRender(List.of(mia, jun, yuna), o, true, null).sceneHash());
         assertEquals(64, plan.sceneHash().length());
     }
 
@@ -98,7 +98,7 @@ class SceneRenderServiceTest {
                 new AiJsonOutput.SceneCast("미아", "heroine", null, "blush", "arms around neck"),
                 new AiJsonOutput.SceneCast("user", "user", null, null, "from behind"))));
 
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o, true, null).prompt();
         assertFalse(p.tipoFull());
         assertTrue(p.sceneTags().contains("1girl, 1boy"), p.sceneTags());
         assertEquals(2, p.actorBlocks().size());
@@ -120,7 +120,7 @@ class SceneRenderServiceTest {
                 new AiJsonOutput.SceneCast("미아", "heroine", null, "blush", "arms around neck"),
                 new AiJsonOutput.SceneCast("user", "user", null, null, "pov, from behind"))));
 
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o, true, null).prompt();
 
         // 유저 제외 → 히로인 1인 풀-TIPO 모드로 강등, (1boy, …, pov:1.1) 결합 원천 차단
         assertTrue(p.tipoFull(), "유저 제외 후 1인 모드: " + p.sceneTags());
@@ -142,7 +142,7 @@ class SceneRenderServiceTest {
                 new AiJsonOutput.SceneCast("미아", "heroine", "female", "smile", "sitting"),
                 new AiJsonOutput.SceneCast("user", "user", "male", null, "sitting across"))));
 
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o, true, null).prompt();
         assertTrue(p.tipoFull());
         assertTrue(p.sceneTags().contains("pov"), p.sceneTags());
         assertTrue(p.sceneTags().contains("male pov"), p.sceneTags());
@@ -160,7 +160,7 @@ class SceneRenderServiceTest {
                 new AiJsonOutput.SceneCast("미아", "heroine", null, "blush", "arms around neck"),
                 new AiJsonOutput.SceneCast("user", "user", null, null, "from behind"))));
 
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o, true, null).prompt();
         assertFalse(p.tipoFull());
         assertTrue(p.sceneTags().contains("1girl, 1boy"), p.sceneTags());
         assertTrue(p.actorBlocks().get(1).startsWith("(1boy, faceless male"), p.actorBlocks().toString());
@@ -179,7 +179,7 @@ class SceneRenderServiceTest {
         AiJsonOutput o = out(false, new AiJsonOutput.SceneIllustrationSpec("shrine, autumn leaves", "holding broom",
             List.of(new AiJsonOutput.SceneCast("미아", "heroine", "female", "expressionless", "standing"))));
 
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), o, true, null).prompt();
         assertTrue(p.tipoFull());
         assertTrue(p.actorBlocks().isEmpty());
         assertTrue(p.sceneTags().contains("1girl"), p.sceneTags());
@@ -193,7 +193,7 @@ class SceneRenderServiceTest {
     @DisplayName("cast 미제공 폴백 — 방 히로인 솔로(풀 TIPO), DB 영속 태그 사용")
     void fallbackHeroineSolo() {
         Character mia = heroine("미아", "pink hair, blue eyes");
-        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), out(false, null)).prompt();
+        ScenePromptAssembler.ScenePrompt p = service.planRender(List.of(mia), out(false, null), true, null).prompt();
         assertTrue(p.tipoFull());
         assertTrue(p.sceneTags().contains("pink hair"), p.sceneTags());
     }

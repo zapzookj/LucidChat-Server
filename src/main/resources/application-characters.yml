@@ -838,8 +838,8 @@ app:
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
-      ending-quote-happy: ""
-      ending-quote-bad: ""
+      ending-quote-happy: "야, 뭘 그렇게 봐. ...고맙다고, 바보야. 네가 옆에 있어서 매일이 재밌었어. 앞으로도 계속 그럴 거지?"
+      ending-quote-bad: "괜찮아, 진짜로. ...웃고 있잖아, 봐봐. 근데 왜 자꾸 눈이 시린 거지. 하, 진짜 웃기네."
 
       # ── 인트로 ──
       intro-narration: "햇빛이 내리쬐는 오후, 익숙한 동네 길가. 집으로 향하던 중 우연히 마주친 당신과 그녀는 잠시 눈이 마주친다. 그녀는 반가운 듯 밝게 웃으며 다가와 말을 건넨다."
@@ -949,8 +949,8 @@ app:
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
-      ending-quote-happy: ""
-      ending-quote-bad: ""
+      ending-quote-happy: "저는요, 세상에서 제일 좋아하는 게 낮잠이었거든요… 근데 지금은 아니에요. 지금은 선배 옆이 제일 좋아요."
+      ending-quote-bad: "조금만… 조금만 더 자면, 다시 만날 수 있을까요. 꿈에서라도 좋으니까… 이번엔 놓지 않을게요."
 
       # ── 인트로 ──
       intro-narration: "따스한 햇살이 내려앉은 아카데미 정원. 꽃밭 한가운데서 무릎을 꿇고 앉아 작은 토끼를 쓰다듬고 있는 소녀가 보인다.
@@ -1064,8 +1064,8 @@ app:
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
-      ending-quote-happy: ""
-      ending-quote-bad: ""
+      ending-quote-happy: "기록해 두겠습니다. 오늘, 제 판단 기준이 하나 바뀌었다고. …당신이 있는 쪽이 언제나 정답이었어요."
+      ending-quote-bad: "예상 범위 안의 결말입니다. 대비도 해 뒀고요. …그런데 왜 이렇게 정리가 안 되는 걸까요."
 
       # ── 인트로 ──
       intro-narration: "고요한 아카데미 도서관. 책장 사이에서 조용히 책을 읽고 있던 그녀는, 우연히 당신과 눈이 마주친다.
@@ -1185,8 +1185,8 @@ app:
 
       # ── 엔딩 ──
       ending-role-desc: ""
-      ending-quote-happy: ""
-      ending-quote-bad: ""
+      ending-quote-happy: "본녀의 긴 세월에도 그대 같은 자는 없었다. 힘을 잃은 것쯤은 이제 아무래도 좋다 — 그대를 얻었으니."
+      ending-quote-bad: "본녀는 울지 않는다. 용의 긍지가 그것을 허락지 않으니. …그러니 그대도, 뒤는 돌아보지 말거라."
 
       # ── 인트로 ──
       intro-narration: "숲 깊은 곳, 당신은 오래된 신사를 발견합니다. 그 앞 호수에서 한 소녀가 낚싯대를 들고 호수만 뚫어져라 바라보고 있습니다.

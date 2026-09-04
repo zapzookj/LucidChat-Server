@@ -96,8 +96,8 @@ public class SceneRenderService {
      * @param turnIndex      현재 턴 수(로그 카운트 기준)
      */
     public SceneView resolveForTurn(Long roomId, List<Character> roomCharacters,
-                                    AiJsonOutput out, int turnIndex, boolean sfw) {
-        SceneRenderPlan plan = planRender(roomCharacters, out, sfw);
+                                    AiJsonOutput out, int turnIndex, boolean sfw, Boolean userMale) {
+        SceneRenderPlan plan = planRender(roomCharacters, out, sfw, userMale);
 
         // [리뷰픽스] 인플라이트 디덥 — 동일 scene_hash 렌더가 아직 PENDING/GENERATING이면
         // 새 RunPod 잡을 제출하지 않고 그 행을 그대로 반환(프론트가 같은 id 폴링).
@@ -182,8 +182,9 @@ public class SceneRenderService {
      */
     public SceneView submitManual(Long roomId, List<Character> cast,
                                   AiJsonOutput.SceneIllustrationSpec spec, int turnIndex,
-                                  boolean sfw, Long requestedBy, EnergySplit charge) {
-        SceneRenderPlan plan = planRender(cast, spec, sfw);
+                                  boolean sfw, Long requestedBy, EnergySplit charge,
+                                  Boolean userMale) {
+        SceneRenderPlan plan = planRender(cast, spec, sfw, userMale);
         SceneIllustration pending = repository.save(SceneIllustration.pendingManual(
             roomId, turnIndex, plan.sceneHash(), plan.prompt().fullPrompt(),
             requestedBy, charge));
@@ -220,24 +221,21 @@ public class SceneRenderService {
 
     public record SceneRenderPlan(ScenePromptAssembler.ScenePrompt prompt, String sceneHash) {}
 
-    /** 테스트 편의 오버로드 — sfw 기본값 true. */
-    public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out) {
-        return planRender(roomCharacters, out, true);
-    }
-
     /**
      * LLM 출력 + 방 캐릭터로 씬 positive와 scene_hash를 계산.
      *
      * @param sfw [리뷰픽스 수위 게이트] 비시크릿 방이면 true — sfw 태그 강제 + NSFW 밴.
      *            시크릿 방(SecretModeService 통과)만 false.
      */
-    public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out, boolean sfw) {
-        return planRender(roomCharacters, out == null ? null : out.sceneIllustration(), sfw);
+    public SceneRenderPlan planRender(List<Character> roomCharacters, AiJsonOutput out, boolean sfw,
+                                      Boolean userMale) {
+        return planRender(roomCharacters, out == null ? null : out.sceneIllustration(), sfw, userMale);
     }
 
     /** [2026-07-31 에픽 B] 스펙 직접 수용 오버로드 — 씬 디렉터(수동 경로) 산출용. */
     public SceneRenderPlan planRender(List<Character> roomCharacters,
-                                      AiJsonOutput.SceneIllustrationSpec spec, boolean sfw) {
+                                      AiJsonOutput.SceneIllustrationSpec spec, boolean sfw,
+                                      Boolean userMale) {
         String location = spec == null ? "" : nz(spec.locationDescription());
         String action = spec == null ? "" : nz(spec.actionDescription());
 
@@ -249,7 +247,11 @@ public class SceneRenderService {
 
         if (spec != null && spec.cast() != null && !spec.cast().isEmpty()) {
             for (AiJsonOutput.SceneCast c : spec.cast()) {
-                boolean male = c.isMale();
+                // [E-2.15] 유저 액터의 성별은 **페르소나 스냅샷이 권위**다 — 히로인이 DB 권위인 것과 대칭.
+                //   종전엔 LLM이 낸 cast.gender를 그대로 믿어 여성 페르소나가 남성으로 렌더될 수 있었다.
+                //   ★ castKey도 같은 값으로 계산해야 scene_hash 디덥이 성별 변경을 인지한다 —
+                //     빠뜨리면 페르소나 성별을 바꿔도 옛 렌더가 재사용된다.
+                boolean male = (c.isUser() && userMale != null) ? userMale : c.isMale();
                 castKey.append('|').append(nz(c.ref())).append(':').append(male ? 'M' : 'F')
                     .append(':').append(nz(c.emotion())).append(':').append(nz(c.pose()));
                 if (c.isUser()) {

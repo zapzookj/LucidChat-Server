@@ -129,13 +129,69 @@ class SceneManualRequestTest {
             List.of(new AiJsonOutput.SceneCast("미아", "heroine", "female", "smile", "sitting"),
                     new AiJsonOutput.SceneCast("user", "user", "male", "", "pov")));
 
-        SceneRenderService.SceneRenderPlan plan = service.planRender(List.of(mia), spec, true);
+        // [E-2.15] userMale=null = 스냅샷 미지정 → 종전대로 LLM cast.gender 폴백(이 테스트의 계약 유지)
+        SceneRenderService.SceneRenderPlan plan = service.planRender(List.of(mia), spec, true, null);
         assertTrue(plan.prompt().sceneTags().contains("1girl"), plan.prompt().sceneTags());
         assertFalse(plan.prompt().sceneTags().contains("1boy"),
             "pov 정규화 — 유저(=카메라)는 화면 밖: " + plan.prompt().sceneTags());
         assertTrue(plan.prompt().sceneTags().contains("pov"), plan.prompt().sceneTags());
         assertTrue(plan.prompt().sceneTags().contains("sfw"), "비시크릿 sfw 게이트 유지");
         assertNotNull(plan.sceneHash());
+    }
+
+    // ━━━━━━━━━━ [E-2.15] 유저 액터 성별 — 페르소나 스냅샷이 권위 ━━━━━━━━━━
+
+    /** 유저 액터가 화면에 남는 케이스(pov 아님)에서만 성별 태그가 의미를 갖는다. */
+    private static AiJsonOutput.SceneIllustrationSpec specWithUser(String llmGender) {
+        return new AiJsonOutput.SceneIllustrationSpec(
+            "cafe interior", "standing side by side",
+            List.of(new AiJsonOutput.SceneCast("미아", "heroine", "female", "smile", "standing"),
+                    new AiJsonOutput.SceneCast("user", "user", llmGender, "", "standing")));
+    }
+
+    @Test
+    @DisplayName("페르소나 스냅샷이 LLM cast.gender를 덮는다 — 여성 페르소나는 남성으로 렌더되지 않는다")
+    void personaSnapshotOverridesLlmGender() {
+        SceneRenderService service = new SceneRenderService(
+            props("manual"), new ScenePromptAssembler(), null, null, null, null, null, null);
+        Character mia = heroine("미아", "pink hair, twintails");
+
+        // LLM은 male이라 했지만 방의 페르소나 스냅샷은 female이다 → 스냅샷이 이긴다
+        String tags = service.planRender(List.of(mia), specWithUser("male"), true, false)
+            .prompt().sceneTags();
+        assertFalse(tags.contains("1boy"), "스냅샷(female)이 권위여야 한다: " + tags);
+
+        // 반대 방향도 성립해야 한다 — 남성 페르소나인데 LLM이 female이라 한 경우
+        String maleTags = service.planRender(List.of(mia), specWithUser("female"), true, true)
+            .prompt().sceneTags();
+        assertTrue(maleTags.contains("1boy"), "스냅샷(male)이 권위여야 한다: " + maleTags);
+    }
+
+    @Test
+    @DisplayName("castKey가 유저 성별을 반영한다 — 페르소나 성별을 바꾸면 옛 렌더가 재사용되지 않는다")
+    void sceneHashChangesWithPersonaGender() {
+        SceneRenderService service = new SceneRenderService(
+            props("manual"), new ScenePromptAssembler(), null, null, null, null, null, null);
+        Character mia = heroine("미아", "pink hair, twintails");
+
+        String femaleHash = service.planRender(List.of(mia), specWithUser("male"), true, false).sceneHash();
+        String maleHash = service.planRender(List.of(mia), specWithUser("male"), true, true).sceneHash();
+
+        // castKey에 스냅샷 성별을 함께 넣지 않으면 두 해시가 같아져 디덥이 성별 변경을 못 본다.
+        assertNotEquals(femaleHash, maleHash,
+            "scene_hash가 페르소나 성별을 인지해야 한다 — 아니면 성별을 바꿔도 옛 렌더가 재사용된다");
+    }
+
+    @Test
+    @DisplayName("스냅샷 미지정(null)이면 종전대로 LLM cast.gender 폴백")
+    void nullSnapshotFallsBackToLlmGender() {
+        SceneRenderService service = new SceneRenderService(
+            props("manual"), new ScenePromptAssembler(), null, null, null, null, null, null);
+        Character mia = heroine("미아", "pink hair, twintails");
+
+        String tags = service.planRender(List.of(mia), specWithUser("male"), true, null)
+            .prompt().sceneTags();
+        assertTrue(tags.contains("1boy"), "userMale=null이면 LLM 값을 그대로 쓴다: " + tags);
     }
 
     // ━━━━━━━━━━ 트리거 모드 게이트 ━━━━━━━━━━

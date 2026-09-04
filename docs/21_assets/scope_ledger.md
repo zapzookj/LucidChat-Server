@@ -1523,3 +1523,34 @@ SELECT h.id FROM chat_room_heroines h LEFT JOIN characters c ON c.id = h.charact
 SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='chat_room_heroines'::regclass AND contype='f';
 ```
 </details>
+
+### 배치 8 — 시드·일러·기타 BE (9건 + 미등재 E-2.15b)
+
+| 결함 | 상태 |
+|---|---|
+| E-3.④.5~8 | ✅ 4캐릭터 엔딩 인용구 8줄 |
+| E-3.③.2 | ✅ MODERN_KOREA `DAILY` → `DAILY_CALM` — **CDN 실측으로 심각도가 바뀐 건** |
+| E-3.②.13 | ✅ 디렉터 movement에 선언 장소 화이트리스트(공식·UGC 양쪽) |
+| E-2.15 · **E-2.15b** | ✅ 씬 일러 유저 성별 = 페르소나 스냅샷 권위 + castKey 동반. 유닛 3건 신설 |
+| E-4.15 | ✅ (b) 사문 웹훅 경로 제거 + 무효 `@Transactional` 제거 |
+| D-6.7 | 🟡 **부분수정** — (C) 로그 보존만. 저장소 분리(A안)는 스키마 결정이라 별도 안건 |
+| B-5.2 | ⏸ **결정 대기** — 코드 완비, 게이트 off. 단 켜기 전제 하나가 실측으로 해소됐다(아래) |
+
+**★ 실측이 판정을 바꾼 것 3건**
+
+1. **E-3.③.2가 표기 문제가 아니었다.** MODERN_KOREA의 `default-bgm: DAILY`가 가리키는
+   `assets.lucid-chat.com/sounds/worlds/modern_korea/bgm_daily.mp3`가 **404**다(`bgm_daily_calm.mp3`는 200).
+   즉 그 월드의 V2 STORY 방은 전부 **BGM 없이** 시작하고 있었다. 4개 월드 자산을 전수 확인했다 —
+   나머지 3개는 TOUCHING(전역 파일, 200)이라 무관하다.
+2. **E-3.②.13의 화이트리스트가 안전하다.** `character_movements`와 `new_dynamic_location`은
+   **별개 필드**다 — 동적 장소는 배경 트랜지션 채널로만 흐르고 WorldLocation 행을 만들지 않는다.
+   두 검증자의 엇갈린 권고를 코드로 갈랐다.
+3. **B-5.2의 켜기 전제 하나가 이미 해소됐다.** 코드 주석이 근거로 든 'ECS 롤링 배포의 신·구 혼재 창'은
+   AWS→Vultr 이관 후 사실이 아니다 — `deploy.sh`는 `docker compose up -d app` **단일 recreate**다(실측).
+   낡은 근거를 주석에서 정정했다. 남은 전제는 '`Unpaid batch consume detected` 0 수렴' 하나뿐인데,
+   현재 로그가 기동 1시간치 + `theater_states` 0건이라 **'사용이 없어서 0'과 구분되지 않는다** —
+   극장 실사용이 생긴 뒤 재확인이 필요하다.
+   그리고 오탐의 대가를 재판정해 주석에 남겼다: FE 자기치유(`loadNextBatch`)가 **1E를 실제로 재차감**한다.
+
+**§2-6가 또 값을 했다** — E-2.15에서 무성별 `planRender` 오버로드 3종을 지우자 컴파일러가
+`ChatStreamService.resolveForTurn`(= **E-2.15b**)을 함께 드러냈다. 두 건이 한 커밋으로 닫혔다.

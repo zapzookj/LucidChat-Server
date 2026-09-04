@@ -294,37 +294,21 @@ public class BackgroundGenerationService {
     //  4. Webhook 콜백 — ModelsLab 전용 (Fal은 SDK subscribe가 완료 자동 처리, webhook 불필요)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /**
-     * [Phase 6-Illust] ModelsLab webhook 콜백 (Secret Mode 배경 트랙).
+    /*
+     * [E-4.15] ModelsLab 배경 웹훅 핸들러를 **제거했다** — 구조적으로 사문이었다.
+     *
+     * 조회 앵커(BackgroundCache 행)는 persistCache가 **이미지 URL을 성공적으로 받은 뒤에만** 만든다.
+     * 따라서 ① 실패 케이스에는 findByFalRequestId가 찾을 행이 애초에 없고
+     *       ② 성공 케이스는 폴링(pollModelsLabUntilComplete)이 이미 완결해 멱등 가드가 즉시 return했다.
+     * 어느 쪽으로도 이 핸들러가 하는 일이 없었다 — '웹훅 폴백이 있다'는 착각만 남겼다.
+     *
+     * 되살리는 안(pending 행 선저장)은 회귀면이 4곳이라 채택하지 않았다:
+     *   resolveBackground L2 HIT 판정 · generateBackgroundAsync 중복 가드 · persistCache 업서트 전환,
+     *   그리고 결정적으로 <b>BackgroundCache에 imageUrl 변경 API가 없다</b>(세터·업데이터 0건) —
+     *   pending 행을 넣어도 완성 URL을 되쓸 수단이 없어 image_url이 영원히 null로 남는다.
+     * 배경은 캐시 미스 시 다음 요청에서 다시 생성되므로 유저 피해가 영구적이지 않다(원가 재지출뿐).
+     * 완결은 폴링이 책임진다 — 아래 5절.
      */
-    @Transactional
-    public void handleModelsLabWebhookCallback(String generationId, JsonNode payload) {
-        log.info("[BG-WEBHOOK] (ModelsLab) Received: id={}", generationId);
-
-        backgroundCacheRepository.findByFalRequestId(generationId).ifPresent(cache -> {
-            if (cache.getImageUrl() != null && !cache.getImageUrl().isBlank()) {
-                log.info("[BG-WEBHOOK] (ModelsLab) Already processed (idempotent): {}", generationId);
-                return;
-            }
-            String imageUrl = modelsLabClient.extractFirstOutputUrl(payload);
-            if (imageUrl == null) {
-                log.warn("[BG-WEBHOOK] (ModelsLab) No image url in payload: {}", generationId);
-                return;
-            }
-            uploadAndCache(cache, imageUrl, generationId);
-        });
-    }
-
-    private void uploadAndCache(BackgroundCache cache, String imageUrl, String providerRequestId) {
-        try {
-            String s3Url = s3StorageService.downloadAndUpload(imageUrl, "backgrounds/", cache.getCacheHash());
-            String redisKey = REDIS_BG_PREFIX + cache.getCacheHash();
-            cacheService.setBackgroundCache(redisKey, s3Url);
-            log.info("[BG-WEBHOOK] Processed: requestId={}, s3Url={}", providerRequestId, s3Url);
-        } catch (Exception e) {
-            log.error("[BG-WEBHOOK] Processing failed: {}", providerRequestId, e);
-        }
-    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  5. 폴링 — ModelsLab 전용 (Fal은 SDK가 내부 폴링)
@@ -370,7 +354,11 @@ public class BackgroundGenerationService {
     //  6. 캐시 영속화
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    @Transactional
+    /*
+     * [E-4.15] {@code @Transactional}을 뗐다 — 이 메서드는 같은 클래스의 generateBackgroundSync가
+     * 직접 부르므로 프록시를 타지 않아 애노테이션이 **아무 효과가 없었다**.
+     * 있는 척하는 트랜잭션 경계는 없는 것보다 위험하다. 실제 쓰기는 repository.save 한 번이다.
+     */
     protected void persistCache(
         String locationName, String canonicalKey, String timeOfDay,
         String s3Url, String promptUsed, Long characterId, String providerRequestId

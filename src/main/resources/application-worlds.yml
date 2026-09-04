@@ -33,7 +33,12 @@ app:
       hero-image-url: https://assets.lucid-chat.com/worlds/modern_korea/hero.png
       thumbnail-url: https://assets.lucid-chat.com/worlds/modern_korea/thumb.png
       opening-narration: 평범한 하루의 시작. 하지만 오늘은 어쩐지 다른 예감이 든다. 도시의 어느 한 구석에서, 운명은 이미 움직이고 있다.
-      default-bgm: DAILY
+      # [E-3.③.2] DAILY → DAILY_CALM. DAILY는 V1 전용 레거시 값이라 V2 방이 자기 어휘 밖에서 시작했고,
+      #   무엇보다 그 값이 가리키는 파일이 **CDN에 없다**(실측 2026-09-05:
+      #   .../worlds/modern_korea/bgm_daily.mp3 = 404, bgm_daily_calm.mp3 = 200).
+      #   즉 MODERN_KOREA의 V2 STORY 방은 전부 BGM 없이 시작하고 있었다 — 표기 문제가 아니라 무음이다.
+      #   나머지 3개 월드는 TOUCHING(전역 파일, 200)이라 무관하다.
+      default-bgm: DAILY_CALM
       mood-keywords: 캠퍼스,도시,일상,현대
       secret-allowed: false
       active: true

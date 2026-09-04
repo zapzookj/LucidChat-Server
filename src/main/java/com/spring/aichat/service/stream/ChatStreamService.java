@@ -495,7 +495,10 @@ public class ChatStreamService {
                     // [리뷰픽스 수위 게이트] 비시크릿 방은 sfw 강제 — 시크릿(성인인증+BM 통과)만 해제
                     com.spring.aichat.service.illustration.scene.SceneRenderService.SceneView view = sceneRenderService.resolveForTurn(
                         roomId, List.of(jpa.room().getCharacter()),
-                        parsed.aiOutput(), (int) (jpa.logCount() + 1), !effectiveSecretMode);
+                        parsed.aiOutput(), (int) (jpa.logCount() + 1), !effectiveSecretMode,
+                        // [E-2.15b] 인밴드 자동 경로에도 페르소나 성별 스냅샷을 전달한다 —
+                        //   trigger=auto로 되살리는 날 이 경로만 LLM 성별을 믿는 비대칭이 남지 않도록.
+                        jpa.room().isPersonaUserMale());
                     if (view != null) {
                         sceneIllust = new SendChatResponse.SceneIllustrationInfo(
                             view.id(), view.turnIndex(), view.status(), view.imageUrl());

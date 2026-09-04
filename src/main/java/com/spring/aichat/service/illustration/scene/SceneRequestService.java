@@ -180,8 +180,11 @@ public class SceneRequestService {
                 AiJsonOutput.SceneIllustrationSpec spec =
                     directorService.composeSpec(recentLogs, cast, resolveLocationText(room), sfw,
                         room.isPersonaUserMale());   // [페르소나] 유저 성별 스냅샷 반영
+                // [E-2.15] 프롬프트 힌트(composeSpec)뿐 아니라 **렌더 액터 성별**에도 스냅샷을 권위로 넘긴다 —
+                //   종전엔 힌트만 주고 실제 성별은 LLM cast.gender를 믿어, 모델이 무시하면 그대로 렌더됐다.
                 return renderService.submitManual(
-                    roomId, cast, spec, turnIndex, sfw, user.getId(), charge);
+                    roomId, cast, spec, turnIndex, sfw, user.getId(), charge,
+                    room.isPersonaUserMale());
             } catch (SceneRenderService.RenderPoolSaturatedException e) {
                 // [리뷰픽스 이중 환불] failRender가 행 기반 멱등 환불을 이미 완료 — 여기서 재환불 금지
                 log.warn("[SCENE-REQUEST] 렌더 풀 포화(환불은 failRender가 완료): roomId={}", roomId);
