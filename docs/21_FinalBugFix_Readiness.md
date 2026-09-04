@@ -154,22 +154,34 @@
 
 ---
 
-## H. ★ 착수 전 필요한 프로드 실측
+## H. 프로드 실측 — **집행 완료 (2026-09-04, 읽기 전용)**
 
-계획서 §6-1이 요구한 8건 중 **최소 4건이 P2 판정의 전제**다. 이번 세션에서 SSH가 권한 정책에 막혔다.
+종원이 SSH를 열어줘 계획서 §6-1의 항목을 직접 실측했다. **판정 4건이 바뀌었다.**
 
-| # | 명령 | 무엇이 갈리는가 |
-|---|---|---|
-| ① | `docker compose logs app \| grep -c '🎭 \[PREFETCH\] Done'` vs `'Failed'` | `D-5.6` 확정 → **UNREACHABLE 4건(D-5.1/5.2/5.3/5.5)의 처분 전체** |
-| ② | `SELECT count(*), min(created_at) FROM user_illustrations WHERE status='PENDING';` | `D-2.k` 정리 스크립트 필요 여부 · 10E 소각 규모 |
-| ③ | `docker exec lucid-app printenv \| grep -E 'MODELSLAB_WEBHOOK_SECRET\|LUCID_WEBHOOK_BASE\|UGC_RUNPOD_WEBHOOK_SECRET'` | `D-18` 착수 형태 |
-| ④ | `SELECT count(*) FROM chat_logs WHERE content LIKE '[NARRATION]%';` 길이 p99 | `E-5.1.b` 상한 확정 |
-| ⑤ | `docker compose logs app \| grep -c 'Unpaid batch consume detected'` | **B-5.2 게이트를 켤 수 있는가** |
-| ⑥ | `SELECT id,slug,secret_eligible FROM characters WHERE source='OFFICIAL' AND secret_eligible=false;` | 9-A′ 착수 가부(0건이어야 안전) |
-| ⑦ | `psql -tAc "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='users'::regclass AND contype='c';"` | 카카오 개통 시 `users_provider_check` 드리프트 |
-| ⑧ | Vercel 대시보드 env — `VITE_PORTONE_MERCHANT_CODE` 존재 여부 | **결제 진입 차단 여부(D-2)** |
+### H-1. 규모 (판단의 배경)
 
-접속: `ssh -i ~/.ssh/lucid_deploy root@141.164.37.146`. 전부 **읽기 전용**이다.
+| users | orders | chat_rooms | **theater_states** | characters | user_illustrations |
+|---:|---:|---:|---:|---:|---:|
+| 10 | **0** | 30 | **0** | 25 | **0** |
+
+극장·결제·레거시 일러는 **실사용이 0**이다. 배치 7(극장 12건)의 실피해는 현재 0이고,
+`D-2.k` 정리 스크립트는 **대상이 없어 불요**다.
+
+### H-2. 실측 결과
+
+| # | 항목 | **실측** | 판정 변화 |
+|---|---|---|---|
+| ① | 극장 prefetch 로그 | `PREFETCH` 매칭 **0건** — 단 컨테이너 기동이 1시간 전(`08:10:48Z`, restarts=0)이고 `theater_states`가 0이라 **로그로는 판별 불가** | `D-5.6` **미확정 유지**. 다만 극장 사용 0이라 실피해 0 — 배치 7 후순위 확정 |
+| ② | 잔존 PENDING 일러 | 테이블 실재(`to_regclass` non-null) · **행 0** | `D-2.k` 정리 스크립트 **불요로 종결** |
+| ③ | 웹훅 시크릿 실제 값 | `MODELSLAB_WEBHOOK_SECRET` **len=0** · `LUCID_WEBHOOK_BASE` len=26(**설정됨**) · **`UGC_RUNPOD_WEBHOOK_SECRET` len=64(설정됨)** · `PORTONE_WEBHOOK_SECRET` **len=0** · `NICE_CLIENT_ID`·`NICE_RETURN_URL` **len=0** | **스윕3 정정** — UGC RunPod 웹훅은 코드 기본값이 fail-open이나 **프로드엔 시크릿이 들어 있다**(무인증 표면 아님). `D-18`은 ModelsLab 축만 남는다 |
+| ④ | 나레이션 길이 분포 | **미집행** — `chat_logs`는 Mongo Atlas(`mongodb+srv://…lucidchatdocument…`)라 서버에서 조회 불가 | `E-5.1.b` 상한은 현행 500 유지. 결정은 차단 vs 로깅만 하나뿐 |
+| ⑤ | 무과금 배치 소비 | `Unpaid batch consume detected` **0건** — ①과 같은 이유로 판별 불가(극장 사용 0) | `B-5.2` 게이트는 **켜도 무해**(거부 대상이 0). 다만 실증 없이 켜는 것이라 배포 후 로그 관측 조건은 유지 |
+| ⑥ | 공식 캐릭터 `secret_eligible` | **false 0건.** 10종 전부 `t`이고 `age`도 전부 채워져 있다(airi 21 · yeonhwa 1000 · taeri 21 · luna 20 · claire 24 · rosetta 20 · chaerin 22 · sierra 20 · edel 27 · seolah 100) | **9-A′【B】(캐스트 전수 판정) 착수 안전 확정.** 유료 해금 유저가 잃을 월드 시크릿 없음 |
+| ⑦ | `users_provider_check` | **`KAKAO`가 이미 포함돼 있다** — `CHECK (provider = ANY (ARRAY['LOCAL','GOOGLE','KAKAO','NAVER']))`. 가입 분포는 `NAVER 9 · LOCAL 1` | **스윕3의 UNKNOWN 해소** — 카카오 개통일에 CHECK 드리프트 **없다**(§2-7 함정 비해당). 남은 건 yml registration뿐 |
+| ⑧ | Vercel env `VITE_PORTONE_MERCHANT_CODE` | **미집행 — 종원 확인 필요** (대시보드 접근 불가) | 없으면 **결제 진입 전면 차단** |
+
+접속: `ssh -i ~/.ssh/lucid_deploy root@141.164.37.146`. DB: `docker exec lucid-postgres psql -U postgres -d lucidchat`.
+Mongo는 Atlas 외부라 서버에서 못 본다.
 
 ---
 
