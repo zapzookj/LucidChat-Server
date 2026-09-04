@@ -102,8 +102,12 @@ public class SupportTicketService {
 
     @Transactional(readOnly = true)
     public Page<SupportTicketSummary> adminList(SupportTicketStatus status, SupportTicketType type, Pageable pageable) {
+        // [E-6.2] 4분기. 종전엔 `if(status) else if(type)` 2분기라 상태+유형을 동시에 고르면
+        //   type이 조용히 버려져 어드민이 '결제 문의 중 미처리'를 걸러낼 수 없었다.
+        //   (컨트롤러가 blank→null 정규화를 이미 해 주므로 여기선 null 판정만 한다.)
         Page<SupportTicket> page;
-        if (status != null) page = ticketRepository.findByStatusOrderByIdDesc(status, pageable);
+        if (status != null && type != null) page = ticketRepository.findByStatusAndTypeOrderByIdDesc(status, type, pageable);
+        else if (status != null) page = ticketRepository.findByStatusOrderByIdDesc(status, pageable);
         else if (type != null) page = ticketRepository.findByTypeOrderByIdDesc(type, pageable);
         else page = ticketRepository.findAllByOrderByIdDesc(pageable);
         return page.map(SupportTicketSummary::from);

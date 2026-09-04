@@ -18,5 +18,8 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
 
     Page<SupportTicket> findByTypeOrderByIdDesc(SupportTicketType type, Pageable pageable);
 
+    /** [E-6.2] 상태+유형 동시 필터. 종전엔 else-if 사슬이라 status가 있으면 type이 조용히 무시됐다. */
+    Page<SupportTicket> findByStatusAndTypeOrderByIdDesc(SupportTicketStatus status, SupportTicketType type, Pageable pageable);
+
     long countByStatus(SupportTicketStatus status);
 }
