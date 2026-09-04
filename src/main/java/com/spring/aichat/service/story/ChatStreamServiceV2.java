@@ -122,6 +122,18 @@ public class ChatStreamServiceV2 {
 
     private static final int RAG_SKIP_THRESHOLD = 6;
 
+    /**
+     * [V2 액션 주입면] 액션 파라미터(장소 키 등)의 길이 상한.
+     *
+     * <p>이 값들은 {@code buildUserLog}가 {@code [ACTION:...]} SYSTEM 로그로 <b>영속</b>하고,
+     * 히스토리 조립이 {@code [ACTION:}으로 시작하는 hidden 로그를 <b>재주입</b>한다
+     * ({@code buildMessageHistoryV2}의 hidden 예외 분기). 장소 키에 120자를 넘길 정상 사유가 없다.
+     */
+    private static final int ACTION_VALUE_MAX = 120;
+
+    /** 서버가 아는 액션. 이 밖의 값은 저장·주입 경로에서 UNKNOWN으로 접는다. */
+    private static final Set<String> KNOWN_ACTIONS = Set.of("MOVE", "TIME_ADVANCE", "NEXT_SCENE");
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  inner records
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -213,6 +225,24 @@ public class ChatStreamServiceV2 {
             cacheService.evictUserProfile(jpa.username());
 
             // ── 3. Prompt Injection Check ──
+            // [V2 액션 주입면] 액션 파라미터도 검사한다. 종전에는 이 블록과 모더레이션(위)이 **둘 다**
+            //   !userMessage.isBlank() 게이트라 message=""로 오는 액션 요청이 두 스캔을 통째로
+            //   건너뛰었다 — 그 값은 [ACTION:...] SYSTEM 로그로 영속되고 system 롤로 재주입된다.
+            //   저장값은 buildUserLog가 정규화하므로 주입 자체는 막히지만, **시도는 기록해야** 한다
+            //   (V1의 E-5.1.b와 같은 감지+기록 정책 — 차단은 하지 않는다).
+            String actionScanTarget = (request.actionPayload() != null
+                ? String.valueOf(request.actionPayload().toLocationKey()) : "");
+            if (userMessage.isBlank() && !actionScanTarget.isBlank() && !"null".equals(actionScanTarget)) {
+                PromptInjectionGuard.InjectionCheckResult actInj =
+                    injectionGuard.checkChatMessage(actionScanTarget, jpa.username());
+                if (actInj.detected()) {
+                    log.warn("⚠️ [V2-INJECTION] 액션 파라미터에서 감지 | severity={} | user={}",
+                        actInj.severity(), jpa.username());
+                    moderationEventService.recordInjection(
+                        roomForCheck.getUser().getId(), jpa.username(), roomId, "ACTION_V2",
+                        actInj.severity().name(), actInj.matchedPattern(), actionScanTarget);
+                }
+            }
             if (!userMessage.isBlank()) {
                 PromptInjectionGuard.InjectionCheckResult injCheck =
                     injectionGuard.checkChatMessage(userMessage, jpa.username());
@@ -412,7 +442,13 @@ public class ChatStreamServiceV2 {
                     log.warn("⚠️ [V2-ACTION] MOVE without toLocationKey, ignored");
                     yield null;
                 }
-                String to = payload.toLocationKey();
+                // [V2 액션 주입면] 아래에서 이 값이 LLM 지시문에 그대로 보간되고 방에도 영속된다.
+                //   개행·대괄호가 들어가면 새 지시문 줄처럼 보일 수 있으므로 정규화한 값만 쓴다.
+                String to = sanitizeActionValue(payload.toLocationKey());
+                if (to == null) {
+                    log.warn("⚠️ [V2-ACTION] MOVE toLocationKey가 정규화 후 비었다 — 무시");
+                    yield null;
+                }
                 txTemplate.execute(status -> {
                     ChatRoom fresh = chatRoomRepository.findById(room.getId()).orElseThrow();
                     fresh.updateUserLocation(to);
@@ -427,15 +463,59 @@ public class ChatStreamServiceV2 {
         };
     }
 
+    /**
+     * [V2 액션 주입면] 액션 로그 조립.
+     *
+     * <p>★ 여기서 만든 문자열은 {@code ChatRole.SYSTEM}으로 <b>영속</b>되고, 히스토리 조립이
+     * {@code [ACTION:}으로 시작하는 hidden 로그를 <b>system 롤로 재주입</b>한다. 유저는 SYSTEM 로그를
+     * 지울 수도 없다. 그런데 {@code actionType}·{@code toLocationKey}는 클라이언트가 완전히 제어하고
+     * (요청 DTO에 제약 애노테이션이 없다), 모더레이션·인젝션 스캔은 <b>둘 다</b>
+     * {@code !userMessage.isBlank()} 게이트라 {@code message=""}면 통째로 건너뛴다.
+     * 즉 빈 메시지 + 조작된 actionType이면 두 스캔을 우회해 system 롤 문장을 심을 수 있었다.
+     *
+     * <p>→ 저장에 쓰는 값은 <b>정규화한 것만</b> 쓴다. 거부하지는 않는다 — 정상 유저를 막지 않는
+     * 방향으로만 좁힌다(원문이 필요하면 로그에 WARN으로 남는다).
+     */
     private ChatLogDocument buildUserLog(Long roomId, String userMessage, String actionType,
                                          com.spring.aichat.dto.story.StoryV2Requests.ActionPayload payload) {
         if (actionType == null && !userMessage.isBlank()) {
             return ChatLogDocument.user(roomId, userMessage);
         }
-        String sysContent = "[ACTION:" + actionType + "]"
-            + (payload != null && payload.toLocationKey() != null ? " to=" + payload.toLocationKey() : "")
-            + (!userMessage.isBlank() ? " | message=" + userMessage : "");
+        String safeAction = normalizeActionType(actionType);
+        String safeTo = payload != null ? sanitizeActionValue(payload.toLocationKey()) : null;
+        String safeMessage = sanitizeActionValue(userMessage);
+
+        String sysContent = "[ACTION:" + safeAction + "]"
+            + (safeTo != null ? " to=" + safeTo : "")
+            + (safeMessage != null ? " | message=" + safeMessage : "");
         return ChatLogDocument.hiddenSystem(roomId, sysContent);
+    }
+
+    /** 서버가 아는 액션만 원형을 남기고 나머지는 UNKNOWN으로 접는다 — 저장·재주입되는 값이라 원문을 남기면 안 된다. */
+    private String normalizeActionType(String raw) {
+        if (raw == null) return "NONE";
+        String upper = raw.toUpperCase(Locale.ROOT);
+        if (KNOWN_ACTIONS.contains(upper)) return upper;
+        log.warn("⚠️ [V2-ACTION] 알 수 없는 actionType — UNKNOWN으로 저장 | len={}", raw.length());
+        return "UNKNOWN";
+    }
+
+    /**
+     * 액션 파라미터 정규화 — 개행·대괄호를 제거하고 길이를 제한한다.
+     *
+     * <p>개행과 {@code []}를 지우는 이유: 이 값이 {@code [ACTION:...]} 한 줄로 저장돼 system 롤로
+     * 재주입되므로, 줄바꿈이나 대괄호를 넣으면 <b>새로운 지시문처럼 보이는 줄</b>을 만들 수 있다.
+     * 길이 초과는 절단한다 — 거부하면 정상 유저가 막히고, 절단은 WARN으로 관측된다.
+     */
+    private String sanitizeActionValue(String raw) {
+        if (raw == null) return null;
+        String s = raw.replaceAll("[\\r\\n\\[\\]]", " ").trim();
+        if (s.isEmpty()) return null;
+        if (s.length() <= ACTION_VALUE_MAX) return s;
+        int end = ACTION_VALUE_MAX;
+        if (Character.isHighSurrogate(s.charAt(end - 1))) end--;   // 서로게이트 페어 보호
+        log.warn("✂️ [V2-ACTION] 액션 값 길이 상한 초과 — 절단 | {}자 → {}자", s.length(), end);
+        return s.substring(0, end);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
