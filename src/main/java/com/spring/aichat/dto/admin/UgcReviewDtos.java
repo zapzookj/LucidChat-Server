@@ -60,8 +60,14 @@ public final class UgcReviewDtos {
         List<WorldLocationItem> locations
     ) {}
 
+    /**
+     * @param status READY / GENERATING / FAILED — [E-5.3.b] 장소 추가가 이제 연결된 PUBLIC 캐릭터를
+     *               재심사로 되돌리므로, <b>배경이 아직 없는 장소가 심사 화면에 뜨는 조합이 상시화</b>된다.
+     *               상태를 함께 내려 심사자가 '빈 이미지'를 결함으로 오인하지 않게 한다.
+     *               (설명 텍스트 자체가 심사 대상이므로 배경 없는 장소를 걸러내지는 않는다.)
+     */
     public record WorldLocationItem(String locationKey, String displayName,
-                                    String description, String backgroundUrl) {}
+                                    String description, String backgroundUrl, String status) {}
 
     /**
      * 판정 — 체크박스 3개 동시 제출.

@@ -58,7 +58,10 @@ public interface CharacterRepository extends JpaRepository<Character, Long> {
     /** UGC slug 충돌 방지용. */
     boolean existsBySlug(String slug);
 
-    /** [2026-07-22 사후 편집 가드] 공개 심사 중인 캐릭터가 연결된 월드의 내용 변경 차단(TOCTOU 방지). */
-    boolean existsByUgcWorldIdAndVisibility(Long ugcWorldId,
+    /**
+     * [E-5.3.b] 월드 내용이 바뀌었을 때 재심사로 되돌릴 대상 — 그 월드에 연결된 PUBLIC 캐릭터.
+     * 종전엔 월드만 reviewStatus=NONE으로 리셋되고 캐릭터는 PUBLIC인 채 남아 리셋이 실효가 없었다.
+     */
+    List<Character> findByUgcWorldIdAndVisibility(Long ugcWorldId,
         com.spring.aichat.domain.enums.CharacterVisibility visibility);
 }

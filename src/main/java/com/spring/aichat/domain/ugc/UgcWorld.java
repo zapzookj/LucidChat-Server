@@ -106,10 +106,18 @@ public class UgcWorld {
     /**
      * [2026-07-22 사후 편집] 설정 텍스트 수정 (무료 — null 필드 유지).
      * 판정 이력이 있으면(APPROVED/REJECTED) NONE으로 리셋 — 수정본은 재검수 대상이며,
-     * PUBLIC 캐릭터 연결 게이트(APPROVED만)가 자동으로 다시 잠긴다. 기존 PUBLIC 캐릭터는 유지.
+     * PUBLIC 캐릭터 연결 게이트(APPROVED만)가 자동으로 다시 잠긴다.
+     *
+     * <p>[E-5.3.b] 종전 주석은 "기존 PUBLIC 캐릭터는 유지"였고 그것이 결함이었다 —
+     * 월드만 NONE으로 떨어지고 이미 PUBLIC인 캐릭터는 공개된 채 남아 <b>리셋이 실효가 없었다</b>.
+     * 심사 통과 후 lore를 통째로 갈아끼우면 무검수 내용이 공개 캐릭터 프롬프트에 그대로 주입된다.
+     * 이제 호출부({@code UgcWorldService.updateWorld})가 이 반환값을 보고 연결된 PUBLIC 캐릭터를
+     * {@code PENDING_PUBLIC}으로 되돌린다.
+     *
+     * @param moodTags null=유지 · 빈 문자열=클리어 마커(태그 전체 삭제) · 그 외=교체
+     * @return 실제로 값이 바뀌었으면 true (= 재심사 회귀가 필요하다)
      */
-    /** @param moodTags null=유지 · 빈 문자열=클리어 마커(태그 전체 삭제) · 그 외=교체 */
-    public void updateTexts(String name, String intro, String lore, String moodTags) {
+    public boolean updateTexts(String name, String intro, String lore, String moodTags) {
         boolean changed = false;
         if (name != null && !name.isBlank() && !name.equals(this.name)) { this.name = name; changed = true; }
         if (intro != null && !intro.equals(this.intro)) { this.intro = intro; changed = true; }
@@ -123,6 +131,7 @@ public class UgcWorld {
         if (changed && reviewStatus != WorldReviewStatus.NONE) {
             this.reviewStatus = WorldReviewStatus.NONE;
         }
+        return changed;
     }
 
     /**

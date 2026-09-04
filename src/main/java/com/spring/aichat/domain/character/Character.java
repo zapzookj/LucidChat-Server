@@ -893,6 +893,25 @@ public class Character {
         return false;
     }
 
+    /**
+     * [E-5.3.b · 안건 20 (A)의 미적용분] 연결된 월드의 심사 대상 내용(텍스트·장소)이 바뀌어 재심사가
+     * 필요해졌을 때 PUBLIC 캐릭터를 대기 상태로 되돌린다.
+     *
+     * <p>{@link #requestPublish()}를 쓰면 안 된다 — 그쪽은 PUBLIC에 대해
+     * {@code IllegalStateException}을 던져서 월드 수정 트랜잭션을 통째로 롤백시킨다
+     * ({@code addLocation}은 1E 과금 경로라 더 위험하다). 레지스터의 원 수정안이 그 함정에 걸려 있었다.
+     *
+     * <p>{@link #updateUgcTexts}와 같은 계약: 되돌렸으면 true. PRIVATE는 심사 대상이 아니고
+     * PENDING_PUBLIC은 이미 대기 상태라 둘 다 건드리지 않는다.
+     */
+    public boolean revertToReviewForWorldChange() {
+        if (isUgc() && visibility == CharacterVisibility.PUBLIC) {
+            this.visibility = CharacterVisibility.PENDING_PUBLIC;
+            return true;
+        }
+        return false;
+    }
+
     // ── 공개 심사 경로 ──
 
     public void requestPublish() {

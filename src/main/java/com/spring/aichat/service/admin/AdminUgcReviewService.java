@@ -106,7 +106,8 @@ public class AdminUgcReviewService {
                 w.getReviewStatus().name(), w.getReviewNote(),
                 ugcWorldLocationRepository.findByUgcWorldIdAndActiveTrueOrderByDisplayOrderAsc(w.getId()).stream()
                     .map(l -> new UgcReviewDtos.WorldLocationItem(
-                        l.getLocationKey(), l.getDisplayName(), l.getDescription(), l.getBackgroundUrl()))
+                        l.getLocationKey(), l.getDisplayName(), l.getDescription(),
+                        l.getBackgroundUrl(), l.getStatus()))
                     .toList()))
             .orElse(null);
     }

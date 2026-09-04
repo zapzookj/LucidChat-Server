@@ -423,15 +423,15 @@ public class UgcWorldService {
 
         txTemplate.executeWithoutResult(tx -> {
             UgcWorld world = ownedWorldOrThrow(username, worldId);
-            requireNotUnderReview(worldId);
             // moodTags: null=유지 · 빈 배열=클리어(빈 문자열 마커 — joinMood는 빈 리스트에 null 반환)
             String moodCsv = null;
             if (req.moodTags() != null) {
                 String joined = UgcWorldPipelineWorker.joinMood(req.moodTags());
                 moodCsv = joined != null ? joined : "";
             }
-            world.updateTexts(blankToNull(req.name()), req.intro(), req.lore(), moodCsv);
+            boolean changed = world.updateTexts(blankToNull(req.name()), req.intro(), req.lore(), moodCsv);
             worldRepository.save(world);
+            if (changed) revertLinkedPublicCharacters(worldId, username, "세계관 설정 수정");
         });
         log.info("[UGC-WORLD] 사후 텍스트 수정: username={}, worldId={}", username, worldId);
     }
@@ -461,7 +461,6 @@ public class UgcWorldService {
             UgcWorld locked = worldRepository.findByIdForUpdate(worldId)
                 .filter(w -> w.isOwnedBy(owner.getId()))
                 .orElseThrow(() -> new NotFoundException("세계관을 찾을 수 없습니다. worldId=" + worldId));
-            requireNotUnderReview(locked.getId());
             List<UgcWorldLocation> existing = locationRepository.findByUgcWorldIdOrderByDisplayOrderAsc(worldId);
             long activeCount = existing.stream().filter(UgcWorldLocation::isActive).count();
             int max = props.world().locationsMax();
@@ -481,6 +480,9 @@ public class UgcWorldService {
             // [안건 20 = (A)] 승인 후 장소 추가 → 재검수 회귀. updateTexts만 회귀시키고
             //   장소 추가를 열어 두면 미검수 장소 설명이 공개 캐릭터 프롬프트에 주입된다(E-5.3.a).
             locked.markNeedsRereview();
+            // [E-5.3.b] 월드만 NONE으로 떨어뜨리는 것으로는 부족하다 — 이미 PUBLIC인 캐릭터가
+            //   공개된 채 남으면 리셋이 실효가 없다. 장소 추가는 무조건 심사 대상을 늘리므로 항상 회귀.
+            revertLinkedPublicCharacters(worldId, username, "세계관 장소 추가");
 
             return locationRepository.save(
                 UgcWorldLocation.createGenerating(worldId, key, displayName, description, order, charge)).getId();
@@ -523,7 +525,9 @@ public class UgcWorldService {
     public void retryLocation(String username, Long worldId, String locationKey) {
         Long locationId = txTemplate.execute(tx -> {
             ownedWorldOrThrow(username, worldId);
-            requireNotUnderReview(worldId);
+            // [E-5.3.b] 심사 가드를 걸지 않는다 — 재시도는 이미 있는 장소 설명으로 배경을 다시 만들 뿐
+            //   심사 대상을 늘리지 않는다. 종전 가드는 '심사 중이면 실패 장소를 되살릴 수도 없다'는
+            //   막다른 길을 만들었다.
             UgcWorldLocation loc = locationRepository
                 .findByUgcWorldIdAndLocationKey(worldId, requireLocationKey(locationKey))
                 .orElseThrow(() -> new NotFoundException("장소를 찾을 수 없습니다."));
@@ -543,7 +547,9 @@ public class UgcWorldService {
     public void deleteFailedLocation(String username, Long worldId, String locationKey) {
         txTemplate.executeWithoutResult(tx -> {
             ownedWorldOrThrow(username, worldId);
-            requireNotUnderReview(worldId);
+            // [E-5.3.b] ★ 여기에 심사 가드가 있으면 안 된다 — 이것이 실패 장소의 <b>유일한 1E 환불
+            //   경로</b>다. 종전 가드는 '장소 추가 → 배경 생성 실패 → 심사 중이라 환불 불가'를 성립시켰다.
+            //   실패 장소 삭제는 심사 대상을 줄이면 줄였지 늘리지 않는다.
             UgcWorldLocation loc = locationRepository
                 .findByUgcWorldIdAndLocationKey(worldId, requireLocationKey(locationKey))
                 .orElseThrow(() -> new NotFoundException("장소를 찾을 수 없습니다."));
@@ -569,13 +575,36 @@ public class UgcWorldService {
     }
 
     /**
-     * [사후 편집 가드] 공개 심사 중인 캐릭터가 연결된 월드는 내용 변경 금지 —
-     * 관리자가 상세에서 본 월드와 판정 대상이 달라지는 TOCTOU 방지 (linkWorld 차단과 동일 원칙).
+     * [E-5.3.b · 안건 20 (A)] 월드 내용이 바뀌면 연결된 <b>PUBLIC 캐릭터를 재심사로 되돌린다</b>.
+     * 회귀만으로 어드민 큐({@code AdminUgcReviewService.queue()})에 자동 편입되므로 큐 쪽 변경은 없다.
+     *
+     * <p><b>왜 차단이 아니라 회귀인가</b> — 종전엔 {@code requireNotUnderReview}가
+     * 'PENDING_PUBLIC 캐릭터가 하나라도 있으면 월드 수정 400'으로 막고 있었다. 그 가드를 남긴 채
+     * 회귀를 넣으면 <b>첫 수정 직후부터 창작자가 자기 월드를 못 고친다</b>. 더 나쁘게는 같은 가드가
+     * {@code retryLocation}·{@code deleteFailedLocation}에도 걸려 있어서, 장소 추가 → 배경 생성 실패 →
+     * <b>1E 환불 경로(유일한 회수 수단)까지 잠긴다</b>. 자산 손실을 만드는 수정은 수정이 아니다.
+     *
+     * <p>차단이 지키려던 것(관리자가 본 월드와 판정 대상이 달라지는 TOCTOU)은 회귀가 <b>더 강하게</b>
+     * 지킨다 — 월드가 바뀌면 캐릭터가 큐로 돌아가 현재 상태로 다시 심사된다. 캐릭터 텍스트 트랙
+     * ({@code Character.updateUgcTexts})도 PENDING_PUBLIC 상태에서 편집을 허용하므로 비대칭도 사라진다.
+     *
+     * <p><b>남는 위험</b>: 관리자가 상세 화면을 열어 둔 사이 창작자가 월드를 고치면 관리자가 낡은
+     * 내용을 승인할 수 있다. 이 경합은 캐릭터 트랙에 이미 존재하며 차단으로도 닫히지 않았다
+     * (관리자 화면 로드는 유저 수정보다 앞선다). 별도 안건으로 남긴다.
      */
-    private void requireNotUnderReview(Long worldId) {
-        if (characterRepository.existsByUgcWorldIdAndVisibility(
-            worldId, com.spring.aichat.domain.enums.CharacterVisibility.PENDING_PUBLIC)) {
-            throw new BadRequestException("공개 심사 중인 캐릭터가 연결된 세계관은 수정할 수 없어요. 심사 후 변경해 주세요.");
+    private void revertLinkedPublicCharacters(Long worldId, String username, String reason) {
+        List<com.spring.aichat.domain.character.Character> published = characterRepository
+            .findByUgcWorldIdAndVisibility(worldId, com.spring.aichat.domain.enums.CharacterVisibility.PUBLIC);
+        int reverted = 0;
+        for (com.spring.aichat.domain.character.Character c : published) {
+            if (c.revertToReviewForWorldChange()) {
+                characterRepository.save(c);
+                reverted++;
+            }
+        }
+        if (reverted > 0) {
+            log.info("[UGC-WORLD] 재심사 회귀: username={}, worldId={}, 사유={}, 캐릭터={}건",
+                username, worldId, reason, reverted);
         }
     }
 

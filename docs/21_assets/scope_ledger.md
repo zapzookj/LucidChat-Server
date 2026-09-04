@@ -1435,5 +1435,7 @@
 | E-6.1.a · E-6.1.b | `fe4b8d2` + Admin `4113849` | ✅ 인스펙션 성별 앵커 + Male LoRA 표시. §2-6대로 무성별 오버로드 3종 제거(테스트 arity 갱신) |
 | F-6 | Admin `22e1bc4` | ✅ 모더레이션 단계 라벨 맵 상수화 + 널 병합 폴백 |
 | E-7.2 | FE `1eefd2a` | ✅ 말투 maxLength 300 + 카운터 2경로. BE는 이미 닫혀 있었다 |
-| E-6.2 · E-6.3.a · E-6.3.b · E-6.5 | (본 커밋) | ✅ 필터 else-if 사슬 3건 + CS 로그 최신순. 감사로그는 **Specification 단일화**(PostgreSQL 파라미터 타입 추론 회피 — 리포지토리 테스트 0건이라 런타임에만 터진다) |
-| E-5.3.b | | ⏳ **마지막 1건.** ★검증이 회귀 위험을 지적 — `requireNotUnderReview`가 4경로(updateWorld·addLocation·retryLocation·deleteFailedLocation)에 걸려 있어 그대로 고치면 창작자가 월드를 못 고치고 **실패 장소 환불 경로까지 막힌다**. 수정안에 대응책을 넣어야 한다 |
+| E-6.2 · E-6.3.a · E-6.3.b · E-6.5 | `bf4b65a` + Admin `0f7b2d3` | ✅ 필터 else-if 사슬 3건 + CS 로그 최신순. 감사로그는 **Specification 단일화**(PostgreSQL 파라미터 타입 추론 회피 — 리포지토리 테스트 0건이라 런타임에만 터진다) |
+| E-5.3.b | (본 커밋) + Admin | ✅ 월드 내용 변경 → 연결 PUBLIC 캐릭터 재심사 회귀. ★검증 지적대로 `requireNotUnderReview`를 **전면 제거**했다 — 남겼으면 창작자가 자기 월드를 못 고치고 실패 장소 1E 환불 경로까지 잠겼다. 차단이 지키려던 TOCTOU는 회귀가 더 강하게 지킨다 |
+
+**배치 1 종결 — 9/9.** 델타 살아있는 행 79 → **70**(P1 1 · P2 37 · P3 32).
