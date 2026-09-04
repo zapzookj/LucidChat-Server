@@ -285,7 +285,8 @@ public class CharacterCreationController {
             int selected = state.key() == null ? -1 : state.history().indexOf(state.key());
             emotionViews.put(tag.name(), new UgcDtos.EmotionCutView(
                 state.status(), assetService.publicUrl(state.key()),
-                versions, selected < 0 ? null : selected));
+                versions, selected < 0 ? null : selected,
+                state.isFreeReroll()));
         });
 
         UgcDtos.ProfileView profileView = null;

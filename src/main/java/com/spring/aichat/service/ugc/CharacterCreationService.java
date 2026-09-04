@@ -453,7 +453,10 @@ public class CharacterCreationService {
                 throw new BadRequestException("이미 다시 만드는 중이에요. 완료 후 시도해 주세요. (" + LOST_REROLL_MINUTES
                     + "분 넘게 그대로면 다시 눌러 주세요 — 자동 복구됩니다)");
             }
-            boolean free = state.is(EmotionAssetState.FAILED);
+            // [D-2.l] 무과금 자격 판정을 상태 record 한 곳으로 통일했다 — 종전엔 여기가
+            //   `is(FAILED)`만 봐서, 완성본이 있는 컷을 2E 내고 리롤했다가 소진되면(revertToReady)
+            //   아무것도 못 받은 채 다음 리롤도 또 2E였다. FAILED 분기만 자가치유되는 비대칭이었다.
+            boolean free = state.isFreeReroll();
             if (!free) {
                 int cost = props.energy().emotionReroll();
                 User user = findUser(username);

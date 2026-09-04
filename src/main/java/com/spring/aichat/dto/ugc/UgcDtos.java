@@ -72,8 +72,13 @@ public final class UgcDtos {
      * [2026-07-20 리롤 누적] versions = 누적 완성본 URL들, selectedIndex = 현재 선택본 위치.
      * 리롤/재시도 중(DERIVING/REFINING)에도 thumbUrl은 직전 선택본을 유지한다(스피너 오버레이용).
      */
+    /**
+     * @param freeReroll [D-2.l] 이 컷의 다음 리롤이 무과금인가. 서버가 {@code EmotionAssetState.isFreeReroll()}로
+     *                   판정한 값 그대로다 — 무료 자격을 줘 놓고 화면이 "2E"라고 하면 유저는 재시도하지 않는다.
+     */
     public record EmotionCutView(String status, String thumbUrl,
-                                 List<String> versions, Integer selectedIndex) {}
+                                 List<String> versions, Integer selectedIndex,
+                                 boolean freeReroll) {}
 
     /** 감정 컷 버전 선택 요청 (무과금). */
     public record VersionSelectRequest(Integer versionIndex) {}

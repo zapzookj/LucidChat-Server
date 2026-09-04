@@ -236,7 +236,8 @@ public class UgcWorldController {
             ? state.history().indexOf(state.key()) : null;
         // 진행 중(GENERATING)에도 직전 선택본을 계속 노출 — 스피너 아래 유지 (감정 컷 UX 동형)
         return new UgcWorldDtos.WorldAssetView(
-            state.status(), assetService.publicUrl(state.key()), versions, selectedIndex);
+            state.status(), assetService.publicUrl(state.key()), versions, selectedIndex,
+            state.isFreeReroll());
     }
 
     private UgcWorldDtos.UgcWorldView toWorldView(UgcWorld world, List<UgcWorldDtos.WorldLocationView> locations) {

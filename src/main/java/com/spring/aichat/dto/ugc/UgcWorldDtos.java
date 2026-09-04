@@ -45,8 +45,13 @@ public final class UgcWorldDtos {
 
     public record StartWorldResponse(Long jobId) {}
 
-    /** 일러 컷 뷰 — status: GENERATING/READY/FAILED. versions=무료 골라잡기 후보(publicUrl). */
-    public record WorldAssetView(String status, String url, List<String> versions, Integer selectedIndex) {}
+    /**
+     * 일러 컷 뷰 — status: GENERATING/READY/FAILED. versions=무료 골라잡기 후보(publicUrl).
+     *
+     * @param freeReroll [D-2.m] 이 컷의 다음 리롤이 무과금인가 — 감정 컷(EmotionCutView)과 같은 계약.
+     */
+    public record WorldAssetView(String status, String url, List<String> versions, Integer selectedIndex,
+                                 boolean freeReroll) {}
 
     // ── [2026-07-22 READY 월드 사후 편집] ──
 
