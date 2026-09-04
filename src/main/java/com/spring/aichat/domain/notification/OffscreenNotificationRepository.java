@@ -36,9 +36,15 @@ public interface OffscreenNotificationRepository extends JpaRepository<Offscreen
 
     /**
      * 방의 미확인 알림 — 토스트 UI 노출용.
+     *
+     * <p>[E-4.13] {@code readAt}만 보던 것을 {@code respondedAt}까지 보도록 좁혔다.
+     * 종전엔 유저가 이미 <b>응답한</b> 알림과 스케줄러가 <b>만료 처리한</b> 알림이 토스트에 영구 재노출됐다
+     * (만료 처리는 {@code markResponded()}로 하므로 respondedAt 필터 하나가 둘 다 덮는다).
+     * 디렉터 프롬프트 조회({@code findByChatRoom_IdAndRespondedAtIsNull…})와 조건계가 이제 일치한다 —
+     * 종전엔 프롬프트는 안 보는 알림을 화면만 계속 띄우고 있었다.
      */
     List<OffscreenNotification>
-    findByChatRoom_IdAndReadAtIsNullOrderBySentAtDesc(Long chatRoomId);
+    findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullOrderBySentAtDesc(Long chatRoomId);
 
     /**
      * 같은 캐릭터의 가장 최근 알림 — 쿨다운(24h) 가드용.
@@ -53,9 +59,9 @@ public interface OffscreenNotificationRepository extends JpaRepository<Offscreen
     findByExpiresAtBeforeAndRespondedAtIsNull(LocalDateTime threshold);
 
     /**
-     * 미확인 알림 개수 — UI 배지 표시용.
+     * 미확인 알림 개수 — UI 배지 표시용. [E-4.13] 위와 같은 이유로 respondedAt까지 본다.
      */
-    long countByChatRoom_IdAndReadAtIsNull(Long chatRoomId);
+    long countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNull(Long chatRoomId);
 
     /** 스토리 초기화 시 일괄 삭제 */
     void deleteByChatRoom_Id(Long chatRoomId);

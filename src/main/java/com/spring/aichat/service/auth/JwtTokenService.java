@@ -129,7 +129,9 @@ public class JwtTokenService {
             // [H-1] 탈취 의심 → 강제 전체 무효화
             redisTemplate.delete(REFRESH_PREFIX + username);
             log.warn("[JWT] RT mismatch — possible theft. All sessions revoked: user={}", username);
-            throw new IllegalArgumentException("유효하지 않거나 만료된 Refresh Token입니다.");
+            // [INT-5] 401이지 500이 아니다 — RT 불일치는 탈취 의심이든 단순 회전 경합이든 인증 실패다.
+            throw new com.spring.aichat.exception.BusinessException(
+                com.spring.aichat.exception.ErrorCode.UNAUTHORIZED, "다시 로그인해 주세요.");
         }
 
         // 3. [H-1] DB에서 최신 role 조회 + [Phase 6] 정지 계정 재발급 차단.
@@ -137,7 +139,9 @@ public class JwtTokenService {
         if (user != null && user.isAccessBlocked()) {
             redisTemplate.delete(REFRESH_PREFIX + username);
             log.warn("[JWT] Reissue blocked — account not active: user={}, status={}", username, user.getStatus());
-            throw new IllegalArgumentException("정지되었거나 이용이 제한된 계정입니다.");
+            // [INT-5] 정지 계정의 재발급 차단도 인증 축이다. FE는 401에서 재로그인 동선을 탄다.
+            throw new com.spring.aichat.exception.BusinessException(
+                com.spring.aichat.exception.ErrorCode.UNAUTHORIZED, "정지되었거나 이용이 제한된 계정입니다.");
         }
         String role = (user != null) ? extractPrimaryRole(user) : DEFAULT_ROLE;
 

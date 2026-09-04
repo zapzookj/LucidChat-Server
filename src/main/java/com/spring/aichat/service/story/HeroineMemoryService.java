@@ -157,11 +157,32 @@ public class HeroineMemoryService {
     /** 방 전체 캐릭터의 모든 메모리 삭제 + 캐시 무효화 (캐시는 prefix 패턴이라 일괄 삭제). */
     @Transactional
     public void clearMemoriesForRoom(Long roomId) {
+        clearMemoriesForRoom(roomId, java.util.List.of());
+    }
+
+    /**
+     * [E-4.6] 방 메모리 전체 삭제 + <b>캐릭터별 Redis 캐시 즉시 무효화</b>.
+     *
+     * <p>종전 주석은 "다음 read 시 자연 무효화 (deleteByRoomId 이후 cache miss → empty)"였고 <b>그게 거짓이었다</b> —
+     * 캐시에는 옛 값이 그대로 남아 있으므로 read는 miss가 아니라 <b>hit</b>이다. 결과적으로 리셋 직후
+     * 첫 턴부터 캐시 TTL이 다 될 때까지 이전 회차 기억이 계속 프롬프트에 주입됐다.
+     * 유저 눈에는 "리셋했는데 캐릭터가 기억한다"로 보인다.
+     *
+     * <p>SCAN 없이 정확히 지운다: 삭제 <b>전에</b> 메모리 행에서 characterId를 뽑고,
+     * 호출자가 아는 캐스트({@code extraCharacterIds})와 합집합으로 evict한다.
+     * 행이 이미 정리됐는데 캐시만 남은 (room, char) 조합은 행만으로는 못 잡기 때문에 합집합이 필요하다.
+     */
+    @Transactional
+    public void clearMemoriesForRoom(Long roomId, java.util.Collection<Long> extraCharacterIds) {
+        java.util.Set<Long> targets = new java.util.HashSet<>();
+        memoryRepository.findByRoomIdOrderByCreatedAtAsc(roomId)
+            .forEach(m -> targets.add(m.getCharacterId()));
+        if (extraCharacterIds != null) targets.addAll(extraCharacterIds);
+
         memoryRepository.deleteByRoomId(roomId);
-        // Redis 캐시는 캐릭터별 키라 일괄 삭제 패턴 매칭 (운영 시 SCAN으로 처리)
-        // 단순화: 다음 read 시 자연 무효화 (deleteByRoomId 이후 cache miss → empty)
-        // 명시적 즉시 삭제 필요 시 별도 prefix scan 구현
-        log.info("🗑️ [H-MEMORY] Cleared room memories: roomId={}", roomId);
+        targets.forEach(cid -> evictCache(roomId, cid));
+
+        log.info("🗑️ [H-MEMORY] Cleared room memories: roomId={}, evicted={}", roomId, targets.size());
     }
 
     /** 특정 캐릭터만 메모리 삭제 — 향후 *그 캐릭터만 기억 초기화* 기능 대비. */

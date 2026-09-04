@@ -29,6 +29,32 @@ public record WorldView(
     public record LocationView(String key, String displayName, String description,
                                boolean selectableAsStart, String backgroundUrl) {}
 
+    /**
+     * [E-3.②.14] 위치 키 → 사람이 읽는 이름. <b>미선언 키의 폴백 규칙을 여기 한 곳에만 둔다.</b>
+     *
+     * <p>종전엔 프롬프트 조립부와 방 상세 DTO가 각자 {@code orElse(locationKey)}로 폴백해
+     * <b>영문 SCREAMING_SNAKE 토큰이 그대로 새어 나갔다</b> — 한국어 프롬프트 안에 맨몸으로 박히고,
+     * {@code currentUserLocationDisplayName}을 통해 <b>채팅 헤더에도 그대로 렌더</b>됐다
+     * ({@code StoryV2Header.jsx}·{@code StoryV2TopIndicator.jsx}).
+     *
+     * <p>폴백 순서: ① 선언된 장소의 표시명 ② 방이 들고 있는 동적 장소 이름
+     * ({@code ChatRoom.currentDynamicLocationName} — 디렉터가 {@code new_dynamic_location}으로
+     * 세팅하는 사람이 읽을 이름) ③ 중립 카피. <b>raw 키는 어느 경우에도 표시하지 않는다</b> —
+     * 원문은 로그에만 남긴다(운영 중 탐지가 목적이다).
+     *
+     * @param dynamicName 방의 현재 동적 장소 이름. 없으면 null.
+     */
+    public static String resolveLocationDisplay(String locationKey,
+                                                List<LocationView> locations,
+                                                String dynamicName) {
+        if (locationKey == null || locationKey.isBlank()) return "(위치 미상)";
+        for (LocationView l : locations) {
+            if (l.key().equals(locationKey)) return l.displayName();
+        }
+        if (dynamicName != null && !dynamicName.isBlank()) return dynamicName;
+        return "(임시 장소)";
+    }
+
     public boolean isUgc() {
         return ugc != null;
     }

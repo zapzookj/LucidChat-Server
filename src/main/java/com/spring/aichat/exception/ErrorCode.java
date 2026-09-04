@@ -104,5 +104,19 @@ public enum ErrorCode {
      * 법적 성인인증(VERIFICATION_UNDERAGE)과 별개 — FE는 이 코드에 '나이를 수정할까요?'
      * 프로필 수정 제안 모달을 연결한다(UX는 부드럽게, 로직은 하드하게 — docs/14 #4).
      */
-    PERSONA_UNDERAGE
+    PERSONA_UNDERAGE,
+
+    /**
+     * [INT-5 · B-8.2] 인증 자격 없음/만료 → <b>401</b>. 주 도달면은 {@code POST /auth/refresh}다 —
+     * 쿠키 부재·RT 불일치·정지 계정·디코드 실패가 전부 {@code IllegalArgumentException}/{@code JwtException}이라
+     * 핸들러가 없어 <b>정상적인 세션 만료가 5xx로 계상</b>되고 있었다.
+     *
+     * <p>⚠ 이 enum에 값을 추가할 때는 {@code GlobalExceptionHandler.handleBusiness}의 switch에도
+     * <b>반드시 함께</b> 매핑을 넣어라. 그 switch는 {@code default -> 500}이라 값만 추가하면 다시 500이 된다 —
+     * STALE_CLIENT_STATE·UNPAID_BATCH가 정확히 그렇게 새고 있었다(그 파일 주석 참조).
+     *
+     * <p>§2-7 비해당: ErrorCode는 어떤 엔티티에도 {@code @Enumerated(STRING)}으로 매핑돼 있지 않다
+     * (domain 패키지 전수 grep 0건) — DB CHECK 제약과 무관하므로 마이그레이션이 필요 없다.
+     */
+    UNAUTHORIZED
 }

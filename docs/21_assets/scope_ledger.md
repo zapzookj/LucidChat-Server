@@ -1488,3 +1488,38 @@
 **미처리 2건(의도적)**
 - `deleteFailedLocation` 후 회귀 복구 — 트리거 이동으로 시나리오가 사라져 불요.
 - 관리자 상세 화면 stale-approve 경합 — 캐릭터 트랙에 원래 있던 것이고 차단으로도 안 닫혔다. 별도 안건.
+
+### 배치 4 — V2 STORY 백엔드 (7건 + 미등재 1건)
+
+| 결함 | 상태 |
+|---|---|
+| C-0.3 · B-8.2 · C-2.c(BE분) · **INT-5** | ✅ `GlobalExceptionHandler` 4→8핸들러. IAE·역직렬화 실패·타입 불일치→400, `JwtException`→401. `ErrorCode.UNAUTHORIZED` 신설 + **switch 매핑 동시** 적용 |
+| E-4.8 | ✅ 공식 월드 히로인 검증에 `isHidden()` 추가 — 어드민 긴급 차단 우회 차단 |
+| E-4.6 | ✅ 리셋이 Redis 메모리 캐시까지 무효화. 거짓 주석('자연 무효화') 삭제 |
+| E-4.13 | ✅ 토스트·뱃지가 `respondedAt`까지 본다 — 응답분·만료분 동시 해소, 결정 불요 |
+| F-8.b | ✅ V2 스트림이 에너지 부족을 삼키지 않는다. **catch 3분할은 채택하지 않았다**(D-2.a 회귀 위험) |
+| E-3.②.14 | ✅ 표시 폴백 단일 출처 + 클라이언트 MOVE 화이트리스트. P3→P2 승격 |
+| D-2.n | ⏸ ALREADY_FIXED — D-2.a 보상 도입으로 봉쇄. 잔여는 운영 실사 SQL 1건(아래) |
+
+**설계 판단 3건**
+
+1. **F-8.b — 원장 수정안을 거절했다.** '3단 catch 분리'는 D-2.a 보상 블록이 그 catch 안에 있어서,
+   쪼갤 때 어느 갈래에 보상 복사를 빠뜨리는 순간 **무보상 소멸이 부활**한다. 보상은 공통으로 두고
+   응답만 분기하는 형태로 바꿨다. 회귀 게이트 = `compensateFullRollback` 호출 수 불변.
+2. **F-8.b 메시지 노출 범위** — 검증자가 C-0.3과의 자기모순을 지적했다. `BusinessException.getMessage()`를
+   그대로 흘리면 접근 가드의 내부 규칙 문구가 샌다. **유저가 행동할 수 있는 코드**
+   (에너지·프리미엄·차단·나이)만 pass-through하고 나머지는 고정 카피로 좁혔다.
+3. **E-3.②.14 유입구 분리** — 검증자 지적대로 두 유입구는 성질이 다르다.
+   디렉터 LLM 출력은 화이트리스트를 걸면 `new_dynamic_location`이 깨지므로 **관측(로그)만**,
+   클라이언트 MOVE는 선언 장소 **검증**을 건다. 하나로 묶으면 기능이 깨지거나 구멍이 남는다.
+
+**D-2.n 종결 (프로드 실사 완료 2026-09-05)** — 고아 히로인 행 **0건**(14행 전수)이고
+`chat_room_heroines`에 **FK 제약 2종이 실재**한다(`character_id → characters`, `chat_room_id → chat_rooms`).
+즉 역참조 NPE는 데이터로도 스키마로도 불가능하다. 방어적 필터·@EntityGraph는 넣지 않는다.
+
+<details><summary>실사 쿼리</summary>
+```sql
+SELECT h.id FROM chat_room_heroines h LEFT JOIN characters c ON c.id = h.character_id WHERE c.id IS NULL;
+SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='chat_room_heroines'::regclass AND contype='f';
+```
+</details>

@@ -25,6 +25,8 @@ import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.dto.story.StoryV2Requests.SendStoryV2MessageRequest;
 import com.spring.aichat.dto.story.StoryV2SendResponse;
+import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.InsufficientEnergyException;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.LlmCircuitBreaker;
 import com.spring.aichat.external.OpenRouterStreamClient;
@@ -330,9 +332,43 @@ public class ChatStreamServiceV2 {
                 log.warn("↩️ [COMPENSATE] V2 TX-2 커밋 전 예외 — 차감·유저로그 되돌림 | roomId={}", roomId);
                 compensateFullRollback(rollbackCtx);
             }
-            log.error("❌ [V2-STREAM] Unexpected error | roomId={} | committed={}", roomId, committed, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
+            // [F-8.b] 종전엔 여기서 무조건 UNEXPECTED_ERROR를 내보내 **에너지 부족까지 삼켰다** —
+            //   FE의 402/INSUFFICIENT_ENERGY 분기가 사문이 되어 정식 트랙(V2 STORY)에서
+            //   충전 모달이 뜨지 않았다. 구매 퍼널이 끊긴 것이다.
+            //
+            //   ★ catch를 셋으로 쪼개지 않은 이유: 위 D-2.a 보상 블록이 이 catch 안에 있어서,
+            //   쪼갤 때 어느 한 갈래에 보상을 복사해 넣지 않으면 그대로 D-2.a 회귀가 된다.
+            //   보상은 공통으로 두고 **분기는 응답 쪽에만** 넣는다.
+            sendTypedStreamError(emitter, e, roomId, committed);
         }
+    }
+
+    /**
+     * [F-8.b] 스트림 최외곽 예외를 타입별 SSE 에러로 변환한다.
+     *
+     * <p>메시지 pass-through는 <b>유저가 행동할 수 있는 코드에만</b> 허용한다 —
+     * 그 외 BusinessException의 메시지에는 내부 규칙 문구가 담겨 있어(예: 접근 가드 사유)
+     * 그대로 내보내면 내부 구조가 샌다. C-0.3에서 전역 핸들러에 적용한 원칙과 같다.
+     */
+    private void sendTypedStreamError(SseEmitter emitter, Exception e, Long roomId, boolean committed) {
+        if (e instanceof InsufficientEnergyException iee) {
+            log.info("⚡ [V2-STREAM] 에너지 부족 | roomId={} | {}", roomId, iee.getMessage());
+            sendSseError(emitter, "INSUFFICIENT_ENERGY", iee.getMessage());
+            return;
+        }
+        if (e instanceof BusinessException be) {
+            String code = be.getErrorCode().name();
+            boolean actionable = switch (be.getErrorCode()) {
+                case INSUFFICIENT_ENERGY, PREMIUM_REQUIRED, CONTENT_BLOCKED, PERSONA_UNDERAGE -> true;
+                default -> false;
+            };
+            log.warn("⚠️ [V2-STREAM] business error | roomId={} | code={}", roomId, code, e);
+            sendSseError(emitter, code,
+                actionable ? be.getMessage() : "요청을 처리할 수 없습니다.");
+            return;
+        }
+        log.error("❌ [V2-STREAM] Unexpected error | roomId={} | committed={}", roomId, committed, e);
+        sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -423,8 +459,10 @@ public class ChatStreamServiceV2 {
             triggerPostProcessing(roomId, userId, 1L, parsed.aiOutput());
 
         } catch (Exception e) {
-            log.error("❌ [V2-OPENING] Unexpected error | roomId={}", roomId, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
+            // [F-8.b] 오프닝은 차감이 없어 에너지 부족은 뜨지 않지만(rollbackCtx가 EnergySplit.ZERO),
+            //   BusinessException 코드를 보존해야 FE가 접근 거부·차단을 구분할 수 있다.
+            //   이 경로엔 committed 플래그가 없으므로 false를 넘긴다(보상 대상 자체가 없다).
+            sendTypedStreamError(emitter, e, roomId, false);
         }
     }
 
@@ -449,6 +487,17 @@ public class ChatStreamServiceV2 {
                     log.warn("⚠️ [V2-ACTION] MOVE toLocationKey가 정규화 후 비었다 — 무시");
                     yield null;
                 }
+                // [E-3.②.14] ★ 클라이언트가 보낸 키는 선언된 장소여야 한다.
+                //   종전엔 정규화만 하고 그대로 방에 영속 + LLM 지시문에 보간했다 —
+                //   임의 문자열이 유저 위치가 되면 프롬프트·헤더에 유령 키가 새고,
+                //   `p.isAt(userLocationKey)`가 전부 false가 되어 그 방의 라우팅이 무너진다.
+                //   ⚠ 디렉터 LLM의 `new_dynamic_location`은 이 게이트와 무관하다 —
+                //     그건 서버가 만드는 값이고 여기는 **클라이언트 유입구**다. 둘을 섞지 마라.
+                //   현재 위치는 항상 허용한다(동적 장소에 있는 유저가 갇히지 않도록).
+                if (!to.equals(room.getCurrentUserLocationKey()) && !isDeclaredLocation(room, to)) {
+                    log.warn("⚠️ [V2-ACTION] 미선언 MOVE 대상 무시: roomId={}, key={}", room.getId(), to);
+                    yield null;
+                }
                 txTemplate.execute(status -> {
                     ChatRoom fresh = chatRoomRepository.findById(room.getId()).orElseThrow();
                     fresh.updateUserLocation(to);
@@ -461,6 +510,21 @@ public class ChatStreamServiceV2 {
             case "NEXT_SCENE" -> "[USER_ACTION] 흐름을 진행시켜달라. 자율적으로 시간이 흐르거나 캐릭터의 행동/사건이 발생하도록 새 씬을 연출하라.";
             default -> null;
         };
+    }
+
+    /**
+     * [E-3.②.14] 이 방의 월드에 <b>선언된</b> 장소 키인가. 공식·UGC 양쪽을 덮는다.
+     * 클라이언트 MOVE 대상 검증 전용 — 디렉터가 만드는 동적 장소에는 적용하지 않는다.
+     */
+    private boolean isDeclaredLocation(ChatRoom room, String locationKey) {
+        if (room.isUgcWorldStory()) {
+            return room.getUgcWorldId() != null
+                && ugcWorldLocationRepository
+                    .findByUgcWorldIdAndLocationKey(room.getUgcWorldId(), locationKey).isPresent();
+        }
+        return room.getWorld() != null
+            && worldLocationRepository
+                .findByWorldIdAndLocationKey(room.getWorld().getId(), locationKey).isPresent();
     }
 
     /**

@@ -17,6 +17,7 @@ import com.spring.aichat.domain.notification.OffscreenNotificationRepository;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.security.PromptInjectionGuard;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -41,6 +42,7 @@ import java.util.stream.IntStream;
  *   dynamicPart — 매 턴 변동 (PRESENT SCENE, MEMORY, 신호 인젝션). system() 인젝션.
  * </pre>
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class StoryDirectorPromptAssemblerV2 {
@@ -829,14 +831,27 @@ public class StoryDirectorPromptAssemblerV2 {
         return notBlank(content) ? "\n\n%s\n%s".formatted(header, content) : "";
     }
 
+    /**
+     * [E-3.②.14] 폴백 규칙은 {@link com.spring.aichat.service.story.WorldView#resolveLocationDisplay}에
+     * 단일 출처로 두고 여기서는 위임만 한다 — 종전엔 {@code orElse(locationKey)}로 raw 영문 토큰을
+     * 한국어 프롬프트에 맨몸으로 박아 넣었고, 방 상세 DTO도 같은 폴백을 복붙하고 있었다.
+     * 미선언 키는 운영 탐지 대상이므로 <b>표시가 아니라 로그로</b> 남긴다.
+     */
     private String resolveLocationDisplay(String locationKey,
                                           List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations) {
-        if (locationKey == null) return "(위치 미상)";
-        return worldLocations.stream()
-            .filter(l -> l.key().equals(locationKey))
-            .map(com.spring.aichat.service.story.WorldView.LocationView::displayName)
-            .findFirst()
-            .orElse(locationKey);  // 동적 임시 장소 등 — key 자체를 표시
+        return resolveLocationDisplay(locationKey, worldLocations, null);
+    }
+
+    private String resolveLocationDisplay(String locationKey,
+                                          List<com.spring.aichat.service.story.WorldView.LocationView> worldLocations,
+                                          String dynamicName) {
+        String display = com.spring.aichat.service.story.WorldView
+            .resolveLocationDisplay(locationKey, worldLocations, dynamicName);
+        if (locationKey != null && !locationKey.isBlank()
+            && worldLocations.stream().noneMatch(l -> l.key().equals(locationKey))) {
+            log.warn("[V2-PROMPT] 미선언 location_key 표시 폴백: key={} → {}", locationKey, display);
+        }
+        return display;
     }
 
     private String toKoreanRelation(RelationStatus s) {

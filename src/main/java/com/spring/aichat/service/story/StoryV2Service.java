@@ -73,7 +73,11 @@ public class StoryV2Service {
     private final ChatRoomHeroineRepository heroineRepository;
     private final CharacterPresenceRepository presenceRepository;
     private final ChatLogMongoRepository chatLogMongoRepository;
-    private final MemorySummaryRepository memorySummaryRepository;
+    /**
+     * [E-4.6] 리포지토리 직타를 봉인하고 서비스만 쓴다 — 직타는 Redis 캐시 무효화를 건너뛴다.
+     * (기존 {@code MemorySummaryRepository} 필드는 이 교체로 사용처가 0이 되어 제거했다.)
+     */
+    private final com.spring.aichat.service.MemoryService memoryService;
 
     private final WorldRoutingService routingService;
     // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩
@@ -484,7 +488,11 @@ public class StoryV2Service {
                 throw new BadRequestException(
                     "Heroine " + h.getId() + " does not belong to world " + worldId);
             }
-            if (!h.isStoryAvailable()) {
+            // [E-4.8] isHidden 누락으로 어드민 긴급 차단을 API 직접 호출로 우회할 수 있었다.
+            //   같은 파일의 UGC 경로(createOrReuseUgcRoom)는 이미 두 조건을 다 보는데
+            //   **공식 월드 경로만** storyAvailable 하나만 봤다 — FE 히로인 풀은 hidden을 거르므로
+            //   화면으로는 안 보이지만, 캐릭터 id를 직접 실어 보내면 통과했다.
+            if (!h.isStoryAvailable() || h.isHidden()) {
                 throw new BadRequestException("Inactive heroine: " + h.getId());
             }
         }
@@ -781,6 +789,13 @@ public class StoryV2Service {
     private void cascadeResetRoom(ChatRoom room, boolean includePersona) {
         Long roomId = room.getId();
 
+        // [E-4.6] 캐스트 id를 **삭제 전에** 캡처한다 — 6번 단계의 캐릭터별 메모리 캐시 무효화에 쓴다.
+        //   메모리 행이 이미 정리됐는데 Redis 캐시만 살아 있는 (room, char) 조합은
+        //   행만 훑어서는 못 잡는다. 히로인 행은 바로 아래에서 지워지므로 여기서 읽어 둬야 한다.
+        List<Long> castCharacterIds = heroineRepository.findByChatRoom_Id(roomId).stream()
+            .map(h -> h.getCharacter().getId())
+            .toList();
+
         // 1. 본체 reset (페르소나 옵션)
         room.resetProgress(includePersona);
 
@@ -802,11 +817,14 @@ public class StoryV2Service {
         // 5. OffscreenNotification
         notificationService.clearNotificationsForRoom(roomId);
 
-        // 6. HeroineMemorySummary (캐릭터별 메모리)
-        heroineMemoryService.clearMemoriesForRoom(roomId);
+        // 6. HeroineMemorySummary (캐릭터별 메모리) — [E-4.6] 캐스트 id를 넘겨 Redis 캐시까지 즉시 무효화
+        heroineMemoryService.clearMemoriesForRoom(roomId, castCharacterIds);
 
         // 7. World-level MemorySummary (기존 RAG 시스템 재활용)
-        memorySummaryRepository.deleteByRoomId(roomId);
+        // [E-4.6] 리포지토리 직타에서 MemoryService.clearMemories로 교체 — 직타는 Redis 캐시를
+        //   안 지워서, 리셋 직후 첫 턴부터 **최대 캐시 TTL 동안 이전 회차 기억이 계속 주입**됐다.
+        //   DB row는 지워졌는데 캐시가 살아 있으니 유저 눈엔 '리셋했는데 기억한다'로 보인다.
+        memoryService.clearMemories(roomId);
 
         // 8. ChatLogDocument (대화 로그)
         chatLogMongoRepository.deleteByRoomId(roomId);
@@ -851,22 +869,24 @@ public class StoryV2Service {
             .map(h -> toHeroineState(h, effectiveSecretMode))
             .toList();
 
-        // 캐릭터 위치들
-        Map<String, String> locationKeyToDisplay = worldView.locations().stream()
-            .collect(Collectors.toMap(WorldView.LocationView::key, WorldView.LocationView::displayName));
-
+        // 캐릭터 위치들 — [E-3.②.14] 표시 폴백은 WorldView.resolveLocationDisplay 단일 출처로 위임했다.
+        //   (종전의 locationKeyToDisplay 맵은 raw 키 폴백 전용이라 함께 제거)
         List<CharacterPresence> presences = presenceRepository.findByChatRoom_Id(roomId);
         List<CharacterPresenceResponse> presenceResponses = presences.stream()
             .map(p -> new CharacterPresenceResponse(
                 p.getCharacterId(),
                 p.getCurrentLocationKey(),
-                locationKeyToDisplay.getOrDefault(p.getCurrentLocationKey(), p.getCurrentLocationKey()),
+                // [E-3.②.14] raw 키 폴백 금지 — 단일 출처 규칙으로 위임(미선언 키면 동적 장소명 → 중립 카피)
+                WorldView.resolveLocationDisplay(
+                    p.getCurrentLocationKey(), worldView.locations(), room.getCurrentDynamicLocationName()),
                 p.getLastMovedAt()
             ))
             .toList();
 
-        String userLocationDisplay = locationKeyToDisplay
-            .getOrDefault(room.getCurrentUserLocationKey(), room.getCurrentUserLocationKey());
+        // [E-3.②.14] ★ 이 값이 StoryV2Header·StoryV2TopIndicator에 그대로 렌더된다 —
+        //   종전엔 미선언 키일 때 영문 SCREAMING_SNAKE 토큰이 채팅 헤더에 찍혔다.
+        String userLocationDisplay = WorldView.resolveLocationDisplay(
+            room.getCurrentUserLocationKey(), worldView.locations(), room.getCurrentDynamicLocationName());
 
         long unreadCount = notificationService.countUnread(roomId);
 

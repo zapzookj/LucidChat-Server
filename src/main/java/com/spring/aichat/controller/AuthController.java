@@ -71,7 +71,9 @@ public class AuthController {
         HttpServletResponse response
     ) {
         if (refreshToken == null) {
-            throw new IllegalArgumentException("Refresh Token이 없습니다.");
+            // [INT-5] 종전엔 IllegalArgumentException이라 핸들러가 없어 500이었다.
+            //   쿠키 없이 /auth/refresh를 부르는 것은 '세션 없음'이지 서버 오류가 아니다.
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "로그인이 필요합니다.");
         }
 
         // 1. 토큰 검증 및 username 추출

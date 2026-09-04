@@ -156,7 +156,7 @@ public class OffscreenNotificationService {
     @Transactional(readOnly = true)
     public List<NotificationResponse> findUnreadForToast(Long roomId) {
         List<OffscreenNotification> rows = notificationRepository
-            .findByChatRoom_IdAndReadAtIsNullOrderBySentAtDesc(roomId);
+            .findByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNullOrderBySentAtDesc(roomId);
         if (rows.isEmpty()) return List.of();
         Map<Long, String> nameById = resolveCharacterNames(rows);
         return rows.stream()
@@ -188,7 +188,8 @@ public class OffscreenNotificationService {
     /** 미확인 알림 카운트만 필요한 경우 — getRoomDetail 등에서 사용. */
     @Transactional(readOnly = true)
     public int countUnread(Long roomId) {
-        return notificationRepository.findByChatRoom_IdAndReadAtIsNullOrderBySentAtDesc(roomId).size();
+        // [E-4.13] 리스트를 통째로 로드해 size()를 세던 것을 count 쿼리로 교체했다.
+        return (int) notificationRepository.countByChatRoom_IdAndReadAtIsNullAndRespondedAtIsNull(roomId);
     }
 
     @Transactional

@@ -43,6 +43,7 @@ public class GlobalExceptionHandler {
             //   클라이언트 귀책 충돌이 5xx로 집계돼 서버 알람 축을 오염시킨다.
             case STALE_CLIENT_STATE -> 409;       // [H-22] 클라 세션 상태가 서버 기준과 어긋남
             case UNPAID_BATCH -> 409;             // [B-5.2] 미과금 배치 소비 시도 — FE가 loadNextBatch로 자기 치유
+            case UNAUTHORIZED -> 401;             // [INT-5] 세션 만료·RT 불일치 — FE axios가 401에 재로그인 유도
             default -> 500;
         };
 
@@ -78,6 +79,59 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest()
             .body(ApiErrorResponse.of(400, ErrorCode.BAD_REQUEST, msg, req.getRequestURI()));
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [C-0.3 · B-8.2 · C-2.c] 클라이언트 귀책 → 400. 종전엔 전부 Exception.class로 떨어져 500이었다.
+    //
+    //  왜 문제인가: ① 5xx 알람 축이 클라 귀책 요청으로 오염돼 진짜 서버 장애가 묻힌다
+    //  ② FE가 '내 요청이 잘못됨'과 '서버가 죽음'을 구분할 수 없다 ③ 500 본문에 스택 유발 문구가 섞일 수 있다.
+    //
+    //  응답 message는 **고정 카피**로 두고 원문은 로그에만 남긴다 — 예외 메시지에 내부 규칙 문구
+    //  ("공식 세계관과 UGC 월드는 동시 연결 불가" 등)가 담겨 있어 그대로 내보내면 내부 구조가 샌다.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 잘못된 인자 — enum 파싱 실패(존재하지 않는 값), 도메인 불변식 위반 등.
+     * 스택을 함께 남긴다: 서버 결함이 IAE로 나오는 경우도 있어 400으로 내려도 원인 추적은 되어야 한다.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException e, HttpServletRequest req) {
+        log.warn("[BAD_REQUEST] IllegalArgument: uri={}, msg={}", req.getRequestURI(), e.getMessage(), e);
+        return ResponseEntity.badRequest()
+            .body(ApiErrorResponse.of(400, ErrorCode.BAD_REQUEST, "요청이 올바르지 않습니다.", req.getRequestURI()));
+    }
+
+    /** [C-2.c] 역직렬화 실패 — 오타 enum·깨진 JSON 본문. 종전엔 500이었다. */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleNotReadable(
+        org.springframework.http.converter.HttpMessageNotReadableException e, HttpServletRequest req) {
+        log.warn("[BAD_REQUEST] malformed body: uri={}, msg={}", req.getRequestURI(), e.getMessage());
+        return ResponseEntity.badRequest()
+            .body(ApiErrorResponse.of(400, ErrorCode.BAD_REQUEST, "요청 본문을 해석할 수 없습니다.", req.getRequestURI()));
+    }
+
+    /** 같은 뿌리 — {@code @PathVariable}/{@code @RequestParam} 타입 불일치(예: id에 문자열). */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException e, HttpServletRequest req) {
+        log.warn("[BAD_REQUEST] type mismatch: uri={}, param={}", req.getRequestURI(), e.getName());
+        return ResponseEntity.badRequest()
+            .body(ApiErrorResponse.of(400, ErrorCode.BAD_REQUEST, "요청 값의 형식이 올바르지 않습니다.", req.getRequestURI()));
+    }
+
+    /**
+     * [INT-5] JWT 디코드 실패(만료·서명 불일치) → 401.
+     * {@code POST /auth/refresh}가 {@code jwtDecoder.decode}를 직접 부르므로 이 advice에 도달한다
+     * (필터 체인의 인증 실패는 Spring Security 진입점이 따로 처리한다).
+     * 만료된 RT로 재발급을 시도하는 것은 <b>정상 흐름</b>이지 서버 오류가 아니다.
+     */
+    @ExceptionHandler(org.springframework.security.oauth2.jwt.JwtException.class)
+    public ResponseEntity<ApiErrorResponse> handleJwt(
+        org.springframework.security.oauth2.jwt.JwtException e, HttpServletRequest req) {
+        log.info("[UNAUTHORIZED] JWT 검증 실패: uri={}, msg={}", req.getRequestURI(), e.getMessage());
+        return ResponseEntity.status(401)
+            .body(ApiErrorResponse.of(401, ErrorCode.UNAUTHORIZED, "다시 로그인해 주세요.", req.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)
