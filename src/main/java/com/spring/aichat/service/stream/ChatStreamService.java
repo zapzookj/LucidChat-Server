@@ -663,7 +663,7 @@ public class ChatStreamService {
                 log.warn("↩️ [COMPENSATE] 지켜보기 TX-2 커밋 전 예외 — 차감 되돌림 | roomId={}", roomId);
                 compensateFullRollback(rollbackCtx);
             }
-            log.error("❌ Director watch error | roomId={} | committed={}", roomId, committed, e);
+            // 로깅은 sendTypedStreamError가 분기별로 한다 — 여기서 또 찍으면 이중 기록이다(아래 주석).
             sendTypedStreamError(emitter, e, roomId, committed, "지켜보기 처리 중 오류 발생");   // [F-8.c]
         }
     }
@@ -859,7 +859,7 @@ public class ChatStreamService {
                 log.warn("↩️ [COMPENSATE] 시간 넘기기 TX-2 커밋 전 예외 — 차감 되돌림 | roomId={}", roomId);
                 compensateFullRollback(rollbackCtx);
             }
-            log.error("❌ Time skip error | roomId={} | committed={}", roomId, committed, e);
+            // 로깅은 sendTypedStreamError가 분기별로 한다 — 여기서 또 찍으면 이중 기록이다(아래 주석).
             sendTypedStreamError(emitter, e, roomId, committed, "시간 넘기기 처리 중 오류 발생");   // [F-8.c]
         }
     }
@@ -1270,6 +1270,12 @@ public class ChatStreamService {
      * <p>메시지 pass-through는 <b>유저가 행동할 수 있는 코드에만</b> 허용한다 —
      * 그 외 BusinessException의 메시지에는 내부 규칙 문구가 담겨 있다(C-0.3과 같은 원칙).
      * V2({@code ChatStreamServiceV2.sendTypedStreamError})와 같은 계약이다.
+     *
+     * <p><b>로깅 권한은 이 메서드가 독점한다</b> — 호출부에서 따로 {@code log.error}를 찍지 마라.
+     * 종전엔 네 경로 중 메시지 경로만 기존 log.error를 지우고 나머지 셋은 남겨 둬서,
+     * <b>정상적인 잔량 부족이 ERROR 레벨 스택트레이스로 새고</b>(❌ ERROR + ⚡ INFO 이중 기록)
+     * 예기치 않은 오류는 같은 스택이 두 번 찍혔다. 알람 오탐의 원인이라 한 곳으로 모았다.
+     * 경로별 컨텍스트(directiveType 등)가 필요하면 DEBUG로 따로 남긴다.
      */
     private void sendTypedStreamError(SseEmitter emitter, Exception e, Long roomId,
                                       boolean committed, String fallbackMessage) {
@@ -1777,8 +1783,9 @@ public class ChatStreamService {
                 //   다음 1E 턴에 최우선 지시로 실행된다. AWAY의 eventStatus는 복원하지 않는다(헬퍼 주석).
                 compensateDirectorState(roomId, isBranchResponse);
             }
-            log.error("❌ Director auto-respond error | type={} | roomId={} | committed={}",
-                directiveType, roomId, committed, e);
+            // 로깅은 sendTypedStreamError가 분기별로 한다 — 여기서 또 찍으면 이중 기록이다(아래 주석).
+            //   directiveType은 이 헬퍼가 못 보므로 컨텍스트만 DEBUG로 남긴다.
+            log.debug("[STREAM] auto-respond 실패 컨텍스트 | type={} | roomId={}", directiveType, roomId);
             sendTypedStreamError(emitter, e, roomId, committed, "자동 응답 처리 중 오류 발생");   // [F-8.c]
         }
     }
