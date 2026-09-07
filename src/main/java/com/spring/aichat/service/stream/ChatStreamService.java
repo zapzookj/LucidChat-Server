@@ -17,6 +17,7 @@ import com.spring.aichat.dto.director.DirectorDirective;
 import com.spring.aichat.dto.openai.OpenAiChatRequest;
 import com.spring.aichat.dto.openai.OpenAiMessage;
 import com.spring.aichat.exception.BusinessException;
+import com.spring.aichat.exception.InsufficientEnergyException;
 import com.spring.aichat.exception.ErrorCode;
 import com.spring.aichat.exception.NotFoundException;
 import com.spring.aichat.external.LlmCircuitBreaker;
@@ -536,8 +537,11 @@ public class ChatStreamService {
                 log.warn("↩️ [COMPENSATE] TX-2 커밋 전 예외 — 차감·유저로그 되돌림 | roomId={}", roomId);
                 compensateFullRollback(rollbackCtx);
             }
-            log.error("❌ Unexpected error | roomId={} | committed={}", roomId, committed, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "예기치 않은 오류가 발생했습니다.");
+            // [F-8.a] 종전엔 여기서 무조건 UNEXPECTED_ERROR를 내보내 **에너지 부족까지 삼켰다** —
+            //   FE의 충전 모달 분기가 사문이 되어 구매 퍼널이 끊겼다.
+            //   ★ catch를 쪼개지 않는다: 바로 위 D-2.b 보상 블록이 이 catch 안에 있어
+            //   쪼개면 어느 갈래에 보상 복사를 빠뜨리는 순간 무보상 소멸이 부활한다(V2와 같은 판단).
+            sendTypedStreamError(emitter, e, roomId, committed, "예기치 않은 오류가 발생했습니다.");
         }
     }
 
@@ -660,7 +664,7 @@ public class ChatStreamService {
                 compensateFullRollback(rollbackCtx);
             }
             log.error("❌ Director watch error | roomId={} | committed={}", roomId, committed, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "지켜보기 처리 중 오류 발생");
+            sendTypedStreamError(emitter, e, roomId, committed, "지켜보기 처리 중 오류 발생");   // [F-8.c]
         }
     }
 
@@ -856,7 +860,7 @@ public class ChatStreamService {
                 compensateFullRollback(rollbackCtx);
             }
             log.error("❌ Time skip error | roomId={} | committed={}", roomId, committed, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "시간 넘기기 처리 중 오류 발생");
+            sendTypedStreamError(emitter, e, roomId, committed, "시간 넘기기 처리 중 오류 발생");   // [F-8.c]
         }
     }
 
@@ -1253,6 +1257,39 @@ public class ChatStreamService {
             isSecretMode ? room.getStatLust() : null,
             isSecretMode ? room.getStatCorruption() : null,
             isSecretMode ? room.getStatObsession() : null);
+    }
+
+    /**
+     * [F-8.a · F-8.c] 스트림 최외곽 예외를 <b>타입별 SSE 에러</b>로 변환한다.
+     *
+     * <p>종전엔 네 개 스트림(메시지·지켜보기·시간넘기기·자동응답)이 전부 무조건
+     * {@code UNEXPECTED_ERROR}를 내보내 <b>에너지 부족까지 삼켰다</b> —
+     * FE의 충전 모달 분기(402/INSUFFICIENT_ENERGY)가 영구 사문이 되어 구매 퍼널이 끊겼다.
+     * SSE 프레임에는 HTTP status가 실리지 않으므로 FE는 errorCode로만 분기할 수 있다.
+     *
+     * <p>메시지 pass-through는 <b>유저가 행동할 수 있는 코드에만</b> 허용한다 —
+     * 그 외 BusinessException의 메시지에는 내부 규칙 문구가 담겨 있다(C-0.3과 같은 원칙).
+     * V2({@code ChatStreamServiceV2.sendTypedStreamError})와 같은 계약이다.
+     */
+    private void sendTypedStreamError(SseEmitter emitter, Exception e, Long roomId,
+                                      boolean committed, String fallbackMessage) {
+        if (e instanceof InsufficientEnergyException iee) {
+            log.info("⚡ [STREAM] 에너지 부족 | roomId={} | {}", roomId, iee.getMessage());
+            sendSseError(emitter, "INSUFFICIENT_ENERGY", iee.getMessage());
+            return;
+        }
+        if (e instanceof BusinessException be) {
+            boolean actionable = switch (be.getErrorCode()) {
+                case INSUFFICIENT_ENERGY, PREMIUM_REQUIRED, CONTENT_BLOCKED, PERSONA_UNDERAGE -> true;
+                default -> false;
+            };
+            log.warn("⚠️ [STREAM] business error | roomId={} | code={}", roomId, be.getErrorCode(), e);
+            sendSseError(emitter, be.getErrorCode().name(),
+                actionable ? be.getMessage() : "요청을 처리할 수 없습니다.");
+            return;
+        }
+        log.error("❌ [STREAM] Unexpected error | roomId={} | committed={}", roomId, committed, e);
+        sendSseError(emitter, "UNEXPECTED_ERROR", fallbackMessage);
     }
 
     private void sendSseError(SseEmitter emitter, String errorCode, String message) {
@@ -1742,7 +1779,7 @@ public class ChatStreamService {
             }
             log.error("❌ Director auto-respond error | type={} | roomId={} | committed={}",
                 directiveType, roomId, committed, e);
-            sendSseError(emitter, "UNEXPECTED_ERROR", "자동 응답 처리 중 오류 발생");
+            sendTypedStreamError(emitter, e, roomId, committed, "자동 응답 처리 중 오류 발생");   // [F-8.c]
         }
     }
 

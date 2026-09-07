@@ -5,6 +5,12 @@
       "name": "lucid-front",
       "url": "http://localhost:5173",
       "port": 5173
+    },
+    {
+      "name": "fe-verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/zapza/Desktop/LucidChat-Front/LucidChat-Front", "run", "dev", "--", "--port", "5176", "--strictPort"],
+      "port": 5176
     }
   ]
 }
