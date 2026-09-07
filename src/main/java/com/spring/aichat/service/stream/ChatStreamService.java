@@ -1289,7 +1289,11 @@ public class ChatStreamService {
                 case INSUFFICIENT_ENERGY, PREMIUM_REQUIRED, CONTENT_BLOCKED, PERSONA_UNDERAGE -> true;
                 default -> false;
             };
-            log.warn("⚠️ [STREAM] business error | roomId={} | code={}", roomId, be.getErrorCode(), e);
+            // [적대적 검토 #7] committed를 함께 싣는다 — 삭제한 호출부 log.error는 예외 종류와
+            //   무관하게 이걸 실었다. 커밋 후에 던진 BusinessException에서 '과금됐는데 보상 안 됨'
+            //   신호가 사라지면 안 된다.
+            log.warn("⚠️ [STREAM] business error | roomId={} | code={} | committed={}",
+                roomId, be.getErrorCode(), committed, e);
             sendSseError(emitter, be.getErrorCode().name(),
                 actionable ? be.getMessage() : "요청을 처리할 수 없습니다.");
             return;
@@ -1784,8 +1788,12 @@ public class ChatStreamService {
                 compensateDirectorState(roomId, isBranchResponse);
             }
             // 로깅은 sendTypedStreamError가 분기별로 한다 — 여기서 또 찍으면 이중 기록이다(아래 주석).
-            //   directiveType은 이 헬퍼가 못 보므로 컨텍스트만 DEBUG로 남긴다.
-            log.debug("[STREAM] auto-respond 실패 컨텍스트 | type={} | roomId={}", directiveType, roomId);
+            //   단 directiveType은 이 헬퍼가 못 보는 컨텍스트라 한 줄 남긴다.
+            // [적대적 검토 #7] DEBUG가 아니라 INFO다 — 이 저장소엔 logging 설정도 logback 파일도
+            //   없어 프로드 root 레벨이 INFO다. DEBUG로 두면 **프로드에서 아예 안 찍혀**
+            //   예기치 않은 자동응답 실패에서 directiveType을 영영 알 수 없다.
+            //   실패 경로에서만 도는 줄이라 INFO여도 노이즈가 아니다.
+            log.info("[STREAM] auto-respond 실패 컨텍스트 | type={} | roomId={}", directiveType, roomId);
             sendTypedStreamError(emitter, e, roomId, committed, "자동 응답 처리 중 오류 발생");   // [F-8.c]
         }
     }
