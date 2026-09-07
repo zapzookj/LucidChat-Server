@@ -8,13 +8,13 @@
 
 | ID | 심각도 | **판정** | 규모 | 런칭영향 | 축 | 요약 |
 |---|---|---|---|---|---|---|
-| B-11.2 | P2 | **LIVE** | SMALL | BROKEN_FLOW | 인증·결제 | 로그인 레이트리밋이 IP 버킷 단독 — 계정 단위 한도·실패/성공 구분 모두 여전히 없음 |
+| B-11.2 | P2 | ~~LIVE~~ **✅수정됨** | SMALL | BROKEN_FLOW | 인증·결제 | ✅2026-09-07 `abcc135` — 계정 단위 실패 버킷(10분 10회). 검사(read-only)와 적립(실패 시에만)을 분리해 성공 로그인이 예산을 태우지 않게 했다. 원비고: 로그인 레이트리밋이 IP 버킷 단독 — 계정 단위 한도·실패/성공 구분 모두 여전히 없음 |
 | B-6.2 | P2 | **LIVE** | SMALL | UX_DEGRADE | 극장 · MIG 극장 ★결정 | 극장 스탯 리롤 횟수 제한 부재 — 구간 제한(총 씬 50 미만)만 있고 카운터가 없어 stat_gate 적응형 우회가 가능하다 |
 | B-8.2 | P3 | **LIVE** | ONE_LINE | COSMETIC | 인증·결제 | IllegalArgumentException → 500 매핑 부재. 단 endingType 경로는 legacy 게이트로 死 — 실제 도달면은 /auth/refresh다 |
 | B-9.3 | P3 | **LIVE** | SMALL | UX_DEGRADE | 극장 · 극장 | 극장 엔딩 엔드포인트에 레이트리밋 부재 — V1 경로는 레거시 게이트로 닫혔으나 TheaterFinalityController는 그대로 열려 있다 |
 | B-9.6 | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE ★결정 | 엔딩 생성 지수 백오프 3회가 게이트 400에도 재시도 — 400 3연타 + 실패 토스트 |
 | C-0.3 | P2 | **LIVE** | SMALL | UX_DEGRADE | V2 STORY | GlobalExceptionHandler에 IllegalArgumentException·HttpMessageNotReadableException 핸들러 부재 → 클라 귀책 요청이 전부 500 |
-| C-1.4 | P2 | **LIVE** | ONE_LINE | BROKEN_FLOW | 인증·결제 | nice.return-url이 아직 `https://yourdomain.com/verify/callback` — D-30 이후 도메인뿐 아니라 **경로 형태까지** 틀렸고, 가드도 이 필드만 비껴간다 |
+| C-1.4 | P2 | ~~LIVE~~ **✅수정됨(코드)** | ONE_LINE | BROKEN_FLOW | 인증·결제 | ✅2026-09-07 `abcc135` — nice 블록을 `${ENV:default}`로 통일, return-url 기본값을 백엔드 수신 엔드포인트로 정정, frontend-callback-url 키 추가, isUnset이 `yourdomain.com`을 미설정으로 판정, return-url을 진입부 검사 대상에 포함. **잔여는 코드가 아니라 행정**(NICE 계약 후 값 주입 — §D BLOCKER). 원비고: nice.return-url이 아직 플레이스홀더 — 경로 형태까지 틀렸고 가드도 이 필드만 비껴간다 |
 | C-2.c | P3 | **LIVE** | ONE_LINE | COSMETIC | 인증·결제 | FE 본체는 소멸(PaymentModal 삭제)했으나 BE 하드닝(역직렬화 실패 → 400)은 미이행 — 오타 enum이 여전히 500 |
 | D-2.l | P2 | **LIVE** | MEDIUM | ASSET_LOSS | 극장 | 감정 컷 유료 리롤(2E) 실패 후 기존본 복귀 시 미환불 — 유료 리롤을 시도한 유저만 순손실 |
 | D-2.m | P3 | **LIVE** | MEDIUM | ASSET_LOSS | 극장 | 월드 에셋 유료 리롤(1E) 실패·기존본 복귀 시 미환불 — 캐릭터 트랙과 동형(복붙 계보) |
@@ -1252,15 +1252,15 @@
 |---|---|---|---|
 | BLOCKER | `portone.webhook-secret / PORTONE_WEBHOOK_SECRET (application.yml:134)` | OPEN | 결제 웹훅 prod fail-closed — .env에 키 자체가 없음 (첫 결제에서 터짐) |
 | BLOCKER | `VITE_PORTONE_MERCHANT_CODE (LucidChat-Front/.env)` | OPEN | 프론트 prod .env에 가맹점 코드 키가 아예 없음 → 결제 진입 전면 차단 |
-| BLOCKER | `nice.* (application.yml:110-115) — NICE_CLIENT_ID / NICE_CLIENT_SECRET / NICE_PRODUCT_ID / NICE_RETURN_URL` | OPEN | 본인인증(성인인증) 자격증명이 리터럴 플레이스홀더 — return-url은 가드조차 없다 |
+| BLOCKER | `nice.* (application.yml:110-115) — NICE_CLIENT_ID / NICE_CLIENT_SECRET / NICE_PRODUCT_ID / NICE_RETURN_URL` | **OPEN(행정만)** | 본인인증(성인인증) 자격증명이 리터럴 플레이스홀더. ✅2026-09-07 `abcc135`로 **코드 축은 닫혔다**(가드 부재·경로 형태 오류·frontend-callback-url 키 누락) — 남은 것은 NICE 계약 후 값 주입뿐이다 |
 | HIGH | `spring.security.oauth2.client.registration.kakao (application.yml:29-45)` | OPEN | 카카오 로그인 — FE에 버튼은 살아 있는데 BE에 registration/provider 설정이 없다 |
 | HIGH | `moderation.chat-enabled / CHAT_MODERATION_ENABLED (application.yml:66)` | OPEN | 채팅 입력 모더레이션이 전면 바이패스 상태로 런칭 예정 |
 | MEDIUM | `bm.secret-products-enabled / SECRET_PRODUCTS_ENABLED (application.yml:107)` | OPEN | 시크릿 상품 3종 롤아웃 스위치 — 기본 off, 서버측 게이트는 정상 배선 |
 | MEDIUM | `THEATER_PREFETCH_ENABLED` | OPEN | 존재하지 않는 노브 — D-5.6(극장 prefetch 100% 실패)은 미수리 |
 | MEDIUM | `ugc.modes.male-builder-enabled / UGC_MALE_BUILDER_ENABLED (application.yml:259)` | OPEN | yml 주석이 '푸시 전 프로드 정책 결정 필요'라 적어둔 채 기본값 true로 푸시됨 |
-| MEDIUM | `ugc.runpod.webhook-secret / UGC_RUNPOD_WEBHOOK_SECRET (application.yml:291)` | OPEN | UGC 웹훅은 시크릿 미설정 시 fail-OPEN — permitAll 무인증 표면 |
+| MEDIUM | `ugc.runpod.webhook-secret / UGC_RUNPOD_WEBHOOK_SECRET (application.yml:291)` | ~~OPEN~~ **✅해소(실측)** | 코드 기본값은 fail-OPEN이지만 **프로드엔 실제로 들어 있다**(§H-2 ③ 실측 len=64) — 무인증 표면이 아니다. 같은 실측이 D-18의 축을 ModelsLab 하나로 좁혔다 |
 | MEDIUM | `MODELSLAB_API_KEY / MODELSLAB_DEFAULT_MODEL_ID / MODELSLAB_WEBHOOK_SECRET / LUCID_WEBHOOK_BASE / JWT_SECRET_BASE64 외 (application.yml:167-173 등)` | OPEN | 기본값 없는 ${ENV} 22종 — 하나라도 빠지면 컨텍스트 기동 실패(부팅 블로커) |
-| MEDIUM | `AuthProvider.KAKAO ↔ users_provider_check` | UNKNOWN | 카카오를 개통하는 날 users.provider CHECK 드리프트로 첫 가입이 500날 수 있다 |
+| MEDIUM | `AuthProvider.KAKAO ↔ users_provider_check` | ~~UNKNOWN~~ **✅해소(실측)** | §H-2 ⑦ 실측 — CHECK에 `KAKAO`가 이미 포함돼 있다(§2-7 비해당). 남은 건 yml registration 부재뿐(HIGH 행) |
 | MEDIUM | `spring.flyway.baseline-version: 9 + 무가드 ALTER (application.yml:57-60)` | OPEN | 마이그레이션 체인이 빈 DB에서 재생 불가 — 재해복구·신규 환경 구축이 막힌다 |
 | MEDIUM | `spring.profiles.active (application.yml:17) + Dockerfile` | OPEN | 기본 활성 프로필이 local — prod는 SPRING_PROFILES_ACTIVE에 전량 의존하고 이미지에 기본값이 없다 |
 | MEDIUM | `application-charactersm.yml + app.seed.update-existing:true` | OPEN | 시크릿(후타나리) 캐릭터 시드 파일이 활성화 한 줄이면 공식 캐릭터 6종을 덮어쓴다 |
