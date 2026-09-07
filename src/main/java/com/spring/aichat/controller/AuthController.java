@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -36,6 +37,7 @@ import java.util.Map;
  *   - Phase 4.5 로비 시스템 이후 유저당 방이 N개이므로 단건 조회 불가
  *   - AuthResponse.hasExistingRooms는 boolean이므로 존재 여부만 확인하면 충분
  */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
@@ -122,8 +124,24 @@ public class AuthController {
         if (rateLimiter.checkLogin(clientIp)) {
             throw new RateLimitException("로그인 시도가 너무 빈번합니다. 1분 후 다시 시도해주세요.", 60);
         }
+        // [B-11.2] IP 버킷만으로는 **분산 크리덴셜 스터핑**이 열려 있다 — IP를 바꿔 가며
+        //   한 계정을 두드리면 IP 버킷은 매번 새로 시작한다. 계정 단위 버킷을 함께 건다.
+        //   ★ 실패만 센다(아래 catch) — 성공까지 세면 여러 기기에서 로그인하는 정상 유저가 잠긴다.
+        //     성공/실패를 구분하지 않는 것이 종전 IP 버킷의 결함이었고, 계정 버킷은 더 좁아 피해가 크다.
+        String account = req.username();
+        if (rateLimiter.checkLoginByAccount(account)) {
+            log.warn("[AUTH] 계정 단위 로그인 실패 한도 초과 — 분산 스터핑 의심: account={}", account);
+            throw new RateLimitException("로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.", 600);
+        }
 
-        AuthService.AuthResult result = authService.login(req);
+        AuthService.AuthResult result;
+        try {
+            result = authService.login(req);
+        } catch (RuntimeException e) {
+            // 실패 1건 적립 — 성공 경로는 여기 오지 않으므로 정상 유저의 반복 로그인은 소모되지 않는다.
+            rateLimiter.recordLoginFailure(account);
+            throw e;
+        }
         setRefreshTokenCookie(response, result.refreshToken());
         return result.response();
     }

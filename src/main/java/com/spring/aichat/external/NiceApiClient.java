@@ -53,15 +53,22 @@ public class NiceApiClient {
      * 그래서 blank와 `YOUR_` 접두 플레이스홀더를 모두 '미설정'으로 본다.
      */
     private static boolean isUnset(String value) {
-        return value == null || value.isBlank() || value.startsWith("YOUR_");
+        if (value == null || value.isBlank()) return true;
+        if (value.startsWith("YOUR_")) return true;
+        // [C-1.4] `YOUR_` 접두만 보던 검사를 넓힌다 — return-url의 플레이스홀더는
+        //   `https://yourdomain.com/...` 형태라 그 검사를 **빠져나가 그대로 NICE에 실려 나갔다**.
+        return value.contains("yourdomain.com");
     }
 
     public String getAccessToken() {
         // [C-1.3] 진입부 가드 — 자격증명이 없으면 외부 호출 전에 명시적으로 실패시킨다.
         //   ※ 전역 fail-fast(부팅 차단)가 아니라 진입부 차단이다(docs/19 D-31과 같은 원칙):
         //     설정 누락이 애플리케이션 부팅 블로커가 되면 안 된다.
-        if (isUnset(props.getClientId()) || isUnset(props.getClientSecret()) || isUnset(props.getProductId())) {
-            log.error("[NICE] 자격증명 미주입 — NICE_CLIENT_ID/NICE_CLIENT_SECRET/NICE_PRODUCT_ID 환경변수를 확인하라");
+        if (isUnset(props.getClientId()) || isUnset(props.getClientSecret())
+            || isUnset(props.getProductId()) || isUnset(props.getReturnUrl())) {
+            // [C-1.4] return-url도 함께 검사한다 — 자격증명만 맞고 콜백 주소가 플레이스홀더면
+            //   토큰은 받아지고 **인증 팝업이 존재하지 않는 도메인으로 돌아가** 더 나쁘게 실패한다.
+            log.error("[NICE] 설정 미주입 — NICE_CLIENT_ID/CLIENT_SECRET/PRODUCT_ID/RETURN_URL 환경변수를 확인하라");
             throw new BusinessException(ErrorCode.VERIFICATION_TOKEN_FAILED,
                 "본인확인 서비스가 아직 설정되지 않았습니다. 잠시 후 다시 시도해 주세요.");
         }

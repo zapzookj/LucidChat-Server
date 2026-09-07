@@ -148,6 +148,52 @@ public class ApiRateLimiter {
         return isRateLimited("login", ipOrUsername, 5, 60);
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [B-11.2] 계정 단위 로그인 실패 한도
+    //
+    //  IP 버킷만으로는 **분산 크리덴셜 스터핑**이 열려 있다 — 공격자가 IP를 바꿔 가며 한 계정을
+    //  두드리면 IP 버킷은 매번 새로 시작한다. 계정 단위 버킷을 함께 건다.
+    //
+    //  ★ 이 버킷은 **실패만** 센다. 그래서 다른 편의 메서드들과 달리 검사(read-only)와
+    //    적립(increment)이 분리돼 있다 — isRateLimited는 호출만으로 카운터를 올리므로
+    //    그대로 쓰면 성공한 로그인도 예산을 태워, 여러 기기를 쓰는 정상 유저가 잠긴다.
+    //    성공/실패를 구분하지 않는 것이 종전 IP 버킷의 결함이었고, 계정 버킷은 더 좁아 피해가 크다.
+    //
+    //  10분 10회 — 사람이 비밀번호를 잊어 다시 치는 빈도는 덮고(로그인 화면 왕복이 수십 초),
+    //  자동화 시도는 IP를 바꿔도 계정당 시간을 사게 만든다.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final int LOGIN_FAIL_MAX = 10;
+    private static final int LOGIN_FAIL_WINDOW_SEC = 600;
+
+    private static String loginFailKey(String username) {
+        return KEY_PREFIX + "login_fail:" + username;
+    }
+
+    /** 적립하지 않고 <b>현재 실패 누적만</b> 본다. Redis 장애 시 허용(가용성 우선 — 기존 정책과 동일). */
+    public boolean checkLoginByAccount(String username) {
+        try {
+            String v = redisTemplate.opsForValue().get(loginFailKey(username));
+            return v != null && Long.parseLong(v) >= LOGIN_FAIL_MAX;
+        } catch (Exception e) {
+            log.error("[RATE_LIMIT] Redis error — allowing login: account={}", username, e);
+            return false;
+        }
+    }
+
+    /** 인증 <b>실패 뒤에만</b> 호출한다. 첫 실패에 TTL을 건다(슬라이딩이 아니라 고정 윈도우). */
+    public void recordLoginFailure(String username) {
+        try {
+            Long n = redisTemplate.opsForValue().increment(loginFailKey(username));
+            if (n != null && n == 1L) {
+                redisTemplate.expire(loginFailKey(username),
+                    java.time.Duration.ofSeconds(LOGIN_FAIL_WINDOW_SEC));
+            }
+        } catch (Exception e) {
+            log.error("[RATE_LIMIT] Redis error — 실패 적립 생략: account={}", username, e);
+        }
+    }
+
     /**
      * 편의 메서드: 회원가입 (IP 기반 권장)
      */

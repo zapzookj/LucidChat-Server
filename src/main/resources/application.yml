@@ -107,12 +107,19 @@ bm:
   secret-products-enabled: ${SECRET_PRODUCTS_ENABLED:false}
 
 # 외부 API 공통 설정
+# [C-1.4] 리터럴 플레이스홀더 → ${ENV:default} 형태로 통일했다.
+#   ⚠ return-url이 `https://yourdomain.com/verify/callback`이었다 — 두 가지가 틀렸다:
+#     ① 도메인이 플레이스홀더인데 isUnset 가드의 `YOUR_` 접두 검사를 **빠져나가** 그대로 NICE에 실려 나갔다
+#     ② 경로 형태도 틀렸다 — D-30 이후 return-url은 **백엔드 수신 엔드포인트**를 가리켜야 한다
+#        (NICE 팝업이 백엔드로 돌아오고, 백엔드가 GET/POST 양쪽을 받아 SPA로 302한다).
+#   기본값을 운영 엔드포인트로 두어 미주입이어도 형태가 옳은 값이 나가게 했다.
 nice:
-  client-id: YOUR_NICE_CLIENT_ID
-  client-secret: YOUR_NICE_CLIENT_SECRET
-  product-id: YOUR_NICE_PRODUCT_ID
-  return-url: https://yourdomain.com/verify/callback
-  api-url: https://svc.niceapi.co.kr:22001
+  client-id: ${NICE_CLIENT_ID:YOUR_NICE_CLIENT_ID}
+  client-secret: ${NICE_CLIENT_SECRET:YOUR_NICE_CLIENT_SECRET}
+  product-id: ${NICE_PRODUCT_ID:YOUR_NICE_PRODUCT_ID}
+  return-url: ${NICE_RETURN_URL:https://api.lucid-chat.com/api/v1/verify/callback}
+  frontend-callback-url: ${NICE_FRONTEND_CALLBACK_URL:https://lucid-chat.com/verify/callback}
+  api-url: ${NICE_API_URL:https://svc.niceapi.co.kr:22001}
 
 portone:
   # [버그픽스 C-2.l · docs/17_assets/defect_register.md §C-2.l · docs/19]
