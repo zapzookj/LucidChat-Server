@@ -1353,8 +1353,10 @@ public class ChatStreamService {
      * 직전 값을 캡처해 두지 않아 복원값을 추측하게 되고, 그 상태는 유저가 다음 발화로 자연 해소된다
      * (개입 시 RESOLVED 판정). 되돌리는 것이 확실한 BRANCH만 처리한다.
      */
-    private void compensateDirectorState(Long roomId, boolean isBranchResponse) {
-        if (!isBranchResponse) return;
+    private void compensateDirectorState(Long roomId, boolean branchGranted) {
+        // [F1] 파라미터 이름이 종전 `isBranchResponse`였다 — 호출부는 이제 **발급이 확인된 분기**
+        //   (branchVerified)를 넘긴다. 이름을 그대로 두면 다음 사람이 "BRANCH 요청이면 다 해제"로 읽는다.
+        if (!branchGranted) return;
         try {
             txTemplate.execute(status -> {
                 chatRoomRepository.findById(roomId).ifPresent(ChatRoom::clearDirectorInterlude);
@@ -1567,6 +1569,47 @@ public class ChatStreamService {
         RollbackContext rollbackCtx = null;
         boolean committed = false;
 
+        // ── [F1 / blockd §A-3] 분기 발급 여부를 과금 앞에서 한 번만 판정한다 ──
+        //
+        //   결함: 종전에는 비용만 `resolveBranchCost(...).orElse(1)`로 폴백하고
+        //   **분기 효과는 그대로 적용**했다. 그래서 요청에서 chosenIndex만 빼면
+        //   4E짜리 카드의 효과(디렉터 constraint 주입 + 나레이션 가시 저장)를
+        //   1E에 받을 수 있었다 — 서버가 '이 분기를 발급한 적이 있는가'를 묻지 않았기 때문이다.
+        //
+        //   수정: '가격표 없음 = 이 분기를 발급한 적이 없음'으로 읽고 **일반 턴으로 강등**한다.
+        //   거부면(400)을 만들지 않는 이유는 chosenIndex를 안 보내던 구 클라이언트 세션이
+        //   통째로 잠기기 때문이다. 강등이면 **이 결함이 노리던 이득**(4E 카드의 효과)이 사라지고
+        //   구 클라이언트는 일반 턴으로 계속 동작한다.
+        //
+        //   ⚠ **무엇이 안 닫혔는지도 적어 둔다**(§1-7) — '착취 이득 0'이라고 단정하면 다음 사람이
+        //   재검토를 건너뛴다. 이 픽스가 닫지 **않은** 것 셋:
+        //     ① 가격표는 `List<Integer>` 비용만 담고 **detail을 담지 않는다.** 그래서 발급된 3장 중
+        //        index=0(2E)로 청구하면서 eventContext에는 임의 문자열을 실을 수 있다 —
+        //        '인덱스는 맞고 내용은 다른' 조합은 여전히 통과한다.
+        //     ② 분기 constraint는 **방 단위 공유 필드**이고 서버측 턴 락이 없다. TX-1 커밋 후
+        //        TX-2까지의 스트림 구간에 들어온 다음 요청이 같은 constraint를 읽어 갈 수 있다.
+        //     ③ 강등은 **유저에게 통보되지 않는다.** FE는 낙관적으로 detail을 나레이션으로 그렸는데
+        //        서버는 hidden으로만 저장하므로, 새로고침하면 그 나레이션만 사라진다.
+        //   셋 다 이 커밋 이전부터 있던 구조이고 국소 패치로 닫히지 않는다 — 별건으로 등재했다.
+        //
+        //   ⚠ 이 값이 갈라놓는 것은 **분기 특권 5곳뿐**이다(constraint 주입 · 나레이션 문구 ·
+        //   가시 로그 저장 · 가격표 소비 · 보상 해제). 인젝션 적재(E-5.1.b)는 강등 여부와 무관하게
+        //   돌아야 한다 — 오히려 미검증 요청이 관측 대상이다.
+        //
+        //   ⚠ 선언 위치가 try **밖**인 것은 의도다 — 최외곽 catch의 보상 경로
+        //   (compensateDirectorState)가 같은 판정을 봐야 하기 때문이다. resolveBranchCost는
+        //   내부에서 예외를 삼키고 빈 Optional을 돌려주므로 try 밖에서 불러도 안전하다.
+        //   또 **한 번만** 부른다 — 읽기 전용이지만(evict는 consumeBranchPricing이 따로 한다)
+        //   두 번 부르면 TTL 경계에서 두 판정이 갈릴 수 있다.
+        final Optional<Integer> resolvedBranchCost =
+            isBranchResponse ? directorService.resolveBranchCost(roomId, chosenIndex)
+                             : Optional.empty();
+        final boolean branchVerified = resolvedBranchCost.isPresent();
+        if (isBranchResponse && !branchVerified) {
+            log.warn("🎬 [DIRECTOR] 미발급 분기 요청 — 일반 턴으로 강등 | roomId={} | chosenIndex={}",
+                roomId, chosenIndex);
+        }
+
         try {
             // [2026-07-30 P0 공개 철회 리뷰픽스] 우회 경로 차단
             ChatRoom accessCheck = chatRoomRepository.findWithMemberAndCharacterById(roomId)
@@ -1582,10 +1625,8 @@ public class ChatStreamService {
                 //   2026-02 `6d3ed07` 이후 FE가 energyCost(2/3/4)를 보내왔지만 여기서는 1로 고정돼
                 //   과소 청구 + FE 표기 불일치 상태였다. 이제 요청 시 캐싱해 둔 가격표를
                 //   chosenIndex로 재판정한다(클라이언트 값은 신뢰하지 않는다).
-                //   캐시 만료·구 FE(인덱스 미전송)는 기존 동작대로 1로 폴백한다.
-                int cost = isBranchResponse
-                    ? directorService.resolveBranchCost(roomId, chosenIndex).orElse(1)
-                    : 1;
+                //   [F1] 미검증이면 1E지만 **분기 효과도 함께 빠진다**(아래 branchVerified 가드).
+                int cost = resolvedBranchCost.orElse(1);
                 EnergySplit charge = room.getUser().consumeEnergy(cost);
 
                 if (isAway) {
@@ -1594,7 +1635,8 @@ public class ChatStreamService {
                 }
 
                 // [Bug Fix] BRANCH 카드 선택 시: constraint로 detail 적용
-                if (isBranchResponse && safeEventContext != null && !safeEventContext.isBlank()) {
+                // [F1] 발급이 확인된 분기에만 적용한다 — 이것이 4E가 사는 값이다.
+                if (branchVerified && safeEventContext != null && !safeEventContext.isBlank()) {
                     room.setDirectorInterlude(safeEventContext,
                         "상황: " + safeEventContext + " — 이 상황에 자연스럽게 반응하세요.");
                 }
@@ -1628,7 +1670,8 @@ public class ChatStreamService {
             String systemMessage;
             if (isAway) {
                 systemMessage = "[SYSTEM_DIRECTOR] 유저가 자리를 비웠습니다. 캐릭터는 혼자(또는 NPC와) 행동합니다.";
-            } else if (isBranchResponse && safeEventContext != null) {
+            } else if (branchVerified && safeEventContext != null) {
+                // [F1] 미검증 분기는 나레이션 문구를 얻지 못하고 아래 일반 문구로 떨어진다.
                 systemMessage = "[NARRATION] " + safeEventContext;
             } else {
                 systemMessage = "[SYSTEM_DIRECTOR] 상황이 발생했습니다. 캐릭터는 자연스럽게 반응합니다.";
@@ -1639,7 +1682,9 @@ public class ChatStreamService {
                 // [Bug Fix A] BRANCH 나레이션은 visible로 저장 (새로고침 시 히스토리에 표시)
                 // AWAY/INTERLUDE/TRANSITION은 hidden (LLM 컨텍스트 전용)
                 ChatLogDocument savedLog;
-                if (isBranchResponse && safeEventContext != null) {
+                // [F1] 미검증 분기의 eventContext를 **visible로 영속하지 않는다** —
+                //   유저가 보낸 임의 문자열이 나레이션으로 히스토리에 남는 표면이었다.
+                if (branchVerified && safeEventContext != null) {
                     savedLog = chatLogRepository.save(
                         ChatLogDocument.system(roomId, safeEventContext));
                 } else {
@@ -1649,6 +1694,12 @@ public class ChatStreamService {
                 savedLogId = savedLog.getId();
             } catch (Exception e) {
                 compensateEnergy(jpa.userId(), jpa.energy(), jpa.username());
+                // [F1] ★ 에너지를 되돌렸으면 TX-1이 건 분기 constraint도 함께 되돌린다.
+                //   안 하면 **전액 환불된 4E 분기의 효과가 방에 장전된 채** 남아, 다음 아무 턴이나
+                //   (1E 일반 턴 포함) 그 지시를 프롬프트 최상단(Priority: HIGHEST)에서 가져간다.
+                //   ⚠ 이 누락은 이 커밋 이전부터 있었다 — 조기 return 3곳(여기 · parsed==null · TX_ERROR)이
+                //     전부 최외곽 catch를 안 타므로 보상이 에너지에만 걸려 있었다.
+                compensateDirectorState(roomId, branchVerified);
                 sendSseError(emitter, "INTERNAL_ERROR", "메시지 저장 실패");
                 return;
             }
@@ -1662,7 +1713,13 @@ public class ChatStreamService {
             // ── LLM 스트림 ──
             ParsedLlmResult parsed = streamLlmAndParse(jpa.room(), jpa.logCount() + 1,
                 effectiveSecretMode, emitter, rollbackCtx);
-            if (parsed == null) return;
+            if (parsed == null) {
+                // [F1] streamLlmAndParse가 내부에서 compensateFullRollback을 마치고 null을 준다.
+                //   그 보상에는 분기 constraint가 없다(그 헬퍼는 방 상태를 모른다) — 여기서 마저 되돌린다.
+                //   이건 try 안의 평범한 return이라 최외곽 catch가 돌지 않는다는 점이 함정이었다.
+                compensateDirectorState(roomId, branchVerified);
+                return;
+            }
 
             // ── TX-2: 상태 업데이트 ──
             SendChatResponse response;
@@ -1701,6 +1758,8 @@ public class ChatStreamService {
                 });
             } catch (Exception e) {
                 compensateFullRollback(rollbackCtx);
+                // [F1] 세 번째 조기 return — 여기도 constraint를 되돌린다(위 두 곳과 같은 이유).
+                compensateDirectorState(roomId, branchVerified);
                 sendSseError(emitter, "TX_ERROR", "자동 응답 처리 실패");
                 return;
             }
@@ -1710,7 +1769,15 @@ public class ChatStreamService {
             //   resolveBranchCost 안에서 evict하면 Redis가 DB 롤백을 안 따라가므로,
             //   에너지 부족·스트림 실패로 보상 롤백이 돌 때 가격표만 사라져
             //   재시도 시 4E 카드가 1E가 된다.
-            if (isBranchResponse) {
+            // [F1] ★ 미검증 요청은 가격표를 소비하면 안 된다.
+            //   소비해 버리면 아직 대기 중인 **정상 분기의 가격표가 사라져**, 유저가 진짜로 고를 때
+            //   캐시 미스로 강등된다. 즉 이 한 줄을 isBranchResponse로 두면
+            //   "chosenIndex 없는 요청" 한 번이 **자기 4E 분기를 스스로 무력화**한다
+            //   (중복 클릭·재시도·구 클라이언트가 그대로 이 형태다).
+            //   ※ 타인의 가격표에는 도달할 수 없다 — 엔드포인트에 방 소유권 검사가 걸려 있고
+            //     키도 방 단위(`director:branchprice:{roomId}`)다. 위협 모델은 '동일 유저의 중복 요청'이다.
+            //   우리가 실제로 쓴 가격표만 소비한다.
+            if (branchVerified) {
                 directorService.consumeBranchPricing(roomId);
             }
 
@@ -1785,7 +1852,9 @@ public class ChatStreamService {
                 compensateFullRollback(rollbackCtx);
                 // TX-1이 커밋한 분기 constraint도 해제한다 — 안 하면 전액 환불된 4E 분기가
                 //   다음 1E 턴에 최우선 지시로 실행된다. AWAY의 eventStatus는 복원하지 않는다(헬퍼 주석).
-                compensateDirectorState(roomId, isBranchResponse);
+                // [F1] 보상은 **우리가 실제로 건 것만** 되돌린다. 미검증 분기는 TX-1에서
+                //   constraint를 걸지 않았으므로, 여기서 clear하면 남의 상태를 지우는 셈이 된다.
+                compensateDirectorState(roomId, branchVerified);
             }
             // 로깅은 sendTypedStreamError가 분기별로 한다 — 여기서 또 찍으면 이중 기록이다(아래 주석).
             //   단 directiveType은 이 헬퍼가 못 보는 컨텍스트라 한 줄 남긴다.

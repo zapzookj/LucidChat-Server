@@ -251,14 +251,39 @@ public class DirectorService {
 
     private static final String BRANCH_PRICE_KEY_PREFIX = "director:branchprice:";
 
+    /**
+     * 분기 1회의 에너지 상한. 프롬프트가 지시하는 값은 normal 2 · affection 3 · secret 4이고
+     * ({@code energy_cost} 규칙, 이 클래스의 SCENARIO 프롬프트 참조) 그보다 큰 값은 나올 이유가 없다.
+     */
+    private static final int MAX_BRANCH_ENERGY_COST = 4;
+
+    /**
+     * 가격표 TTL. 지시문 자체({@link #DIRECTIVE_TTL_SECONDS} = 10분)보다 길게 잡는다.
+     *
+     * <p>가격표가 먼저 만료되면 <b>느리게 고민한 정상 유저</b>가 자기가 고른 분기를 못 받는다
+     * (아래 F1 픽스로 미검증 분기는 일반 턴으로 강등되기 때문). 반대로 오래 살아도 위험이 없다 —
+     * 새 지시문이 나오면 같은 키를 덮어쓰고, 턴이 성공하면 {@link #consumeBranchPricing}이 지운다.
+     * 즉 이 TTL을 늘리는 것은 착취면을 넓히지 않고 오탐만 줄인다.
+     */
+    private static final long BRANCH_PRICE_TTL_SECONDS = 3600;
+
     private void cacheBranchPricing(Long roomId, DirectorDirective directive) {
         if (directive == null || !directive.checkBranch()
             || directive.branch() == null || directive.branch().options() == null) return;
+        // [F1] LLM 출력을 그대로 신뢰하지 않는다 — energy_cost는 모델이 만든 JSON 필드이고
+        //   DirectorDirective(:130 int energyCost)에도 범위 검증이 없다. 여기가 그 값이
+        //   '서버가 정한 가격'으로 승격되는 경계이므로 이 자리에서 [1, 4]로 조인다.
+        //   (0 이하가 캐시되면 무료 분기가 되고, 큰 값이 캐시되면 과다 청구가 된다.)
         List<Integer> costs = directive.branch().options().stream()
             .map(DirectorDirective.BranchOption::energyCost)
+            .map(DirectorService::clampBranchCost)
             .toList();
         cacheService.put(BRANCH_PRICE_KEY_PREFIX + roomId, costs,
-            DIRECTIVE_TTL_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+            BRANCH_PRICE_TTL_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private static int clampBranchCost(int raw) {
+        return Math.max(1, Math.min(MAX_BRANCH_ENERGY_COST, raw));
     }
 
     /**
@@ -270,8 +295,12 @@ public class DirectorService {
      * 같은 분기를 다시 골랐을 때 캐시 미스로 4E 카드가 1E가 된다(정상 유저 손해이자 착취면).
      * 그래서 소비 시점을 '턴 전체 성공 후'로 미뤘다.
      *
-     * @return 서버가 제시했던 비용. 인덱스 범위 밖·캐시 만료·미BRANCH면 {@link Optional#empty()}
-     *         → 호출부는 레거시 기본값으로 폴백한다(관용 롤아웃).
+     * @return 서버가 제시했던 비용([1,4]로 clamp됨). 인덱스 미전송·음수·범위 밖·캐시 만료면
+     *         {@link Optional#empty()}.
+     *         <p><b>[F1 · 2026-09-09 계약 변경]</b> 빈 값은 더 이상 '비용만 1E로 폴백'이 아니라
+     *         <b>'이 분기를 발급한 적이 없다'</b>는 뜻이다. 호출부는 1E를 청구하되
+     *         <b>분기 특권(constraint 주입 · 나레이션 가시 저장 · 가격표 소비 · 보상 해제)을 전부 뺀
+     *         일반 턴으로 강등</b>한다. 즉 이 메서드의 반환값이 돈과 효과를 동시에 가른다.
      */
     public Optional<Integer> resolveBranchCost(Long roomId, Integer chosenIndex) {
         if (chosenIndex == null || chosenIndex < 0) return Optional.empty();
@@ -288,7 +317,16 @@ public class DirectorService {
                     chosenIndex, costs.size(), roomId);
                 return Optional.empty();
             }
-            return Optional.of(((Number) costs.get(chosenIndex)).intValue());
+            // 읽을 때도 조인다 — 배포 시점에 이미 캐시돼 있던 항목(구 TTL 600초)은 clamp를 안 거쳤다.
+            int raw = ((Number) costs.get(chosenIndex)).intValue();
+            int cost = clampBranchCost(raw);
+            if (cost != raw) {
+                // 모델이 프롬프트의 2/3/4를 벗어난 값을 냈다는 뜻이다. 관측되지 않으면
+                // '가끔 이상한 과금'으로만 보이므로 반드시 남긴다.
+                log.warn("🎬 [DIRECTOR] energy_cost 범위 이탈 — clamp 적용 | roomId={} | raw={} → {}",
+                    roomId, raw, cost);
+            }
+            return Optional.of(cost);
         } catch (Exception e) {
             log.warn("🎬 [DIRECTOR] Branch cost resolve failed | roomId={}", roomId, e);
             return Optional.empty();
