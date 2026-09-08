@@ -23,7 +23,7 @@
 | E-1.10a | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | FE 채팅 · FE | handleSendMessageV2 낙관적 에너지 차감이 플랫 2 하드코딩 — 부스트 비구독자는 실제 10 |
 | E-1.10b | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | FE 채팅 · FE | handleSendActionV2에 에너지 가드·낙관적 차감·onError 롤백이 전부 없음 |
 | E-1.11a | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE ★결정 | V2 스탯 매퍼는 도입됐으나 방 재조회 후 재파생이 없어 세션 내내 진입 시점 값으로 동결 (잔여분) |
-| E-1.13b | P2 | **LIVE** | SMALL | BROKEN_FLOW | 인증·결제 · FE 극장 | 로비·극장이 LucidStore에 onRequestAdultVerify를 여전히 안 넘긴다 — SECRET_PRODUCTS_ENABLED를 켜는 날 미드나잇 패스 구매가 무반응 |
+| E-1.13b | P2 | **부분수정** | SMALL | BROKEN_FLOW | 인증·결제 · FE 극장 | 로비·극장이 LucidStore에 onRequestAdultVerify를 여전히 안 넘긴다 — SECRET_PRODUCTS_ENABLED를 켜는 날 미드나잇 패스 구매가 무반응 |
 | E-1.14 | P3 | **LIVE** | ONE_LINE | UX_DEGRADE | 인증·결제 · FE | SupportPanel 알림 탭이 읽음 처리 직후 스스로 QnA로 튕긴다 — initialTab이 deps에 남아 열린 채로 activeTab을 덮어쓴다 |
 | E-1.3 | P3 | **LIVE** | SMALL | BROKEN_FLOW | FE 채팅 · FE | 디렉터 fetch 3종(peek·consume·request)에 401 갱신 부재 — V1 SANDBOX 방에서 여전히 도달 |
 | E-1.4 | P2 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE | ChatPageV2 자동응답·지켜보기·시간넘기기 SSE 3종에 abortController 미전달 (도달 창구는 좁아졌다) |
@@ -60,7 +60,7 @@
 | E-6.3.b | P3 | **LIVE** | ONE_LINE | DEAD_CODE | 어드민·UGC | [인접] 같은 else-if 사슬 때문에 targetType/targetId 필터가 actor·action이 있으면 무시되고, 한쪽만 주면 전체 목록으로 침묵 강등 |
 | E-6.5 | P2 | **LIVE** | SMALL | BROKEN_FLOW | 어드민·UGC · FE | 어드민 CS 대화 로그가 '가장 오래된 100건'만 로드 (ASC + page 0 하드코딩 + 페이지네이션 UI 없음) |
 | E-7.2 | P3 | **LIVE** | SMALL | UX_DEGRADE | 어드민·UGC · FE | PATCH /ugc/characters/{id}/texts 길이 검증 — BE는 닫혔고 FE 말투 textarea의 maxLength·카운터만 남음 |
-| F-1.a | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | 인증·결제 · FE 극장 | 극장 생성 4단계 업셀 카드가 Lucid Pass 스탯을 '최대 40 P'로 광고 — 실제 지급은 20P (★ F-1.c 의존은 해소됨) |
+| F-1.a | P2 | **수정됨** | ONE_LINE | UX_DEGRADE | 인증·결제 · FE 극장 | 극장 생성 4단계 업셀 카드가 Lucid Pass 스탯을 '최대 40 P'로 광고 — 실제 지급은 20P (★ F-1.c 의존은 해소됨) |
 | F-1.b | P3 | **ALREADY_FIXED** | ONE_LINE | COSMETIC | 인증·결제 · FE 극장 | 같은 업셀 카드의 스탯 이름 5종이 실제 슬라이더 라벨과 불일치 (위트/대담함/공감 vs 입담/담력/감수성). ✅커밋 `d64978b` — `TheaterCreateFlow.jsx:723 {STAT_AXES.map((a) => a.label).join(" / ")}` 단일 출처. 2026-09-08 재실측: 하드코딩 라벨 잔재 0건(`:721`은 경위 설명 주석) |
 | F-2 | P3 | **LIVE** | ONE_LINE | UX_DEGRADE | 극장 · FE 극장 | 인터미션 '대성공(GREAT_SUCCESS)' 결과가 무음 — 효과음 분기가 존재하지 않는 문자열 "CRIT"을 비교한다 |
 | F-3.c | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE | V1·V2 SSE 에러 폴백 대사가 공식 4인 하드코딩 (동일 블록 2곳) |
@@ -73,7 +73,7 @@
 | F-8.d | P3 | **LIVE** | SMALL | BROKEN_FLOW | FE 채팅 · FE | SSE onError의 error.status === 402 분기가 영구 사문 (V1·V2 각 1곳) — 단, BE와 세트여야 실효 |
 | B-5.2 | P2 | **NEEDS_DECISION** | ONE_LINE | ASSET_LOSS | 시드·일러 · 극장 ★결정 | 무과금 배치 소비 게이트 — 코드는 완비됐으나 기본값이 fail-open(관측 모드)이라 착취면이 그대로 열려 있다 |
 | E-5.1.b | P1 | **NEEDS_DECISION** | SMALL | UX_DEGRADE | V1 스트림 · ★결정 | BRANCH eventContext가 visible SYSTEM 롤로 영구 저장·매 턴 role=system 재주입 — 길이·적재는 닫혔고 잔여 결정 1건(CRITICAL 인젝션 차단 vs 로깅만) |
-| F-1.c | P3 | **결정됨 → LIVE** | SMALL | COSMETIC | 극장 · FE 극장 | 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20. **정본 확정(2026-09-08 §G-6) = 300/100** — (가)/(나) 이지선다가 아니라 제3안. 착수는 docs/26 배치 3 |
+| F-1.c | P3 | **수정됨** | SMALL | COSMETIC | 극장 · FE 극장 | 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20. **정본 확정(2026-09-08 §G-6) = 300/100** — (가)/(나) 이지선다가 아니라 제3안. 착수는 docs/26 배치 3 |
 | D-5.1 | P2 | **UNREACHABLE** | SMALL | DEAD_CODE | 극장 · 극장 ★결정 | 극장 prefetch가 현재 배치 ID N에 저장 — 코드는 그대로지만 워터마크 가드 + @Transactional 부재로 이중 차단 |
 | D-5.2 | P3 | **UNREACHABLE** | ONE_LINE | DEAD_CODE | 극장 · 극장 | prefetch 중복 가드가 N+1 키를 검사하는데 기록은 N 키 — 키 어긋남은 그대로, 그러나 LLM 이중 호출은 발생하지 않는다 |
 | D-5.3 | P3 | **UNREACHABLE** | SMALL | DEAD_CODE | 극장 · 극장 | 배치 소비 확정에 내용물 동일성(batchId) 탐지 가드 부재 — 가드는 여전히 없으나 덮어쓰기 경로가 막혀 오염이 발생하지 않는다 |
@@ -1715,3 +1715,59 @@ deps 배열은 `useCallback` 호출의 **인자**라 렌더 시점에 평가되�
 
 **#3은 가드 배치의 일반 규칙을 준다** — 가드는 *함수 진입부*가 아니라
 **되돌릴 수 없는 상태 변경 앞**에 둔다. 11경로 각각은 맞았고, 틀린 것은 함수 **경계**였다.
+
+---
+
+### 배치 0 — 원장 정합 (2026-09-08 · 코드 0줄)
+
+착수 지시는 [`../26_Wrapup_Execution_Readiness.md`](../26_Wrapup_Execution_Readiness.md). 커밋 `20dd42b`.
+
+**왜 코드보다 먼저인가** — 이 원장이 아직 F-1.c에 *"(가)는 주석만 바꾸므로 무위험"*을 권고하고 있었다.
+그대로 읽으면 배치 3이 **§G-6 확정(300/100)을 뒤집는다.** 이 사이클이 이미 두 번 밟은 함정이라
+코드를 만지기 전에 닫았다(CLAUDE.md §1-8).
+
+- §G-6을 뒤집을 수 있던 낡은 권고 **5곳**에 종결 배너: `decisions_confirmed` §B 17-③ ·
+  이 파일 F-1.c 블록 · `defect_register` F-1.c · `24_Decision_Briefs` §1-2행·§2-① · `21_FinalBugFix_Readiness` §B
+- **사실 정정** — `decisions_confirmed` §G-6 ★의 *"부수 효과가 결함 수정"*은 성립하지 않는다
+  (`dominantStat()`이 300에서도 3축 동점 시 CHARM 고정). 결정값은 유지, 근거만 정정.
+  `docs/25`의 검증 절차 *"3축 만렙 시 지배 스탯"* 은 아무것도 판별하지 못하므로 삭제
+- 상태 3건을 **코드로 확인해** ALREADY_FIXED 전환: F-1.b(`d64978b`) · E-2.15 · E-2.15b
+- 좌표 드리프트 6건 정정 — blockd §A-8 `:792-830`→**`:885-921`**(93줄) · §A-18 `:745-766`→**`:735-757`** ·
+  D-29b `:340`→**`ChatPageV2.jsx:455`** · F-1.a `741`→**744** · F-1.b `720`→**723** · F-1.c 계열 9행
+- V36 충돌 해소(git + 프로드 `flyway_schema_history` 양쪽 실측) · `CLAUDE.md` §3 기준선 21클래스/116건 → **31/197**
+
+### 배치 2 — 라이브 오광고 + 시크릿 게이트 정합 (2026-09-08 · FE `e3cb8b0`)
+
+**`F-1.a` — 유료 구독 결제 직전 화면이 지급량을 2배로 광고하고 있었다.**
+비교 카드가 `최대 40 P`를 하드코딩했는데 실지급은 20 P. **문자열만 고치지 않고** `STAT_TIER_LIMITS`
+상수 표를 세워 `statTier`와 업셀 카피가 같은 출처를 보게 했다 — 원인이 판단 착오가 아니라
+**같은 숫자를 두 곳에 적은 것**이라, 출처를 하나로 만들지 않으면 같은 사고가 재발한다.
+그 덕에 배치 3의 FE 작업이 **한 줄**로 줄었다(종전 구조였으면 두 곳).
+
+- 도달 경로는 문서가 적은 1곳이 아니라 **2곳**이었다 — `StoryTab.jsx:161-166` · `TheaterPortalPage.jsx:579-585`
+- 같은 카드의 **두 번째 오광고**: 부제 `자유 분배 + 분기 해금`. Lucid Pass perStat 상한 **10** <
+  stat_gate `min_value` **30~70**(`TheaterBranchService`: `unlocked = state.getStat(stat) >= minValue`)이라
+  **구매 시점에 열리는 분기가 0개**다. 다만 인터미션이 스탯을 +1/+3/+5씩 올리므로 나중에는 열린다 —
+  '거짓'까지는 아니고 '구매가 즉시 준다고 읽히는' 문구라 근거 없는 절반만 뺐다. **카피 판단이라 되돌리기 쉽게 한 줄로.**
+
+**`E-1.13b` 절반 — 시크릿 탭 가시성 술어가 두 갈래였다.** 탭 렌더는
+`currentCharacterId && secretProductsEnabled`, initialTab 폴백은 `secretProductsEnabled`만.
+노브를 켜는 날 캐릭터 문맥 없는 진입점(LobbyShell · TheaterPortalPage — **실측 결과 둘 다
+`currentCharacterId`를 안 넘긴다**)에서 탭 없이 본문만 시크릿인 화면이 됐다.
+`canShowSecretTab()` 하나로 4지점 통일 + 캐릭터 문맥 절반은 동기 적용해 플래시 제거.
+본문 가드까지 건 이유는 `activeTab`이 `"secret"`으로 남는 경로가 하나만 생겨도 같은 화면이 재현되기 때문이다.
+⚠ **표시 정합이지 구매 게이트가 아니다** — 서버가 독립적으로 막는다(`PaymentService`의 `isSecretGated()` 검사).
+❌ 이 행의 본체인 `onRequestAdultVerify` 프롭 결손은 **배치 6(G-4)** 잔여.
+
+### 배치 3 — G-6 미드나잇 초기 스탯 300/100 (2026-09-08 · BE `8dbf7b6` + FE `a57d407`)
+
+**두 리포를 같은 릴리즈로 배포할 것.** 서버가 같은 값으로 위변조를 검증하므로
+(`validateInitialStats`) 서버만 내리면 500 슬라이더를 그리는 화면이 정상 배분에도 400을 맞는다.
+
+- `PREMIUM_TOTAL_POINTS 500 → 300`(perStat 100 유지) · 소비처는 `validateInitialStats` **1곳**뿐(전수 grep)
+- 낡은 `40/20` 주석 **7행** 정정. FE 2곳은 배치 2에서 블록째 교체되며 이미 소멸 →
+  문서가 센 9행 중 실제로 이 배치가 만진 것은 7행이다
+- 마이그레이션 불요 — 정수 컬럼이고 소급 무효화 경로가 없다.
+  프로드 재실측(2026-09-08): `theater_states` 0행 · `orders` 0행 · `theater_save_slots` 0행
+- 검증: 컴파일 통과 · `*Test` **197건 녹색**(재실행분) · FE TDZ·빌드 통과 · `not exported` 0건 ·
+  번들 실측 `LUCID_MIDNIGHT_PASS:{total:300,perStat:100}` · `total:500` 0건
