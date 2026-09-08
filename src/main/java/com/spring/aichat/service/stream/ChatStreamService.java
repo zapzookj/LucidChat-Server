@@ -897,12 +897,34 @@ public class ChatStreamService {
 
         // 적대에서 벗어나는 것은 새 단계의 획득이 아니라 원상복귀 — 연출 없이 복원만.
         if (RelationStatusPolicy.isEnemyRecovery(oldStatus, newStatus)) {
-            log.info("🎯 [PROMOTION] ENEMY recovery (silent) | {} → {} | roomId={}",
-                oldStatus, newStatus, room.getId());
+            // [G-3] ★ 연출은 없어도 **최고 기록은 올린다.** 안 올리면 peak가 회복 단계보다 낮게
+            //   남아, 그 방이 나중에 같은 단계를 다시 밟을 때 연출이 또 터진다 —
+            //   이 픽스가 없애려는 경계 진동 증상이 ENEMY를 거친 방에서만 되살아난다.
+            //   반환값은 버린다: 여기서는 세리머니를 내지 않는 것이 종원 확정이다.
+            room.raisePeakStatusLevel(newStatus);
+            log.info("🎯 [PROMOTION] ENEMY recovery (silent) | {} → {} | peak={} | roomId={}",
+                oldStatus, newStatus, room.getPeakStatusLevelOrDefault(), room.getId());
             return null;
         }
         if (!RelationStatusPolicy.isUpgrade(oldStatus, newStatus)) {
             log.info("🎯 [PROMOTION] Downgrade | {} → {} | roomId={}", oldStatus, newStatus, room.getId());
+            return null;
+        }
+
+        // [G-3 · 안건 18 · blockd §A-8] 세리머니 히스테리시스 — **처음 도달했을 때만** 연출한다.
+        //
+        //   단계는 계속 오르내리게 두되(위 updateStatusLevel은 이미 실행됐다) 연출만 억제한다.
+        //   종전에는 여기 판정이 isUpgrade 하나뿐이라, 관계 수치가 단계 경계(예: 39↔40)에서
+        //   진동하면 **오를 때마다 '관계 상승' 축하가 다시 터졌다.** 강등은 무연출이라
+        //   유저에게는 '올라감'만 계속 보였다. 블록 D가 구 완충(임계 스냅 + 5턴 시험)을
+        //   걷어내고 대체를 넣지 않아 생긴 회귀다.
+        //
+        //   raisePeakStatusLevel은 새 최고 단계일 때만 true를 주고 그때 컬럼을 갱신한다.
+        //   ⚠ 위 ENEMY 회복 분기가 **이 지점보다 먼저** 있는 것이 맞다 — 회복은 새 단계의
+        //     획득이 아니라 원상복귀라 peak를 건드리면 안 된다(종원 확정, 위 javadoc).
+        if (!room.raisePeakStatusLevel(newStatus)) {
+            log.info("🎯 [PROMOTION] Re-entry (silent) | {} → {} | peak={} | roomId={}",
+                oldStatus, newStatus, room.getPeakStatusLevelOrDefault(), room.getId());
             return null;
         }
 

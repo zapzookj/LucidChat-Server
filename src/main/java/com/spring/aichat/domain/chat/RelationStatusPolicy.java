@@ -75,6 +75,21 @@ public final class RelationStatusPolicy {
         return current == RelationStatus.ENEMY && next != RelationStatus.ENEMY;
     }
 
+    /**
+     * [G-3 · 안건 18] {@code next}가 <b>지금까지 도달한 최고 단계를 넘어서는가.</b>
+     * 승급 세리머니를 낼지 가르는 판정이다.
+     *
+     * <p>{@link #isUpgrade}와 다르다 — isUpgrade는 '직전 단계보다 위인가'(경계에서 진동하면 매번 참),
+     * 이쪽은 '<b>처음 도달했는가</b>'다. 종전에는 둘을 같은 것으로 봐서 관계 수치가 단계 경계에서
+     * 오르내릴 때마다 연출이 무제한 반복됐다(blockd_regressions §A-8).
+     *
+     * <p>⚠ 비교는 반드시 {@link #rank}로 한다. enum ordinal은 STRANGER, ACQUAINTANCE, FRIEND,
+     * LOVER, <b>ENEMY</b> 순이라 ENEMY가 최상위로 잡힌다 — 관계 진전 서열에서는 STRANGER보다 아래다.
+     */
+    public static boolean isNewPeak(RelationStatus peak, RelationStatus next) {
+        return rank(next) > rank(peak);
+    }
+
     /** 서열 — 선언 ordinal이 아니라 관계 진전 순서. ENEMY는 STRANGER보다 뒤다. */
     private static int rank(RelationStatus s) {
         return switch (s) {

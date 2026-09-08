@@ -209,6 +209,27 @@ public class ChatRoom {
     @Column(name = "status_level", length = 30)
     private RelationStatus statusLevel;
 
+    /**
+     * [G-3 · 안건 18 · blockd §A-8] <b>지금까지 도달한 최고 관계 단계.</b> 승급 연출의 히스테리시스.
+     *
+     * <p>단계 자체({@link #statusLevel})는 계속 오르내리되, <b>세리머니는 이 값을 넘어설 때만</b> 낸다.
+     * 종전에는 경계(예: 39↔40)에서 수치가 진동할 때마다 '관계 상승' 연출이 무제한 반복됐고,
+     * 강등은 무연출이라 유저에게는 '올라감'만 계속 보였다.
+     *
+     * <p>결정 원문(decisions_confirmed.md §G-3): <i>"(peak) 최고 도달 단계 1컬럼 … 컬럼 1개 +
+     * 리셋 경로 3곳 초기화"</i> — 2026-08-21 확정안 (b) '단계별 이력'에서 변경된 형태다.
+     *
+     * <p>⚠ <b>nullable이다</b>(V36). NOT NULL + DEFAULT 없음 컬럼은 훗날 이 필드를 떼는 순간
+     * 신규 INSERT를 죽인다(CLAUDE.md §2-1). 구 행·롤백 대비로 읽기는 반드시
+     * {@link #getPeakStatusLevelOrDefault()}를 쓴다.
+     *
+     * <p>⚠ 리셋 경로 <b>3곳</b>에서 함께 초기화한다 — 생성자 · {@code resetAffection()} ·
+     * {@code resetSandboxFields()}. 하나라도 빠지면 방을 초기화한 유저가 첫 승급 연출을 못 본다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "peak_status_level", length = 30)
+    private RelationStatus peakStatusLevel;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "last_emotion", length = 30)
     private EmotionTag lastEmotion;
@@ -345,6 +366,7 @@ public class ChatRoom {
         this.currentBgmMode = BgmMode.DAILY;
         this.affectionScore = 0;
         this.statusLevel = RelationStatus.STRANGER;
+        this.peakStatusLevel = RelationStatus.STRANGER;   // [G-3] 리셋 경로 1/3 — 생성자
         this.lastEmotion = EmotionTag.NEUTRAL;
         this.currentTimeOfDay = TimeOfDay.NIGHT;
         if (character != null) {
@@ -600,6 +622,32 @@ public class ChatRoom {
         this.statusLevel = status;
     }
 
+    /**
+     * [G-3] 최고 도달 단계를 읽는다. 구 행·롤백 대비로 <b>null은 STRANGER로 본다</b>
+     * (V36이 백필하지만 그 사이 생성된 행이나 롤백 후 재기동을 견뎌야 한다).
+     */
+    public RelationStatus getPeakStatusLevelOrDefault() {
+        return peakStatusLevel != null ? peakStatusLevel : RelationStatus.STRANGER;
+    }
+
+    /**
+     * [G-3] {@code next}가 지금까지의 최고 단계를 <b>넘어설 때만</b> 갱신하고 true를 돌려준다.
+     *
+     * <p>호출부는 이 반환값으로 <b>승급 세리머니를 낼지</b> 결정한다. 즉 '단계가 올랐는가'와
+     * '처음 도달했는가'를 갈라놓는 것이 이 메서드의 존재 이유다 — 종전에는 둘을 같은 것으로 봐서
+     * 경계 진동마다 연출이 반복됐다.
+     *
+     * <p>서열 비교는 {@link RelationStatusPolicy#isNewPeak}에 맡긴다. <b>enum ordinal을 쓰면 안 된다</b> —
+     * {@code RelationStatus}의 선언 순서는 STRANGER, ACQUAINTANCE, FRIEND, LOVER, <b>ENEMY</b>라
+     * ENEMY가 ordinal 최상위다. 관계 진전 서열에서 ENEMY는 STRANGER보다 <b>아래</b>다.
+     */
+    public boolean raisePeakStatusLevel(RelationStatus next) {
+        requireSandbox();
+        if (!RelationStatusPolicy.isNewPeak(getPeakStatusLevelOrDefault(), next)) return false;
+        this.peakStatusLevel = next;
+        return true;
+    }
+
     public void updateDynamicRelationTag(String tag) {
         requireSandbox();
         this.dynamicRelationTag = tag;
@@ -712,6 +760,9 @@ public class ChatRoom {
         this.affectionScore = 0;
         this.statAffection = 0;
         this.statusLevel = RelationStatus.STRANGER;
+        // [G-3] 리셋 경로 2/3 — 단계를 STRANGER로 되돌리면 최고 도달 단계도 함께 지운다.
+        //   안 지우면 초기화한 유저가 다시 올라갈 때 첫 승급 연출을 전부 못 본다.
+        this.peakStatusLevel = RelationStatus.STRANGER;
     }
 
     /**
@@ -949,6 +1000,7 @@ public class ChatRoom {
     private void resetSandboxFields() {
         this.affectionScore = 0;
         this.statusLevel = RelationStatus.STRANGER;
+        this.peakStatusLevel = RelationStatus.STRANGER;   // [G-3] 리셋 경로 3/3 — resetProgress 경유
         this.statIntimacy = 0;  this.statAffection = 0;  this.statDependency = 0;
         this.statPlayfulness = 0;  this.statTrust = 0;
         this.statLust = 0;  this.statCorruption = 0;  this.statObsession = 0;
