@@ -75,7 +75,9 @@
 
 ### [P2 · 유력] 임계 즉시 승급 전환으로 경계선 진동 시 승급 세리머니가 무제한 반복된다
 
-`src/main/java/com/spring/aichat/service/stream/ChatStreamService.java:792-830`
+~~`src/main/java/com/spring/aichat/service/stream/ChatStreamService.java:792-830`~~
+→ **⟳ 좌표 재실측 2026-09-08: `ChatStreamService.java:885-921`** (`resolvePromotionLogic` 선언 :885, 메서드 끝 :921 — **93줄 드리프트**).
+**이 항목은 `안건 18`·`G-3`과 같은 결함이다**(중복 등재). 착수는 [`../26_Wrapup_Execution_Readiness.md`](../26_Wrapup_Execution_Readiness.md) 배치 5에서 한 번에 닫힌다.
 
 **근거** — 새 resolvePromotionLogic은 `newStatus != oldStatus`이면 곧바로 updateStatusLevel + PromotionEvent("SUCCESS")를 반환한다. 구 코드에는 완충이 있었다 — 승급 감지 시 `room.updateAffection(thresholdEdge)`로 호감도를 임계-1에 고정하고 5턴 시험을 거쳐야 했으므로 같은 단계로 재승급이 연속 발생하지 않았다. 블록 D는 이 완충을 통째로 없앴고 대체 히스테리시스(재승급 쿨다운·임계 스냅)를 넣지 않았다. 강등은 무연출(로그만)이라 유저에게는 '올라감'만 반복 노출된다.
 
@@ -173,7 +175,9 @@
 
 ### [P3 · 추정] refreshRelationFromStats의 반환값 의미가 뒤집혔는데 javadoc은 옛 계약을 유지한다
 
-`src/main/java/com/spring/aichat/domain/chat/ChatRoom.java:745-766`
+~~`src/main/java/com/spring/aichat/domain/chat/ChatRoom.java:745-766`~~
+→ **⟳ 좌표 재실측 2026-09-08: `ChatRoom.java:735-757`**(javadoc :735-738 · 본문 :739-757 · `:757 return oldStatus != newStatus;   // 판정 결과만 알린다(승급은 호출부가 결정)`) — **10줄 드리프트**.
+`21_assets/scope_ledger.md`의 인용(:735-738 / :747 / :757)이 정확하다.
 
 **근거** — 메서드는 여전히 `@return statusLevel이 변경되었으면 true (승급 트리거 신호)` / "5종 스탯 기반으로 statusLevel + dynamic_relation_tag 재계산"이라고 선언하지만, 실제로는 statusLevel을 더 이상 대입하지 않고 `oldStatus != newStatus`(= 계산값과 저장값의 불일치 여부)를 반환한다. 즉 '변경됨'이 아니라 '아직 반영 안 됨'을 의미하며, statusLevel이 stale한 동안 계속 true가 된다. 현재 호출부 2곳은 반환값을 무시하지만, 계약 문구를 믿고 `if (room.refreshRelationFromStats()) { 승급 연출 }` 식으로 재사용하면 매 턴 오발동한다.
 

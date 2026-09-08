@@ -7826,7 +7826,9 @@ TheaterCreateFlow.jsx:739-741 (무료 유저 전용 업셀 비교표 중 Pass �
 **수정안**
 
 파일 …\src\components\theater\TheaterCreateFlow.jsx.
-최소 수정: 741행 문자열 치환.
+최소 수정: ~~741행~~ **744행**(⟳좌표 재실측 2026-09-08) 문자열 치환.
+⚠ **도달 경로는 하나가 아니다** — 실측 결과 `StoryTab.jsx:161-166` 외에 **`TheaterPortalPage.jsx:579-585`**에서도 같은 컴포넌트가 마운트된다. 수동 확인은 두 경로 모두.
+⚠ **같은 카드에 두 번째 오광고가 있다** — `:746 자유 분배 + 분기 해금`. Lucid Pass의 perStat 상한은 **10**인데 분기 게이트 `min_value`는 30~70이라(`TheaterBranchService.java:442`) **분기가 하나도 안 열린다.** 함께 고칠 것.
 - 현재: `<div className="text-sm text-amber-100 font-bold mb-0.5">최대 40 P</div>`
 - 교정: `<div className="text-sm text-amber-100 font-bold mb-0.5">최대 20 P</div>`
 권장(재발 방지): STAT_AXES 정의(66-72행) 아래에 티어 상수를 신설하고 statTier useMemo(135-140행)와 업셀 카피가 같은 출처를 보게 한다.
@@ -7873,17 +7875,33 @@ const STAT_AXES = [
 
 **수정안**
 
-파일 …\src\components\theater\TheaterCreateFlow.jsx 720행.
+> **✅ 수정 완료 (커밋 `d64978b` "fix : 극장 업셀 카피의 스탯 이름을 단일 출처에서 파생 (aichat F-1.b)")** — 아래 '권장(단일 출처화)'안이 채택됐다.
+> 2026-09-08 재실측: `TheaterCreateFlow.jsx:723 Lucid Pass 가입자는 시작 단계에서 {STAT_AXES.map((a) => a.label).join(" / ")}` ·
+> 하드코딩 라벨 잔재 **0건**(`:721`은 경위 설명 주석). 아래 본문은 기록으로만 남긴다.
+
+파일 …\src\components\theater\TheaterCreateFlow.jsx ~~720행~~ **723행**(⟳좌표 재실측).
 - 현재: `                            Lucid Pass 가입자는 시작 단계에서 매력 / 위트 / 대담함 / 지성 / 공감`
 - 교정: `                            Lucid Pass 가입자는 시작 단계에서 매력 / 입담 / 담력 / 지성 / 감수성`
 권장(단일 출처화): 720행을 `Lucid Pass 가입자는 시작 단계에서 {STAT_AXES.map((a) => a.label).join(" / ")}`로 바꿔 STAT_AXES가 유일 정본이 되게 한다.
 
 ---
 
-### F-1.c. 미드나잇 패스 스탯 포인트가 코드 500/100인데 BE·FE 주석과 클래스 javadoc은 전부 40/20 — 어느 쪽이 정본인지 불명
+### F-1.c. 미드나잇 패스 스탯 포인트가 코드 500/100인데 BE·FE 주석과 클래스 javadoc은 전부 40/20 — ~~어느 쪽이 정본인지 불명~~ **정본 확정됨**
 
-**🔴 잔존** · P3 · SMALL · BE/FE  
-`aichat/src/main/java/com/spring/aichat/service/theater/TheaterLobbyService.java:88-90 / …/LucidChat-Front/src/components/theater/TheaterCreateFlow.jsx:127-134`
+> **★ 정본 확정 (2026-09-08 · `19_assets/decisions_confirmed.md` §G-6)** — 원문:
+> *"| G-6 | **미드나잇 극장 초기 스탯** | **300 / perStat 100** | ★2026-08-21 §B 17-③의 **500/100에서 정정**"*
+>
+> **아래 '수정안'의 (가)/(나) 이지선다와 '❓ 결정 필요'는 끝났다 — 종원은 제3안(300/100)을 골랐다.**
+> 코드를 500에 두는 (가)안을 따르면 확정을 뒤집는 것이다. 착수 지시는
+> [`../26_Wrapup_Execution_Readiness.md`](../26_Wrapup_Execution_Readiness.md) 배치 3.
+>
+> **⟳ 좌표 재실측 2026-09-08** — 아래 본문의 좌표가 전부 밀렸다. 실측값:
+> `TheaterLobbyService.java` **:91**(javadoc) · **:92-93**(상수) · **:76**(매핑 주석) · **:79-80**(⚠ 문단) · **:657-658**(인라인 주석) ·
+> `SubscriptionType.java` **:15** · `TheaterCreateFlow.jsx` **:126** · **:133**(← 문서의 :127·:134는 1줄 어긋남) · **:137**(상수).
+> **고쳐야 할 줄은 문서가 센 4~6곳이 아니라 9행이다.**
+
+**🔴 잔존(값)** · P3 · SMALL · BE/FE  
+`aichat/src/main/java/com/spring/aichat/service/theater/TheaterLobbyService.java:91-93 / …/LucidChat-Front/src/components/theater/TheaterCreateFlow.jsx:126-137`
 
 **근거**
 

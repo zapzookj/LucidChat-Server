@@ -35,8 +35,8 @@
 | E-1.6d | P2 | **LIVE** | ONE_LINE | BROKEN_FLOW | FE 채팅 · FE | V2 액션·오프닝 엔트리에 parentLogId 누락 — E-1.5와 동일 증상이 두 경로에 추가 |
 | E-1.7 | P2 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE | ChatPage V1 init 복원의 스테일 클로저 — 초기 50개 로그 전부가 화자 '캐릭터' + 히로인 대사 NPC 오분류 |
 | E-1.9 | P2 | **LIVE** | MEDIUM | UX_DEGRADE | FE 채팅 · FE ★결정 | 씬 리플레이가 outfit만 소비 — 과거 복장 + 현재 배경/시간/BGM이 뒤섞인 장면이 재현 |
-| E-2.15 | P2 | **LIVE** | SMALL | UX_DEGRADE | 시드·일러 | 씬 일러 유저 성별이 여전히 LLM 출력 권위 — 페르소나 스냅샷은 프롬프트 힌트로만 배선돼 여성 페르소나가 남성으로 렌더될 수 있다 |
-| E-2.15b | P3 | **LIVE** | SMALL | DEAD_CODE | V1 스트림 | 씬 일러 자동(인밴드) 경로에 페르소나 성별이 미전달 — trigger=manual로 현재 휴면 |
+| E-2.15 | P2 | **ALREADY_FIXED** | SMALL | UX_DEGRADE | 시드·일러 | 씬 일러 유저 성별이 여전히 LLM 출력 권위 — 페르소나 스냅샷은 프롬프트 힌트로만 배선돼 여성 페르소나가 남성으로 렌더될 수 있다. ✅2026-09-08 실측 종결 — `SceneRenderService.java:254 boolean male = (c.isUser() && userMale != null) ? userMale : c.isMale();` + `Boolean userMale`이 오버로드 4종(:99 :186 :231 :238)에 전부 배선됐다 |
+| E-2.15b | P3 | **ALREADY_FIXED** | SMALL | DEAD_CODE | V1 스트림 | 씬 일러 자동(인밴드) 경로에 페르소나 성별이 미전달 — trigger=manual로 현재 휴면. ✅2026-09-08 실측 종결 — `ChatStreamService.java:499-502` 주석 `// [E-2.15b] 인밴드 자동 경로에도 페르소나 성별 스냅샷을 전달한다` + `jpa.room().isPersonaUserMale()` 인자. ⚠ 이 경로 자체는 G-9 데드코드 정리 대상(docs/26 배치 7) |
 | E-3.②.13 | P3 | **LIVE** | SMALL | UX_DEGRADE | 시드·일러 | 유령 위치 키 유입 — 루틴 경로는 시더 검증으로 봉쇄됐으나 LLM 디렉터 경로(applyCharacterMovements)는 여전히 무검증 |
 | E-3.②.14 | P3 | **LIVE** | SMALL | UX_DEGRADE | V2 STORY | 유령/동적 위치 키가 디렉터 프롬프트와 응답 DTO에 raw 영문 토큰으로 그대로 노출 — 런타임 유입구(movement 화이트리스트)는 여전히 열려 있다 |
 | E-3.④.5 | P3 | **LIVE** | ONE_LINE | UX_DEGRADE | 시드·일러 · 극장 | 강채린 엔딩 인용구 2필드가 여전히 빈 문자열 — 증상은 ④.10이 닫았으나 폴백이 '아이리 문구'라 캐릭터 톤이 깨진다 |
@@ -61,7 +61,7 @@
 | E-6.5 | P2 | **LIVE** | SMALL | BROKEN_FLOW | 어드민·UGC · FE | 어드민 CS 대화 로그가 '가장 오래된 100건'만 로드 (ASC + page 0 하드코딩 + 페이지네이션 UI 없음) |
 | E-7.2 | P3 | **LIVE** | SMALL | UX_DEGRADE | 어드민·UGC · FE | PATCH /ugc/characters/{id}/texts 길이 검증 — BE는 닫혔고 FE 말투 textarea의 maxLength·카운터만 남음 |
 | F-1.a | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | 인증·결제 · FE 극장 | 극장 생성 4단계 업셀 카드가 Lucid Pass 스탯을 '최대 40 P'로 광고 — 실제 지급은 20P (★ F-1.c 의존은 해소됨) |
-| F-1.b | P3 | **LIVE** | ONE_LINE | COSMETIC | 인증·결제 · FE 극장 | 같은 업셀 카드의 스탯 이름 5종이 실제 슬라이더 라벨과 불일치 (위트/대담함/공감 vs 입담/담력/감수성) |
+| F-1.b | P3 | **ALREADY_FIXED** | ONE_LINE | COSMETIC | 인증·결제 · FE 극장 | 같은 업셀 카드의 스탯 이름 5종이 실제 슬라이더 라벨과 불일치 (위트/대담함/공감 vs 입담/담력/감수성). ✅커밋 `d64978b` — `TheaterCreateFlow.jsx:723 {STAT_AXES.map((a) => a.label).join(" / ")}` 단일 출처. 2026-09-08 재실측: 하드코딩 라벨 잔재 0건(`:721`은 경위 설명 주석) |
 | F-2 | P3 | **LIVE** | ONE_LINE | UX_DEGRADE | 극장 · FE 극장 | 인터미션 '대성공(GREAT_SUCCESS)' 결과가 무음 — 효과음 분기가 존재하지 않는 문자열 "CRIT"을 비교한다 |
 | F-3.c | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE | V1·V2 SSE 에러 폴백 대사가 공식 4인 하드코딩 (동일 블록 2곳) |
 | F-5 | P3 | **LIVE** | SMALL | COSMETIC | FE 채팅 · FE | FOURTH_WALL 이스터에그 콘솔이 캐릭터 무관하게 'Airi.exe'를 출력 |
@@ -73,7 +73,7 @@
 | F-8.d | P3 | **LIVE** | SMALL | BROKEN_FLOW | FE 채팅 · FE | SSE onError의 error.status === 402 분기가 영구 사문 (V1·V2 각 1곳) — 단, BE와 세트여야 실효 |
 | B-5.2 | P2 | **NEEDS_DECISION** | ONE_LINE | ASSET_LOSS | 시드·일러 · 극장 ★결정 | 무과금 배치 소비 게이트 — 코드는 완비됐으나 기본값이 fail-open(관측 모드)이라 착취면이 그대로 열려 있다 |
 | E-5.1.b | P1 | **NEEDS_DECISION** | SMALL | UX_DEGRADE | V1 스트림 · ★결정 | BRANCH eventContext가 visible SYSTEM 롤로 영구 저장·매 턴 role=system 재주입 — 길이·적재는 닫혔고 잔여 결정 1건(CRITICAL 인젝션 차단 vs 로깅만) |
-| F-1.c | P3 | **NEEDS_DECISION** | SMALL | COSMETIC | 극장 · FE 극장 ★결정 | 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20 — 정본 불명 |
+| F-1.c | P3 | **결정됨 → LIVE** | SMALL | COSMETIC | 극장 · FE 극장 | 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20. **정본 확정(2026-09-08 §G-6) = 300/100** — (가)/(나) 이지선다가 아니라 제3안. 착수는 docs/26 배치 3 |
 | D-5.1 | P2 | **UNREACHABLE** | SMALL | DEAD_CODE | 극장 · 극장 ★결정 | 극장 prefetch가 현재 배치 ID N에 저장 — 코드는 그대로지만 워터마크 가드 + @Transactional 부재로 이중 차단 |
 | D-5.2 | P3 | **UNREACHABLE** | ONE_LINE | DEAD_CODE | 극장 · 극장 | prefetch 중복 가드가 N+1 키를 검사하는데 기록은 N 키 — 키 어긋남은 그대로, 그러나 LLM 이중 호출은 발생하지 않는다 |
 | D-5.3 | P3 | **UNREACHABLE** | SMALL | DEAD_CODE | 극장 · 극장 | 배치 소비 확정에 내용물 동일성(batchId) 탐지 가드 부재 — 가드는 여전히 없으나 덮어쓰기 경로가 막혀 오염이 발생하지 않는다 |
@@ -378,6 +378,7 @@
 - **★결정 필요** B-6.1과 묶인 질문 — 리롤 UI를 신설할 것인가? 신설한다면 억제 수단을 (가) 에너지 과금만, (나) 횟수 캡만, (다) 둘 다 중 무엇으로 할 것인가? 리롤 UI를 만들지 않기로 하면 B-6.2도 함께 종결(엔드포인트 자체 제거 검토).
 - **★검증 — 수정안 우려** 마이그레이션 번호 실측이 맞다 — `ls src/main/resources/db/migration/`의 번호를 수치 정렬하면 최대 **V35**이므로 다음은 V36. enum 값 추가가 아니라 컬럼 추가라 §2-7 CHECK 동기화 불요라는 판정도 맞다. '부팅 성공 = 적용됨으로 판정 금지'(§2-0) 경고도 적절. 결함 없음.
 - **★검증 — 놓친 연결** F-1.c와의 연결이 evidence보다 강하다 — `AvatarStat.clamp`는 `Math.max(0, Math.min(100, value))`로 **스탯 상한 자체가 100**이다. 즉 PREMIUM_PER_STAT_MAX=100 · TOTAL=500은 '5축 전부 최대치'라 미드나잇 유저에게 stat_gate(min_value 30~70)는 **리롤 없이도 이미 무의미**하다. 따라서 B-6.2의 적응형 우회가 실제 이득을 만드는 대상은 FREE/STANDARD 티어이고, 미드나잇에 대해서는 F-1.c의 정본 결정이 억제 설계보다 먼저다. 우선순위 서술을 그렇게 정정할 것.
+  - **⟳ 2026-09-08 재정정 — 이 문단의 결론이 §G-6으로 뒤집혔다.** 위 논증은 **TOTAL=500(=100×5축)일 때만** 참이다. 확정값은 **300/100**(`decisions_confirmed.md` §G-6)이므로 미드나잇도 **최대 3축만 만렙**이고 나머지 2축은 0이다 → stat_gate(min 30~70)가 미드나잇에게도 **실제로 걸린다.** 즉 B-6.2의 적응형 우회(리롤로 게이트마다 축을 옮기기)는 FREE/STANDARD만이 아니라 **미드나잇에도 이득을 만든다.** 배치 3(G-6) 이후 B-6.2의 우선순위 서술을 다시 볼 것.
 
 #### B-9.3 — 극장 엔딩 엔드포인트에 레이트리밋 부재 — V1 경로는 레거시 게이트로 닫혔으나 TheaterFinalityController는 그대로 열려 있다
 
@@ -429,9 +430,22 @@
 - **★검증 — 수정안 우려** 수정안의 `Character` 완전수식명 주의는 타당하다(java.lang.Character 충돌 실재). 다만 '살리기'로 결정할 경우 리포지토리 조회 1회를 더 붙이기보다 **이미 로드된 것을 재사용**하는 편이 낫다 — decideNextSpeakerHeroine과 같은 소스인 `affectionRepository.findByRoom_Id(roomId)`에서 currentHeroineId로 필터하면 되고, 그 리스트를 startIntervention이 이미 쓰고 있는지부터 확인할 것(미확인). 조회를 추가하는 안은 '접기' 결정이 나면 순손실이라고 evidence가 스스로 지적한 만큼, 의존성을 늘리지 않는 경로를 우선 검토하라.
 - **★검증 — 놓친 연결** 판정 라벨에 한 가지 유보 — FE 호출부 0건 + 증상이 '소비자 없는 응답 필드의 표시 불일치'이므로, 이 항목의 실질은 LIVE보다 **DEAD_CODE(결정 대기)**에 가깝다. launchImpact를 DEAD_CODE로 잡은 것과 verdict=LIVE가 어긋나 보이므로, 종원에게 올릴 때 '코드상 결함은 실재하나 관측 가능한 피해 경로는 없다'를 한 줄로 못 박을 것 — 안 그러면 LIVE 9건 집계가 실제 작업량을 과대 표시한다.
 
-#### F-1.c — 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20 — 정본 불명
+#### F-1.c — 미드나잇 패스 극장 스탯 포인트가 코드 500/100 vs 모든 주석·javadoc 40/20 — ~~정본 불명~~ **정본 확정됨**
 
-- **판정** NEEDS_DECISION · 규모 SMALL · 런칭영향 COSMETIC · 극장축(§C#6) · FE 동반
+> ## ★★ 이 블록의 '★결정 필요'와 '(가)안 권고'는 **끝났다** — 읽고 실행하지 마라
+>
+> **확정(2026-09-08 · `19_assets/decisions_confirmed.md` §G-6)** — 원문:
+> *"| G-6 | **미드나잇 극장 초기 스탯** | **300 / perStat 100** | ★2026-08-21 §B 17-③의 **500/100에서 정정**"*
+>
+> 아래 본문은 **(가) 500/100 유지 / (나) 40/20 복귀**의 이지선다를 세우고 (가)를 권고한다.
+> **종원은 (가)도 (나)도 아닌 제3안(300/100)을 골랐다.** 그러므로 이 블록의 이지선다 프레이밍 자체가 무효다.
+> **아래의 "(가)는 주석만 바꾸므로 무위험"을 근거로 코드를 500에 두면 확정을 뒤집는 것이다.**
+>
+> 착수 지시는 [`../26_Wrapup_Execution_Readiness.md`](../26_Wrapup_Execution_Readiness.md) **배치 3**에 있다
+> (BE·FE 한 커밋 · 낡은 주석은 문서가 말한 6곳이 아니라 **9행**).
+> 아래 본문은 **판단 경위의 기록으로만** 남긴다.
+
+- **판정** ~~NEEDS_DECISION~~ → **결정됨(§G-6 300/100)** · 규모 SMALL · 런칭영향 COSMETIC · 극장축 · FE 동반
 - **좌표** TheaterLobbyService.PREMIUM_TOTAL_POINTS / PREMIUM_PER_STAT_MAX / validateInitialStats, SubscriptionType javadoc, TheaterCreateFlow.jsx 티어 매핑 함수
 - **파일** `src/main/java/com/spring/aichat/service/theater/TheaterLobbyService.java` · `src/main/java/com/spring/aichat/domain/enums/SubscriptionType.java` · `LucidChat-Front/src/components/theater/TheaterCreateFlow.jsx`
 - **도달 경로** 현재 런타임 증상 없음 — FE·BE가 같은 값(500/100)을 쓰므로 미드나잇 유저의 방 생성은 정상 동작한다. 도달하는 것은 '다음 수정자'이며, 주석을 믿고 코드를 40/20으로 되돌리는 순간 기존 분배가 캡 초과가 되고 리롤이 400을 낸다.
@@ -1119,7 +1133,7 @@
 #### D-29b (decision_agenda D-29)  ·  P3
 
 - v2DerivedRoomInfo 死 memo
-- **근거** ChatPageV2.jsx에서 `grep -n v2DerivedRoomInfo`의 결과가 **:340 정의 한 줄뿐** — `const v2DerivedRoomInfo = useMemo(() => {`. 소비처 0건.
+- **근거** ChatPageV2.jsx에서 `grep -n v2DerivedRoomInfo`의 결과가 **정의 한 줄뿐** — `const v2DerivedRoomInfo = useMemo(() => {`. 소비처 0건. ⟳좌표 재실측 2026-09-08: **`ChatPageV2.jsx:455`**(원장이 적은 :340은 낡았다 — 이 행은 두 번 밀렸다).
 - **수정안·비고** 열려 있고 79건 밖. 배치 1 잔여. 계획서 경고는 유효하되 **좌표가 밀렸다** — 문서의 :338-353이 아니라 :340부터다. 종료 지점은 마커 문자열이 아니라 **중괄호 균형**으로 잡을 것(CLAUDE.md §1-1 260줄 과절단 사고 유형). 우선순위 최하.
 
 #### D-29c (decision_agenda D-29)  ·  P3

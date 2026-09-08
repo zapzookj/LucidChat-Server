@@ -253,7 +253,7 @@ HEAD `a6f4ec6`, tree clean, delta table measured at 246 rows (178 of them live-s
 | F-8.c | P3 | SMALL | ChatStreamService.java:600-603·783-786·1556-1559 | 보조 3경로도 402 미전달 |
 | F-8.d | P3 | SMALL | ChatPage.jsx:1624 · ChatPageV2.jsx:2470 | `error.status === 402` 사문 분기(SSE 페이로드에 status 없음) |
 | F-1.b | P3 | ONE_LINE | TheaterCreateFlow.jsx:720 (대조 :66-72·:801) | 스탯 축 라벨 3종 불일치 |
-| F-1.c | P3 | SMALL | TheaterLobbyService.java:91-93·76·80·657 · SubscriptionType:15 | 코드 500/100 ↔ 주석·FE 전부 40/20. **코드 수정이 아니라 정본 결정 대기** |
+| F-1.c | P3 | SMALL | TheaterLobbyService.java:91-93·76·**79**·80·657·**658** · SubscriptionType:15 · **TheaterCreateFlow.jsx:126·133·137** | 코드 500/100 ↔ 주석·FE 전부 40/20. ~~**코드 수정이 아니라 정본 결정 대기**~~ → **정본 확정 = 300/100**(§G-6, 2026-09-08). **상수 변경 + 주석 9행 정정**이고 BE·FE 한 커밋 |
 | F-2 | P3 | ONE_LINE | TheaterIntermissionPage.jsx:105-107 | GREAT_SUCCESS에 sfx 분기 없음 — 최고 등급 결과 무음 |
 | F-3.c | P3 | SMALL | ChatPage.jsx:1629-1636 · ChatPageV2.jsx:2475-2482 | 에러 폴백 narrationMap 공식 4인 하드코딩 2곳 |
 | F-5 | P3 | SMALL | EasterEggEffects.jsx:197·111·333 | `Airi.exe` 하드코딩 — characterSlug 미전달 |

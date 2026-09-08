@@ -164,10 +164,10 @@ psql -tAc "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint
 ./gradlew test --tests '*Test' --no-daemon -q
 ```
 
-- 테스트는 23개 파일 / 순수 유닛(Mockito·POJO)뿐이다. **통합·리포지토리·컨트롤러 테스트는 0건.**
+- 테스트는 **33개 파일**(2026-09-08 실측) / 순수 유닛(Mockito·POJO)뿐이다. **통합·리포지토리·컨트롤러 테스트는 0건.**
 - `AichatApplicationTests`(`@SpringBootTest`)는 `src/test/resources` 부재로 CI가 `*Test` 글롭으로 의도적으로 제외한다 — 사실상 죽은 테스트다.
 - 즉 **자동 테스트가 잡아주는 범위가 좁다.** 서비스 로직 변경은 수동 재현 시나리오를 함께 남겨라.
-- 베이스라인 실측(2026-08-21, `cleanTest` 강제 재실행): `*Test` 글롭 **21클래스 / 116건 전부 녹색**.
+- 베이스라인 실측(**2026-09-08 갱신**): `*Test` 글롭 **31클래스 / 197건 전부 녹색**(테스트 파일 33개). <s>2026-08-21: 21클래스 / 116건</s> — 배치 1~8이 그 사이에 들어갔다. **"116건 녹색"을 기준선으로 인용하지 마라.**
 - ✅ **컨텍스트 기동 검증은 가능하다 — 반드시 하라.** 2026-08-21에 `MongoConfig`의 `@EnableMongoRepositories` basePackages 누락(`domain.ending` 빠짐)으로 **애플리케이션이 부팅되지 않는 상태**가 컴파일 통과 + 116건 녹색인 채로 master에 올라갔다(docs/19 §C-1). 리포지토리·설정 클래스를 신설하면 **패키지가 스캔 범위 안인지** 확인하고, 아래로 실제 기동을 확인하라.
 
 ```bash
@@ -192,6 +192,7 @@ npm run build 2>&1 | grep -i "not exported"
 | 제품 결정 (로비·페르소나·BM·레거시 처분 §G 21건) | `docs/14_ProductDecisions_Session_Handoff.md` + `14_assets/impl_spec_details.md` |
 | 시크릿 모드 전략 (핵심 BM) | `docs/16_SecretMode_Pivot_Directive.md` |
 | 버그 레지스터 (원자 245건 — 근거·수정안 **본문**) | `docs/17_assets/defect_register.md` |
+| **★★ 마무리 착수 지시 정본** (실측 기반 배치 계획) | `docs/26_Wrapup_Execution_Readiness.md` — 2026-09-08. **원장·인계와 어긋나면 이쪽이 우선**(원장 낡은 행을 실측으로 정정한 문서다). 결정 자체는 여전히 `19_assets/decisions_confirmed.md`가 정본 |
 | **★ 최종 버그픽스 스코프 정본** (코드 85 · 설정 18 · 결정 12) | `docs/21_FinalBugFix_Readiness.md` + `docs/21_assets/scope_ledger.md` — 2026-09-04 전수 재판정. **델타와 어긋나면 이쪽이 우선** |
 | 결함 상태·좌표 (블록 D 재판정 델타 245행) | `docs/19_assets/rejudgment_delta.md` — docs/21이 덮는다 |
 | **버그픽스 결정 안건 정본** (22건 + 결정 불요 33건) | `docs/19_assets/decision_agenda.md` · 상위 판단 `docs/19_Register_Rejudgment.md` |
