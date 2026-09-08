@@ -896,12 +896,24 @@ public class ChatStreamService {
         room.updateStatusLevel(newStatus);
 
         // 적대에서 벗어나는 것은 새 단계의 획득이 아니라 원상복귀 — 연출 없이 복원만.
+        //
+        // [G-3] ★ 여기서 peak를 **올리지 않는다.** 한때 올렸다가 되돌렸으니 이유를 남긴다.
+        //
+        //   회복 판정은 `fromStats`가 `affectionScore < 0`이면 ENEMY를 고정 반환하는 구조라
+        //   (다른 4축이 아무리 높아도) 회복하는 순간 **max 스탯이 곧바로 단계가 된다.**
+        //   즉 STRANGER였던 방이 ENEMY를 거쳐 곧장 FRIEND로 복귀할 수 있다.
+        //   그때 peak를 FRIEND로 올려 버리면 그 유저는 ACQUAINTANCE·FRIEND 승급 연출을
+        //   **한 번도 못 본 채 영영 잃는다** — '과잉 연출'을 '연출 0'으로 바꾸는 회귀다.
+        //
+        //   올리지 않아도 진동은 재발하지 않는다: 회복 이후 첫 정상 승급에서
+        //   isNewPeak가 참이 되어 **한 번만** 연출되고 그때 peak가 올라간다. 이후는 억제된다.
+        //   즉 이 자리를 비워 두는 것이 자기 치유적이다.
+        //
+        //   종원 확정 원문(RelationStatusPolicy.isEnemyRecovery javadoc):
+        //     "회복은 단계만 조용히 복원하고 세리머니를 띄우지 않는다."
+        //   → 확정이 말하는 것은 **이 턴의 연출 억제**이고, peak 갱신 여부는 그 문장에 없다.
+        //     위 근거로 '올리지 않음'을 택했다(§1-7 — 확정 원문과 우리 판단을 구분해 적는다).
         if (RelationStatusPolicy.isEnemyRecovery(oldStatus, newStatus)) {
-            // [G-3] ★ 연출은 없어도 **최고 기록은 올린다.** 안 올리면 peak가 회복 단계보다 낮게
-            //   남아, 그 방이 나중에 같은 단계를 다시 밟을 때 연출이 또 터진다 —
-            //   이 픽스가 없애려는 경계 진동 증상이 ENEMY를 거친 방에서만 되살아난다.
-            //   반환값은 버린다: 여기서는 세리머니를 내지 않는 것이 종원 확정이다.
-            room.raisePeakStatusLevel(newStatus);
             log.info("🎯 [PROMOTION] ENEMY recovery (silent) | {} → {} | peak={} | roomId={}",
                 oldStatus, newStatus, room.getPeakStatusLevelOrDefault(), room.getId());
             return null;
@@ -920,8 +932,9 @@ public class ChatStreamService {
         //   걷어내고 대체를 넣지 않아 생긴 회귀다.
         //
         //   raisePeakStatusLevel은 새 최고 단계일 때만 true를 주고 그때 컬럼을 갱신한다.
-        //   ⚠ 위 ENEMY 회복 분기가 **이 지점보다 먼저** 있는 것이 맞다 — 회복은 새 단계의
-        //     획득이 아니라 원상복귀라 peak를 건드리면 안 된다(종원 확정, 위 javadoc).
+        //   ⚠ 위 ENEMY 회복 분기가 **이 지점보다 먼저** 있어야 한다 — 서열상 rank(무엇이든) >
+        //     rank(ENEMY)라, 순서를 바꾸면 회복이 '승급'으로 새어 세리머니가 뜬다.
+        //     (회복 분기에서 peak를 올리지 않는 이유는 그 블록의 주석 참조.)
         if (!room.raisePeakStatusLevel(newStatus)) {
             log.info("🎯 [PROMOTION] Re-entry (silent) | {} → {} | peak={} | roomId={}",
                 oldStatus, newStatus, room.getPeakStatusLevelOrDefault(), room.getId());

@@ -1,5 +1,6 @@
 package com.spring.aichat.domain.chat;
 
+import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.RelationStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,10 +83,61 @@ class RelationPeakPolicyTest {
     }
 
     @Test
-    @DisplayName("ENEMY 회복은 세리머니 없이 단계만 복원한다 (종원 확정)")
-    void enemyRecoveryStaysSilent() {
+    @DisplayName("isEnemyRecovery 판정 자체 — ENEMY에서 벗어나는 방향만 참")
+    void enemyRecoveryPredicate() {
+        // ⚠ 이 테스트는 **판정 함수만** 본다. '회복 턴에 세리머니가 안 뜬다'는 계약은
+        //   ChatStreamService.resolvePromotionLogic의 배선이라 여기서 검증되지 않는다.
         assertThat(RelationStatusPolicy.isEnemyRecovery(RelationStatus.ENEMY, RelationStatus.FRIEND)).isTrue();
         assertThat(RelationStatusPolicy.isEnemyRecovery(RelationStatus.FRIEND, RelationStatus.ENEMY)).isFalse();
+    }
+
+    // ── 엔티티 배선 — 정적 헬퍼만 테스트하면 배선을 지워도 녹색이다 ──────────────
+
+    /**
+     * 적대적 검토 지적 반영: 위 케이스들은 전부 {@link RelationStatusPolicy}의 정적 메서드만
+     * 때리므로, {@code ChatRoom.raisePeakStatusLevel}의 필드 대입이나 리셋 경로를 통째로 지워도
+     * 전부 통과한다(CLAUDE.md §1-3이 경고하는 형태). 아래 3건이 그 배선을 실제로 호출한다.
+     */
+    private static ChatRoom sandboxRoom() {
+        return new ChatRoom(null, null, ChatMode.SANDBOX);
+    }
+
+    @Test
+    @DisplayName("[배선] raisePeakStatusLevel이 필드를 실제로 갱신하고, 두 번째 호출은 false")
+    void raisePeakActuallyMutatesField() {
+        ChatRoom room = sandboxRoom();
+        assertThat(room.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.STRANGER);
+
+        assertThat(room.raisePeakStatusLevel(RelationStatus.ACQUAINTANCE)).isTrue();
+        assertThat(room.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.ACQUAINTANCE);
+
+        // 같은 단계 재도달 = 연출 없음 (경계 진동)
+        assertThat(room.raisePeakStatusLevel(RelationStatus.ACQUAINTANCE)).isFalse();
+        assertThat(room.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.ACQUAINTANCE);
+    }
+
+    @Test
+    @DisplayName("[배선] ENEMY로는 peak가 내려가지 않는다")
+    void peakNeverDropsToEnemy() {
+        ChatRoom room = sandboxRoom();
+        room.raisePeakStatusLevel(RelationStatus.FRIEND);
+
+        assertThat(room.raisePeakStatusLevel(RelationStatus.ENEMY)).isFalse();
+        assertThat(room.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.FRIEND);
+    }
+
+    @Test
+    @DisplayName("[배선] 리셋 경로가 peak를 STRANGER로 되돌린다 — 안 되돌리면 첫 승급을 못 본다")
+    void resetPathsClearPeak() {
+        ChatRoom a = sandboxRoom();
+        a.raisePeakStatusLevel(RelationStatus.LOVER);
+        a.resetAffection();
+        assertThat(a.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.STRANGER);
+
+        ChatRoom b = sandboxRoom();
+        b.raisePeakStatusLevel(RelationStatus.LOVER);
+        b.resetProgress(false);   // → resetSandboxFields
+        assertThat(b.getPeakStatusLevelOrDefault()).isEqualTo(RelationStatus.STRANGER);
     }
 
     // ── 시나리오 ────────────────────────────────────────────────────────────
