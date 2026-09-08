@@ -1813,3 +1813,65 @@ deps 배열은 `useCallback` 호출의 **인자**라 렌더 시점에 평가되�
 
 ⚠ **F1-a·F1-b는 "서버가 분기 값을 정한다"가 아직 절반이라는 뜻이다.** blockd §A-3을 '수정됨'으로
 내리되 이 두 행을 함께 읽어야 한다.
+
+### 배치 5 — G-3 승급 세리머니 peak + V36 (2026-09-09 · V36 `0cf0feb` + 코드 `9bb37d2`)
+
+**증상 원문**(안건 18): *"관계 수치가 경계선(39↔40)에서 오르내릴 때마다 '관계 상승' 축하 연출이
+무한 반복된다 — 강등은 무연출이라 유저에게는 '올라감'만 계속 보인다."*
+**원인**(blockd §A-8): *"블록 D는 이 완충을 통째로 없앴고 대체 히스테리시스를 넣지 않았다."*
+
+판정이 `isUpgrade` 하나뿐이었다 — **'직전보다 위인가'**만 물으니 진동하면 매번 참이다.
+`isNewPeak`(**'처음 도달했는가'**)을 따로 물어 갈랐다. 단계는 그대로 오르내리고 연출만 억제된다.
+구 완충(임계 스냅 + 5턴 시험)을 되살리지 않은 이유는 **그 자체가 반쯤 고장나 있었기 때문**이다
+(진행도가 스탯 변화량의 **절댓값 합**이라 캐릭터를 모욕해도 합격했다 — docs/13 E-4.2).
+
+- **마이그레이션 단독 커밋**(§5 롤백 단위 분리). V36 = G-3 단독 — 청구자 3후보 중 나머지 둘은
+  안건 16(확정안이 (b) '마이그레이션 불요')·D-6.7 A안(이번 사이클 밖, V37 예약)이다.
+- **리셋 3경로** 초기화 — 생성자 · `resetAffection()` · `resetSandboxFields()`.
+  `grep -c "this.peakStatusLevel = RelationStatus.STRANGER"` = **3**으로 확인(§1-3).
+  `resetAll()`은 resetAffection을, `resetProgress`는 resetSandboxFields를 타므로 함께 덮인다.
+
+#### ★ ENEMY 함정 2건 — 둘 다 컴파일러가 못 잡는다
+
+**① ordinal 함정** — `RelationStatus` 선언 순서가 STRANGER, ACQUAINTANCE, FRIEND, LOVER, **ENEMY**라
+ENEMY가 ordinal 최상위다. 관계 진전 서열에서는 STRANGER보다 **아래**다(`rank()`: ENEMY=-1).
+ordinal로 비교하도록 퇴화하면 **'적대가 되는 순간이 최고 기록'**이 되어 그 방의 이후 승급 연출이
+전부 사라진다. 신규 테스트가 이 케이스를 명시적으로 고정한다.
+
+**② 백필 함정 — 실기동 뒤 결과를 조회하다 발견했다.**
+첫 작성본은 `COALESCE(status_level,'STRANGER')`였다. 그러면 현재 ENEMY인 방은 `peak=ENEMY`가 되는데,
+그건 **peak가 바닥(STRANGER)보다 낮은 상태**다. 그 방이 나중에 재상승하면 이미 겪은 단계에서도
+연출이 다시 터진다 — 이 픽스가 없애려던 증상이 ENEMY를 거친 방에서만 되살아난다.
+실측: **프로드 chat_rooms 34행 중 ENEMY 5행** · 로컬 dev 2행이 이 분기를 탄다.
+→ `CASE WHEN status_level = 'ENEMY' THEN 'STRANGER'`로 정정.
+**이 발견은 마이그레이션을 로컬에 실제로 적용하고 백필 결과를 SELECT로 열어 봤기 때문에 나왔다**
+— SQL을 읽는 것만으로는 안 보였다.
+
+**③ 같은 이유로 코드에도 1줄** — ENEMY 회복 경로가 early return이라 peak를 안 올리고 지나갔다.
+연출은 무음으로 두되(종원 확정) **peak는 올린다**. 안 그러면 회복한 방의 peak가 낮게 남아
+같은 증상이 재현된다.
+
+#### §2-7 — CHECK를 붙이지 않는 것이 이 마이그레이션의 요점
+
+`peak_status_level`은 `@Enumerated(STRING)` 신규 컬럼이다. 둘 다 성립한다:
+- **CHECK를 박으면** 훗날 `RelationStatus`에 값을 추가하는 순간 V31형 사고(부팅 성공·런타임 500).
+- **마이그레이션을 생략하면** prod가 `ddl-auto=update`라(§2-0) Hibernate가 컬럼을 만들며 CHECK를 붙인다.
+→ **컬럼은 Flyway가 만들고 CHECK는 만들지 않는다.** 실기동 후 `pg_constraint` 조회로 peak 관련 CHECK
+**0건** 실측 확인.
+
+#### 검증
+
+| 항목 | 결과 |
+|---|---|
+| 컴파일 | 통과 |
+| `*Test` | **33클래스 215건 전부 녹색**(`RelationPeakPolicyTest` 9건 신설) |
+| **실기동** | `Migrating schema "public" to version "36"` → `Successfully applied 1 migration` → `Started AichatApplication in 23.554 seconds` |
+| 백필 실측 | STRANGER/STRANGER 6 · STRANGER/NULL 3 · FRIEND/FRIEND 2 · **STRANGER/ENEMY 2** · NULL 잔존 0행 |
+| CHECK | peak 관련 `pg_constraint` **0건** |
+| `flyway.enabled` 혼입 | 없음(§2-3) |
+
+**수동 재현 시나리오**(자동 테스트가 못 잡는 축):
+① 관계 수치를 단계 경계에서 왕복시켜 세리머니가 **1회만** 뜨는지 ②
+
+ ENEMY까지 떨어뜨렸다 회복시킨 뒤 같은 단계를 다시 밟아 연출이 안 뜨는지
+③ 방 초기화(`resetProgress`) 후 첫 승급이 **정상 재생**되는지.
