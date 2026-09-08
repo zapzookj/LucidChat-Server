@@ -583,5 +583,30 @@ public class TheaterState {
         this.endingType = null;
         this.endingTitle = null;
         this.endingMainHeroineId = null;
+
+        // [E-4.5.a] ★ 세션 상태도 함께 되돌린다 — 이 세 줄이 하나의 불변식이다.
+        //
+        //   종전에는 endingReached만 false로 내리고 sessionStatus는 "ENDED"로 남겼다.
+        //   그래서 완주한 방에 세이브를 로드하면 **플레이는 되는데 '활성 극'으로는 안 잡히는**
+        //   어긋난 상태가 됐다:
+        //     · 플레이 경로는 sessionStatus를 보지 않는다(소유·모드만 검사) → URL로 계속 진행된다
+        //     · 종료 가드는 isEndingReached() 하나인데 바로 위에서 그걸 지웠다 → 막히지 않는다
+        //     · 그런데 findActiveByUserId에는 안 잡힌다 → '활성 극 1개' 정책이 이 방을 못 본다
+        //   결과: 유저가 새 극을 시작하면 **두 방이 동시에 진행**되고, 로비는 로드한 방을
+        //   '완결'로 표시해 다시 못 들어가는 것처럼 보인다.
+        //
+        //   loadSlot은 바로 위에서 archiveCurrentActiveIfAny(user, roomId)로 **다른** 활성 극을
+        //   전부 아카이브한 뒤 이 방을 복원한다 — 즉 이 방이 활성이 되는 것이 그 호출의 전제다.
+        //   resumeFromArchive()를 그대로 쓰는 이유는 sessionStatus와 changedAt을 **짝으로**
+        //   갱신하기 때문이다(따로 대입하면 다음 사람이 한쪽만 옮긴다).
+        resumeFromArchive();
+
+        // [E-4.5.b] 되돌린 챕터에서 MAJOR 분기가 다시 제안되게 한다.
+        //   스냅샷은 이 플래그를 담지 않으므로, 로드 후에도 라이브 세션이 켜 둔 TRUE가 남아
+        //   **그 챕터에서 대형 분기가 영영 안 나왔다**(DirectorEngine이 이 값으로 1회 제한을 건다).
+        //   FALSE로 되돌려도 남발되지 않는다 — MAJOR는 '챕터 50% 지점을 처음 가로지를 때'만
+        //   발동하므로, 복원 지점이 이미 중반을 넘었으면 조건 자체가 성립하지 않는다.
+        //   (스냅샷에 필드를 추가하지 않은 이유이기도 하다 — 인자 하나를 늘리는 대신 재계산에 맡긴다.)
+        this.majorBranchDoneInChapter = Boolean.FALSE;
     }
 }

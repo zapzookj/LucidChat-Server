@@ -59,12 +59,32 @@ public class TheaterInterventionService {
     private static final String INT_TOKEN_KEY = "theater:intervention:token:";
     private static final Duration TOKEN_TTL = Duration.ofHours(1);
 
+    /**
+     * [D-29c] 난입 진입 노브. 기본 꺼짐 — 프론트 호출부가 0건인데 엔드포인트만 열려 있어,
+     * 직접 호출하면 2에너지를 쓰고 1시간 뒤 체크포인트 TTL 만료로 복구 불능이 된다.
+     *
+     * <p>⚠ 게이트는 <b>컨트롤러가 아니라 여기</b>에 둔다(CLAUDE.md §2-4) — 프론트 진입점만
+     * 지우면 API가 소유권 검사만으로 열린 채 남는다({@code /users/beta-activate}가 그 실수였다).
+     *
+     * <p>⚠ <b>{@code resumeFromIntervention}에는 걸지 않는다.</b> 노브를 끄는 순간 이미 난입 중이던
+     * 세션이 있으면, 복귀까지 막아 버리면 그 방이 영구히 갇힌다. 진입만 막고 탈출은 열어 둔다.
+     *
+     * <p>⚠ 엔드포인트 자체는 남긴다 — §2-5 원문:
+     * <i>"엔드포인트 삭제는 금지 — 막아야 하면 노브로 차단한다(되돌릴 여지 보존)."</i>
+     * 난입 기능의 <b>존폐</b>는 별개 결정이다(decisions_confirmed.md §H '난입 존폐').
+     */
+    @org.springframework.beans.factory.annotation.Value("${theater.intervention-enabled:false}")
+    private boolean interventionEnabled;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  1. 난입 시작
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @Transactional
     public InterventionStart startIntervention(Long roomId, String username, String trigger) {
+        if (!interventionEnabled) {
+            throw new BadRequestException("난입 기능은 현재 사용할 수 없습니다.");
+        }
         ChatRoom room = getOwnedRoom(roomId, username);
         TheaterState state = getState(roomId);
 

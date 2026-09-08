@@ -215,6 +215,14 @@ modelslab:
 # 이 세션에서 '미확정 분기 가드'가 정상 유저를 잠가 철회된 선례가 있다 — 같은 실수를 반복하지 말 것.
 theater:
   paid-batch-gate-enforced: ${THEATER_PAID_BATCH_GATE:false}
+  # [D-29c] 난입(Intervention) 진입 차단. 기본 꺼짐.
+  #   프론트 호출부가 0건인데 엔드포인트만 열려 있어, 직접 호출하면 2에너지를 쓰고
+  #   1시간 뒤 복구 불능이 된다(체크포인트 TTL). 소유자 자해 경로라 P3지만 열어 둘 이유가 없다.
+  #   ⚠ 엔드포인트를 지우지 않는 이유는 CLAUDE.md §2-5 원문 그대로다 —
+  #     "엔드포인트 삭제는 금지 — 막아야 하면 노브로 차단한다(되돌릴 여지 보존)."
+  #   난입 기능의 존폐 자체는 별개 결정이다(decisions_confirmed.md §H '난입 존폐').
+  #   되살리려면 이 값을 true로 두고 F-7(난입 화자 오표기)을 함께 볼 것.
+  intervention-enabled: ${THEATER_INTERVENTION_ENABLED:false}
 
 illustration:
   scene:
