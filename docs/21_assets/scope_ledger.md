@@ -47,8 +47,8 @@
 | E-4.13 | P2 | **LIVE** | SMALL | UX_DEGRADE | V2 STORY · ★결정 | 오프스크린 알림 토스트·뱃지가 readAt만 봐서 소비·만료된 알림이 영구 재노출되고 미확인 수가 부풀어 있다 |
 | E-4.15 | P2 | **LIVE** | MEDIUM | UX_DEGRADE | 시드·일러 · MIG ★결정 | 시크릿 배경 ModelsLab 웹훅 폴백이 구조적 사문 — 실패 케이스에서 조회 앵커(캐시 행)가 아예 생성되지 않는다 |
 | E-4.17.b | P2 | **LIVE** | ONE_LINE | BROKEN_FLOW | V1 스트림 · 극장 | 자동 디렉터 응답의 씬 상태 저장이 뒤집힌 isStoryMode() 게이트에 갇혀, SANDBOX 이벤트 카드 턴의 장소·복장·BGM·시간 변화가 영속되지 않는다 |
-| E-4.5.a | P2 | **LIVE** | ONE_LINE | BROKEN_FLOW | 극장 · 극장 | 세이브 로드가 sessionStatus를 복원하지 않아 ENDED 세션이 '게임은 중반, 세션은 영구 완결'로 잠긴다 |
-| E-4.5.b | P3 | **LIVE** | SMALL | BROKEN_FLOW | 극장 · 극장 | 세이브가 majorBranchDoneInChapter를 직렬화·복원하지 않아 로드 후 해당 챕터 MAJOR 분기가 영구 차단된다 |
+| E-4.5.a | P2 | **수정됨** | ONE_LINE | BROKEN_FLOW | 극장 · 극장 | 세이브 로드가 sessionStatus를 복원하지 않아 ENDED 세션이 '게임은 중반, 세션은 영구 완결'로 잠긴다 |
+| E-4.5.b | P3 | **수정됨** | SMALL | BROKEN_FLOW | 극장 · 극장 | 세이브가 majorBranchDoneInChapter를 직렬화·복원하지 않아 로드 후 해당 챕터 MAJOR 분기가 영구 차단된다 |
 | E-4.6 | P2 | **LIVE** | SMALL | BROKEN_FLOW | V2 STORY | V2 스토리 리셋이 월드 메모리 Redis 캐시를 안 지워 최대 2시간 이전 회차 기억이 계속 주입 — 히로인 메모리 캐시도 동일 |
 | E-4.8 | P3 | **LIVE** | ONE_LINE | BROKEN_FLOW | V2 STORY | 공식 월드 V2 방 생성의 히로인 검증에 isHidden 누락 — 어드민 긴급 차단을 API 직접 호출로 우회 가능 |
 | E-5.1.a | P3 | **LIVE** | ONE_LINE | DEAD_CODE | V1 스트림 | 이벤트/디렉터 텍스트가 ContentModerationService를 전혀 통과하지 않는다 (원 좌표 소멸 → sendAutoDirectorResponse로 승계, 게이트 off로 현재 실효 0) |
@@ -62,7 +62,7 @@
 | E-7.2 | P3 | **LIVE** | SMALL | UX_DEGRADE | 어드민·UGC · FE | PATCH /ugc/characters/{id}/texts 길이 검증 — BE는 닫혔고 FE 말투 textarea의 maxLength·카운터만 남음 |
 | F-1.a | P2 | **수정됨** | ONE_LINE | UX_DEGRADE | 인증·결제 · FE 극장 | 극장 생성 4단계 업셀 카드가 Lucid Pass 스탯을 '최대 40 P'로 광고 — 실제 지급은 20P (★ F-1.c 의존은 해소됨) |
 | F-1.b | P3 | **ALREADY_FIXED** | ONE_LINE | COSMETIC | 인증·결제 · FE 극장 | 같은 업셀 카드의 스탯 이름 5종이 실제 슬라이더 라벨과 불일치 (위트/대담함/공감 vs 입담/담력/감수성). ✅커밋 `d64978b` — `TheaterCreateFlow.jsx:723 {STAT_AXES.map((a) => a.label).join(" / ")}` 단일 출처. 2026-09-08 재실측: 하드코딩 라벨 잔재 0건(`:721`은 경위 설명 주석) |
-| F-2 | P3 | **LIVE** | ONE_LINE | UX_DEGRADE | 극장 · FE 극장 | 인터미션 '대성공(GREAT_SUCCESS)' 결과가 무음 — 효과음 분기가 존재하지 않는 문자열 "CRIT"을 비교한다 |
+| F-2 | P3 | **수정됨** | ONE_LINE | UX_DEGRADE | 극장 · FE 극장 | 인터미션 '대성공(GREAT_SUCCESS)' 결과가 무음 — 효과음 분기가 존재하지 않는 문자열 "CRIT"을 비교한다 |
 | F-3.c | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE | V1·V2 SSE 에러 폴백 대사가 공식 4인 하드코딩 (동일 블록 2곳) |
 | F-5 | P3 | **LIVE** | SMALL | COSMETIC | FE 채팅 · FE | FOURTH_WALL 이스터에그 콘솔이 캐릭터 무관하게 'Airi.exe'를 출력 |
 | F-6 | P2 | **LIVE** | SMALL | UX_DEGRADE | 어드민·UGC · FE | 어드민 모더레이션 로그의 '단계' 컬럼이 2분기뿐 — UGC VLM(3)·UGC Stage0(4)이 전부 'OpenAI'로 오표기 |
@@ -1918,3 +1918,56 @@ top-level `affection_change`를 **난이도 스케일 없이 · 이벤트 스탯
 다만 출력 스키마에 그 필드가 없어 평시엔 `delta==0`으로 무동작이다.
 → **'상시 이중가산'이 아니라 '모델이 구 필드를 뱉는 턴에만 발화하고 그때 두 게이트를 함께 우회'**하는
 잠재 결함이다. 예약 판정은 유지하되 등급 근거를 이렇게 정정한다.
+
+### 배치 6 — G-1 극장 수리 (2026-09-09 · **첫 덩이만 완료**)
+
+BE `02283c1` + FE `e06f9f6`. 계획서가 *"단독 세션 권장 · 이 사이클 최대 배치"*로 잡은 배치라
+**세 덩이 중 첫 덩이만** 닫았다. 남은 범위는 아래 표에 명시한다.
+
+#### 완료 3건
+
+- **E-4.5.a** — `restoreFromSnapshot`이 `endingReached`만 내리고 `sessionStatus`는 "ENDED"로 남겼다.
+  플레이 경로는 sessionStatus를 안 보고(소유·모드만), 종료 가드는 `isEndingReached()` 하나인데
+  바로 위에서 그걸 지운다. 그런데 `findActiveByUserId`엔 안 잡힌다 → **'활성 극 1개' 정책이 그 방을
+  못 보고**, 유저가 새 극을 시작하면 두 방이 동시 진행된다. 로비에는 '완결'로 보여 다시 못 들어간다.
+  `loadSlot`이 바로 위에서 `archiveCurrentActiveIfAny(user, roomId)`로 **다른** 활성 극을 전부
+  아카이브하는 것이 '이 방이 활성이 된다'는 전제이므로, `resumeFromArchive()`를 그대로 호출한다
+  (status와 changedAt을 짝으로 갱신 — 따로 대입하면 다음 사람이 한쪽만 옮긴다).
+- **E-4.5.b** — 스냅샷이 `majorBranchDoneInChapter`를 담지 않아 라이브 세션의 TRUE가 남고,
+  그 챕터에서 **MAJOR 분기가 영영 안 나왔다.** FALSE로 되돌린다. 남발되지 않는다 —
+  MAJOR는 '챕터 50% 지점을 **처음** 가로지를 때'만 발동하므로 복원 지점이 중반을 넘었으면
+  조건 자체가 성립하지 않는다. 스냅샷 인자를 13→14로 늘리지 않고 재계산에 맡긴 이유다.
+- **D-29c** — `theater.intervention-enabled`(기본 false) 신설.
+  ★ 게이트를 **서비스**에 뒀다(§2-4). ★ `resumeFromIntervention`에는 **걸지 않았다** —
+  노브를 끄는 순간 난입 중이던 세션의 복귀까지 막으면 그 방이 영구히 갇힌다. **진입만 막고 탈출은 연다.**
+  ★ 엔드포인트는 남긴다(§2-5 원문: *"엔드포인트 삭제는 금지 — 막아야 하면 노브로 차단한다"*).
+
+**검증**: 컴파일 · `*Test` 33클래스 **218건 녹색** · 로컬 bootRun 실기동
+(`Started AichatApplication in 31.398 seconds` — 새 `@Value` 노브 바인딩 확인) ·
+FE TDZ·빌드 통과 · `not exported` 0건 · `application.yml` diff에 flyway 변경 0건(§2-3).
+
+**수동 재현 시나리오**(극장은 자동 테스트 0건):
+① 완주 → 세이브 로드 → 로비에 '진행 중'으로 뜨고 재입장되는지
+② 로드 후 새 극 생성 → 두 방 동시 진행이 아니라 기존 방이 아카이브되는지
+③ 챕터 중반 **이전** 지점으로 로드 → 그 챕터에서 MAJOR 분기가 제안되는지
+④ 인터미션 '대성공' 시 성공음이 나는지(결정론적 재현은 `TheaterIntermissionService.rollOutcome`을 고정)
+
+#### 남은 범위 — 다음 세션
+
+| 항목 | 규모 | 왜 남겼나 |
+|---|---|---|
+| **D-5.4** 같은 회차 재생성 시 장면 기록 중복 적재 | MEDIUM | 처방이 `persistSceneLogs`를 `onBatchConsumed`로 **옮기는 구조 변경**이라 단독 검토가 필요하다. 실 UI 경로는 문서가 말한 4개가 아니라 **2개**로 좁혀져 있다 — (a) 세이브 로드 (b) 배치 캐시 6h TTL 만료. 난입은 UI 경로가 아니고(D-29c로 이제 노브까지 닫혔다), 분기 확정은 소비 후 중복을 안 만든다 |
+| **E-4.17.b** 씬 디렉션 모드 게이트 | ONE_LINE | 한 줄이지만 **STORY 회귀 확인을 건너뛰면 안 된다** — `sendAutoDirectorResponse`에는 STORY 반송 가드가 없고 V2 STORY가 실제로 이 경로를 탄다. 유실되는 건 SANDBOX뿐 |
+| **INT-2** 엔딩/다음 연타로 같은 묶음이 두 번 적용 | SMALL | 배치 4가 남긴 '방 단위 공유 상태 + 서버측 턴 락 부재'(F1-b)와 뿌리가 같다. 함께 보는 편이 낫다 |
+| **B-9.3** 극장 컨트롤러에 레이트리밋 미주입 | SMALL | 극장 컨트롤러가 `ApiRateLimiter`를 **하나도** 주입하지 않는다(주입된 컨트롤러 8개). LLM 증폭 축은 이미 닫혀 있어 우선순위 최하 |
+
+#### 착수하지 않은 것 — §H 미결 (경계선을 여기 명시한다)
+
+**노브 차단 = 허용 / 엔드포인트 삭제·기능 존폐 = §H.** 이 문장이 없어서 D-29c와 F-7이
+같은 사실관계인데 한쪽만 착수 대상으로 읽혔다.
+
+- **D-5.6 · D-5.5 · D-5.7 + B-5.2**(미리 만들기 존폐) — **반드시 한 배치**. 코드 주석이 자인한다:
+  *"현재는 D-5.6(이 메서드가 @Async인데 @Transactional이 없어 detached LAZY 역참조로 100% 실패)이
+  **우연히 막고 있을 뿐이다** — 그 우연에 과금 정합을 걸어 두지 않는다."*
+  D-5.6만 고치면 노브 없는 두 축(디렉터 노트 DB 행 · 배경 생성)이 먼저 깨어난다.
+- **E-4.11**(엔딩 모델 원가) · **F-7**(난입 화자 오표기) · **B-6.2**(리롤 화면 존폐) — 종원 결정 대기.
