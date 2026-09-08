@@ -12,7 +12,8 @@ package com.spring.aichat.domain.enums;
  * LUCID_MIDNIGHT_PASS (Tier 2, 24,900원/월) - 성인 전용 / 프리미엄
  *   - Tier 1의 모든 혜택
  *   - 모든 캐릭터 시크릿 모드 상시 개방
- *   - Theater 초기 스탯 분배 40p (perStat 20)  ※ 추후 무제한으로 정책 변경 예정
+ *   - Theater 초기 스탯 분배 300p (perStat 100)  ※ [G-6 · 2026-09-08] 500/100에서 정정.
+ *     "추후 무제한" 방향은 철회됐다 — 정본은 TheaterLobbyService.PREMIUM_TOTAL_POINTS
  *
  * @deprecated LUCID_PASS_PREMIUM
  *   초기 설계에서 정의되었으나 실제 결제 모델(ProductType)에 매핑되지 않은

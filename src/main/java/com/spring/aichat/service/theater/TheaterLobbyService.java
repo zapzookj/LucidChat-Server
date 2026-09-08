@@ -73,11 +73,12 @@ public class TheaterLobbyService {
     //  매핑:
     //   - 미구독              → FREE     (0p / 분배 잠김)
     //   - LUCID_PASS          → STANDARD (20p, perStat 10)
-    //   - LUCID_MIDNIGHT_PASS → PREMIUM  (40p, perStat 20)
+    //   - LUCID_MIDNIGHT_PASS → PREMIUM  (300p, perStat 100)
     //   - LUCID_PASS_PREMIUM  → FREE     (deprecated 데드 enum 값 — fallback)
     //
-    //  ⚠️ LUCID_MIDNIGHT_PASS는 향후 "분배 무제한" 정책으로 전환될 예정.
-    //     현재는 임시로 40/20 캡을 적용한다.
+    //  ⚠️ [G-6 · 2026-09-08] "분배 무제한" 방향은 **철회됐다.**
+    //     500/100(=100×5축)은 사실상 무제한이라 5축 전부 만렙이 가능했고, 그러면
+    //     지배 스탯 판정이 동점으로 뭉개져 스탯 체계가 장식이 된다. 확정값은 300/100이다.
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** 무료 유저: 초기 분배 불가 (총 0) */
@@ -88,8 +89,22 @@ public class TheaterLobbyService {
     private static final int STANDARD_TOTAL_POINTS = 20;
     private static final int STANDARD_PER_STAT_MAX = 10;
 
-    /** LUCID_MIDNIGHT_PASS (Premium, 24,900원/월): 총 40포인트, 단일 스탯 최대 20 */
-    private static final int PREMIUM_TOTAL_POINTS = 500;
+    /**
+     * LUCID_MIDNIGHT_PASS (Premium, 24,900원/월): 총 300포인트, 단일 스탯 최대 100.
+     *
+     * <p>[G-6 · decisions_confirmed.md §G-6 · 2026-09-08] 500 → 300으로 정정.
+     * 확정 원문: <i>"| G-6 | <b>미드나잇 극장 초기 스탯</b> | <b>300 / perStat 100</b> |
+     * ★2026-08-21 §B 17-③의 <b>500/100에서 정정</b>"</i>
+     *
+     * <p>⚠ <b>프론트(TheaterCreateFlow.jsx의 STAT_TIER_LIMITS)와 반드시 함께 배포할 것.</b>
+     * 아래 validateInitialStats가 같은 값으로 위변조를 검증하므로, 서버만 내리면
+     * 아직 500 슬라이더를 그리는 화면이 정상 배분에도 400("스탯 총합이 한도를 초과했습니다")을 맞는다.
+     *
+     * <p>⚠ 이 값은 <b>지배 스탯 동점 문제를 고치지 않는다.</b> {@code TheaterState.dominantStat()}이
+     * 전부 엄격 {@code >} 비교에 초기값이 CHARM이라, 300에서도 {@code 100/100/100/0/0}이면
+     * 여전히 동점 → CHARM 고정이다. 만렙 축이 5→3으로 줄 뿐이다. 타이브레이크는 별건 결함.
+     */
+    private static final int PREMIUM_TOTAL_POINTS = 300;
     private static final int PREMIUM_PER_STAT_MAX = 100;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -654,8 +669,9 @@ public class TheaterLobbyService {
                     maxTotal = STANDARD_TOTAL_POINTS;
                     maxPerStat = STANDARD_PER_STAT_MAX;
                 }
-                // [Polish] LUCID_MIDNIGHT_PASS = Premium tier (40/20)
-                //  ※ 추후 "분배 무제한" 정책으로 전환 예정 — 그때 별도 분기로 처리.
+                // [Polish] LUCID_MIDNIGHT_PASS = Premium tier (300/100)
+                //  ※ [G-6 · 2026-09-08] 종전 주석의 "40/20"과 "추후 무제한 전환 예정"은 둘 다 낡았다.
+                //    값은 상수 선언부(PREMIUM_TOTAL_POINTS)가 정본이다 — 여기 숫자를 따로 적지 말 것.
                 case LUCID_MIDNIGHT_PASS -> {
                     maxTotal = PREMIUM_TOTAL_POINTS;
                     maxPerStat = PREMIUM_PER_STAT_MAX;
