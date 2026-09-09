@@ -2006,3 +2006,35 @@ true였고 유실된 건 SANDBOX뿐이라, `supportsSceneDirection` 교체는 **
 
 **INT-2 — 코드 변경 없이 재판정(무해 종결).** `@Version`(2026-05-12 H-21) + batchId 불일치 검사로
 두 겹이 이미 막고 있다. 등재(2026-09-04)가 그 방어보다 나중인데 반영이 안 됐던 '표가 낡음' 유형.
+
+#### 배치 6 후속 — 적대적 검토 반영 (`4c7ff1b` · `9156b7f`) + 신규 등재 5건
+
+3렌즈 검토. **가장 무거운 지적 두 개가 모두 내가 이 배치에서 넣은 것**이었다.
+
+**★ 되돌린 것 ① — 세이브 로드 시 씬 로그 하드 삭제(내가 만든 데이터 손실).**
+좌표 계산은 맞았지만(off-by-one 없음) **삭제가 슬롯 단위가 아니라 방 단위**라는 걸 놓쳤다:
+슬롯1(씬 50) 로드 → 50~99 영구 삭제 → 슬롯2(씬 80) 로드 → 50~79가 없어
+**캐릭터가 실제로 있었던 일을 잊는다.** 고치려던 결함의 정확한 거울상이고 역시 화면에 안 보인다.
+Mongo 삭제는 그 트랜잭션을 따라 롤백되지도 않는다.
+→ 삭제를 걷고 **읽는 쪽에서 거른다**(`findTop30…GlobalSceneSeqLessThan…`).
+   되돌린 구간은 재진행하며 좌표 overwrite로 덮인다.
+
+**★ 되돌린 것 ② — 좌표 삭제의 순서.** delete-then-save는 저장 실패 시
+**기존 로그만 사라진 상태**를 남긴다(append-only보다 나쁘다).
+read-stale → save → delete-stale로 뒤집어 최악을 '중복이 남는다'(종전 증상)로 눕혔다.
+
+**정정** — 엔딩 레이트리밋을 `chat_send` 공유 버킷에서 `theater_ending`으로 분리(두 렌즈 동일 지적).
+주석 2건 정정: `archiveCurrentActiveIfAny`는 '전부'가 아니라 **최대 1건**(2건이면 예외로 죽는다) ·
+존재하지 않는 메서드명 `loadSlot` → `TheaterSaveLoadService.load`.
+
+| ID | 등급 | 증상 | 처분 |
+|---|:--:|---|---|
+| **G6-b** | P2 | ★**제품 규칙 충돌** — 이 저장소는 ENDED를 '영구 완결·resume 불가'로 강제한다(`TheaterLobbyService`: *"엔딩에 도달한 극은 다시 시작할 수 없습니다. 아카이브에서 감상만 가능합니다."*). 그런데 `load` 경로엔 isEnded 가드가 없어, E-4.5.a 수정으로 완주한 방이 세이브 로드 시 ACTIVE로 되살아난다 → 아카이브 목록(`sessionStatus IN ('ARCHIVED','ENDED')`)에서 빠진다 | **종원 결정.** docs/25가 요구한 수정(E-4.5.a)을 그대로 이행한 결과라 코드는 그대로 두고 충돌만 코드·원장에 명시했다. 선택지: (a) load에 isEnded 가드 (b) ENDED 로드는 아카이브에 남긴 채 플레이 허용 (c) 부활을 정본으로 하고 아카이브 기준을 'ending_results 존재'로 변경 |
+| **G6-a** | P3 | `archiveCurrentActiveIfAny`가 활성 극 **1건만** 처리하고 2건이면 `IncorrectResultSizeDataAccessException`으로 죽는다. DB에 부분 유니크 인덱스도 없다(`session_status`는 Flyway가 아니라 ddl-auto가 만든 컬럼). E-4.5.a가 load를 '활성으로 만드는 경로'로 바꿔, 두 방 동시 로드로 2-활성이 되면 이후 활성 조회가 전부 500이 되고 자가 복구가 없다 | 근본 방어는 DB 부분 유니크 인덱스(다음 가용 번호 확인 후 신규 마이그레이션). 그전엔 `findActiveByUserId`를 List로 바꿔 N건 아카이브 |
+| **G6-c** | P3 | `E-4.17.b`의 술어 교체가 **THEATER도 false→true**로 바꾼다. 극장 방이 `/director/auto-respond`에 도달하면 V1 씬 필드를 쓰게 된다(엔드포인트에 모드 게이트가 없다). 실피해는 현재 0 — 극장 서비스가 그 필드를 읽지 않는다 | 메인 턴(`:332`)이 이미 같은 술어를 쓰므로 정책 일관이다. 도달성 자체(모드 게이트 부재)가 별건 |
+| **G6-d** | P3 | 새 Mongo 쿼리들이 prod에서 **컬렉션 스캔**이다(`auto-index-creation: false`) | 씬 로그 규모가 커지면 인덱스 필요. 현재 prod scene_illustrations 9건·극장 세션 0건이라 무해 |
+| **G6-e** | P3 | `TheaterSaveLoadService` 클래스 javadoc이 *"로그는 유지 (MongoDB append-only)"*라 적혀 있는데 이 배치가 그 전제를 바꿨다(좌표 overwrite) | 문구 정정 — 배치 8 |
+
+⚠ **INT-2 재판정 보강**: 결론(이미 막혀 있다)은 검토도 지지했다. 다만 **잔여가 있다** —
+동시 요청의 패자가 `OptimisticLockingFailure`로 **500**이 된다(재시도 없음). 정합은 지켜지지만
+유저는 원인 모를 오류를 본다. 별건.
