@@ -45,6 +45,16 @@ public interface TheaterSceneLogRepository extends MongoRepository<TheaterSceneL
         Long roomId, int actNumber, int chapterNumber, int batchId);
 
     /**
+     * [D-5.4] 같은 좌표의 기존 행 조회 — <b>새 행을 저장한 뒤에</b> 이것들만 지우기 위해서다.
+     *
+     * <p>순서가 중요하다. delete-then-save로 하면 저장이 실패했을 때 <b>기존 로그만 사라지고
+     * 새 로그는 없는</b> 상태가 남는다 — append-only이던 시절보다 나쁘다.
+     * read-stale → save → delete-stale 순이면 최악이 '중복이 남는다'(종전 증상)로 떨어진다.
+     */
+    List<TheaterSceneLog> findByRoomIdAndActNumberAndChapterNumberAndBatchId(
+        Long roomId, int actNumber, int chapterNumber, int batchId);
+
+    /**
      * [D-5.4] 최근 기억 주입용 — <b>되돌린 지점 이후(유령 장면)를 제외</b>하고 읽는다.
      *
      * <p>세이브 로드는 state를 과거로 되돌리지만 씬 로그는 그대로 남는다. 그 '일어나지 않은

@@ -536,10 +536,15 @@ public class TheaterBatchGenerator {
             //     그 주석이 스스로 "D-5.6이 **우연히** 막고 있을 뿐"이라 적어 두었다.
             //   → **미리 만들기를 되살리는 커밋(§H)은 이 삭제를 반드시 함께 봐야 한다.**
             //     그 커밋에서 persistSceneLogs를 onBatchConsumed로 옮기면(원래 (A)안) 둘 다 닫힌다.
-            sceneLogRepository.deleteByRoomIdAndActNumberAndChapterNumberAndBatchId(
-                room.getId(), state.getCurrentAct().getNumber(),
-                state.getCurrentChapter(), state.getCurrentBatchId());
+            //   ★ 순서: **읽기 → 저장 → 삭제.** delete-then-save로 하면 저장이 실패했을 때
+            //     기존 로그만 사라지고 새 로그는 없는 상태가 남는다(append-only 시절보다 나쁘다).
+            //     이 순서면 최악이 '중복이 남는다' = 종전 증상으로 떨어진다.
+            List<TheaterSceneLog> stale = sceneLogRepository
+                .findByRoomIdAndActNumberAndChapterNumberAndBatchId(
+                    room.getId(), state.getCurrentAct().getNumber(),
+                    state.getCurrentChapter(), state.getCurrentBatchId());
             sceneLogRepository.saveAll(logs);
+            if (!stale.isEmpty()) sceneLogRepository.deleteAll(stale);
             log.debug("🎭 [SCENE-LOG] Persisted {} scenes | roomId={} | batchId={}",
                 logs.size(), room.getId(), state.getCurrentBatchId());
         } catch (Exception e) {

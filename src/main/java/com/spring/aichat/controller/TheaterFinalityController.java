@@ -69,7 +69,10 @@ public class TheaterFinalityController {
         //   ※ 이 가드가 마지막 방어선은 아니다 — 중복 생성 자체는
         //     TheaterEndingService가 쓰기 잠금 조회 + 저장본 반환으로 이미 막고 있다.
         //     여기서 막는 것은 그 앞단의 호출 폭주다.
-        if (rateLimiter.checkChatSend(authentication.getName())) {
+        //   ⚠ 버킷을 **분리한다**(`theater_ending`). checkChatSend를 그대로 쓰면 username당
+        //     단일 `chat_send` 버킷을 공유해, 다른 방에서 채팅을 보낸 직후 3초 안에 엔딩을 누르면
+        //     엉뚱하게 막힌다(그 반대도 마찬가지). 서로 다른 기능이 같은 예산을 쓸 이유가 없다.
+        if (rateLimiter.isRateLimited("theater_ending", authentication.getName(), 1, 3)) {
             throw new RateLimitException("요청이 너무 빠릅니다.", 3);
         }
         return endingService.triggerEnding(roomId, authentication.getName());
