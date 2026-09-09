@@ -595,10 +595,24 @@ public class TheaterState {
         //   결과: 유저가 새 극을 시작하면 **두 방이 동시에 진행**되고, 로비는 로드한 방을
         //   '완결'로 표시해 다시 못 들어가는 것처럼 보인다.
         //
-        //   loadSlot은 바로 위에서 archiveCurrentActiveIfAny(user, roomId)로 **다른** 활성 극을
-        //   전부 아카이브한 뒤 이 방을 복원한다 — 즉 이 방이 활성이 되는 것이 그 호출의 전제다.
+        //   `TheaterSaveLoadService.load`는 바로 위에서 `archiveCurrentActiveIfAny(user, roomId)`를
+        //   불러 활성 극을 정리한 뒤 이 방을 복원한다 — 이 방이 활성이 되는 것이 그 호출의 전제다.
         //   resumeFromArchive()를 그대로 쓰는 이유는 sessionStatus와 changedAt을 **짝으로**
         //   갱신하기 때문이다(따로 대입하면 다음 사람이 한쪽만 옮긴다).
+        //
+        //   ⚠ 그 헬퍼는 **활성 극을 최대 1건만** 아카이브한다(findActiveByUserId가 Optional이라
+        //     2건이면 IncorrectResultSizeDataAccessException으로 죽는다). 즉 '전부 정리한다'가 아니다.
+        //     DB에도 부분 유니크 인덱스가 없다(session_status는 Flyway가 아니라 ddl-auto가 만든 컬럼).
+        //     → 두 방에 대해 로드를 거의 동시에 부르면 둘 다 활성이 되어 그 뒤 활성 조회가
+        //       전부 500이 될 수 있다. 신규 등재(G6-a)로 남겼다.
+        //
+        //   ⚠⚠ **제품 규칙 충돌 — 종원 결정 대기(G6-b).** 이 저장소는 다른 곳에서 ENDED를
+        //     '영구 완결·resume 불가'로 강제한다(`TheaterLobbyService`: *"엔딩에 도달한 극은 다시
+        //     시작할 수 없습니다. 아카이브에서 감상만 가능합니다."*). 그런데 `load` 경로에는
+        //     isEnded 가드가 없어, 완주한 방에 세이브를 로드하면 여기서 ACTIVE로 되살아난다.
+        //     docs/25가 요구한 수정(E-4.5.a — "완주 후 세이브 로드 시 방이 '완결'로 잠겨
+        //     다시 못 들어가는 것")을 그대로 이행한 결과이지만, 두 규칙이 부딪히므로
+        //     어느 쪽이 정본인지는 결정 사항이다. 결정 전까지는 docs/25의 지시를 따른다.
         resumeFromArchive();
 
         // [E-4.5.b] 되돌린 챕터에서 MAJOR 분기가 다시 제안되게 한다.

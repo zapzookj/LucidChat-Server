@@ -526,6 +526,16 @@ public class TheaterBatchGenerator {
             //
             //   삭제를 '생성 실패해도 배치를 죽이지 않는다'는 기존 try 안에 둔 것은 의도다 —
             //   로그 정합 때문에 유저의 배치 생성이 실패하면 안 된다.
+            //
+            //   ★★ 프리페치 결합 경고 — 이 삭제는 **프리페치가 죽어 있다는 전제** 위에 있다.
+            //     좌표가 전부 state 현재값이라(D-5.1/5.2: 프리페치는 state를 전진시키지 않은 채
+            //     generateNextBatch를 부른다) 프리페치가 되살아나면 이 삭제가
+            //     **유저가 지금 보고 있는 배치 N의 로그를 지우고 다른 LLM 롤로 덮는다.**
+            //     종전에는 행이 하나 더 쌓이는 additive 결함이었는데, 파괴적으로 바뀐다.
+            //     지금 이걸 막는 것은 TheaterService의 워터마크 가드 하나뿐이고,
+            //     그 주석이 스스로 "D-5.6이 **우연히** 막고 있을 뿐"이라 적어 두었다.
+            //   → **미리 만들기를 되살리는 커밋(§H)은 이 삭제를 반드시 함께 봐야 한다.**
+            //     그 커밋에서 persistSceneLogs를 onBatchConsumed로 옮기면(원래 (A)안) 둘 다 닫힌다.
             sceneLogRepository.deleteByRoomIdAndActNumberAndChapterNumberAndBatchId(
                 room.getId(), state.getCurrentAct().getNumber(),
                 state.getCurrentChapter(), state.getCurrentBatchId());
@@ -558,8 +568,14 @@ public class TheaterBatchGenerator {
     private String buildRecentScenesMemory(Long roomId, TheaterState state) {
         if (state.getTotalSceneCount() == 0) return null;
 
+        // [D-5.4] 되돌린 지점 이후의 '유령 장면'을 제외하고 읽는다.
+        //   세이브 로드는 state만 과거로 되돌리고 씬 로그는 남긴다. 그 장면들이 여기로 새어
+        //   들어가면 **캐릭터가 아직 없던 일을 기억한다** — 화면과 달리 눈에 안 보인다.
+        //   삭제가 아니라 필터인 이유는 리포지토리 메서드 javadoc 참조(슬롯 간 이동 시
+        //   진짜 과거가 지워지는 거울상 결함을 피하기 위해서다).
         List<TheaterSceneLog> recent = sceneLogRepository
-            .findTop30ByRoomIdOrderByGlobalSceneSeqDesc(roomId);
+            .findTop30ByRoomIdAndGlobalSceneSeqLessThanOrderByGlobalSceneSeqDesc(
+                roomId, state.getTotalSceneCount());
         if (recent.isEmpty()) return null;
 
         // 역순 정렬 → 시간순

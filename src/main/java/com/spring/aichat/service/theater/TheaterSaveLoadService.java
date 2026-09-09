@@ -44,8 +44,6 @@ public class TheaterSaveLoadService {
     private final TheaterSaveSlotRepository saveSlotRepository;
     /** [적대적 리뷰 P2] 로드 시 되돌린 지점 이후의 분기 확정 기록 폐기용. */
     private final TheaterBranchChoiceRepository branchChoiceRepository;
-    // [D-5.4] 되돌린 지점 이후의 씬 로그 폐기용.
-    private final com.spring.aichat.domain.theater.TheaterSceneLogRepository sceneLogRepository;
     private final TheaterBatchCacheService batchCache;
     private final ObjectMapper objectMapper;
     // [D-14] load 시 '활성 극 1개' 정책 유지용 — resume 경로와 같은 메서드를 재사용한다.
@@ -249,13 +247,22 @@ public class TheaterSaveLoadService {
             log.info("🎭 [LOAD] 되돌린 지점 이후 분기 확정 기록 {}건 폐기 | roomId={}", discarded, roomId);
         }
 
-        // [D-5.4] ★ 씬 로그도 같은 이유로 되돌린다 — 분기 기록만 지우고 여기만 남겨 뒀었다.
-        //   남겨 두면 (a) 대화 기록 패널에 **일어나지 않은 미래 장면**이 그대로 보이고
-        //   (b) 최근 기억 주입(findTop30…OrderByGlobalSceneSeqDesc)이 그 장면을 프롬프트에 넣어
-        //   캐릭터가 아직 없던 일을 기억하게 된다. (b)가 더 나쁘다 — 화면과 달리 안 보인다.
-        //   기준은 복원된 totalSceneCount다: 그 이상의 globalSceneSeq는 되돌린 구간이다.
-        sceneLogRepository.deleteByRoomIdAndGlobalSceneSeqGreaterThanEqual(
-            roomId, state.getTotalSceneCount());
+        // [D-5.4] ★ 씬 로그는 **지우지 않는다.** 한때 여기서 되돌린 지점 이후를 하드 삭제했다가
+        //   적대적 검토 지적으로 되돌렸다. 이유를 남긴다 — 같은 판단을 다시 하지 않도록.
+        //
+        //   삭제는 **방 단위**라 슬롯을 오가는 유저의 진짜 과거를 지운다:
+        //   슬롯1(씬 50)을 로드하면 50~99가 사라지고, 마음을 바꿔 슬롯2(씬 80)를 로드하면
+        //   state는 80으로 복원되는데 50~79의 로그가 없다 → **캐릭터가 실제로 있었던 일을 잊는다.**
+        //   고치려던 결함(없던 일을 기억함)의 정확한 거울상이고, 역시 화면에 안 보인다.
+        //   게다가 Mongo 삭제는 이 트랜잭션을 따라 롤백되지도 않는다.
+        //
+        //   대신 **읽는 쪽에서 거른다** — 최근 기억 주입은
+        //   findTop30ByRoomIdAndGlobalSceneSeqLessThan…(roomId, totalSceneCount)로 유령 장면을
+        //   제외한다(TheaterBatchGenerator.buildRecentScenesMemory). 되돌린 구간은
+        //   재진행하면서 같은 좌표에 덮어써진다(persistSceneLogs의 좌표 overwrite).
+        //
+        //   ⚠ 잔여: 대화 기록 패널(TheaterHistoryService.getRecentScenes)은 아직 경계 없이 읽는다 —
+        //     로드 직후 그 패널에만 유령 장면이 보인다. state 주입이 필요해 별건으로 남긴다.
 
         log.info("🎭 [LOAD] slot={} | roomId={}", slotNumber, roomId);
         return new LoadResult(roomId, slotNumber, true, "로드 완료");
