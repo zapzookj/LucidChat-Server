@@ -784,8 +784,17 @@ public class ChatRoom {
     }
 
     /**
-     * [V1 Phase 5.5] 5종 스탯 기반으로 statusLevel + dynamic_relation_tag 재계산.
-     * @return statusLevel이 변경되었으면 true (승급 트리거 신호)
+     * [V1 Phase 5.5] 5종 스탯 기반으로 <b>dynamic_relation_tag만</b> 재계산한다.
+     *
+     * <p>⚠ [blockd §A-18] <b>이 메서드는 statusLevel을 바꾸지 않는다.</b> 블록 D가 단계 변경을
+     * 승급 경로(`resolvePromotionLogic`)로 일원화하면서 대입을 걷어냈다(아래 주석 참조).
+     * 종전 javadoc은 여전히 <i>"statusLevel + dynamic_relation_tag 재계산"</i> ·
+     * <i>"@return … 승급 트리거 신호"</i>라 적혀 있었다 — <b>계약이 뒤집혔는데 설명만 남은</b> 상태였다.
+     * 그 설명대로 배선하면 매 턴 승급이 오발동한다(호출부 2곳 모두 이미 승급 판정 뒤에 온다).
+     *
+     * @return 스탯 기준으로 <b>계산된</b> 단계가 현재 statusLevel과 다른가 —
+     *         '승급하라'는 신호가 아니라 <b>판정 결과의 보고</b>다. 실제 승급은 호출부가 결정한다.
+     *         (현재 두 호출부 모두 이 반환값을 쓰지 않는다.)
      */
     public boolean refreshRelationFromStats() {
         requireSandbox();

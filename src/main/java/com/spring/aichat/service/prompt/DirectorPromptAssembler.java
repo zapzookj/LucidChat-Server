@@ -3,6 +3,7 @@ package com.spring.aichat.service.prompt;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
+import com.spring.aichat.domain.enums.RelationStatus;   // [G3-c] ordinal 대신 enum 값으로 판정
 import com.spring.aichat.domain.user.User;
 import org.springframework.stereotype.Component;
 
@@ -298,13 +299,23 @@ public class DirectorPromptAssembler {
         int nextThreshold;
         try {
             // 현재 관계에서 다음 단계의 임계값
-            int currentOrdinal = room.getStatusLevel().ordinal();
-            if (currentOrdinal >= 3) return 999; // LOVER면 승급 없음
-            nextThreshold = switch (currentOrdinal) {
-                case 0 -> 21;  // STRANGER → ACQUAINTANCE
-                case 1 -> 40;  // ACQUAINTANCE → FRIEND
-                case 2 -> 80;  // FRIEND → LOVER
-                default -> 999;
+            //
+            // [G3-c] ⚠ **enum ordinal로 판정하면 안 된다.** RelationStatus의 선언 순서는
+            //   STRANGER, ACQUAINTANCE, FRIEND, LOVER, **ENEMY**라 ENEMY.ordinal() == 4다.
+            //   종전 코드의 `if (currentOrdinal >= 3) return 999; // LOVER면 승급 없음`이
+            //   **적대 관계 방까지 잡아**, 디렉터 프롬프트에 '더 오를 곳 없음' 맥락을 주입했다.
+            //   ENEMY는 관계 진전 서열에서 LOVER의 반대쪽 끝(rank -1)이지 최상위가 아니다.
+            //   같은 함정을 G-3(승급 peak)에서도 만나 rank() 비교로 통일했다.
+            RelationStatus current = room.getStatusLevel();
+            if (current == RelationStatus.LOVER) return 999;   // 최상위 — 더 오를 곳이 없다
+            nextThreshold = switch (current) {
+                case STRANGER     -> 21;  // → ACQUAINTANCE
+                case ACQUAINTANCE -> 40;  // → FRIEND
+                case FRIEND       -> 80;  // → LOVER
+                // ENEMY는 회복이 먼저다. 승급 거리 개념이 성립하지 않으므로 '없음'으로 둔다
+                // (종전에도 결과는 999였으나 이유가 'LOVER라서'로 잘못 적혀 있었다).
+                case ENEMY        -> 999;
+                default           -> 999;
             };
         } catch (Exception e) {
             return 999;
