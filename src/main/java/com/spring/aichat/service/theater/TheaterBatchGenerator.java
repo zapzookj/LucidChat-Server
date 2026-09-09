@@ -511,6 +511,24 @@ public class TheaterBatchGenerator {
         }
 
         try {
+            // [D-5.4] ★ 같은 좌표를 먼저 비운다 — 재생성이 append가 아니라 overwrite가 되게.
+            //
+            //   이 컬렉션의 복합 인덱스 3개에 unique가 없고, 이 메서드는 배치 '생성' 시점에
+            //   무조건 돈다. 그런데 seq가 전부 state 현재값에서 파생되므로, 같은 배치가 다시
+            //   생성되면 **같은 자리에 행이 하나 더 쌓인다.** 유저에게는 같은 장면이 두 번
+            //   보이고, 최근 기억 주입도 중복된 장면을 프롬프트에 넣는다.
+            //
+            //   실제 도달 경로는 둘이다(문서가 적은 4개가 아니다):
+            //     ① 세이브 로드 — 캐시를 비우고 seq를 되돌린 뒤 다시 진행한다
+            //     ② 배치 캐시 TTL(6시간) 만료 — state는 안 움직였는데 캐시만 사라져 재생성된다
+            //   난입은 UI 경로가 아니고(D-29c로 노브까지 닫혔다), 분기 확정은 소비 후
+            //   무효화 지점을 currentBatchId로 잡아 중복을 만들지 않는다.
+            //
+            //   삭제를 '생성 실패해도 배치를 죽이지 않는다'는 기존 try 안에 둔 것은 의도다 —
+            //   로그 정합 때문에 유저의 배치 생성이 실패하면 안 된다.
+            sceneLogRepository.deleteByRoomIdAndActNumberAndChapterNumberAndBatchId(
+                room.getId(), state.getCurrentAct().getNumber(),
+                state.getCurrentChapter(), state.getCurrentBatchId());
             sceneLogRepository.saveAll(logs);
             log.debug("🎭 [SCENE-LOG] Persisted {} scenes | roomId={} | batchId={}",
                 logs.size(), room.getId(), state.getCurrentBatchId());

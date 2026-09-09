@@ -44,6 +44,8 @@ public class TheaterSaveLoadService {
     private final TheaterSaveSlotRepository saveSlotRepository;
     /** [적대적 리뷰 P2] 로드 시 되돌린 지점 이후의 분기 확정 기록 폐기용. */
     private final TheaterBranchChoiceRepository branchChoiceRepository;
+    // [D-5.4] 되돌린 지점 이후의 씬 로그 폐기용.
+    private final com.spring.aichat.domain.theater.TheaterSceneLogRepository sceneLogRepository;
     private final TheaterBatchCacheService batchCache;
     private final ObjectMapper objectMapper;
     // [D-14] load 시 '활성 극 1개' 정책 유지용 — resume 경로와 같은 메서드를 재사용한다.
@@ -246,6 +248,14 @@ public class TheaterSaveLoadService {
         if (discarded > 0) {
             log.info("🎭 [LOAD] 되돌린 지점 이후 분기 확정 기록 {}건 폐기 | roomId={}", discarded, roomId);
         }
+
+        // [D-5.4] ★ 씬 로그도 같은 이유로 되돌린다 — 분기 기록만 지우고 여기만 남겨 뒀었다.
+        //   남겨 두면 (a) 대화 기록 패널에 **일어나지 않은 미래 장면**이 그대로 보이고
+        //   (b) 최근 기억 주입(findTop30…OrderByGlobalSceneSeqDesc)이 그 장면을 프롬프트에 넣어
+        //   캐릭터가 아직 없던 일을 기억하게 된다. (b)가 더 나쁘다 — 화면과 달리 안 보인다.
+        //   기준은 복원된 totalSceneCount다: 그 이상의 globalSceneSeq는 되돌린 구간이다.
+        sceneLogRepository.deleteByRoomIdAndGlobalSceneSeqGreaterThanEqual(
+            roomId, state.getTotalSceneCount());
 
         log.info("🎭 [LOAD] slot={} | roomId={}", slotNumber, roomId);
         return new LoadResult(roomId, slotNumber, true, "로드 완료");

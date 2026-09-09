@@ -1775,7 +1775,25 @@ public class ChatStreamService {
                         freshRoom.clearDirectorInterlude();
                     }
 
-                    if (jpa.room().isStoryMode()) {
+                    // [E-4.17.b] 자동 디렉터 응답 턴의 장소·복장·BGM·시간 변화를 영속한다.
+                    //
+                    //   종전 게이트는 `jpa.room().isStoryMode()`였다. 그래서 **SANDBOX 방에서만**
+                    //   씬 상태가 통째로 유실됐다 — LLM이 캐릭터를 다른 장소로 옮기거나 복장·시간대를
+                    //   바꿔도 그 턴 SSE로만 보이고 방에는 안 남아, 새로고침하면 이전 장소로 되돌아간
+                    //   것처럼 보이고 다음 턴 프롬프트의 장소 컨텍스트도 어긋났다.
+                    //   진단이 어려웠던 이유는 **부분적으로만 저장되기 때문**이다 — 디렉터 지시문이
+                    //   정한 BGM·시간은 applyDirectiveToRoom이 따로 반영하고, 그 뒤 캐릭터 응답이
+                    //   만들어낸 장소·복장 변화만 사라졌다.
+                    //
+                    //   ⚠ 레지스터는 이 게이트를 '죽은 코드'(STORY가 진입부에서 반송되므로 항상 false)로
+                    //     봤는데 **그 전제가 틀렸다.** 진입부 STORY 반송은 sendMessageStream 안에 있고
+                    //     이 메서드에는 없다 — V2 STORY 방이 실제로 이 경로를 탄다(/director/auto-respond).
+                    //     즉 게이트는 STORY에서 true였고, 유실된 것은 SANDBOX뿐이다.
+                    //     그래서 이 교체는 **STORY 동작을 바꾸지 않는다**(true → true).
+                    //
+                    //   형제 경로들과도 맞춘다 — 지켜보기·시간 넘기기는 게이트 없이 무조건 부르고,
+                    //   메인 턴은 같은 ChatModePolicy 술어를 쓴다.
+                    if (ChatModePolicy.supportsSceneDirection(freshRoom.getChatMode())) {
                         freshRoom.updateSceneState(parsed.lastBgm(), parsed.lastLoc(),
                             parsed.lastOutfit(), parsed.lastTime());
                     }

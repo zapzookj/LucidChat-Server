@@ -5,6 +5,8 @@ import com.spring.aichat.dto.theater.TheaterRequests.SaveSlotRequest;
 import com.spring.aichat.dto.theater.TheaterRequests.TriggerDirectorCommandRequest;
 import com.spring.aichat.dto.theater.TheaterRequests.UpdateDirectorNoteRequest;
 import com.spring.aichat.dto.theater.TheaterResponses.*;
+import com.spring.aichat.exception.RateLimitException;
+import com.spring.aichat.security.ApiRateLimiter;
 import com.spring.aichat.service.theater.TheaterDirectorNoteService;
 import com.spring.aichat.service.theater.TheaterEndingService;
 import com.spring.aichat.service.theater.TheaterSaveLoadService;
@@ -42,6 +44,7 @@ public class TheaterFinalityController {
     private final TheaterEndingService endingService;
     private final TheaterSaveLoadService saveLoadService;
     private final TheaterDirectorNoteService directorNoteService;
+    private final ApiRateLimiter rateLimiter;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  엔딩
@@ -53,6 +56,22 @@ public class TheaterFinalityController {
         @PathVariable Long roomId,
         Authentication authentication
     ) {
+        // [B-9.3] 극장 컨트롤러는 ApiRateLimiter를 **하나도** 주입하지 않았다
+        //   (주입된 컨트롤러 8개: Auth·CharacterCreation·Chat·Payment·Story·StoryV2·UgcWorld·User).
+        //   엔딩은 20~60초짜리 LLM 생성이라 연타의 증폭비가 가장 크다.
+        //
+        //   ⚠ **플레이 루프(/next-batch → /batch-consumed)에는 걸지 않는다.**
+        //     checkChatSend는 username당 단일 버킷(3초 1회)이라, 정상 플레이가 두 호출을
+        //     3초 안에 연달아 보내는 순간 두 번째가 막힌다. 이 저장소는 정상 유저를 잠그는
+        //     가드를 네 번 철회한 이력이 있다 — 같은 실수를 반복하지 않는다.
+        //     엔딩은 그런 연쇄가 없다(사람이 3초 안에 두 번 발동시킬 이유가 없다).
+        //
+        //   ※ 이 가드가 마지막 방어선은 아니다 — 중복 생성 자체는
+        //     TheaterEndingService가 쓰기 잠금 조회 + 저장본 반환으로 이미 막고 있다.
+        //     여기서 막는 것은 그 앞단의 호출 폭주다.
+        if (rateLimiter.checkChatSend(authentication.getName())) {
+            throw new RateLimitException("요청이 너무 빠릅니다.", 3);
+        }
         return endingService.triggerEnding(roomId, authentication.getName());
     }
 
