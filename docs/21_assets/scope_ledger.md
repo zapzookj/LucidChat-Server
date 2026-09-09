@@ -11,14 +11,14 @@
 | B-11.2 | P2 | ~~LIVE~~ **✅수정됨** | SMALL | BROKEN_FLOW | 인증·결제 | ✅2026-09-07 `abcc135` — 계정 단위 실패 버킷(10분 10회). 검사(read-only)와 적립(실패 시에만)을 분리해 성공 로그인이 예산을 태우지 않게 했다. 원비고: 로그인 레이트리밋이 IP 버킷 단독 — 계정 단위 한도·실패/성공 구분 모두 여전히 없음 |
 | B-6.2 | P2 | **LIVE** | SMALL | UX_DEGRADE | 극장 · MIG 극장 ★결정 | 극장 스탯 리롤 횟수 제한 부재 — 구간 제한(총 씬 50 미만)만 있고 카운터가 없어 stat_gate 적응형 우회가 가능하다 |
 | B-8.2 | P3 | **LIVE** | ONE_LINE | COSMETIC | 인증·결제 | IllegalArgumentException → 500 매핑 부재. 단 endingType 경로는 legacy 게이트로 死 — 실제 도달면은 /auth/refresh다 |
-| B-9.3 | P3 | **LIVE** | SMALL | UX_DEGRADE | 극장 · 극장 | 극장 엔딩 엔드포인트에 레이트리밋 부재 — V1 경로는 레거시 게이트로 닫혔으나 TheaterFinalityController는 그대로 열려 있다 |
+| B-9.3 | P3 | **수정됨** | SMALL | UX_DEGRADE | 극장 · 극장 | 극장 엔딩 엔드포인트에 레이트리밋 부재 — V1 경로는 레거시 게이트로 닫혔으나 TheaterFinalityController는 그대로 열려 있다 |
 | B-9.6 | P3 | **LIVE** | SMALL | UX_DEGRADE | FE 채팅 · FE ★결정 | 엔딩 생성 지수 백오프 3회가 게이트 400에도 재시도 — 400 3연타 + 실패 토스트 |
 | C-0.3 | P2 | **LIVE** | SMALL | UX_DEGRADE | V2 STORY | GlobalExceptionHandler에 IllegalArgumentException·HttpMessageNotReadableException 핸들러 부재 → 클라 귀책 요청이 전부 500 |
 | C-1.4 | P2 | ~~LIVE~~ **✅수정됨(코드)** | ONE_LINE | BROKEN_FLOW | 인증·결제 | ✅2026-09-07 `abcc135` — nice 블록을 `${ENV:default}`로 통일, return-url 기본값을 백엔드 수신 엔드포인트로 정정, frontend-callback-url 키 추가, isUnset이 `yourdomain.com`을 미설정으로 판정, return-url을 진입부 검사 대상에 포함. **잔여는 코드가 아니라 행정**(NICE 계약 후 값 주입 — §D BLOCKER). 원비고: nice.return-url이 아직 플레이스홀더 — 경로 형태까지 틀렸고 가드도 이 필드만 비껴간다 |
 | C-2.c | P3 | **LIVE** | ONE_LINE | COSMETIC | 인증·결제 | FE 본체는 소멸(PaymentModal 삭제)했으나 BE 하드닝(역직렬화 실패 → 400)은 미이행 — 오타 enum이 여전히 500 |
 | D-2.l | P2 | **LIVE** | MEDIUM | ASSET_LOSS | 극장 | 감정 컷 유료 리롤(2E) 실패 후 기존본 복귀 시 미환불 — 유료 리롤을 시도한 유저만 순손실 |
 | D-2.m | P3 | **LIVE** | MEDIUM | ASSET_LOSS | 극장 | 월드 에셋 유료 리롤(1E) 실패·기존본 복귀 시 미환불 — 캐릭터 트랙과 동형(복붙 계보) |
-| D-5.4 | P3 | **LIVE** | MEDIUM | DATA_LOSS | 극장 · 극장 | persistSceneLogs가 state 현재값으로 시퀀스를 잡아, 같은 배치를 재생성할 때마다 Mongo 씬로그가 동일 seq로 중복 적재된다 |
+| D-5.4 | P3 | **수정됨** | MEDIUM | DATA_LOSS | 극장 · 극장 | persistSceneLogs가 state 현재값으로 시퀀스를 잡아, 같은 배치를 재생성할 때마다 Mongo 씬로그가 동일 seq로 중복 적재된다 |
 | D-6.7 | P2 | **LIVE** | MEDIUM | DATA_LOSS | 시드·일러 · MIG ★결정 | 채팅로그 데드레터가 방금 실패한 그 MongoDB에 기록 — Mongo 장애 시 안전망 전체가 무의미하고 페이로드 본문도 로그에 안 남는다 |
 | E-1.10a | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | FE 채팅 · FE | handleSendMessageV2 낙관적 에너지 차감이 플랫 2 하드코딩 — 부스트 비구독자는 실제 10 |
 | E-1.10b | P2 | **LIVE** | ONE_LINE | UX_DEGRADE | FE 채팅 · FE | handleSendActionV2에 에너지 가드·낙관적 차감·onError 롤백이 전부 없음 |
@@ -46,7 +46,7 @@
 | E-4.11 | P2 | **LIVE** | SMALL | UX_DEGRADE | 극장 · 극장 ★결정 | resolveEndingModel이 호출처 0건 사문 — 세션의 클라이맥스인 엔딩 씬이 저비용 기본 모델로 생성된다 |
 | E-4.13 | P2 | **LIVE** | SMALL | UX_DEGRADE | V2 STORY · ★결정 | 오프스크린 알림 토스트·뱃지가 readAt만 봐서 소비·만료된 알림이 영구 재노출되고 미확인 수가 부풀어 있다 |
 | E-4.15 | P2 | **LIVE** | MEDIUM | UX_DEGRADE | 시드·일러 · MIG ★결정 | 시크릿 배경 ModelsLab 웹훅 폴백이 구조적 사문 — 실패 케이스에서 조회 앵커(캐시 행)가 아예 생성되지 않는다 |
-| E-4.17.b | P2 | **LIVE** | ONE_LINE | BROKEN_FLOW | V1 스트림 · 극장 | 자동 디렉터 응답의 씬 상태 저장이 뒤집힌 isStoryMode() 게이트에 갇혀, SANDBOX 이벤트 카드 턴의 장소·복장·BGM·시간 변화가 영속되지 않는다 |
+| E-4.17.b | P2 | **수정됨** | ONE_LINE | BROKEN_FLOW | V1 스트림 · 극장 | 자동 디렉터 응답의 씬 상태 저장이 뒤집힌 isStoryMode() 게이트에 갇혀, SANDBOX 이벤트 카드 턴의 장소·복장·BGM·시간 변화가 영속되지 않는다 |
 | E-4.5.a | P2 | **수정됨** | ONE_LINE | BROKEN_FLOW | 극장 · 극장 | 세이브 로드가 sessionStatus를 복원하지 않아 ENDED 세션이 '게임은 중반, 세션은 영구 완결'로 잠긴다 |
 | E-4.5.b | P3 | **수정됨** | SMALL | BROKEN_FLOW | 극장 · 극장 | 세이브가 majorBranchDoneInChapter를 직렬화·복원하지 않아 로드 후 해당 챕터 MAJOR 분기가 영구 차단된다 |
 | E-4.6 | P2 | **LIVE** | SMALL | BROKEN_FLOW | V2 STORY | V2 스토리 리셋이 월드 메모리 Redis 캐시를 안 지워 최대 2시간 이전 회차 기억이 계속 주입 — 히로인 메모리 캐시도 동일 |
@@ -1971,3 +1971,38 @@ FE TDZ·빌드 통과 · `not exported` 0건 · `application.yml` diff에 flyway
   **우연히 막고 있을 뿐이다** — 그 우연에 과금 정합을 걸어 두지 않는다."*
   D-5.6만 고치면 노브 없는 두 축(디렉터 노트 DB 행 · 배경 생성)이 먼저 깨어난다.
 - **E-4.11**(엔딩 모델 원가) · **F-7**(난입 화자 오표기) · **B-6.2**(리롤 화면 존폐) — 종원 결정 대기.
+
+#### 배치 6 둘째 덩이 — D-5.4 · E-4.17.b · B-9.3 + INT-2 재판정 (`a366747`)
+
+**D-5.4 — 씬 로그 중복 적재.** `persistSceneLogs`가 배치 **생성** 시점에 무조건 돌고 seq가 전부
+state 현재값에서 파생되는데 복합 인덱스 3개에 unique가 없다. 같은 `(act, chapter, batchId)`가
+다시 생성되면 같은 자리에 행이 하나 더 쌓인다. **실 도달 경로는 문서가 적은 4개가 아니라 2개**다 —
+① 세이브 로드 ② 배치 캐시 TTL(6h) 만료. → 저장 직전에 같은 좌표를 비워 **overwrite**로 만든다.
+
+**★ 조사 중 같은 뿌리의 두 번째 결함을 찾았다** — `loadSlot`이 분기 확정 기록은 되돌리면서
+(`deleteFromPosition`) **씬 로그는 남겼다.** 그래서 되돌린 뒤에도 (a) 대화 기록에 일어나지 않은
+미래 장면이 보이고 (b) **최근 기억 주입이 그 장면을 프롬프트에 넣어 캐릭터가 없던 일을 기억한다.**
+(b)가 더 나쁘다 — 화면과 달리 안 보인다. → 복원된 `totalSceneCount` 이상의 seq를 함께 폐기.
+
+경계값을 직접 확인했다: `globalSceneSeq = totalSceneCount + idx`(idx 0-base)이므로
+`>= totalSceneCount` 삭제가 정확히 '되돌린 지점 이후'다(off-by-one 없음).
+좌표 삭제도 안전하다 — Chapter/Act 전환은 `currentBatchId=0`과 `currentChapter+=1`을
+**함께** 대입하므로 좌표가 통째로 움직인다.
+
+⚠ **남은 한계** — 프리페치가 되살아나면(§H) 배치 N·N+1이 **둘 다 소비 전**이라 같은
+`globalSeqStart`에서 시작해 seq가 겹친다. 좌표(batchId)가 달라 이번 삭제와는 충돌하지 않지만
+seq 중복은 남는다. 원래 권고안 (A)(`persistSceneLogs`를 `onBatchConsumed`로 이동)가 그걸 닫는다 —
+**프리페치 존폐 결정과 같은 배치에서 처리할 것.**
+
+**E-4.17.b — 자동 디렉터 응답 턴의 씬 상태가 SANDBOX에서만 유실.**
+⚠ 레지스터의 '죽은 게이트' 전제가 **틀렸다** — STORY 반송 가드는 `sendMessageStream` 안이고
+`sendAutoDirectorResponse`에는 없다. V2 STORY가 실제로 이 경로를 탄다. 즉 게이트는 STORY에서
+true였고 유실된 건 SANDBOX뿐이라, `supportsSceneDirection` 교체는 **STORY 동작을 안 바꾼다**.
+
+**B-9.3 — 극장 컨트롤러에 레이트리밋 0개.** 엔딩(20~60초 LLM)에만 걸었다.
+⚠ **플레이 루프에는 걸지 않았다** — `checkChatSend`가 username당 단일 버킷(3초 1회)이라
+정상 플레이가 `/next-batch` → `/batch-consumed`를 3초 안에 보내면 두 번째가 막힌다.
+이 저장소는 정상 유저를 잠그는 가드를 네 번 철회했다.
+
+**INT-2 — 코드 변경 없이 재판정(무해 종결).** `@Version`(2026-05-12 H-21) + batchId 불일치 검사로
+두 겹이 이미 막고 있다. 등재(2026-09-04)가 그 방어보다 나중인데 반영이 안 됐던 '표가 낡음' 유형.
