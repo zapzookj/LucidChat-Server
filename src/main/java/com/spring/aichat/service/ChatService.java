@@ -60,6 +60,8 @@ public class ChatService {
     private final PromptInjectionGuard injectionGuard;
     private final com.spring.aichat.domain.illustration.BackgroundCacheRepository backgroundCacheRepository;
     private final MemoryService memoryService;
+    /** [2026-09-11] 자유 방 페르소나 재적용 — 초기화 시 자동 + 설정창 수동 액션 공용 */
+    private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
 
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -102,7 +104,9 @@ public class ChatService {
                 .orElseThrow(() -> new NotFoundException("Room not found for thought generation"));
 
             Character character = room.getCharacter();
-            String nickname = room.getUser().getNickname();
+            // [2026-09-11] 대사·디렉터와 같은 기준 — 속마음만 계정 닉네임을 쓰면
+            //   같은 방에서 캐릭터가 유저를 두 이름으로 부른다.
+            String nickname = room.getEffectiveNickname(room.getUser());
 
             // 최근 대화 5턴 로드 (생각의 맥락)
             List<ChatLogDocument> recentLogs = chatLogRepository.findTop20ByRoomIdOrderByCreatedAtDesc(roomId);
@@ -322,6 +326,8 @@ public class ChatService {
                     // [Bug #3 Fix] 도메인 분리
                     room.isSecretModeActive(),
                     room.getUserPersona(),
+                    // [2026-09-11] 이 방의 호칭 — 프롬프트가 쓰는 값과 같은 기준으로 노출
+                    room.getEffectiveNickname(room.getUser()),
                     // [세계관 빌더] UGC 월드 연동 — 프론트 동적 배경 클리어 가드 스킵용
                     character.getUgcWorldId()
                 );
@@ -331,17 +337,52 @@ public class ChatService {
             });
     }
 
+    /**
+     * [V1 자유] 대화 기록 초기화. 이름과 달리 <b>방 행은 지우지 않는다</b> — 로그·기억만 비우고
+     * 방 상태를 처음으로 되돌린다(그래서 방 재생성으로 페르소나가 갱신될 여지가 없었다).
+     *
+     * <p>[2026-09-11 종원 확정] 자유 모드는 페르소나를 풀어놓는다 — 초기화는 '처음부터 다시'이므로
+     * <b>현재 프로필을 다시 스냅샷</b>한다. 종전에는 {@code resetAll()}이 페르소나를 보존해
+     * (블록 B 이전 문법의 잔재: 그때는 유저가 방마다 직접 써넣은 텍스트라 보존이 맞았다)
+     * 첫 방 생성 시점의 스냅샷에 영구 동결됐다. 스토리(V2)는 고정 유지 — 그쪽은
+     * {@code resetStory(includePersona=true)}가 이미 같은 일을 한다.
+     */
     @Transactional
     public void deleteChatRoom(Long roomId) {
         chatLogRepository.deleteByRoomId(roomId);
         ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
-        room.resetAll();
+        room.resetAll();   // 페르소나는 건드리지 않는다(V1 호환) — 재적용은 아래에서 명시적으로
+        // ⚠ 모드 가드는 여기서 직접 건다. resetAll()의 requireSandbox()는 throw가 주석 처리된
+        //   no-op(ChatRoom.java:479-483)이라 스토리 방을 막아주지 않는다 — 그걸 믿으면
+        //   '스토리는 시작 시점 고정'이 초기화 한 번으로 뚫린다.
+        if (room.isSandboxMode()) {
+            userPersonaService.applyProfileSnapshot(room, room.getUser());
+        }
         memoryService.clearMemories(roomId);
 
         cacheService.evictRoomInfo(roomId);
         cacheService.evictRoomOwner(roomId);
+    }
+
+    /**
+     * [V1 자유] 진행 중인 방에 현재 프로필을 다시 적용한다(대화 기록은 보존).
+     *
+     * <p>스토리는 '시작 시점 고정'이 확정 정책이라 자유 모드에서만 허용한다 —
+     * {@code resetAll()}의 {@code requireSandbox()}와 같은 경계다.
+     */
+    @Transactional
+    public void refreshRoomPersona(Long roomId) {
+        ChatRoom room = chatRoomRepository.findWithMemberAndCharacterById(roomId).orElseThrow(
+            () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
+        );
+        if (!room.isSandboxMode()) {
+            throw new BadRequestException("스토리 모드는 시작할 때의 페르소나로 고정돼요. 스토리 초기화에서 바꿀 수 있어요.");
+        }
+        userPersonaService.applyProfileSnapshot(room, room.getUser());
+        cacheService.evictRoomInfo(roomId);
+        log.info("[ROOM_PERSONA] 현재 프로필 재적용: roomId={}", roomId);
     }
 
     public void initializeChatRoom(Long roomId) {

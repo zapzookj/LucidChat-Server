@@ -1001,6 +1001,15 @@ public class ChatStreamService {
         if (room.getUser() != null && room.getUser().getNickname() != null) {
             sanitizerSpeakers.add(room.getUser().getNickname().trim());
         }
+        // [2026-09-11] 프롬프트가 알려준 호칭(방 스냅샷의 프로필 이름)도 넣는다 — 이걸 빼면
+        //   LLM이 붙인 '프로필이름: ' 접두를 못 걷어 Mongo 로그에 영구 저장된다.
+        //   계정 닉네임과 함께 담는다(레거시 방·과거 히스토리 호환, LinkedHashSet이라 중복 자동 제거).
+        if (room.getUser() != null) {
+            String effectiveName = room.getEffectiveNickname(room.getUser());
+            if (effectiveName != null && !effectiveName.isBlank()) {
+                sanitizerSpeakers.add(effectiveName.trim());
+            }
+        }
 
         Consumer<String> onFirstScene = firstSceneJson -> {
             try {

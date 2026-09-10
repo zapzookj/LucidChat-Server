@@ -528,17 +528,24 @@ public class ChatRoom {
         this.secretModeActive = false;
     }
 
-    public void updateUserPersona(String persona) {
-        this.userPersona = persona;
-    }
+    // [2026-09-11] updateUserPersona 제거 — 방 단위 페르소나 편집 엔드포인트가 블록 B에서
+    //   빠지면서 호출자 0이 된 데드 세터였다. 페르소나 쓰기는 applyPersonaCard(3필드 동시)로만
+    //   한다 — 텍스트만 바꾸는 경로가 남아 있으면 옛 렌즈·성별이 그대로 주입되는 유령 스탯이 난다.
 
-    /** [Phase 7-V2 Pivot] V2 STORY 전용 닉네임 갱신. */
+    /**
+     * 방에서 유저가 불릴 이름을 갱신한다.
+     * <p>[2026-09-11] 컬럼명은 {@code story_user_nickname}(V2 피벗 유래)이지만 <b>두 모드 공용</b>이다 —
+     * 자유 방도 생성·재적용 시 프로필 이름을 여기에 스냅샷한다. 쓰기는
+     * {@code UserPersonaService.applyProfileSnapshot} 한 곳으로 모았다.
+     */
     public void updateStoryUserNickname(String nickname) {
         this.storyUserNickname = nickname;
     }
 
     /**
-     * [Phase 7-V2 Pivot] 실효 닉네임 — storyUserNickname 우선, 없으면 User.nickname 폴백.
+     * 실효 닉네임 — 방 스냅샷의 프로필 이름 우선, 없으면 User.nickname 폴백(레거시 방).
+     * <p>[2026-09-11] 자유·스토리 두 어셈블러의 단일 기준. 호출부에서 인라인으로 다시 풀지 마라 —
+     * 그렇게 갈라져 있어서 모드마다 다른 이름으로 유저를 부르던 결함이 났다.
      */
     public String getEffectiveNickname(User user) {
         if (this.storyUserNickname != null && !this.storyUserNickname.isBlank()) {
@@ -858,7 +865,10 @@ public class ChatRoom {
         this.activeDirectorConstraint = null;
         this.activeDirectorNarration = null;
         this.secretModeActive = false;
-        // userPersona는 의도적으로 리셋하지 않음 — 유저가 설정한 페르소나는 유지
+        // [2026-09-11] 페르소나 3필드는 여기서 건드리지 않는다 — 호출부(ChatService.deleteChatRoom)가
+        //   리셋 직후 현재 프로필을 명시적으로 재적용한다. 종전 주석("유저가 설정한 페르소나는 유지")은
+        //   방마다 직접 써넣던 블록 B 이전 문법의 잔재였고, 스냅샷 문법으로 바뀐 뒤로는
+        //   '보존'이 아니라 '첫 생성 시점 영구 동결'로 작동했다.
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

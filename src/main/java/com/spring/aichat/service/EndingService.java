@@ -81,7 +81,8 @@ public class EndingService {
                 "이 방에서는 엔딩을 생성할 수 없습니다. (멀티 히로인 방)");
         }
         String characterName = character.getName();
-        String userNickname = room.getUser().getNickname();
+        // [2026-09-11] 방 실효 호칭 — 엔딩 편지·추억 문장이 본편 대사와 다른 이름을 쓰지 않게
+        String userNickname = room.getEffectiveNickname(room.getUser());
         int affection = room.getAffectionScore();
         String relationStatus = room.getStatusLevel().name();
         // [Bug #3 Fix] Room-level 시크릿 모드 판정

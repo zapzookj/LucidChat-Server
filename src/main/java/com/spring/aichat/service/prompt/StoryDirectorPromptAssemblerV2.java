@@ -512,9 +512,9 @@ public class StoryDirectorPromptAssemblerV2 {
     private String buildSection7Persona(ChatRoom room, User user) {
         String persona = room.getEffectivePersona(user);
         String safePersona = persona != null ? injectionGuard.sanitizePersona(persona) : "(미정의)";
-        // [닉네임] 방별 스토리 닉네임 우선, 없으면 계정 닉네임 — 캐릭터 호칭의 단일 기준
-        String rawNickname = room.getStoryUserNickname() != null && !room.getStoryUserNickname().isBlank()
-            ? room.getStoryUserNickname() : user.getNickname();
+        // [닉네임] 방 스냅샷의 프로필 이름 우선, 없으면 계정 닉네임 — 캐릭터 호칭의 단일 기준.
+        //   [2026-09-11] 인라인 복제를 걷고 V1과 같은 접근자로 통일(두 모드 호칭 불일치 원인).
+        String rawNickname = room.getEffectiveNickname(user);
         String safeNickname = rawNickname != null ? injectionGuard.sanitizePersona(rawNickname) : "주인공";
         return """
             # [7] USER ACTOR PERSONA

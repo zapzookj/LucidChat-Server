@@ -40,7 +40,9 @@ public class DirectorPromptAssembler {
                                          boolean topicConcluded, boolean relationGated) {
         boolean isSecretMode = user.getIsSecretMode();
         String characterName = character.getName();
-        String userName = user.getNickname();
+        // [2026-09-11] 방 스냅샷의 프로필 이름이 정본 — 디렉터만 계정 닉네임을 쓰면
+        //   같은 방 안에서 캐릭터 대사와 디렉터 연출이 유저를 다른 이름으로 부른다.
+        String userName = room.getEffectiveNickname(user);
 
         String locationOptions = String.join(", ", character.getAllowedLocations(room.getStatusLevel(), isSecretMode, relationGated));
         String outfitOptions = String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), isSecretMode, relationGated));

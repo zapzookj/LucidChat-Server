@@ -42,7 +42,11 @@ public record ChatRoomInfoResponse(
     String currentDynamicBgUrl,
     // ── [Bug #3 Fix] 도메인 분리 ──
     boolean secretModeActive,       // 이 방에서의 시크릿 모드 활성 여부
-    String userPersona,             // 이 방 전용 유저 페르소나 (null이면 유저 기본값)
+    String userPersona,             // 이 방에 스냅샷된 유저 페르소나 소개 (null이면 미적용)
+    // ── [2026-09-11] 이 방에서 캐릭터가 유저를 부르는 이름 ──
+    //   방 스냅샷의 프로필 이름 우선, 없으면 계정 닉네임(ChatRoom.getEffectiveNickname과 동일 기준).
+    //   설정창이 '계정 닉네임'과 이 값을 나란히 보여줘야 유저가 어느 이름이 대화에 쓰이는지 안다.
+    String userNickname,
     // ── [세계관 빌더] UGC 월드 연동 ──
     Long ugcWorldId                 // 캐릭터 소속 UGC 월드 (null=미연결). 프론트는 이 값으로 동적 배경 클리어 가드를 스킵
 ) {}

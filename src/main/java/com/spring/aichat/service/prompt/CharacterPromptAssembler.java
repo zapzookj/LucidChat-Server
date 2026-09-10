@@ -311,7 +311,10 @@ public class CharacterPromptAssembler {
             - High [Dependency]: Seek the user's approval, act slightly clingy or obedient.
             - High [Playfulness]: Use jokes, teasing, memes, and light sarcasm.
             """.formatted(
-            injectionGuard.encapsulate("Nickname", user.getNickname()),
+            // [2026-09-11] 방 스냅샷의 프로필 이름이 정본 — 계정 닉네임은 폴백(레거시 방).
+            //   종전엔 user.getNickname() 직접 참조라 스토리(프로필 이름)와 자유(계정 닉네임)가
+            //   서로 다른 이름으로 유저를 불렀다.
+            injectionGuard.encapsulate("Nickname", room.getEffectiveNickname(user)),
             injectionGuard.encapsulate("Profile", room.getEffectivePersona(user)),  // [Bug #3 Fix] Room-level 페르소나
             room.getStatusLevel().name(),
             room.getDynamicRelationTag() != null ? room.getDynamicRelationTag() : RelationStatusPolicy.getDisplayName(room.getStatusLevel()),

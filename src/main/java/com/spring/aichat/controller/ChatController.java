@@ -130,6 +130,17 @@ public class ChatController {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
+     * [2026-09-11] 자유 방에 현재 프로필을 다시 적용 (대화 기록은 보존).
+     * 스토리 방은 시작 시점 고정이라 400.
+     */
+    @PostMapping("/rooms/{roomId}/persona/refresh")
+    @PreAuthorize("@authGuard.checkRoomOwnership(#roomId, principal.subject)")
+    public ChatRoomInfoResponse refreshRoomPersona(@PathVariable Long roomId) {
+        chatService.refreshRoomPersona(roomId);
+        return chatService.getChatRoomInfo(roomId);
+    }
+
+    /**
      * 채팅방 시크릿 모드 토글
      *
      * Body: { "enabled": true }
@@ -200,9 +211,6 @@ public class ChatController {
             doc.getScenesJson(), doc.getDialogueOptionsJson(), ordinal);
     }
 
-    // ── DTO ──
-    public record RoomPersonaRequest(
-        @Size(max = 500, message = "페르소나는 500자 이내로 입력해주세요.")
-        String persona
-    ) {}
+    // [2026-09-11] RoomPersonaRequest 제거 — 짝이 되는 PATCH /rooms/{id}/persona가
+    //   블록 B에서 빠진 뒤 아무도 안 쓰던 DTO. 페르소나 갱신은 persona/refresh(프로필 재적용)로만.
 }

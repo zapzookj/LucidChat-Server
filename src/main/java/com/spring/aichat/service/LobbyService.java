@@ -208,9 +208,9 @@ public class LobbyService {
             .findByUser_IdAndCharacter_IdAndChatMode(user.getId(), character.getId(), chatMode)
             .orElseGet(() -> {
                 ChatRoom created = new ChatRoom(user, character, chatMode);
-                // [블록 B 페르소나] 피커 없이 현재 프로필 자동 스냅샷 — FE 전 생성 경로 공통(신규 방에만)
-                var profile = userPersonaService.getOrCreateProfile(user);
-                created.applyPersonaCard(profile.personaTextOrNull(), profile.statsJson(), profile.getGenderOrDefault());
+                // [블록 B 페르소나] 피커 없이 현재 프로필 자동 스냅샷 — FE 전 생성 경로 공통(신규 방에만).
+                // 재적용(대화 기록 초기화·설정창 액션)은 ChatService가 같은 메서드로 다시 찍는다.
+                userPersonaService.applyProfileSnapshot(created, user);
                 ChatRoom newRoom = chatRoomRepository.save(created);
                 // [세계관 빌더] UGC 월드 캐릭터 — 첫 장소 대표 배경을 초기 동적 배경으로 시딩
                 //   (UGC는 slug 정적 배경 에셋이 없어 dynamicBg가 유일한 실효 렌더 소스)

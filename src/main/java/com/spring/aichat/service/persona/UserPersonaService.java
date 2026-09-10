@@ -1,5 +1,6 @@
 package com.spring.aichat.service.persona;
 
+import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.enums.CharacterGender;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserPersona;
@@ -84,6 +85,24 @@ public class UserPersonaService {
         Validated v = validate(payload);
         profile.applyProfileUpdate(v.name(), v.age(), v.gender(), v.text(),
             v.allure(), v.friendliness(), v.trust(), v.charisma(), v.mystique());
+        return profile;
+    }
+
+    /**
+     * 현재 활성 프로필을 방에 스냅샷한다 — 소개·렌즈·성별 + 방에서 불릴 이름까지 한 번에.
+     *
+     * <p>방 생성(V1 자유·V2 스토리)과 <b>자유 방의 프로필 재적용</b>이 공유하는 단일 진입점이다.
+     * 이전에는 호출부마다 applyPersonaCard + updateStoryUserNickname을 따로 적어
+     * 자유 방에서 이름 스냅샷이 누락됐다(캐릭터가 계정 닉네임으로 부르던 원인).
+     *
+     * <p>스냅샷 의미론은 유지된다 — 프로필을 나중에 고쳐도 이 방은 소급 변경되지 않는다.
+     * 자유 방만 {@code ChatService}의 재적용 경로로 다시 찍을 수 있다(스토리는 고정).
+     */
+    @Transactional
+    public UserPersona applyProfileSnapshot(ChatRoom room, User user) {
+        UserPersona profile = getOrCreateProfile(user);
+        room.applyPersonaCard(profile.personaTextOrNull(), profile.statsJson(), profile.getGenderOrDefault());
+        room.updateStoryUserNickname(profile.getName());
         return profile;
     }
 

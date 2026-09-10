@@ -98,9 +98,7 @@ public class StoryV2Service {
      * 피커 입력(userPersonaId/personaText/preset/nickname)은 더 이상 소비하지 않는다.
      */
     private void applyProfileSnapshot(ChatRoom room, User user) {
-        var profile = userPersonaService.getOrCreateProfile(user);
-        room.applyPersonaCard(profile.personaTextOrNull(), profile.statsJson(), profile.getGenderOrDefault());
-        room.updateStoryUserNickname(profile.getName());
+        userPersonaService.applyProfileSnapshot(room, user);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

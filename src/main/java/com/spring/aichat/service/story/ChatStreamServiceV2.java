@@ -747,6 +747,15 @@ public class ChatStreamServiceV2 {
         if (room.getUser() != null && room.getUser().getNickname() != null) {
             speakers.add(room.getUser().getNickname().trim());
         }
+        // [2026-09-11] 프롬프트가 알려준 호칭(방 스냅샷의 프로필 이름)도 넣는다 — V2는 생성 때부터
+        //   프로필 이름을 쓰는데 화이트리스트엔 계정 닉네임만 있어, LLM이 붙인 '프로필이름: ' 접두를
+        //   못 걷고 Mongo 로그에 그대로 저장됐다. (LinkedHashSet이라 같은 값이면 자동 dedupe)
+        if (room.getUser() != null) {
+            String effectiveName = room.getEffectiveNickname(room.getUser());
+            if (effectiveName != null && !effectiveName.isBlank()) {
+                speakers.add(effectiveName.trim());
+            }
+        }
         return speakers;
     }
 
