@@ -1,5 +1,7 @@
 # 19-assets. 결정 확정 기록 (종원)
 
+> **최신 모델 결정(2026-09-24): Gemini 3 Flash → Gemini 3.8 Flash 갱신.** 적용 범위·검증·미배포 상태는 아래 §I를 따른다. 9/18–9/22의 모델 유지 결정은 당시 실험 종료 기록으로 보존한다.
+
 > ## ★ 이 파일이 **결정 정본**이다
 >
 > 결정 목록을 만드는 모든 문서(`21_FinalBugFix_Readiness.md` §F · `24_Decision_Briefs.md` · 세션 인계)는
@@ -182,3 +184,20 @@
 | **관계 태그 존폐** (안건 22) | 2026-08-21에 "미답(나중)"으로 이월됨 | 상태창 개편과 함께 |
 | **구독 다운그레이드 허용 여부** | §F 12건 표에서 누락됐던 항목 | 런칭 후 CS 1~2주 관측 |
 | **극장 하위 4건** | 미리 만들기 존폐 · 리롤 화면 · 난입 존폐 · 엔딩 모델 원가 | G-1로 수리는 열렸으나 "그 기능을 살릴까"는 별개 |
+
+---
+
+# I. 2026-09-24 Gemini 3.8 Flash 갱신 (9/28 결정으로 대체)
+
+- **출처/결정:** 사용자 요청 "루시드챗 LLM 모델이 gemini 3 flash인데, 3.8 flash로 갱신해라". 이전 모델 유지 결정을 이번 요청으로 대체한다. [OpenRouter 모델](https://openrouter.ai/google/gemini-3.8-flash)·[공개 endpoints](https://openrouter.ai/api/v1/models/google/gemini-3.8-flash/endpoints)·[Google 모델 문서](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash)를 당일 확인했다.
+- **로컬 반영:** `google/gemini-3-flash-preview` → `google/gemini-3.8-flash`. 전역 `openai.model`·`sentiment-model`, 일반 10개+시크릿 6개 시드, UGC VLM 기본값과 Java 폴백을 갱신했다. Pro(`google/gemini-3.1-pro-preview`)·별도 Stage0 모델·에너지 가격·프롬프트·라우팅 정책은 이번 변경 대상이 아니다.
+- **기존 데이터 적용:** UGC 생성 시 `llm_model_name`이 저장되고 극장 배치는 이를 우선하므로 설정만 변경하면 기존 UGC 극장이 누락된다. `V38__upgrade_gemini_flash_model.sql`은 `characters.llm_model_name`이 정확히 구 Flash ID인 행만 신모델로 갱신한다. 다른 명시 모델과 나머지 데이터는 보존한다. 운영 DB에는 실행하지 않았으며 다음 배포의 Flyway 실행이 필요하다.
+- **검증(관측):** `gradlew.bat test --tests '*Test' bootJar --no-daemon` 성공, 36클래스/250검사·실패/오류/스킵 0. 신규 마이그레이션 검사는 실제 SQL을 H2 PostgreSQL 모드에 실행해 공식/UGC 2행 변경·나머지 4행 보존·전체 6행 대조·재실행 불변을 확인했다. 별도 일회성 Java 검사로 실제 YAML 바인딩, 시드 전체 16=10+6개·프로필 내 slug 중복 0·applySeed 이후 극장 모델 선택, 전역/보조/VLM 기본값과 Pro 보존을 확인했다. 독립 컨텍스트 최종 읽기 검토에서 추가 누락·무결성 문제 없음.
+- **상태/한계:** BE `master ca27320` 위 로컬 미커밋 변경. 기존 프롬프트·비교실 작업과 실험 원본은 보존했다. 커밋·푸시·배포·운영 DB 실행·유료 API 호출·전체 앱 기동은 미실행이다. 공개 endpoint에서 AI Studio/Vertex의 모델 및 JSON/max_tokens 지원은 확인했지만 실제 생성 품질·지연·출력 잘림은 이번에 검증하지 않았다. 3.8의 `minimal` thinking 미지원은 확인했고 운영 요청은 해당 옵션을 보내지 않는다. 기존 TTFT 폴백과 토큰 한도는 유지된다.
+
+# J. 2026-09-28 Gemini 3 Flash 복귀와 프롬프트 수리 배포
+
+- **출처/결정:** 사용자가 기본 모델을 다시 Gemini 3 Flash로 변경한 뒤 이번 작업을 커밋·푸시·프로드 배포하도록 명시 지시했다. 현재 선택은 `google/gemini-3-flash-preview`이며 §I의 3.8 선택을 대체한다.
+- **구현:** 전역·보조·VLM 폴백·일반 10개/시크릿 6개 시드와 관련 주석/검사에서 미커밋 3.8 변경을 복귀했다. Pro·Stage0 명시 모델·에너지 가격·라우팅 정책·동결된 베이크오프 후보/결과는 보존한다.
+- **배포 전 운영 관측:** 실행 중인 프로드는 `/health` OK, Flyway 최신 V37이며 V38은 없다. 캐릭터 저장 모델 26행 전부 3 Flash, 관련 모델 환경변수 override도 없었다. 따라서 운영 DB 수정은 불필요하다. 미배포 V38 업그레이드 SQL과 전용 검사는 로컬 `build/release-backup-20260928`에 보존하고 활성 소스에서 제거했다. V38 번호를 적용된 이력처럼 취급하지 않는다.
+- **범위/근거:** 프롬프트 정합 수리와 격리된 로컬 비교실을 배포 대상으로 삼는다. 다른 디오라마·UI 작업은 포함하지 않는다. 검증·실제 배포 결과는 [9/28 릴리스 기록](../28_assets/prompt-release-2026-09-28.md)을 따른다. 과거 P1 실험의 지연 증가와 잔여 의미 오류를 개선 완료로 바꾸지 않는다.

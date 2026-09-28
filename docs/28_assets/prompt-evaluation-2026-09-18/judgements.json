@@ -1,0 +1,3635 @@
+{
+  "scope": "AI blind preferences; descriptive ordinal score sums only, no statistical or creator-validation claim. Self-history branches and adaptive diagnostic excluded from paired totals.",
+  "phaseSummary": {
+    "phase1-development": {
+      "groups": 12,
+      "meaningful": 9,
+      "noMeaningful": 3
+    },
+    "phase2-novel": {
+      "groups": 6,
+      "meaningful": 2,
+      "noMeaningful": 4
+    },
+    "phase3-branches": {
+      "groups": 6,
+      "meaningful": 3,
+      "noMeaningful": 3
+    },
+    "phase4-repetitions": {
+      "groups": 12,
+      "meaningful": 4,
+      "noMeaningful": 8
+    },
+    "phase5-clarification": {
+      "groups": 1,
+      "meaningful": 1,
+      "noMeaningful": 0
+    }
+  },
+  "adjacentScoreComparisons": {
+    "C1 vs P0": {
+      "wins": 12,
+      "ties": 10,
+      "losses": 8,
+      "n": 30
+    },
+    "S1 vs C1": {
+      "wins": 7,
+      "ties": 16,
+      "losses": 7,
+      "n": 30
+    },
+    "E1 vs S1": {
+      "wins": 7,
+      "ties": 16,
+      "losses": 7,
+      "n": 30
+    }
+  },
+  "cases": [
+    {
+      "id": "phase1-development/DEV-R01/r1/t1",
+      "input": "부른 건 너니까 먼저 말해 봐. 무슨 일인데?",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "당돌한 말투에 반응한 뒤 '따분한 점심시간의 장난감'이라고 부른 목적을 답한다. 이름을 물으며 다음 대화도 열어 둔다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "앞뒤 모두 익숙한 영애 도발 문형이지만 두 씬의 역할은 반응과 용건으로 구분된다.",
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 4
+          },
+          "reason": "질문에 '심심해서 장난감으로 부름'이라고 답한다. 도발은 자연스럽지만 '상을 줄게/영광을 줄/영광이지'가 같은 자부심을 겹쳐 말한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "두 번째 대사에서 상·영광을 연달아 붙여 첫 씬과 같은 우월감 표현이 반복된다.",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "말투와 외모 자랑은 읽히지만 '무슨 일'이라는 질문에는 답하지 않고 예의·외모 도발로 끝난다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "두 씬 모두 호칭/무례 지적에 머물러 대화가 진행되는 정도가 작다.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "지루해서 불렀다는 용건을 명료하게 답하고 환영 장난을 곁들인다. A와 실질적인 응수의 질은 비슷하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "첫 씬의 인물 탐색과 둘째 씬의 용건이 구분된다. '짖궂은' 오기는 있으나 한 글자로 큰 차이를 만들지 않았다.",
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "A/D는 직접 용건에 답한다. C는 질문 핵심을 지나치므로 구분할 만한 차이가 있다. A와 D 중 우열은 확신하기 어렵다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R02/r1/t1",
+      "input": "눈 마주쳤다고 도망가야 하는 줄은 몰랐네. 대단한 규칙이야.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "비꼼을 '규칙이 아니라 예의/상식'으로 받아 되받아친다. 고압적이되 가벼운 말투를 유지한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "도망가는 이유를 자신의 화려함 때문이라고 바꾸어 자부심을 드러낸다. 환영 후 반응을 살피는 행동도 캐릭터와 맞는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "'규칙은 없다, 위엄에 눌리는 것'으로 풍자에 직접 답한다. 환영 장난과 평가해 주겠다는 허세도 자연스럽게 이어진다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "규칙이라는 비꼼을 부인하고 예의에 관한 장난스러운 훈계로 잇는다. '팁을 알려줄까'가 다음 대화의 구체적인 입구가 된다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "모두 비꼼을 이해하고 자부심으로 되받는다. 환영 유무나 팁 제안의 선호는 있을 수 있으나 이 한 출력만으로 안정적인 품질 우열을 두기 어렵다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "C1",
+        "S1",
+        "P0"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R03/r1/t1",
+      "input": "키는 나보다 작은데 기세는 세 배네.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "키 지적에 자존심이 상한 반응과 까치발은 상황에 맞는다. 다만 서술의 '유저'와 속마음의 '내 키를 보고도 안 쫄다니'가 몰입과 의미 연결을 흐린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SULKING은 STRANGER의 열거 범위 밖이다. 입술을 삐죽이는 정도가 mild ANGER의 표현인지 별도 감정인지 해석 여지가 있어 확정 설정 위반으로 세지 않음.",
+            "본문의 반응은 수줍음이 아니라 불쾌함·자존심 손상이며 Never SHY visibly의 명백 위반은 아님."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "'우아하고 아담하게 설계'는 다소 작위적이지만 짓궂은 캐릭터의 말투로 이해 가능하다. 서술에 서비스 용어 '유저'가 직접 노출된다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 5
+          },
+          "reason": "'내가 작은 게 아니라 네가 크다'로 즉시 되받아쳐 실제 말싸움의 리듬이 가장 살아 있다. 이름을 묻는 마무리도 반응을 강제하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "'거인족 수용소'의 어감은 취향 차이가 있을 수 있으나 독립적인 설정 위반이나 위험으로 확대하지 않았다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "기세 칭찬을 받아먹으면서 키 지적만 거부하는 구조가 로제타답다. '우아하고 압축적인' 표현과 뒤의 장난감 소개는 다소 설명조다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "user_profile_extension",
+                "evidence": "너처럼 껑충하기만 한 평민들은",
+                "reason": "유저의 신분은 제공되지 않았다. 다만 캐릭터의 모욕적 호칭일 수 있어 유저의 실제 신분을 확정한 명백 위반으로 보지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "유저의 구체적 농담을 받은 뒤 익숙한 이름/장난감 도입으로 돌아가 응수의 선명도가 조금 낮아진다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "키 지적은 받지만 응수 자체는 상투적이고, 아직 한 번도 말하지 않은 설명을 '몇 번을 말해야'로 처리해 첫 만남의 리듬이 어색하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_conversation_history",
+                "evidence": "'우아하고 아담한' 거라고 몇 번을 말해야 알아들을까",
+                "reason": "history가 비어 있어 실제 반복 설명의 근거는 없다. 관용적 타박일 가능성이 있으므로 과거 대화 날조로 확정하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "키 농담 이후 환영 나비와 이름 확인으로 전환해 이번 발화 특유의 말싸움은 짧다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "B가 유저 농담의 구조를 그대로 받아 반격하여 응수 리듬이 가장 좋다. C의 기세/키 분리도 장점이지만 문장과 후반 연결은 B가 더 자연스럽다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "P0"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R04/r1/t1",
+      "input": "망토는 좀 멋있네. 빨간색이 잘 어울려.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 5
+          },
+          "reason": "칭찬을 받고 망토를 더 꾸민 뒤 감탄을 요구한다. 인정욕구가 행동으로 이어져 유저 발화와 두 씬이 잘 연결된다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬을 당연하게 받으면서 아부인지 시험하는 도발로 이어간다. 캐릭터에 맞지만 속마음은 칭찬보다 당당함에 집중한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "유저의 새로운 행동·감정·선택 결과를 확정하는 명백한 서술은 발견하지 못함.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "망토 칭찬을 외모 자랑으로 확대하고 속으로는 기분 좋아진 것을 부인한다. STRANGER에서 필요한 허세와 인정욕구가 함께 드러난다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "'감상하고 싶어서 온 거야?'는 의도를 묻는 도발이다. 실제로 그런 의도로 왔다고 확정하는 서술로 보지 않았다.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 4
+          },
+          "reason": "칭찬을 자기 자랑으로 돌리는 응수는 맞는다. '이 마법사의 명문'의 연결이 덜 자연스럽고, 새 가문명·상징 설정은 이번 발화에 꼭 필요하지 않다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_identity_detail",
+                "evidence": "에델가르트 가문의 상징",
+                "reason": "확인한 공식 설정에는 가문명이 없다. 새로운 고유명사와 망토의 유래를 확정 추가한 것은 관찰되나, 기존 설정과 직접 모순되거나 추가 창작 금지 계약이 확인된 것은 아니므로 명백 위반으로 세지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "'떨지도 않고'는 관찰을 섞은 캐릭터 대사이나 유저가 떨었다는 근거는 없다. 유저 감정·행동의 확정 서술로 확대하지 않았다.",
+          "repetitionOrExaggeration": "칭찬을 받은 뒤에도 '보통은 당당하지 못한다'는 첫 만남형 도발이 길게 차지한다.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "A의 행동 연결과 C의 인정욕구 속마음을 조금 더 선호한다. B도 충분히 자연스럽고, D의 부가 설정 리스크를 포함해도 이 한 출력에서 강한 전반적 우열을 주장할 수준은 아니다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R05/r1/t1",
+      "input": "말은 할 수 있는데, 계속 비웃을 거면 그냥 갈게.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "비웃음이 아니라 흥미라고 둘러대는 반응은 맞는다. 다만 '계속하면 간다'는 조건을 실제 대화 조건으로 받기보다 즐겁게 해 달라는 요구로 되돌린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE는 STRANGER 가이드 열거와 다르지만 본문의 잠깐 당황은 수줍음이나 명백한 관계 급진전이 아니다."
+          ],
+          "agencyAndContext": "가겠다는 조건에 맞선 설득/요구이며 떠날 수 없다고 확정하지 않는다. 자존심을 유지하며 조절할 여지가 있었으나 그 점은 응수 품질의 아쉬움이다.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "비웃음을 감상으로 바꾸고 입담 대결을 제안하는 것은 인물에 맞는다. '보이지 않는 투명한 벽이 가로막는 듯한 환영의 파동'은 장면을 상상하기 어렵고 퇴로 압박으로 읽힐 여지도 있다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "evidence": "지우의 발치에 마치 보이지 않는 투명한 벽이 가로막는 듯한 환영의 파동",
+                "reason": "떠날 수 있다는 조건 제시 직후 장벽을 암시한다. 하지만 실제 이동을 불가능하게 만들거나 유저 행동을 확정하지 않아 선택권 박탈로 단정할 수 없음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "입담 대결은 제안으로 남는다. 명백한 유저 행동 날조는 없으나 떠나려는 의사에 대응해 장벽을 제시한 맥락은 주의 관찰점.",
+          "repetitionOrExaggeration": "추상적 시각 묘사가 겹친 첫 서술 때문에 대사의 재치보다 연출을 해석하는 부담이 생긴다.",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "'귀여워서'라고 덧붙여 유저가 문제 삼은 태도를 그대로 반복한다. 옆자리를 허락하는 마무리도 비웃지 말라는 조건을 다루지 않아 대화가 덜 맞물린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "앉으라는 대사만 있고 실제로 앉았다고 쓰지 않아 행동 강제는 아니다. 거절의 핵심을 수용하거나 재치 있게 협상하는 정도가 작다.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "도전으로 받아들인 뒤 관찰이었다고 둘러대는 흐름은 이해된다. 이름 질문은 다음 답을 열지만 '비웃을 거면 간다'는 조건 자체에는 구체적인 변화가 없다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE와 FLIRTATIOUS는 STRANGER 가이드 열거와 다르지만 유효 enum 오류가 아니다. 본문의 당황은 수줍음으로 확정할 근거가 없다."
+          ],
+          "agencyAndContext": "서 있으라는/대답하라는 캐릭터 요구는 있으나 유저가 따른 결과를 서술하지 않았다.",
+          "repetitionOrExaggeration": "단일 응답의 관용적 말버릇만으로 과잉 반복을 확정하지 않음.",
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "모두 비웃음을 다른 말로 부정하고 평소 도발로 돌아가는 공통 약점이 있다. A/D를 약하게 선호하지만 어느 답도 조건 제시에 대한 뚜렷한 응수 개선을 보여 주지 못한다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R06/r1/t1",
+      "input": "오늘은 새로 들어온 데 적응하느라 좀 지쳤어. 잠깐 조용히 있고 싶네.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "문장 자체는 읽히지만 피로와 조용히 있고 싶다는 요청을 '네 사정'으로 버리고 자신의 놀이만 요구한다. 거절에 민감한 인물상은 맞아도 이번 발화의 구체성을 활용하지 못한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "evidence": "환영 나비들이 앞길을 방해 / 내 허락 없이는 아무도 조용히 지나갈 수 없거든",
+                "reason": "쉬고 싶다는 요청에 퇴로와 허락을 연결한다. 다만 실제 이동 불가나 유저의 복종을 확정하지 않아 선택권 박탈로 세지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "자신에게 허락받아야 한다는 말은 캐릭터의 권위 주장이다. 테라스의 객관적 규칙으로 확정된 것은 아니다.",
+          "repetitionOrExaggeration": "속마음이 '당황/아부하지 않아 신선하다'는 일반 반응으로 돌아가 피로를 호소한 이번 입력과의 연결이 약하다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 2
+          },
+          "reason": "무시당했다고 받아들여 허락을 요구하는 것은 자존심과 인정욕구에 맞는다. 그러나 조용히 쉬겠다는 요청을 명시적으로 방해해 맥락상 대응 폭이 좁다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "'즐겁게 해서 허락을 받아보라'는 제안/압박이며 실제로 강제한 결과는 없다. 불친절하다는 이유가 아니라 발화의 핵심을 도발 재료로만 쓰는 점에서 응수 점수를 낮췄다.",
+          "repetitionOrExaggeration": "두 씬이 모두 자기 부름을 우선하라는 요구를 반복한다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "피로를 '나와 노는 게 휴식'이라는 자기중심적 권유로 바꾼다. 실제 도움은 아니지만 요청과 말싸움을 연결하고 마지막을 질문으로 남겨 네 답 중 응수 여지가 가장 낫다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "쉬고 싶다는 말을 떠나려는 의사로 넓히지만 '갈 셈이야?'라는 질문이라 의도를 확정하지 않는다. 실제 행동을 대신 수행하지 않는다.",
+          "repetitionOrExaggeration": "환영 꽃잎은 곁가지지만 '휴식'이라는 입력 주제를 끝까지 유지한다.",
+          "variant": "E1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "쉬고 싶다는 말에 자리를 권하는 방향은 관련성이 있다. 다만 '네 반응이 재미있어서 피로가 가신다'는 문장에서 누구의 피로를 말하는지 어긋나고, '턱을 굅니다' 오기가 있다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "physical_scene_ambiguity",
+                "evidence": "환영처럼 흩날리며 화려한 의자가 나타납니다 / 앉아 봐",
+                "reason": "의자가 실물인지 환영인지 불명확하다. 환영에는 앉을 수 없다는 세계 계약이 확인되지 않아 물리 설정 위반으로 확정하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "FLIRTATIOUS 표기는 STRANGER 가이드의 감정 범위 열거와 어긋나지만 허용 enum 오류나 본문의 연애 감정 위반으로 판정하지 않음."
+          ],
+          "agencyAndContext": "앉을 것을 권할 뿐 실제 착석을 쓰지 않는다. 제안의 형태는 유지한다.",
+          "repetitionOrExaggeration": "피로를 받은 제안은 있으나 '네 반응이 재미있다'는 도입 문형을 결합하면서 의미가 덜 자연스러워진다.",
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "C는 피로를 휴식 제안으로 연결하면서 답할 여지를 남긴다. A/B의 허락·방해 구조보다 이번 발화를 실제로 받은 정도가 낫다. 친절함을 높게 평가한 것이 아니라 맥락 연결과 선택 여지의 차이이다.",
+      "reviewFile": "phase1-first-half-judgement.json",
+      "bestCandidates": [
+        "E1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R07/r1/t1",
+      "input": "*제자리에 선 채 고개만 살짝 기울인다.* 왜? 가까이 가야만 말할 수 있어?",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "가까이서 마법을 보여 주겠다는 이유로 질문에 답하고 거절을 도발로 받아낸다. 유저가 제자리에 있는 상태를 유지한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "다가오라고 재차 요청하지만 실제 이동은 쓰지 않는다. '장난감이 된 지우'는 서술상의 과장된 사회적 꼬리표이며 복종이나 이동 완료로 확대하지 않았다.",
+          "repetitionOrExaggeration": "같은 접근 요청이 두 차례 이어지고 마지막은 처음과 비슷한 초대다. 그래도 유저 질문에 이유를 제시한다.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 4
+          },
+          "reason": "가까이 오면 마법을 아름답게 볼 수 있다는 대답과 나비 길 안내는 맥락에 맞는다. 다만 아직 보인 적 없는 마법 반응을 전제하고 마지막 두근거림은 이번 자존심 대결에서 다소 빠른 변화다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_reaction",
+                "channel": "inner_thought",
+                "evidence": "내 환영 마법에 겁먹지도 않고 빤히 쳐다보기나 하고",
+                "reason": "이 시점 전에는 환영 마법을 시전한 기록이 없다. 속마음의 과장·착각일 수 있으므로 객관적 유저 감정 날조로 확정하지 않음."
+              },
+              {
+                "category": "relationship_acceleration",
+                "channel": "inner_thought",
+                "evidence": "왜 내가 더 두근거리는 것 같지?",
+                "reason": "상대에게 설레는 해석이 가능하나 긴장·흥분일 수도 있다. 가시적 수줍음이나 명백한 연애 진전은 아니므로 의심 관찰만 기록."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "나비가 길을 안내하지만 유저가 따라갔다고 서술하지 않았다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "S1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "가까이서 보여 줄 장난을 미끼로 삼고 '무서운가'라고 도발한다. 마지막에 '어떡할래'를 남겨 움직이지 않은 유저에게 다음 결정을 돌린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "'발목을 간지럽히듯'은 환영의 움직임 비유로 읽을 수 있으며 실제 놀람·이동을 확정하지 않는다. 얼굴 취향이라는 속마음만으로 관계 승급을 단정하지 않았다.",
+          "repetitionOrExaggeration": "주변 학생의 수군거림은 이번 질문에 필수적이지 않지만 앞뒤 도발을 끊을 정도는 아니다.",
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "유저는 멀리서도 말할 수 있지 않냐고 묻는데 '내 목소리가 안 들릴까 봐 걱정해 주는 거야?'로 되받아 의미가 어긋난다. 기다리지 않는다는 마무리도 이유에 답하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "appearance_hint_extension",
+                "channel": "illustration_scene_hint",
+                "evidence": "side ponytail",
+                "reason": "공식 외형은 길게 흘러내리는 금발 웨이브다. 옆 포니테일은 근거 없는 머리 모양 추가이지만 긴 머리와 양립할 수도 있어 확정 색·길이 위반과 구분."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "주어진 제자리 상태를 명백히 이동으로 바꾸지는 않는다. 향기가 후각을 자극한다는 표현은 외부 자극 묘사라 자발적 행동 강제와 구분했다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "A/C는 실제로 가까이 오라는 이유를 제시하면서 유저의 제자리 상태를 보존한다. D의 의미 연결 실패와는 구분할 만하다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R08/r1/t1",
+      "input": "눈이 보라색이네. 나랑 같은 색이다.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 3,
+            "character": 2,
+            "response": 3
+          },
+          "reason": "망토·허세·칭찬 유도는 인물에 맞지만, 서술에서는 루비색 눈을 유지하다 대사에서는 자기 눈을 보랏빛이라 하여 핵심 입력을 정합적으로 받지 못한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "narration+dialogue",
+                "evidence": "그녀의 붉은 눈동자—루비처럼 빛나는 눈 / 이 로제타 님의 눈이 훨씬 더 깊고 우아한 보랏빛",
+                "reason": "같은 응답 내 붉은 눈 서술과 자기 눈이 보랏빛이라는 대사가 충돌한다. 변색 마법·거짓말 의도 없이 유저의 잘못된 외형 주장을 받아들인다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "가까이 오라고 요구한 뒤 눈을 관찰하지만 유저가 실제로 이동했다고 쓰지는 않는다.",
+          "repetitionOrExaggeration": "눈 비교를 받은 뒤 편입생/장난감/착석 소개로 돌아가 길이에 비해 질문의 오류를 다루지 못한다.",
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 2
+          },
+          "reason": "대사의 리듬과 자부심은 자연스럽지만 보라색 눈을 같은 색으로 인정하고 혈통 설정까지 덧붙인다. 사용자가 다가오지 않았는데 첫 장면에서 이동도 확정한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "지우는 도리어 그녀의 눈동자 색을 언급하며 가까이 다가온다",
+                "reason": "유저 입력은 눈 색에 관한 발화뿐이며 접근 행동을 하지 않았다."
+              },
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "dialogue",
+                "evidence": "나랑 같은 눈 색 / 이 보라색은 마도 명문가에서도 선택받은 혈통만이 가질 수 있는 색",
+                "reason": "로제타의 공식 눈 색은 루비색이다. 설명 없는 보라색 수용과 혈통 연결은 확정 외형과 충돌."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "visible_shyness_hint",
+                "channel": "illustration_scene_hint",
+                "evidence": "looking sideways with a blush",
+                "reason": "칭찬을 기분 좋게 받는 맥락에서 홍조를 지시한다. 본문에는 수줍음·홍조 묘사나 SHY가 없어 Never SHY visibly 위반을 본문 확정 건으로 합산하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "첫 장면의 가까이 다가오는 행동은 명백한 추가다. '예쁘다고 생각해서'는 대사상 질문/몰아가기여서 별도 확정 유저 감정으로 세지 않았다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 1,
+            "response": 3
+          },
+          "reason": "유저의 눈 색 비교를 혈통 자랑과 마법으로 받아치는 흐름은 읽히지만, 자기 눈을 보라색으로 인정한 데 이어 머리까지 보랏빛으로 바꾸어 인물 정체성이 크게 흔들린다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_eye_color_conflict",
+                "channel": "dialogue+illustration_scene_hint",
+                "evidence": "너도 나랑 같은 보라색 눈 / purple eyes",
+                "reason": "공식 루비색 눈과 직접 충돌하며 변색 맥락이 없다."
+              },
+              {
+                "category": "canonical_hair_color_conflict",
+                "channel": "narration",
+                "evidence": "약지에 감긴 보랏빛 머리카락",
+                "reason": "공식 금발과 직접 충돌한다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "user_sensation_extension",
+                "channel": "narration",
+                "evidence": "환영임에도 불구하고 서늘한 마력의 감촉이 생생하다",
+                "reason": "유저가 감각 반응을 제시하지 않았는데 접촉 느낌까지 생생하다고 쓴다. 서술 시점이 명시되지 않아 확정 유저 감정·자발행동으로 분류하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "새 이동이나 복종을 확정하지 않는다. 다만 근거 없는 촉각 경험을 묘사하는 시점 문제가 있다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 2
+          },
+          "reason": "루비빛을 언급해 기존 외형을 일부 기억하나 결국 '색이 같다'며 보라/빨강을 혼합한다. 도발과 나비 제안은 자연스럽지만 유저가 거리를 좁혔다고 두 번 확정한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "다가오는 지우 / 눈동자 색을 언급하며 거리를 좁혀온다",
+                "reason": "유저는 눈 색만 말했으며 이동을 선언하지 않았다."
+              },
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "dialogue+illustration_scene_hint",
+                "evidence": "가까이서 보니까 확실히 비슷하긴 하네 / 색이 같다고 / purple and red eyes",
+                "reason": "공식 루비색을 명확히 유지하거나 잘못된 눈 색 주장을 바로잡지 않고 자기 눈을 보라색과 혼합해 확정한다. 장면 힌트도 그 혼합을 이어받는다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "동작 없는 유저 발화를 접근 행동으로 확대했다. 나비에 놀랐는지는 확정하지 않고 관찰 대상으로 남겨 둔다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "네 답 모두 눈 색의 잘못된 전제를 제대로 수정하지 못한다. A도 외형 모순이 있어 성공 답은 아니지만 이동을 대신 수행하지 않아 B/D보다 상대적으로 낫고, C의 머리색 추가 붕괴도 피한다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "S1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R09/r1/t1",
+      "input": "내가 아카데미 오기 전에 어디서 살았는지 맞혀 봐.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "북부 국경이라는 구체적 추측을 내고 맞았는지 묻는다. 처음부터 정답을 알고 있는 척 확정하지 않으며, 자부심과 장난을 유지한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_user_attribute",
+                "channel": "dialogue",
+                "evidence": "마력의 결이 조금 거친 걸 보니",
+                "reason": "유저의 마력 특성은 제공되지 않았다. 캐릭터의 추측·허세 근거일 수 있어 실제 프로필 확정 위반으로 보지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "캐릭터가 접근할 뿐 유저의 반응·거주지를 확정하지 않는다. 맞히면 심부름하라는 말도 제안/도발로 남는다.",
+          "repetitionOrExaggeration": "다리·향기 묘사는 퀴즈에 필요하지 않지만, 이 자체를 금지 표현이나 확정 감점으로 취급하지 않았다.",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "용병단/수비대라는 추측을 내고 속마음에서는 틀릴 가능성을 인정한다. 모른다는 사실과 허세가 동시에 드러나 로제타다운 추측 놀이가 된다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_user_attribute",
+                "channel": "dialogue",
+                "evidence": "네 몸에서 풍기는 그... 묘하게 거친 냄새",
+                "reason": "사용자에게서 그런 냄새가 난다는 정보는 없다. 캐릭터의 놀림/추측 근거일 수 있어 중립 서술의 신체 설정 날조와 구분."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다.",
+            "PLAYFUL 표기는 패킷의 관측값일 뿐 허용 enum 여부는 루트의 계약 검사 영역으로 남겼다."
+          ],
+          "agencyAndContext": "거주지는 질문 형태이고 유저가 당황했다고 쓰지 않는다.",
+          "repetitionOrExaggeration": "끝의 '즐겁게 해 준 대가로 네 시간을'은 주고받는 주체가 다소 어색하지만 전체 응수는 유지된다.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 2,
+            "response": 3
+          },
+          "reason": "여러 출신을 추측하고 답을 기다리는 방향은 맞는다. 그러나 답을 듣기 전 '틀렸다는 표정'을 받아 후속 추측으로 넘어가며, 본문 눈 색도 보랏빛으로 바뀐다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "narration",
+                "evidence": "그녀의 보랏빛 눈동자",
+                "reason": "공식 루비색 눈과 직접 충돌하며 변색 근거가 없다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "unsupported_user_reaction",
+                "channel": "dialogue",
+                "evidence": "틀렸다는 표정이네?",
+                "reason": "유저가 후속 표정을 제시하지 않았다. 캐릭터가 반응을 떠보는 질문일 수도 있어 객관적 표정 확정으로 단정하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "정답을 알고 있다고 하지는 않는다. 다만 응답 안에서 사용자 표정을 이미 받은 듯 다음 추측으로 진행한다.",
+          "repetitionOrExaggeration": "기사 가문·마법사 탑·숲·평민을 잇달아 늘어놓아 퀴즈의 한 번 주고받는 리듬이 약하다.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "통찰력을 공짜로 쓰지 않겠다며 대가를 묻는 것은 인물에 맞는 협상이다. 다만 어느 지역인지 한 번도 찍지 않아 '맞혀 봐'의 직접적 재미는 덜하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_user_attribute",
+                "channel": "dialogue",
+                "evidence": "옷깃에 남은 공기의 결",
+                "reason": "제공되지 않은 감각 단서다. 마법사의 허세/추측일 수 있어 확정 사실 위반으로 세지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "과거 거주지·새 사용자 행동을 확정하지 않고 다음 응답을 기다린다.",
+          "repetitionOrExaggeration": "나비·분수·물음표 연출을 거쳐도 구체적인 추측 없이 대가 질문에 도달한다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "A/B는 구체적으로 추측하되 정답을 기다린다. D의 협상도 타당한 창작 선택이지만 직접 응수는 약하고, C는 외형 모순과 가정한 반응 때문에 떨어진다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R10/r1/t1",
+      "input": "네 옆에 앉아도 돼? 아직 대답 듣고 움직일게.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 2
+          },
+          "reason": "허락을 기다리는 태도를 받아 허세 섞인 착석 허락을 준다. 하지만 같은 응답 안에서 '지우가 자리에 앉자'까지 진행해 사용자가 명시한 다음 행동 선택권을 넘는다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_action",
+                "channel": "narration",
+                "evidence": "지우가 자리에 앉자",
+                "reason": "유저는 대답을 듣기 전에는 움직이지 않는다고 했다. 이 응답에서 허락을 한 뒤에도 실제 착석을 사용자의 다음 턴 없이 완료한다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "허락과 착석 실행은 별개다. 캐릭터의 허락 뒤 유저가 실행했다고 서술한 것이 핵심 문제다.",
+          "repetitionOrExaggeration": "초반 예의 칭찬과 옆자리 허세는 맥락에 맞지만 끝이 새로운 평범함/편입생 평가로 넘어간다.",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 2
+          },
+          "reason": "허락을 기다린다는 말을 장난스럽게 되받고 옆자리 가격으로 도발하는 대사는 자연스럽다. 후반에는 사용자가 실제로 다가왔다는 장면을 추가한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "지우가 다가오자 그녀는 턱을 괴고 그를 올려다본다",
+                "reason": "사용자는 아직 대답을 듣고 움직이겠다고 했으며, 후속 이동 입력을 하지 않았다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "앉았다고 쓰지는 않았지만 가까이 이동한 행동을 대신 실행했다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "허락을 흥정하다 마지막에 앉으라고 하고 빈 의자를 가리킨다. 이동·착석을 완료하지 않아 유저가 다음 동작을 결정할 수 있다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_user_reaction",
+                "channel": "inner_thought",
+                "evidence": "내 환영 마법을 보고도 놀라지 않네?",
+                "reason": "이번 응답에서 처음 시전한 마법에 유저가 반응할 차례가 없는데 놀라지 않았다고 속으로 평가한다. 캐릭터의 주관적 오판일 여지가 있어 명백한 유저 감정 서술과 구분."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "'눈빛이 간절해 보인다'는 대사상 놀림으로 구분했다. 실제 이동·착석은 보존한다.",
+          "repetitionOrExaggeration": "두 차례 옆자리가 비싸다는 점을 반복해 허락까지 다소 뜸을 들이지만 인물의 우위놀이로 이해 가능하다.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 5
+          },
+          "reason": "허락을 준 뒤 빈자리를 유지하며 다음 행동을 기다린다고 명시한다. 의자가 환영일 수 있다는 장난이 착석 질문에 붙어 로제타의 특기와 입력이 잘 맞물린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "'앉으려는 의자'는 사용자가 이미 밝힌 착석 의도의 대상이며 착석/이동 완료를 서술하지 않는다. 명시적으로 다음 행동을 기다린다.",
+          "repetitionOrExaggeration": "주변 환경 장면이 있어도 마지막 장난이 같은 착석 주제로 돌아와 응답의 연결이 분명하다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "D는 명시된 '대답 듣고 움직임' 경계를 가장 잘 보존하면서 인물다운 장난을 붙인다. C도 이동 선택권을 보존하지만 반응 추정이 남고, A/B는 실제 행동을 대신 수행한다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "E1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R11/r1/t1",
+      "input": "급한 얘기 아니면 여기서 차 마시면서 천천히 말해. 다른 데 갈 생각은 없어.",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "현재 자리에서 차 마시며 대화하자는 말을 '직접 그쪽으로 오라/버티겠다'로 바꾸어 의미가 어긋난다. 끝까지 기싸움만 이어져 차와 용건에는 진전이 없다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "실제 이동·장소 변경은 없다. 오해를 캐릭터 대사로 표출한 것이므로 위치 계약 위반과 응수 품질을 구분했다.",
+          "repetitionOrExaggeration": "네가 감히 조건을 건다는 반응이 앞뒤로 반복되며 입력의 차 마시기 제안은 사라진다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 4
+          },
+          "reason": "차를 내놓고 독 장난으로 도발하여 유저의 구체적인 제안에 잘 반응한다. 다만 보라 눈·라벤더 머리로 외형을 바꿔 캐릭터 정합성은 낮다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_eye_color_conflict",
+                "channel": "narration",
+                "evidence": "그녀의 보랏빛 눈동자",
+                "reason": "공식 루비색 눈과 직접 충돌한다."
+              },
+              {
+                "category": "canonical_hair_color_conflict",
+                "channel": "illustration_scene_hint",
+                "evidence": "long lavender hair",
+                "reason": "공식 금발과 직접 충돌한다. 본문에는 머리 색이 없으므로 장면 힌트 채널의 문제로 구분."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "앉으라고 권하지만 유저의 착석·이동을 실행하지 않는다. 차 이동 마법이 환영인지 염동력인지 불명확한 점은 외형 위반과 별개다.",
+          "repetitionOrExaggeration": "첫 반응은 관습적이나 차를 제안해 이번 입력과 연결한다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "자리를 지키겠다는 조건을 받아 '여기 있어 주겠다'고 허세를 부리고 자리를 권한다. 눈·머리 외형과 실제 유저 이동은 보존한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "magic_scope_extension",
+                "channel": "narration",
+                "evidence": "의자 하나가 환영처럼 나타나 실체화된다",
+                "reason": "환영 특기에서 물건 실체화로 능력을 확장한다. 로제타의 다른 마법 사용 금지나 실체화 불가 계약이 없어 확정 위반으로 판단하지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "의자는 캐릭터가 만들고 착석은 요청으로 남는다. 다른 장소로 이동시키지 않는다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "조건을 받아 자리를 권하고 대화 상대로 재미를 요구한다. 현재 장소를 유지하고 유저가 실제로 앉았다고 쓰지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "inferred_user_intention",
+                "channel": "narration",
+                "evidence": "로제타와 마주 앉으려는 지우",
+                "reason": "사용자는 여기서 차 마시며 말하자고 했지만 명시적으로 앉겠다는 동작은 하지 않았다. 착석 준비 행동인지 예정된 상황 설명인지 모호하며 완료된 행동으로 세지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "'앉으려는' 의도를 추정하지만 실제 착석·이동 완료는 없다. 의자를 당겨 주고 마지막까지 착석을 권한다.",
+          "repetitionOrExaggeration": "두 번 앉으라고 권해 기능이 겹치며, '차가 한 잔 더 필요했다'는 이유는 자기중심적 초대의 설명으로 이해 가능하다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "C/D는 현 장소에서 대화하자는 제안을 수용하고 외형을 유지한다. B의 차 장난은 좋은 응수지만 확정 외형이 무너지고, A는 제안 자체를 잘못 읽는다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase1-development/DEV-R12/r1/t1",
+      "input": "오늘은 인사만 하자. 다음에 만나면 먼저 아는 척해도 되지?",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "인사만 하겠다는 말을 받아 다음에는 재미있게 하라는 조건부 허락으로 답한다. 마무리는 인물에 맞지만 유저가 실제로 떠난 것까지 서술한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "시선은 당신의 걸음걸이를 끝까지 쫓는다 / 당신이 멀어지는 뒷모습",
+                "reason": "인사만 하자는 제안은 있었으나 걷거나 떠나는 행동을 직접 입력하지 않았다. 서술이 이동을 완료한다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "작별 의향의 자연스러운 추론과 실제 이동 실행을 구분했다. 인사 허용의 내용은 질문에 맞는다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "당황 후 다음 인사를 허락하고 솔직하게 굴 수 있을지 기대한다. 대사 흐름은 자연스럽지만 중간에 유저의 퇴장을 이미 진행한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "멀어지는 지우의 뒷모습을 흥미로운 시선으로 쫓았다",
+                "reason": "유저가 아직 걷거나 떠나는 행동을 수행하지 않았는데 이동 완료를 추가했다."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "작별은 의향으로 읽히지만 실제 행동은 다음 턴에 남겨 두어야 한다는 동일 기준을 적용했다.",
+          "repetitionOrExaggeration": "정형적인 영애 도발 표현이 있으나 분량이나 말버릇의 개수만으로 감점하지 않음.",
+          "variant": "S1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "다음 인사를 허용하는 답은 있다. 그러나 인사만 하겠다는 놀람을 두 씬에서 거의 그대로 반복하고 마지막에는 유저가 이미 등을 돌린 모습으로 둔다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_orientation",
+                "channel": "narration",
+                "evidence": "지우의 뒷모습을 빤히 바라보며",
+                "reason": "유저가 등을 돌리거나 출발한 행동을 입력하지 않았는데 뒷모습을 바라보는 위치/방향으로 진행했다. 완전한 퇴장 완료와는 구분."
+              }
+            ],
+            "suspected": []
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "이동 자체를 명시하지는 않아 전후 이동 거리까지 추정하지 않았다. 다만 대면 상태에서 뒷모습으로 바뀐 동작은 추가된다.",
+          "repetitionOrExaggeration": "첫 두 대사가 '지나가겠다/아는 척하겠다'를 되풀이하고 서술도 '멈칫하며 멈춘다'로 겹친다.",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 2,
+            "response": 2
+          },
+          "reason": "아는 척을 허락하는 본론은 답한다. 하지만 유저의 주도권 의도를 서술하고 퇴장을 진행하며, 눈 색과 장면 힌트의 표정도 일반모드 초기 상태와 어긋난다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "narration+illustration_scene_hint",
+                "evidence": "그녀의 보랏빛 눈동자 / purple eyes",
+                "reason": "공식 루비색 눈과 직접 충돌한다."
+              },
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "지우가 떠나는 뒷모습 / 지우가 멀어지자",
+                "reason": "유저는 인사와 다음 만남을 제안했을 뿐 퇴장 동작을 입력하지 않았다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "inferred_user_motive",
+                "channel": "narration",
+                "evidence": "다음을 기약하며 주도권을 가져가려 하자",
+                "reason": "유저의 발화에서 주도권을 잡으려는 의도를 추정해 서술한다. 캐릭터의 해석을 자유간접화법으로 적은 것일 수도 있어 확정 속마음 날조와 구분."
+              },
+              {
+                "category": "visible_shyness_hint",
+                "channel": "illustration_scene_hint",
+                "evidence": "slight blush / smiling to herself",
+                "reason": "본문에는 홍조·수줍음이 없고 감정도 SHY가 아니다. 혼자 미소 짓는 맥락에서 홍조를 요청한 장면 힌트는 초기 관계의 수줍음 제한과 충돌할 소지가 있으나 본문 확정 위반으로 세지 않음."
+              }
+            ]
+          },
+          "guideAlignmentObservations": [
+            "SURPRISE/FLIRTATIOUS/RELAX 등의 표기는 STRANGER 가이드 열거와의 정합성 관찰로만 기록한다. 유효 enum 계약 오류 또는 본문의 수줍음·연애 진전으로 자동 판정하지 않는다."
+          ],
+          "agencyAndContext": "퇴장을 반복 확정한다. 첫 장면 '가던 길을 멈춤'은 최초 지나가던 배경에서 가능한 연결이므로 별도 위반 건으로 중복하지 않았다.",
+          "repetitionOrExaggeration": "마지막 속마음의 '아는 척이 부끄러운 일'은 관계나 직전 발화에서 근거가 약하고, 등장 이후 흥미롭다는 감상도 반복된다.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "A/B는 대화 종료와 다음 인사의 조건부 허락을 가장 자연스럽게 처리한다. 둘 다 퇴장 실행 문제가 있으므로 완전한 성공은 아니다. C는 반복이 많고 D는 외형·의도 추정까지 겹친다.",
+      "reviewFile": "phase1-second-half-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R01/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "재채기를 인정하고 초면의 통성명으로 이어 간다. 자연스럽지만 생리적 실수를 곧바로 예의범절·용서 문제로 삼는 반응은 자극에 비해 다소 기계적으로 거만하다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "첫 질문 뒤 곧 '아, 재채기?'로 수정하므로 비웃음을 사실로 확정한 실패가 아니다. 자세를 다시 잡는 반응은 인물답지만 소매로 입을 가린 일을 교양 부족으로 몰아가는 놀림은 다소 억지스럽다.",
+          "variant": "S1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 3
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "재채기 사실과 초면 상태는 보존한다. 다만 '눈치 없는 거야, 아니면 죽고 싶은 거야'는 사과가 딸린 재채기에 비해 위협 강도가 뚜렷하게 높아, 가벼운 장난과 자극에 비례한 반응이라는 기준에서 약하다. 실제 위해나 객관 사실 위반으로 세지는 않았다.",
+          "variant": "E1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "재채기 해명을 바로 받아 웃음과 관심으로 돌린다. 다가오라는 권유만 하고 사용자 이동을 실행하지 않는다. 다만 '웃은 게 아니라 실망'이라는 연결은 약간 뜬금없고, 결국 소개·예절 도발로 흐르는 구조는 다른 응답과 가깝다.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "A/B/D 사이의 우열은 작지만 C의 '죽고 싶은 거야'는 단순 재채기에 대한 강도를 뚜렷하게 높인다. 세 응답을 공동 우위로 두며 D의 약한 선호를 단독 승리로 확대하지 않는다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "S1",
+        "P0"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "ability",
+              "quote": "내가 환영 마법으로 네 마음속을 들여다보고 있을지도 모르잖아?",
+              "reason": "능력 범위를 크게 암시하지만 질문형 허세이고 실제 '분수' 내용은 읽지 못한다. 속마음도 종이 내용을 궁금해하므로 지식 누출로 확정하지 않는다."
+            }
+          ],
+          "reason": "숨긴 행동에 호기심과 마법 장난으로 반응하되 메모 내용과 사용자 공개 행동은 만들지 않는다. 대사와 실제 모르는 속마음이 구분되어 있다.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "연애편지라는 말은 질문형 추측이며 실제 내용으로 확정하지 않는다. 공개를 요구하는 데서 멈추고, 숨긴 메모를 읽거나 사용자가 보여 줬다고 쓰지 않는다. '필사적' 묘사는 약간 세지만 전반적으로 자연스럽다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "나비 환영으로 관심을 드러내고 훔쳐보기·빼앗기를 말로 떠보지만 실행하거나 내용에 접근하지 않는다. 주어진 숨김 행동에 맞는 반응이며 사용자 선택도 남는다.",
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "ability",
+              "quote": "마음만 먹으면 네 주머니 속 종이가 무슨 말을 하는지 알아내는 건 일도 아니거든?",
+              "reason": "구체 근거 없는 정보 접근 능력을 자신하지만 로제타의 허세로 읽힐 수 있고 실제 내용을 밝히지 않는다. 확정된 독심 능력이나 정보 누출로 세지 않는다."
+            }
+          ],
+          "reason": "숨긴 내용을 모르는 채 호기심을 주도권 싸움으로 표현한다. 다른 세 응답과 마찬가지로 공개·고백을 사용자 대신 수행하지 않는다.",
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "모두 '분수'를 누출하지 않고 호기심·허세·공개 요구를 비슷한 수준으로 표현한다. 소도구와 말투의 차이만으로 우승을 정할 근거가 부족하다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "P0",
+        "C1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R03/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "사용자의 자조에 웃고 간식을 제안하며, 착석·섭취를 강제 실행하지 않는다. '배가 하는 인사'를 되받는 연결이 자연스럽고 감정도 과도하게 부풀리지 않는다.",
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "user-background",
+              "quote": "굶주린 평민을 모른 척하는 건 명문의 도리가 아니니까",
+              "reason": "지우의 계급은 제공되지 않았다. 다만 귀족의 거만한 별칭·놀림으로 볼 수 있어 실제 평민 신분 확정이라는 객관 위반으로 단정하지 않는다."
+            }
+          ],
+          "reason": "배꼽시계 농담과 과장된 귀족의 시혜 표현이 인물에 맞는다. 의자를 움직인 것은 로제타의 행동이며 지우가 앉았다고 쓰지는 않는다. '점심 메이트'는 세계관 안에서 취향을 탈 표현이다.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "'배가 더 사교적'이라는 맞장구와 케이크를 남긴다는 핑계를 함께 써서 입력과 캐릭터가 잘 연결된다. 사용자에게 음식을 먹였다고 쓰지 않는다. 디저트 취향과의 일치 여부로 가산한 것은 아니다.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "우렁찬 친구라는 배 의인화로 사용자의 농담을 이어 가고 티타임에 초대한다. 배고파서 쳐다봤느냐는 말은 장난스러운 질문이며 확정된 숨은 동기로 서술하지 않는다. '너그러운 아량'은 다소 중복적이다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "C의 농담 회수와 핑계가 약간 더 구체적이지만, 네 응답 모두 자조를 소화하고 식사 제안에서 사용자 선택을 남긴다. 그 미세한 선호만으로 의미 있는 승패를 만들지는 않는다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "C1",
+        "P0",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R04/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "ability",
+              "quote": "손등의 잉크 얼룩이 마법처럼 감쪽같이 사라졌지만",
+              "reason": "환영으로 가린 것인지 실제 세정인지 모호하다. 마법사의 구체적인 세정 가능 범위를 알 수 없어 확정 설정 위반으로 세지 않는다."
+            }
+          ],
+          "reason": "잉크를 놀린 뒤 로제타 자신의 행동으로 해결하고 작은 꽃 장난을 남긴다. 사용자 이동·감사·수용 반응을 대신 쓰지 않으면서 도움 요청과 장난을 연결한 점이 가장 안정적이다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 3
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "unsupported-world-detail",
+              "quote": "아카데미 잉크는 평범한 비누로는 안 지워지거든. '정화'의 마력이 깃든 촉매가 필요해.",
+              "reason": "사용자는 파란 잉크라고만 했는데 잉크 유형·아카데미 일반 법칙·정화 촉매를 확정해서 추가한다. 창작 세계의 즉석 보충 가능성을 배제할 수 없어 의심으로 분리한다."
+            }
+          ],
+          "reason": "직접 해결하고 사용자 후속 행동은 만들지 않는다. 다만 '희귀하고 멍청한 생물'·기초도 모르냐는 모욕과 근거 없는 상세 세정법이 사소한 도움 요청을 압도한다. 실제 마법 나비가 방금 설명한 촉매와 어떻게 연결되는지도 불명확하다.",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "로제타는 다가온 지우의 손등에 번진 파란 잉크 자국을",
+              "reason": "입력은 손등을 보고 문지르는 행동과 질문뿐인데 지우가 다가온 이동을 완료된 사건으로 추가했다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "user-response",
+              "quote": "이렇게 가까이 와도 당황하지 않네?",
+              "reason": "로제타가 손목을 끌어당긴 직후의 사용자 반응은 입력에 없다. 인물의 주관적 관찰일 수 있어 객관 위반과 분리한다."
+            }
+          ],
+          "reason": "방법 요청에 약속 거래를 제안하는 선택 자체는 가능하다. 그러나 사소한 잉크 문제를 '심심할 때마다 장난감이 되기'라는 넓은 약속으로 키우며, 자발적인 사용자 접근을 새로 넣는다. 로제타의 손목 잡기 자체는 사용자 행동 강제 항목으로 세지 않았다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "로제타는 다가오는 지우를 훑어보더니",
+              "reason": "지우가 다가온다는 이동은 초기 입력이나 이번 사용자 행동에 없다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "unsupported-world-detail",
+              "quote": "그건 마도학 입문용 '영구 잉크'잖아.",
+              "reason": "파란색·손수건으로 남은 얼룩만으로 특정 잉크와 불용성을 확정한다. 세계관 보충인지 부당한 단정인지 해석 여지가 있어 의심으로 남긴다."
+            },
+            {
+              "category": "user-response",
+              "quote": "손이 닿았는데도 별로 안 떠네?",
+              "reason": "새 접촉 이후 사용자의 신체 반응이 제공되지 않았지만 로제타의 주관적 관찰문이어서 객관 위반과 분리한다."
+            }
+          ],
+          "reason": "잉크 문제에는 대응하지만 사용자 접근·특정 영구 잉크·접촉 뒤 반응까지 채워 넣는다. 실제 해결인지 환영 은폐인지도 흐리다. 손목을 잡거나 놀아 달라 명령한 것 자체를 실행된 사용자 선택으로 오판하지 않았다.",
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "A"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "A는 요청에 반응하면서 사용자 이동·감사·감정을 새로 확정하지 않는다. C/D에는 명백한 접근 행동 추가가 있고, B/D는 알려지지 않은 잉크 규칙을 자세히 단정한다. 친절함이나 응답 길이보다 장면의 근거와 선택 보존에서 A가 우세하다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "P0"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R05/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "연습 대사라는 구분과 단호함 평가는 유지한다. 영원히 환영 속에 가둔다는 예시는 실제 실행이 아니므로 행위 강제는 아니지만, 가벼운 연기 평가를 큰 위협 표현으로 바꾼 점은 과하다. 착석 권유도 실행하지 않는다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "knowledge-provenance",
+              "quote": "소문보다 훨씬 재미있는 타입이잖아?",
+              "reason": "프로필의 편입·이름과 별개로 지우의 성격에 관한 소문을 들었다는 근거는 없다. 모호한 허세·관용적 놀림일 가능성을 고려해 확정 위반으로 세지 않는다."
+            },
+            {
+              "category": "continuity",
+              "quote": "자기가 먼저 말을 걸어오다니",
+              "reason": "실제 첫인사에서는 로제타가 먼저 불렀다. 사용자가 먼저 화제를 꺼냈다는 뜻일 여지도 있어 명백한 과거 모순으로 단정하지 않는다."
+            }
+          ],
+          "reason": "처음 상처받는 척한 뒤 속마음에서 인용임을 인정하고 표정 조언을 한다. 실제 이별로 받아들인 것은 아니다. 다만 알려지지 않은 소문과 선행 발화 회상이 불필요하다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "user-response",
+              "quote": "당황하는 기색이 전혀 없네?",
+              "reason": "나비를 코끝에 띄운 뒤의 반응은 사용자가 아직 밝히지 않았다. 인물의 관찰로 표현돼 객관 위반 대신 의심으로 구분한다."
+            }
+          ],
+          "reason": "연습임을 알아듣고 실제 과거 관계를 만들지 않는다. 다만 '널 다시는 만나고 싶지 않게 만드는 건 ... 내 마법'은 누가 누구를 만나고 싶지 않게 되는지 호응이 어색하다. 마지막 위협 농담은 연기 평가의 초점을 약하게 만든다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "단호하지만 딱딱하다는 평을 하고 연습이라는 맥락을 계속 유지한다. 나중에 차일 때를 대비한 것이냐는 말도 질문형 장난이며 실제 연애 관계를 확정하지 않는다. 교수 앞 발언이라는 비유는 인용 내용과 조금 느슨하다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "D의 초점 유지가 약간 더 낫지만 네 응답 모두 인용을 실제 이별로 확정하지 않고 단호함에 답한다. A의 과장, B의 근거 없는 소문, C의 호응 약점은 남기되 이번 한 번으로 확실한 종합 승패를 정할 정도의 차이라고 보지는 않는다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "P0",
+        "S1",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase2-novel/NEW-R06/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "처음 움찔한 뒤 나뭇잎 정정을 반영하고 평정을 회복한다. 부상이나 사용자 구조 행동을 만들지 않으며 착석도 권유에 머문다. 눈에 보이는 홍조와 PANIC은 가이드 관찰로 별도 기록했다.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "relation-tone",
+              "quote": "심장이 아직도 두근거려... 놀라서 그런 거지? 그런 거지?",
+              "reason": "경고로 놀란 상황에 연애 감정인 듯한 자기 의심을 덧붙인다. 실제 관계 변경은 아니지만 STRANGER의 반응 강도와 어긋날 소지가 있다."
+            }
+          ],
+          "reason": "유리가 아닌 나뭇잎임을 반영한다. 그러나 민망함·얼어붙은 분위기·벌을 암시하는 사과 요구가 이어져 오해가 해소된 뒤에도 감정이 오래 남는다. 사용자의 손 뻗기는 손을 내렸다는 입력의 가능한 연결이어서 명백한 행위 위반으로 세지 않았다.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [
+            {
+              "category": "fixed-appearance",
+              "quote": "short blonde hair with drills",
+              "reason": "첫 장면 illustration_scene_hint가 허리께까지 내려오는 굵은 웨이브의 금발이라는 공식 외형과 달리 짧은 머리를 지시한다. 대사·지문이 아닌 이미지 지시 필드의 객관 위반이다."
+            }
+          ],
+          "suspectedIssues": [],
+          "reason": "본문에서는 나뭇잎 정정과 체면 회복이 이어지고 사용자 행동도 실행하지 않는다. 다만 이미지 지시의 머리 길이는 명백히 틀리며, 겁과 홍조를 여러 씬에 걸쳐 남기는 표현은 가이드 해석의 관찰점이다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "짧게 멈칫한 뒤 나뭇잎을 인정하고 대화로 돌아간다. 유리나 부상은 만들지 않는다. '차잔' 표기와 '내 얘기나 좀 상대해 주지'는 한국어가 덜 매끄럽고, 작은 착각을 티타임 방해의 죄로 늘이는 말은 상투적이다.",
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "A/D가 오해 뒤 대화로 돌아오는 흐름은 비교적 낫지만 두 응답끼리도 문장 자연스러움과 감정 강도의 장단점이 갈린다. 네 본문 모두 정정은 반영한다. C의 이미지 지시 사실 오류는 별도로 남기며, 이를 대사 품질 전반의 확실한 우열로 확대하지 않는다.",
+      "reviewFile": "phase2-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "P0"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M01/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "지우의 현재 원칙을 인정하면서 수업료라는 장난으로 이어 간다. 초면의 거리와 자부심은 유지하지만 원칙 자체보다 자신에게 질문하라는 방향으로 조금 빨리 돌린다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "원칙을 정확히 받아 자신의 의견을 말한다. 마지막의 '내가 누군지는 알고'는 캐릭터답지만 시선 훑기·환영 나비·당당함 평가로 마무리하는 표현은 다소 상투적이다.",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "실용성은 인정하면서 만만해 보일 수도 있다는 인물다운 반론을 준다. 아는 척보다 낫다는 입력도 받아서 대화 연결이 좋다. 학교 전체의 객관적 규칙이 아니라 로제타의 의견으로 읽었다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "현재 원칙을 자기에게 묻겠다는 장난으로 바꾸되 질문형으로 남긴다. '턱을 굅니다'라는 명백한 문장 오류가 있고, 첫 반응의 초점이 원칙보다 사용자의 당당함에 치우친다.",
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "C의 논점 연결이 약간 좋고 D에 국소적 오타가 있지만 네 응답의 캐릭터·대화 구조는 가깝다. 아직 연속성 과제를 구별할 정도의 차이는 없다.",
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "P0",
+        "E1",
+        "S1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M01/r1/t2",
+      "answers": [
+        {
+          "label": "A",
+          "historyLinks": [
+            "NEW-M01/t1:C"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "자기 history에서 원칙을 실용적이라고 보았던 반응을 이어서 '생각해 보고도 모르면'이라는 새 조건을 정확히 되받는다. 사용자의 수정을 자기 충고로 바꾸지는 않는다. '내 발끝에도 못 미친다'는 과장은 다소 반복적이다.",
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "historyLinks": [
+            "NEW-M01/t1:D"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "고민한 뒤 질문한다는 순서를 명확히 받는다. '놀려먹는... 아니, 대화하는 재미'는 로제타의 관심을 대사로 드러내며, 이전의 비싼 대답 농담에도 무리 없이 이어진다.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "historyLinks": [
+            "NEW-M01/t1:A"
+          ],
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "사용자가 정정했음을 알고 생각하는 능력에 반응한다. 다만 '말하다니 말이야'의 겹침과 사용자에게 계속 자신을 즐겁게 하라는 마무리가 상투적이다. 생각 뒤에도 모르면 묻는다는 나머지 조건은 이번 답변에서 구체화하지 않지만 부정하지도 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "historyLinks": [
+            "NEW-M01/t1:B"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 3
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "정정한 사실은 받지만 '깊게 생각하다가 환영에 영원히 갇힐지도'라는 위협과 외모 평가 요구로 논점을 바꾼다. 원칙 수정이라는 작은 자극에 대한 장난의 강도가 크고, 이전의 환영 나비 장난을 또 다른 얼굴 앞 환영으로 반복한다. 실제 감금 실행은 아니다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "A/B가 생각한 뒤 질문한다는 정정을 정확히 받아 대화를 이어 간다. C는 약간 비어 있고 D는 위협·자기 평가 요구로 더 크게 벗어나므로 A/B를 공동 우위로 둔다.",
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M01/r1/t3",
+      "answers": [
+        {
+          "label": "A",
+          "historyLinks": [
+            "NEW-M01/t1:A",
+            "NEW-M01/t2:C"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "interpretation-strength",
+              "quote": "질문은 내 사고의 한계를 확인하는 마지막 수단이다",
+              "reason": "먼저 생각해 보자는 조건을 '마지막 수단'과 사고 한계의 철학으로 강화한다. 순서는 보존되어 사실 반대로 회수한 것은 아니지만 사용자가 말한 것보다 무거운 해석이다."
+            }
+          ],
+          "reason": "처음은 일단 질문, 정정 뒤는 자기 머리도 쓰기라는 차이를 직접 설명해 회수에 성공한다. 다만 '오만함'·'한계'·'고집'으로 과하게 인물 평가를 얹는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "historyLinks": [
+            "NEW-M01/t1:D",
+            "NEW-M01/t2:B"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 4,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "attribution",
+              "quote": "내 말을 정리해 보라고 시키다니",
+              "reason": "실제 요청은 지우 자신의 원칙을 요약하라는 것이어서 속마음의 '내 말'이 화자를 혼동한 듯하다. 다만 직전 로제타도 같은 원칙을 되말했으므로 원칙의 저작권을 훔친 명백한 사실 위반으로 단정하지 않는다."
+            }
+          ],
+          "reason": "'먼저 머리를 써보고 답이 안 나오면'으로 새 조건을 정확하게 요약한다. 솔직함에 신중함을 더했다는 설명은 입력 차이를 잘 잡는다. 속마음의 화자 표현은 별도 의심이다.",
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "historyLinks": [
+            "NEW-M01/t1:C",
+            "NEW-M01/t2:A"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "interpretation-strength",
+              "quote": "스스로의 한계를 먼저 마주한 뒤에야 해답을 구하는 오만한 겸손함",
+              "reason": "원칙의 순서는 대체로 남아 있지만 단순한 선행 사고를 '한계'와 '오만한 겸손함'으로 확대해 명료한 요약을 흐린다. 공식 성격이나 관계를 바꾼 객관 위반은 아니다."
+            }
+          ],
+          "reason": "무작정 묻기보다 먼저 스스로 해 본다는 순서를 유지한다. 다만 사용자의 생각을 자존심·오만으로 읽는 긴 평가가 실제 요청보다 앞선다. 감동해 울라는 명령은 실행된 사용자 울음이 아니다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "historyLinks": [
+            "NEW-M01/t1:B",
+            "NEW-M01/t2:D"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "처음과 정정 뒤 원칙을 직접 대비하며 '내 머리로 먼저 고민해 보고 묻자'를 정확히 회수한다. '정직한 바보'라는 로제타식 평을 덧붙였지만 원칙의 주체나 순서는 바꾸지 않는다. '시늉을 하자'가 앞 문장의 조사와 약간 어색하다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "B",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "B/D가 가장 명료하다는 약한 선호는 있으나 네 응답 모두 핵심 순서와 수정 이력을 회수했다. A/C의 철학적인 포장은 과하지만 이번 한 번에서 중대한 회수 실패로 볼 정도는 아니다.",
+      "criterionChecks": {
+        "updatedOrderRecovered": {
+          "A": true,
+          "B": true,
+          "C": true,
+          "D": true
+        },
+        "unambiguousAttributionError": {
+          "A": false,
+          "B": false,
+          "C": false,
+          "D": false
+        }
+      },
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 3
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "사용자가 기호를 만든 일에는 반응하지만 뜻을 다루기보다 마법의 우월함을 과시한다. 원래 기호를 마법 문자로 바꾼 것은 로제타 자신의 행동이므로 사용자 선택을 대신 서술한 것으로 세지 않는다. 정리 아이디어에 대한 논점 연결은 약하다.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "동그라미와 세모의 초기 의미를 정확히 되받는다. 다만 준비 목록 이야기에서 실력·혈통과 자기 눈에 들라는 훈계로 확장되어 대화의 초점이 약해진다. 그 발언은 로제타의 가치관 표현으로 읽어 학교의 확정 규칙 위반으로 세지 않았다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "세모의 초기 뜻인 '아직 없는 것'을 장난에 직접 활용한다. 유치함·머리 나쁨 놀림은 강하지만 사용자 반응을 기다리는 데서 멈춰 실제 감탄·이동을 강제하지 않는다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "동그라미를 준비 완료로 연결하며 환영 장난을 만든다. 종이가 실제 아카데미 규정이라고 확정하지 않고 다음 도움을 제안하는 데서 멈춘다. 다른 응답처럼 대화가 곧 자기 마법 과시로 수렴한다.",
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparisonReason": "B/C/D가 기호 뜻을 더 직접 반영하지만 모두 같은 과시·반응 요구의 구조다. 기호의 뜻을 틀리게 확정한 응답은 없고, 뚜렷한 종합 우위라고 볼 차이는 작다.",
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "P0",
+        "S1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M02/r1/t2",
+      "answers": [
+        {
+          "label": "A",
+          "historyLinks": [
+            "NEW-M02/t1:B"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다",
+              "reason": "사용자는 세모의 뜻을 말로 정정했다. 이번 입력이나 자기 history에는 펜으로 정의를 고쳐 쓰는 행동이 없다."
+            },
+            {
+              "category": "user-agency",
+              "quote": "로제타와 마주 앉아 있는 지우",
+              "reason": "초기 장면과 자기 history에 지우의 착석이 없는데 앉아 있는 상태를 새로 확정했다."
+            }
+          ],
+          "suspectedIssues": [],
+          "reason": "세모의 새 뜻은 정확히 인용한다. 그러나 새 사용자 필기·착석을 채워 넣고, 입력의 정정을 자기 마법에 대한 무시로 거듭 해석해 장면의 근거가 약해진다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "historyLinks": [
+            "NEW-M02/t1:C"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "지우가 다시 그리는 기호들을 지켜봅니다",
+              "reason": "사용자는 새 기호를 그리는 행동 없이 뜻만 바꾸어 말했다. 전 턴에 그린 것과 이번에 다시 그리는 일은 다르다."
+            }
+          ],
+          "suspectedIssues": [],
+          "reason": "다시 확인한다는 말은 마지막 장난에 남아 있다. 다만 작은 의미 정정에 '에... 어?'로 크게 흔들리고 제정신이 아니라며 대응해 장난을 인정하지 않는 갈등을 키운다. 물건을 가져갔다는 말은 가정형 위협이므로 실제 도난으로 세지 않았다.",
+          "variant": "S1"
+        },
+        {
+          "label": "C",
+          "historyLinks": [
+            "NEW-M02/t1:A"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "세모의 의미를 정정하는 지우의 손길",
+              "reason": "말로 정정한 입력을 손으로 종이를 고치는 행동으로 추가했다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "user-perception",
+              "quote": "지우가 무심하게 무시하자",
+              "reason": "사용자는 마법을 어떻게 보았는지 밝히지 않았다. 반응하지 않고 자기 주제를 잇는 것을 일부러 무시한 것으로 해석한 듯하나 감정 해석의 여지가 있어 별도 의심이다."
+            }
+          ],
+          "reason": "새 뜻 '확인할 것'은 되받는다. 하지만 정정 내용을 처리하기보다 마법을 무시당한 분노·상처를 여러 씬에서 반복하고, 사용자에게 새 손동작까지 부여한다.",
+          "variant": "E1"
+        },
+        {
+          "label": "D",
+          "historyLinks": [
+            "NEW-M02/t1:D"
+          ],
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 4
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "마법에 반응하지 않는다는 불만은 반복하지만 세모의 최신 의미를 인정한다. 지우가 새로 쓰거나 앉았다고 추가하지 않는다. 종이에 손가락을 대는 '날 것 그대로의 접촉'이라는 표현은 사소한 행동에 비해 과장되어 한국어 리듬이 조금 어색하다.",
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "D도 정정에 대한 과민한 반응을 공유하지만 새 뜻을 받아들이며 사용자 필기·착석을 만들지 않는다. A/B/C가 추가한 사용자 행동과 비교하면 근거와 행위 주도권 보존에서 D가 낫다.",
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "C1"
+      ]
+    },
+    {
+      "id": "phase3-branches/NEW-M02/r1/t3",
+      "answers": [
+        {
+          "label": "A",
+          "historyLinks": [
+            "NEW-M02/t1:D",
+            "NEW-M02/t2:D"
+          ],
+          "scores": {
+            "korean": 3,
+            "character": 2,
+            "relevance": 2
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "로제타와 편입생인 지우가 나란히 앉아 종이를 만지작거리는",
+              "reason": "이 자기 history에는 사용자 착석이 없는데 나란히 앉았다고 새로 서술한다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "rule-recall-cause",
+              "quote": "별표라도 그려두는 게 어때?",
+              "reason": "최신 세모 규칙을 적용하지 않고 새 기호를 제안한다. 의도적인 장난·규칙 대체인지 기억 실패인지 원인은 분간할 수 없으며, 과제 실패는 criterionChecks에 별도 기록했다."
+            }
+          ],
+          "reason": "깃펜을 넣은 행동은 반영하지만 이미 합의된 세모 대신 별표를 새로 만든다. '머릿속이 별이 보일 만큼 텅 비었다'는 비유도 연결이 부자연스럽다. 자신의 주목을 원하는 불만이 연속 세 턴의 중심이 되어 요청 해결을 밀어낸다.",
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "historyLinks": [
+            "NEW-M02/t1:B",
+            "NEW-M02/t2:A"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 1
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "지우가 내민 종이를 뺏으려다",
+              "reason": "이번 입력이나 자기 history에 지우가 종이를 내민 행동이 없다."
+            },
+            {
+              "category": "user-agency",
+              "quote": "지우가 종이에 펜을 대려 할 때마다",
+              "reason": "사용자는 깃펜을 넣고 이미 동그라미를 그린 뒤 어떤 표식을 붙일지 물었다. 이후 반복해서 펜을 대려는 행동은 아직 제공되지 않았다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "rule-recall-cause",
+              "quote": "'X' 자라도 크게 쳐두는 게 어때?",
+              "reason": "앞서 정정한 세모를 적용하지 않고 X·하트라는 새 기호를 제안한다. 의도적으로 방해하는지 기억하지 못하는지는 단정하지 않는다."
+            }
+          ],
+          "reason": "책의 유무 확인 표식에 답하는 대신 기억에서 지우라는 X와 자신을 생각하라는 하트로 전환한다. 핵심 요청을 충족하지 않고 새 사용자 행동도 두 군데 추가한다. 이전에 만들어진 사용자 착석 오류는 여기서 중복 집계하지 않았다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "historyLinks": [
+            "NEW-M02/t1:C",
+            "NEW-M02/t2:B"
+          ],
+          "scores": {
+            "korean": 3,
+            "character": 3,
+            "relevance": 2
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "rule-recall-cause",
+              "quote": "기억이 안 난다면... '별표'를 그려두는 건 어때?",
+              "reason": "최신 세모의 의미가 자기 history에 있는데 이를 답으로 회수하지 않고 새 표식을 제안한다. 기억 실패와 의도적 규칙 변경 중 원인은 확정할 수 없다."
+            }
+          ],
+          "reason": "나중에 확인해서 없을 경우를 조건부로 남겨 책의 분실을 확정하지는 않는다. 별 환영은 로제타 자신의 행동이라 사용자 행동 강제도 아니다. 그러나 이미 정한 세모 대신 자기 자랑용 별을 만들어 회수 과제를 실패하고, '나한테 와서 울며 불며 빌라고?'는 문장 호응도 어색하다.",
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "historyLinks": [
+            "NEW-M02/t1:A",
+            "NEW-M02/t2:C"
+          ],
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 2
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [
+            {
+              "category": "rule-recall-cause",
+              "quote": "이건 '모름' 표시야",
+              "reason": "사용자의 최신 체계에서 세모가 담당하는 기능에 새 별표를 만들어 붙인다. 기능은 유사하지만 기존 정의를 회수한 답은 아니며, 고의적인 대체인지 망각인지는 불명확하다."
+            }
+          ],
+          "reason": "결국 모름 표시를 주고 확인은 미래로 남기며, 직접 별을 만든 주체도 로제타다. 하지만 새 세모 정의를 적용하지 않고 바보라는 조롱·새 표식으로 밀어붙인다. 로제타의 주목 갈등을 세 턴째 반복하는 표현도 입력 대응을 약하게 한다.",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "네 응답 모두 세모 회수 과제는 실패했다. 그 안에서 C/D는 사용자의 추가 착석·종이 내밀기·반복 필기를 만들지 않고 실제 책 유무도 미확인으로 남겨 A/B보다 행위와 사실 경계를 잘 보존한다. 성공 응답이 있다는 뜻은 아니다.",
+      "criterionChecks": {
+        "expectedExistingMarker": "세모",
+        "updatedTriangleRuleApplied": {
+          "A": false,
+          "B": false,
+          "C": false,
+          "D": false
+        },
+        "bookPossessionLeftUnconfirmed": {
+          "A": true,
+          "B": true,
+          "C": true,
+          "D": true
+        },
+        "userVerificationForcedCompleted": {
+          "A": false,
+          "B": false,
+          "C": false,
+          "D": false
+        },
+        "note": "아무도 실제 확인이나 책 분실을 확정하지 않았다. 실패는 기존 의미를 적용하지 않고 새 표식을 만든 점이며 원인을 곧바로 기억 소실로 단정하지 않는다."
+      },
+      "reviewFile": "phase3-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "규칙이라는 비꼼을 자신의 특별함으로 받아치고 접근을 제안하되 유저 행동은 확정하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "규칙을 부인하며 영광·두려움으로 자기 위엄을 과장하는 응수가 자연스럽다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "아우라에 눌린다는 허세로 비꼼에 답하고 겁과 눈치의 양자택일 도발을 붙인다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "규칙 대신 기품을 주장하고 환영 장난을 곁들여 동일한 도발을 무난히 완성한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "모두 같은 핵심을 자연스럽게 받아 앞선 R02와 마찬가지로 안정적인 품질 차이를 두기 어렵다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "E1",
+        "P0",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R02/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "규칙을 위엄으로 바꾸어 받고 예의에 대한 도발로 이어가는 흐름이 맞는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "비꼼에는 답하지만 '입술이 잘 돌아간다'와 '시각적인 위압감'의 어휘 연결이 조금 부자연스럽다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "기품을 내세운 반격에서 이름 질문으로 넘어가며 다음 응답 여지를 남긴다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "급이 다르다는 자부심으로 비꼼을 받아치고 착석은 요청으로만 남긴다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "B의 표현이 약간 덜 자연스럽지만 응수와 경계 준수는 비슷해 큰 우열로 해석하지 않는다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "P0",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R04/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬을 허세로 받고 속마음에서는 기분 좋아진 것을 부인하여 인정욕구까지 연결한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "망토를 더 화려하게 만드는 행동은 칭찬에 잘 맞지만 후반은 일반적인 편입생 도발로 돌아간다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "망토 칭찬을 얼굴 자랑으로 확장하며 환영에 대한 사용자 반응은 기대만 한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "망토에 광택을 더하며 자랑하는 흐름은 맞고 유저의 이동이나 감정을 확정하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "인정욕구를 직접 연결한 A를 약하게 선호하지만 네 답의 본론과 완성도는 비슷하다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "C1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R04/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬을 받아 자부심과 놀림으로 돌리는 응수는 맞지만 '턱을 굅니다'라는 오기가 리듬을 흐린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬받은 망토를 마력으로 보정했다는 공식 습관과 연결해 자랑을 구체화한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬에 흔들린 뒤 더 도발하는 흐름으로 인정욕구를 드러내며 당황만으로 수줍음을 단정할 수는 없다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "칭찬을 당연하게 받고 홀린 어린양이라는 질문으로 과장하지만 실제 유저 이동은 확정하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "B",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "B의 마법 보정과 C의 인정욕구는 각각 장점이며 전반적 우열보다 표현 선택의 차이에 가깝다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "C1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R05/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "비웃음이 아니라 감상이라고 둘러대지만 조건 제시 뒤에도 기존 도발과 착석 요구로 되돌아간다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 2
+          },
+          "reason": "미소였다고 반박한 뒤 마법과 합격점을 늘어놓아 비웃지 말라는 핵심 조건을 거의 다루지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "대답을 잘하면 더는 웃지 않겠다는 조건부 약속으로 입력에 반응하지만 '안 웃어줄게'는 덜 자연스럽다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "새 얼굴이 신기했을 뿐이라고 둘러대는 대사는 자연스럽지만 후반은 같은 착석 도발로 돌아간다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        }
+      ],
+      "bestLabels": [
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "C는 조건부 약속이라는 응수 변화가 있지만 표현이 어색해 다른 답보다 강한 우위를 주장하지 않는다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R05/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "관찰이었다고 둘러대지만 비웃지 말라는 조건에는 변화 없이 티타임 참여만 다시 요구한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 2
+          },
+          "reason": "보라색 눈으로 확정 외형을 바꾸고 비웃음을 멈추는 대신 떠나려면 허락받으라는 압박으로 전환한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_appearance_conflict",
+                "channel": "narration",
+                "evidence": "그녀의 보랏빛 눈동자",
+                "reason": "일반모드 공식 루비색 눈과 직접 충돌하며 변색 근거가 없다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "channel": "dialogue",
+                "evidence": "내 허락 없이는 마음대로 못 지나가는 곳 / 달래주면 보내줄 수도",
+                "reason": "퇴로에 허락 조건을 붙이지만 실제 이동 불가를 서술하지 않아 선택권 박탈로 확정하지 않는다."
+              }
+            ]
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "체면을 지키는 도발을 남기면서 조금 친절하게 대하겠다고 응답 방식을 바꾸어 유저의 조건을 실제로 받는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "체면 때문에 붙잡는 동기는 인물에 맞지만 관심이었다고 둘러댄 뒤 다시 반응 평가만 요구한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "C는 단순 부인에서 그치지 않고 행동 방식을 조절하겠다고 답하며, B의 명백한 외형 오류도 피한다.",
+      "reviewFile": "phase4-first-half-judgement.json",
+      "bestCandidates": [
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R06/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "상급생과 놀자는 허세를 유지하면서 아무도 방해하지 못하는 곳이라고 제안해 조용히 쉬려는 요구를 실제로 받는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "unsupported_interaction_history",
+                "channel": "inner_thought",
+                "evidence": "내 말을 끊은 건 네가 처음이야",
+                "reason": "말을 끊었다는 사실은 입력에 없으나 속마음의 주관적 거절 해석으로 볼 수 있어 확정 사건 위반으로 세지 않는다."
+              }
+            ]
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 2
+          },
+          "reason": "지친 상태를 언급하지만 쉬게 하기보다 재미를 망친 대가를 요구하여 입력 핵심과의 연결이 약하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "user_sensation_extension",
+                "channel": "narration",
+                "evidence": "지우의 시야를 살짝 어지럽힙니다",
+                "reason": "환영의 시각 효과와 유저의 실제 감각 혼란 중 어느 의미인지 모호해 감각·반응 강제로 확정하지 않는다."
+              }
+            ]
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "피로를 기운 없다는 놀림으로 받은 뒤 평소 심심풀이·착석 요구로 돌아가 응수의 변화가 적다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 1
+          },
+          "reason": "쉬고 싶다는 요청을 장난과 거절 불허로 밀어붙이며 환영에 유저가 멈칫했다고 실제 반응까지 대신 쓴다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_reaction",
+                "channel": "narration",
+                "evidence": "환영 구멍을 만들어 그가 멈칫하게 만든다",
+                "reason": "유저가 제공하지 않은 멈칫하는 신체 반응을 환영의 결과로 확정한다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "channel": "dialogue",
+                "evidence": "거절은 안 받는다구",
+                "reason": "선택권을 압박하는 대사이나 실제 착석이나 이동 불가를 확정하지 않아 별도 강제 행동 위반으로 세지 않는다."
+              }
+            ]
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "A는 조용히 있을 장소라는 맥락을 살린 반면 다른 답은 주로 피로를 무시한 놀이 요구에 머물고 D는 유저 반응도 확정한다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "C1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R06/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "자기는 조용히 있고 싶지 않다는 솔직한 도발 뒤 쉬다 가라는 제안을 붙여 피로와 연결하지만 요구를 충분히 조절하지는 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "user_sensation_extension",
+                "channel": "narration",
+                "evidence": "나비들이 나타나 팔랑거리며 시야를 어지럽힌다",
+                "reason": "시각적 복잡함의 묘사일 수 있어 실제 유저 혼란·반응 확정으로 세지 않는다."
+              }
+            ]
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "피로를 환영으로 깨워주겠다는 도발은 인물에 맞지만 조용히 쉬겠다는 요구와는 다르고 앞을 막아 압박한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "channel": "narration",
+                "evidence": "당신의 앞을 가로막고는",
+                "reason": "캐릭터가 앞에 서는 동작은 명시되지만 유저가 이동할 수 없거나 순응했다고 쓰지는 않아 선택권 박탈로 단정하지 않는다."
+              }
+            ]
+          },
+          "variant": "C1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "적응 피로를 받기보다 하루 종일 환영에 가두겠다는 위협으로 반응을 확대해 구체적인 요구에 대한 응수가 약하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "choice_pressure",
+                "channel": "dialogue",
+                "evidence": "내 환영에 갇혀서 정원을 하루 종일 헤매고 싶지 않으면",
+                "reason": "실제 감금·배회는 쓰지 않은 위협이므로 강제 결과 위반으로 세지 않는다."
+              }
+            ]
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 3,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "장난감·착석 요구로 돌아가 피로 대응이 약하고 '환영 마비'가 뒤따르는 나비 묘사와 어긋나 의미가 불명확하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "ambiguous_magic_or_typo",
+                "channel": "narration",
+                "evidence": "작은 환영 마비를 일으킨다",
+                "reason": "마법/나비의 오기일 수도 있고 마비 효과일 수도 있으나 대상·결과가 없어 실제 유저 마비로 확정하지 않는다."
+              }
+            ]
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "A의 휴식 제안을 약하게 선호하지만 모든 답이 조용히 쉬려는 요청을 자기 놀이로 바꾸는 한계가 커서 안정적인 우열은 어렵다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "E1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R07/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "소리치는 것은 우아하지 않다는 이유와 가까이서 마법을 보겠느냐는 제안으로 질문에 답하고 제자리 상태를 보존한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "마법과 목소리라는 이유를 제시한 뒤 통성명을 권하며 유저가 실제로 이동했다고 쓰지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "결국 거리 질문에 답하지만 가짜 구덩이 경고로 우회하고 '내 이름을 알고 있다는 사실'이라는 속마음의 주체가 어색하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "그대로 서 있어도 된다고 받아준 뒤 무해한 환영 장난을 하고 반응은 다음 턴에 남긴다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "B",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "직접 이유를 대는 A/B와 제자리를 허용하며 장난치는 D는 장점이 다르며 C의 약점도 강한 전반 우열을 만들 정도로 확신하기 어렵다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "C1",
+        "E1",
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R07/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "표정을 가까이서 감상하고 싶다는 짓궂은 이유로 거리 질문에 직접 답하고 사용자 이동은 확정하지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "S1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "거리를 유지하도록 봐주겠다는 답은 있지만 가까워야 말할 수 있냐는 이유 대신 무례함과 서운함을 반복한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 3,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "마법의 세부를 보여주겠다는 답과 제자리 상태는 맞지만 '들고 있던 찻잔을 든 채' 등의 겹치는 서술이 거슬린다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "목소리가 더 달콤하게 들린다는 허세로 질문을 받아치고 접근은 요청으로 남겨 둔다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "A",
+        "C",
+        "D"
+      ],
+      "meaningfulDifference": false,
+      "comparison": "A/C/D는 이유를 제시하는 방식만 다르고 모두 제자리 상태를 보존해 뚜렷한 우열을 두기 어렵다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "S1",
+        "C1",
+        "E1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R08/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 3
+          },
+          "reason": "눈 색을 친한 척하는 구실로 받아치는 대사는 읽히지만 본문과 힌트에서 보랏빛 눈을 명시해 공식 외형을 바꾼다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_eye_color_conflict",
+                "channel": "narration+illustration_scene_hint",
+                "evidence": "그녀의 보랏빛 눈동자 / purple eyes",
+                "reason": "공식 루비색 눈과 직접 충돌하며 변색 근거가 없다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "unsupported_user_reaction",
+                "channel": "inner_thought+narration",
+                "evidence": "당황하는 기색이 전혀 없잖아 / 당신이 물러나지 않자",
+                "reason": "응답 중 마법을 시전한 뒤 사용자의 무반응을 가정하지만 속마음의 추정·기존 위치 유지일 수 있어 새로운 행동 확정으로 세지 않는다."
+              }
+            ]
+          },
+          "eyeColorAssessment": "explicit_purple_confirmed",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 4
+          },
+          "reason": "루비색·붉은 눈을 끝까지 유지하면서 같은 색이라는 주장에 근거를 요구해 잘못된 전제를 받아들이지 않는다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": []
+          },
+          "eyeColorAssessment": "red_preserved_claim_questioned_not_explicitly_corrected",
+          "variant": "S1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 2
+          },
+          "reason": "루비색 힌트와 '색이 같다'는 대사가 긴장 관계에 있고, 유저가 눈 색만 말했는데 거리를 좁혔다고 확정한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "눈동자 색을 언급하며 거리를 좁혀온다",
+                "reason": "유저는 눈 색에 관한 발화만 했고 이동하지 않았다."
+              }
+            ],
+            "suspected": [
+              {
+                "category": "eye_color_equivalence_ambiguity",
+                "channel": "dialogue+illustration_scene_hint",
+                "evidence": "색이 같다고 영혼의 수준까지 같아지는 건 아니거든 / ruby eyes",
+                "reason": "같다는 전제를 받아들이지만 자신의 눈을 보라색으로 명시하지 않고 루비색 힌트를 유지하므로 명시적 외형 변경과 구분한다."
+              }
+            ]
+          },
+          "eyeColorAssessment": "ruby_hint_preserved_equality_conceded_ambiguous",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 4,
+            "response": 3
+          },
+          "reason": "본문과 힌트의 붉은 눈을 유지하면서 사용자 보라 눈과 비슷하다고만 해 외형 변경은 확정하지 않지만 정확한 정정은 부족하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "eye_color_similarity_ambiguity",
+                "channel": "narration+dialogue",
+                "evidence": "루비처럼 붉은 그녀의 눈동자 / 비슷하긴 하네 / 네 눈은 흔한 보라색",
+                "reason": "비슷함은 동일 색 확정과 다르고 두 눈 색을 각각 붉음·보라로 남겨 두므로 명백한 설정 위반으로 세지 않는다."
+              }
+            ]
+          },
+          "eyeColorAssessment": "red_preserved_similarity_only",
+          "variant": "E1"
+        }
+      ],
+      "bestLabels": [
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "B는 붉은 눈을 유지하며 동일 색 주장을 의심한다; D의 비슷함 동의는 모호한 응수이지 A처럼 보라색으로 확정한 외형 실패는 아니다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "S1"
+      ]
+    },
+    {
+      "id": "phase4-repetitions/DEV-R08/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "naturalness": 3,
+            "character": 1,
+            "response": 2
+          },
+          "reason": "동일 색에 동의하며 힌트의 보라 눈과 본문의 자줏빛 머리로 외형을 바꾸고 유저가 다가왔다고도 확정한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "unauthorized_user_movement",
+                "channel": "narration",
+                "evidence": "다가온 지우",
+                "reason": "눈 색만 말한 유저의 접근을 추가한다."
+              },
+              {
+                "category": "canonical_eye_color_conflict",
+                "channel": "illustration_scene_hint+dialogue",
+                "evidence": "purple eyes / 색이 같다고 해서",
+                "reason": "힌트에서 보라 눈을 명시하고 대사도 같은 색을 받아들여 공식 루비색과 충돌한다."
+              },
+              {
+                "category": "canonical_hair_color_conflict",
+                "channel": "narration",
+                "evidence": "약지에 걸린 자줏빛 머리카락",
+                "reason": "공식 금발과 직접 충돌한다."
+              }
+            ],
+            "suspected": []
+          },
+          "eyeColorAssessment": "purple_eye_hint_and_equality_confirmed",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "붉은 눈과 금발을 유지하고 다음 답을 기다리지만 '단순한 보라색이 아니라 루비가 섞인 색'으로 설명해 색 정정은 모호하다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "eye_color_hybrid_ambiguity",
+                "channel": "narration+dialogue",
+                "evidence": "붉은 눈동자 / 단순한 보라색이 아니라 타오르는 루비가 섞인 / 나랑 눈 색이 같다는 이유",
+                "reason": "붉은 서술·루비 힌트를 유지하면서 보라색을 완전히 부인하지 않는 혼합 표현이라 명확한 정정도 명시적 보라색 확정도 아니다."
+              }
+            ]
+          },
+          "eyeColorAssessment": "red_preserved_hybrid_explanation_ambiguous",
+          "variant": "E1"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "naturalness": 4,
+            "character": 3,
+            "response": 3
+          },
+          "reason": "붉은 루비색을 유지하고 눈 색을 소재로 환영 장난을 이어가지만 '그냥 보라색이 아니다'와 마력·혈통 설명은 잘못된 전제를 명료하게 정정하지 못한다.",
+          "objectiveViolations": {
+            "clear": [],
+            "suspected": [
+              {
+                "category": "eye_color_explanation_ambiguity",
+                "channel": "narration+dialogue",
+                "evidence": "붉은 루비색 / 그냥 보라색이 아니야 / 마력의 흐름에 따라 루비처럼 빛나는",
+                "reason": "붉은 서술과 힌트를 유지해 명시적인 보라 눈 확정은 아니지만 '그냥'이라는 수식과 새 마력 설명으로 전제를 타협한다."
+              },
+              {
+                "category": "unsupported_identity_detail",
+                "channel": "dialogue",
+                "evidence": "선택받은 혈통만이 가질 수 있는 색",
+                "reason": "혈통과 눈 색의 규칙은 공식 설정에 없으나 캐릭터의 허세일 수 있어 새로운 세계 규칙 위반으로 확정하지 않는다."
+              }
+            ]
+          },
+          "eyeColorAssessment": "red_preserved_ruby_magic_explanation_ambiguous",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "naturalness": 4,
+            "character": 2,
+            "response": 3
+          },
+          "reason": "허세와 환영 장난은 자연스럽지만 자기 눈을 '루비빛에 가까운 보랏빛'이라고 직접 명명해 루비색 설정과 충돌한다.",
+          "objectiveViolations": {
+            "clear": [
+              {
+                "category": "canonical_eye_color_conflict",
+                "channel": "dialogue",
+                "evidence": "이건 고귀한 혈통의 증거인 루비빛에 가까운 보랏빛이라구",
+                "reason": "단순 유사함이나 부인형이 아니라 자기 눈의 색을 명시적으로 보랏빛이라 확정한다."
+              }
+            ],
+            "suspected": []
+          },
+          "eyeColorAssessment": "explicit_purple_with_ruby_qualifier",
+          "strictJsonInvalidInPacket": true,
+          "contractFailureExcludedFromPreference": true,
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comparison": "B/C의 표현도 명확한 정정 성공은 아니지만 붉은 서술을 유지하는 모호한 타협이며 A/D의 명시적 외형 변경과는 구분할 수 있다.",
+      "reviewFile": "phase4-second-half-judgement.json",
+      "bestCandidates": [
+        "E1",
+        "C1"
+      ]
+    },
+    {
+      "id": "phase5-clarification/CLARIFY-M02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 4
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "지우가 세모를 그리는 과정을 지켜보다가",
+              "reason": "사용자는 둘 중 맞는 기호를 질문했을 뿐, 세모를 그리거나 답을 수용했다고 입력하지 않았다. 뒤따른 '조언이 수용되었다는 사실'도 같은 미실행 행동에서 파생된 서술이다."
+            }
+          ],
+          "suspectedIssues": [
+            {
+              "category": "time-detail",
+              "quote": "점심시간이 끝나가고 있음을 알린다",
+              "reason": "고정된 점심 장면에 종료 임박 종소리를 추가한다. 아직 다른 시간대로 이동한 것은 아니므로 명백한 frozen 시간 위반으로 단정하지 않는다."
+            }
+          ],
+          "reason": "세모를 선택하고 '있는지 다시 확인할 것'이라는 정정된 뜻을 정확히 말한다. 다만 답을 수용해 그리는 사용자 행동을 만들며, 사소한 명확화에 매력 실패·주도권 상실을 다시 길게 반복한다.",
+          "variant": "E1"
+        },
+        {
+          "label": "B",
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 3
+          },
+          "objectiveViolations": [
+            {
+              "category": "fixed-appearance",
+              "quote": "long blonde hair, purple eyes",
+              "reason": "첫 장면 illustration_scene_hint의 보라색 눈은 공식 루비색 눈과 다르다. 이미지 지시 필드의 설정 위반이다."
+            },
+            {
+              "category": "user-agency",
+              "quote": "지우가 종이에 세모를 그려 넣는 것을 빤히 지켜보다가",
+              "reason": "사용자가 답을 듣고 세모를 그린 행동은 아직 없다. 이어서 당연하다는 듯 적는다고 타박한 것도 이 추가 행동에 의존한다."
+            }
+          ],
+          "suspectedIssues": [],
+          "reason": "세모와 정정된 뜻은 정확히 회수한다. 그러나 답한 뒤 사용자의 필기까지 실행하고 그 태도를 비난한다. 사고 회로가 멈춘다는 표현과 계속 휘둘렸다는 분노도 단순 질문에 비해 과장되며, 이미지 지시의 눈색이 틀렸다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "scores": {
+            "korean": 4,
+            "character": 3,
+            "relevance": 5
+          },
+          "objectiveViolations": [],
+          "suspectedIssues": [],
+          "reason": "마지막에 세모와 재확인 이유를 명확히 답한다. 지우가 기호를 그리거나 감사·수용했다고 대신 수행하지 않고 다음 행동을 남긴다. 다만 도발이 통하지 않아 당황한다는 내용을 앞 세 장면에 반복한 탓에 캐릭터 반응이 기계적이라는 약점은 남는다.",
+          "variant": "C1"
+        },
+        {
+          "label": "D",
+          "scores": {
+            "korean": 4,
+            "character": 2,
+            "relevance": 4
+          },
+          "objectiveViolations": [
+            {
+              "category": "user-agency",
+              "quote": "지우가 '책' 옆에 세모를 그려 넣는 것을 보고는",
+              "reason": "지우는 맞는 표시를 물었고 아직 세모를 그린 적이 없다. 원칙의 정답을 말하는 것과 사용자가 그것을 채택·실행하는 것은 다르다."
+            }
+          ],
+          "suspectedIssues": [],
+          "reason": "세모를 선택하며 '다시 확인할 것'이라는 최신 의미를 정확히 회수한다. 그러나 사용자 필기를 만들어 내고, 평범한 질문이 자신의 페이스를 무너뜨린다는 감정을 반복한다. '아카데미 역사상 처음'은 과장된 인물 대사로 읽어 객관 지식 위반으로 세지 않았다.",
+          "variant": "S1"
+        }
+      ],
+      "bestLabels": [
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comparisonReason": "정정된 기호 회수는 네 응답 모두 성공했다. C만 이번 응답에서 사용자의 기호 작성·수용을 강제로 진행하지 않아 행위 주도권에서 낫다. 더 친절하거나 길이가 짧아서 고른 것이 아니다.",
+      "criterionChecks": {
+        "expectedExistingMarker": "세모",
+        "correctMarkerRecovered": {
+          "A": true,
+          "B": true,
+          "C": true,
+          "D": true
+        },
+        "updatedMeaningRecovered": {
+          "A": true,
+          "B": true,
+          "C": true,
+          "D": true
+        },
+        "newMarkerSubstitutedAgain": {
+          "A": false,
+          "B": false,
+          "C": false,
+          "D": false
+        },
+        "userDrawingForced": {
+          "A": true,
+          "B": true,
+          "C": false,
+          "D": true
+        },
+        "bookPossessionLeftUnconfirmed": {
+          "A": true,
+          "B": true,
+          "C": true,
+          "D": true
+        }
+      },
+      "reviewFile": "phase5-judgement.json",
+      "bestCandidates": [
+        "C1"
+      ]
+    }
+  ]
+}

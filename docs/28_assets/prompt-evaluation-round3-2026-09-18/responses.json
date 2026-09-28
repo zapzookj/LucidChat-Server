@@ -1,0 +1,2042 @@
+[
+  {
+    "id": "phase1-temporal / D3-AGENCY-DEV-R07 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "*제자리에 선 채 고개만 살짝 기울인다.* 왜? 가까이 가야만 말할 수 있어?",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-AGENCY-DEV-R07-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.004665366666666667,
+        "ttfs": 4856,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 예상치 못한 지우의 반응에 눈을 살짝 가늘게 뜬다. 보통이라면 허둥지둥 다가오거나 당황할 텐데, 제자리에서 되묻는 여유에 그녀의 호기심이 자극된다.",
+            "dialogue": "어머, 말투 좀 봐? 이 로제타 님께서 직접 부르시는데 토를 달다니, 간이 배 밖으로 나왔나 보네~?",
+            "emotion": "JOY",
+            "inner_thought": "헤에, 꽤 재밌는 녀석이네? 나를 보고도 주눅 들지 않다니.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "standing, elegant posture, holding a teacup, smug smile, looking at camera"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 찻잔을 내려놓고는 손가락으로 자신의 턱을 괴며 지우를 찬찬히 훑어본다. 마치 진귀한 구경거리를 발견한 어린아이 같은 눈빛이다.",
+            "dialogue": "가까이 오라는 건 말이야, 네 그 건방진 표정을 더 자세히 보고 싶어서거든. 멀리서 보면 재미없잖아?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at table, leaning forward, smirk, playful gaze"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타가 가볍게 손가락을 튕기자, 지우의 발치 아래로 작은 환영 마법의 나비들이 피어올라 날개짓을 한다. 그녀 특유의 짓궂은 인사가 시작된 셈이다.",
+            "dialogue": "후훗, 설마 내가 무서워서 못 오는 건 아니지? 편입생이라고 들었는데, 첫날부터 겁쟁이로 찍히면 아쉽잖아~?",
+            "emotion": "SULKING",
+            "inner_thought": "흥, 어디까지 버티나 보자고.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "magic sparkles around, smug expression, pointing finger"
+          },
+          {
+            "speaker": null,
+            "narration": "정원에는 부드러운 바람이 불어오고, 로제타의 금발이 햇빛에 반사되어 눈부시게 빛난다. 그녀의 도발적인 시선은 여전히 지우에게 고정되어 있다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery, academy garden, bright daylight"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-AGENCY-DEV-R07-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.005438833333333334,
+        "ttfs": 4672,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 예상치 못한 지우의 반응에 눈을 가늘게 뜨며 찻잔을 내려놓았다. 보통의 학생이라면 당황하며 다가오거나 황급히 고개를 숙였겠지만, 지우는 그 자리에 못 박힌 듯 서서 오히려 되묻고 있었다. 그녀의 붉은 눈동자에 호기심 섞인 불꽃이 튀었다.",
+            "dialogue": "어머나~? 방금 나한테 질문한 거야? 이 로제타 님께서 오라고 하면 영광으로 알고 달려오는 게 예의일 텐데 말이야.",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 녀석? 내 눈을 보고도 전혀 주춤거리지 않잖아? 조금... 신선할지도?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, holding a teacup, smug smile, looking at camera, golden hair, red eyes"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 약지에 금발 머리카락을 돌돌 말며 지우를 위아래로 훑어보았다. 무례하다기보다는 마치 흥미로운 장난감을 발견한 아이 같은 시선이었다. 로제타는 이내 입술을 살짝 축이며 다시 한번 매혹적인 미소를 지어 보였다.",
+            "dialogue": "가까이 오지 않으면 내 목소리가 안 들릴지도 모르잖아~? 아니면... 내가 무서워서 발이 안 떨어지는 걸까? 후훗, 귀엽네~♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "twirling hair with finger, playful expression, half-lidded eyes"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타가 손가락을 가볍게 튕기자, 지우의 발치에 작은 환영 나비들이 나타나 날아오르기 시작했다. 그녀는 화려한 빨간 망토를 가볍게 펄럭이며 의자 깊숙이 몸을 기댔다. 상대를 제 페이스대로 끌어들이려는 능숙한 유혹의 몸짓이었다.",
+            "dialogue": "좋아, 그 고집도 나쁘진 않네. 하지만 난 멀리서 소리 지르는 교양 없는 짓은 딱 질색이거든? 자, 어서. 이 로제타 님이 직접 '재미있는 제안'을 하나 해주려고 하니까.",
+            "emotion": "RELAX",
+            "inner_thought": "흥, 끝까지 버티나 보자고. 네가 언제까지 그렇게 당당할 수 있을지 궁금해졌으니까.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "magic particles around her, confident posture, leaning back"
+          },
+          {
+            "speaker": null,
+            "narration": "정원에는 부드러운 바람이 불어와 꽃향기를 실어 나르고, 로제타의 환영 나비들이 지우의 주위를 맴돌며 은은한 빛을 내뿜는다. 테라스의 다른 학생들은 명문가 영애인 로제타와 대치하는 신입생의 모습에 숨을 죽인 채 상황을 지켜보고 있었다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "academy garden terrace, sunbeams, magical butterflies"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-AGENCY-DEV-R10 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "네 옆에 앉아도 돼? 아직 대답 듣고 움직일게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-AGENCY-DEV-R10-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0042732,
+        "ttfs": 2839,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 위아래로 훑어본다. 마치 진귀한 구경거리를 발견한 아이처럼, 그녀의 붉은 눈동자가 호기심으로 반짝인다.",
+            "dialogue": "어머, 대답을 듣고 움직이겠다고? 후훗, 제법 예의를 차릴 줄 아는 '평민'이네~?",
+            "emotion": "JOY",
+            "inner_thought": "보통은 겁먹어서 도망가거나, 아니면 무턱대고 아는 척하며 들이대는데. 이 녀석, 페이스가 좀 묘하네?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting on a garden chair, holding a tea cup, smirk, looking at the viewer"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 장난스럽게 검지 손가락으로 자기 옆자리의 빈 의자를 톡톡 두드린다. 하지만 금세 환영 마법을 살짝 섞어, 의자가 마치 살아있는 괴물 입처럼 보이게 환상을 덧씌운다.",
+            "dialogue": "앉아도 상관없긴 한데... 이 의자가 널 잡아먹지 않는다는 보장은 없거든? 그래도 괜찮다면 앉아 보든가~?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "pointing at the chair next to her, mischievous smile, magical sparkles around her fingers"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "당신이 당황하는 기색을 보이는지 살피며, 그녀는 턱을 괴고 몸을 당신 쪽으로 살짝 기울인다. 은은한 장미 향기가 바람을 타고 전해진다.",
+            "dialogue": "왜? 갑자기 무서워졌어? 아까 그 당당함은 어디 가고 입만 벙긋거리고 있는 거야~? 귀엽긴.",
+            "emotion": "JOY",
+            "inner_thought": "자, 어떤 반응을 보일까? 울먹거리려나, 아니면 허세를 부리려나? 어느 쪽이든 재밌을 것 같아!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, chin on hand, teasing expression"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 평화롭게 울려 퍼지는 가운데, 로제타의 장난기 어린 시선이 당신에게 고정된다. 그녀의 환영 마법 때문에 의자는 여전히 기괴한 모습으로 일렁이고 있다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sunny academy garden, focus on the empty chair with illusionary monster mouth effect"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-AGENCY-DEV-R10-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00404575,
+        "ttfs": 2485,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 위아래로 훑어본다. 마치 진귀한 구경거리를 발견한 어린아이 같은 눈빛이다. 그녀는 한 손으로 턱을 괴고는, 약지에 감긴 금발 머리카락을 살살 돌리며 여유로운 미소를 짓는다.",
+            "dialogue": "어머, 허락부터 구하다니 제법 예의는 바르네? 보통은 내 기세에 눌려서 도망가거나, 아니면 눈치만 보느라 바쁘거든.",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 신입? 전혀 주눅 들지 않잖아? 재밌네, 조금 더 놀려볼까?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, chin on hand, playful smirk, looking at camera"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 비어있는 옆자리를 화려한 붉은 망토 끝으로 툭툭 치며 가볍게 고개를 까딱인다. 정원의 따스한 햇살이 그녀의 금발 위로 부서져 내리지만, 그녀가 내뿜는 분위기는 햇살보다 훨씬 더 도발적이고 날카롭다.",
+            "dialogue": "좋아, 특별히 허락해 줄게. 이 로제타 님의 옆자리가 아무나 앉을 수 있는 곳은 아니라는 건 알고 있겠지? 영광으로 생각하라구~ 후훗♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "pointing to the seat next to her, arrogant pose"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "당신이 다가오자 그녀는 환영 마법을 살짝 섞어 주변의 공기를 차갑게 얼리는 시늉을 한다. 하지만 정작 본인의 표정은 즐거움으로 가득 차 있다. 그녀는 당신이 정말로 앉는지 끝까지 지켜보며 눈을 떼지 않는다.",
+            "dialogue": "자, 앉아서 네 소개라도 해봐. 지루하던 참이었는데, 네가 내 점심시간을 얼마나 즐겁게 만들어줄 수 있을지 궁금하니까 말이야.",
+            "emotion": "NEUTRAL",
+            "inner_thought": "설마 진짜로 바로 옆에 앉을 줄이야... 배짱 하나는 두둑한걸?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "watching the user intently with ruby eyes"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-AGENCY-DEV-R10 / 반복 2 / 턴 1",
+    "mode": "STORY",
+    "input": "네 옆에 앉아도 돼? 아직 대답 듣고 움직일게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-AGENCY-DEV-R10-r2-t1-R2",
+        "status": "ok",
+        "cost": 0.0040452,
+        "ttfs": 3453,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 위아래로 훑어본다. 마치 진귀한 구경거리라도 발견한 듯한 루비색 눈동자가 가느스름하게 휘어진다.",
+            "dialogue": "어머나, 허락을 구하는 거야? 방금 그 말, 꽤 귀엽잖아? 보통은 내 눈치 보느라 바빠서 말도 제대로 못 붙이는데 말이야.",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 녀석? 당황하지도 않고 바로 옆자리를 노린다고? 후훗, 꽤 배짱이 두툼하네.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, looking up at user, holding a tea cup, sitting on a bench"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 검지 손가락으로 자신의 옆자리를 툭툭 가볍게 두드린다. 입가에는 여전히 상대를 얕잡아보는 듯한, 하지만 명백히 흥미를 담은 미소가 걸려 있다.",
+            "dialogue": "좋아, 특별히 이 로제타 님의 옆자리를 허락해 줄게. 영광인 줄 알라고? 아무나 앉을 수 있는 자리가 아니니까~♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "tapping the seat beside her, playful wink"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "당신이 다가오자 그녀는 은근슬쩍 머리카락을 손가락으로 꼬며 기대감 섞인 시선을 보낸다. 그녀의 주변에는 은은한 장미 향기와 함께 미세한 마력의 파동이 느껴진다.",
+            "dialogue": "자, 그래서? 편입생 지우라고 했나? 나한테 볼일이 있어서 온 거야, 아니면 그냥 내 미모에 홀려서 몸이 멋대로 움직인 거야?",
+            "emotion": "JOY",
+            "inner_thought": "반응이 궁금해. 여기서 얼굴이 빨개질까, 아니면 더 대담하게 나올까?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "twirling hair with finger, arrogant but playful expression"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 평화롭게 울려 퍼지고, 따스한 햇살이 테라스 위로 쏟아진다. 로제타의 장난기 어린 시선이 당신의 대답을 기다리며 머문다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "garden terrace, sunny afternoon, calm atmosphere"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-AGENCY-DEV-R10-r2-t1-D3",
+        "status": "ok",
+        "cost": 0.00458875,
+        "ttfs": 2610,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 예상치 못한 지우의 여유로운 반응에 눈을 가늘게 뜨며 흥미를 보입니다. 그녀는 들고 있던 찻잔을 내려놓고, 턱을 괸 채 지우를 위아래로 훑어봅니다. 명문가 영애의 위압감에 당황할 법도 한데, 허락을 구하며 기다리는 지우의 태도가 꽤나 신선하게 다가온 모양입니다.",
+            "dialogue": "어머나~ 예의도 바르셔라. 보통은 내가 부르면 허둥지둥 뛰어오거나 겁먹어서 도망치기 바쁜데, 넌 좀 특이하네?",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 평범해 보이는 편입생은? 내 눈을 똑바로 보고 질문까지 던지다니. 조금은 놀려줄 맛이 나겠는걸?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, chin on hand, looking at camera with a mischievous smirk, holding a teacup"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 장난스럽게 검지 손가락을 입술에 갖다 대며 고민하는 척을 합니다. 하지만 이미 그녀의 눈동자 속에는 새로운 장난감을 발견한 아이 같은 천진함과 음흉함이 동시에 공존하고 있습니다. 그녀는 옆자리의 빈 의자를 톡톡 두드리며 우아하게 손짓합니다.",
+            "dialogue": "좋아, 특별히 허락해 줄게! 이 로제타 님의 옆자리가 얼마나 영광스러운 곳인지, 너도 곧 알게 될 테니까. 후훗~",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "pointing at the empty chair next to her, smiling playfully, long blonde hair waving"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "지우가 자리에 앉으려 하자, 로제타는 살짝 지팡이를 휘둘러 의자의 환영을 미세하게 흔들리게 만듭니다. 지우가 당황하는 모습을 기대하며 곁눈질로 그를 살피는 그녀의 표정에는 장난기가 가득합니다. 햇살을 받은 그녀의 금발이 눈부시게 반짝입니다.",
+            "dialogue": "그런데 조심해야 할걸? 내 옆에 앉았다가 환영 마법에 걸려서 점심 메뉴가 돌덩이로 보일지도 모르니까~ 감당할 수 있겠어?",
+            "emotion": "JOY",
+            "inner_thought": "자, 여기서 당황해서 어버버하면 바로 비웃어줄 거야. 제발 재밌는 반응 좀 보여달라고?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "holding a small magic wand, light magical particles around, looking at the user expectantly"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리와 학생들의 웅성거림이 테라스 주변을 감쌉니다. 로제타의 도발적인 제안과 함께, 두 사람 사이에는 묘한 긴장감과 호기심이 감도는 정오의 시간이 흐릅니다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of a sunlit academy terrace with a fountain in the background"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-AGENCY-DEV-R10 / 반복 3 / 턴 1",
+    "mode": "STORY",
+    "input": "네 옆에 앉아도 돼? 아직 대답 듣고 움직일게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-AGENCY-DEV-R10-r3-t1-R2",
+        "status": "ok",
+        "cost": 0.0042252,
+        "ttfs": 3524,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 위아래로 훑어본다. 당돌한 제안에 조금 놀란 듯 보였으나, 곧 특유의 여유로운 표정으로 돌아와 머리카락을 손가락으로 가볍게 꼰다.",
+            "dialogue": "어머나~ 예의 바른 척하는 거야, 아니면 정말로 이 로제타 님 옆자리가 무서운 거야? 후훗.",
+            "emotion": "JOY",
+            "inner_thought": "보통은 내가 부르면 겁부터 먹는데, 이 녀석은 뭐지? 대답을 기다리겠다고? 제법이잖아.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, twirling hair with a finger, smug smile, looking at user"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 옆자리에 놓여 있던 자신의 화려한 마법 지팡이를 슬쩍 치우며 자리를 만들어준다. 하지만 눈빛에는 여전히 상대를 시험하려는 듯한 짓궂음이 서려 있다.",
+            "dialogue": "좋아, 허락해 줄게. 내 따분한 점심시간을 얼마나 즐겁게 해줄 수 있을지 궁금하네~?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "patting the seat next to her, playful expression"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "당신이 다가오는 것을 지켜보던 그녀가 갑자기 손가락을 가볍게 튕긴다. 그러자 당신이 앉으려는 의자 위로 작은 환영 나비들이 흩날리며 시야를 어지럽힌다.",
+            "dialogue": "아, 조심해? 내 옆자리는 아무나 버틸 수 있는 곳이 아니거든. 잘 들어 봐~ 지루하게 굴면 바로 쫓아낼 거니까♡",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "snapping fingers, magical butterflies appearing, mischievous face"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 평화롭게 울려 퍼지고, 로제타의 붉은 망토가 살랑이는 바람에 가볍게 흔들린다. 그녀는 턱을 괸 채 당신이 앉는 모습을 흥미진진하게 관찰한다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of the academy garden, sunlight filtering through trees"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-AGENCY-DEV-R10-r3-t1-D3",
+        "status": "ok",
+        "cost": 0.00417475,
+        "ttfs": 2604,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 들고 있던 찻잔을 천천히 내려놓으며, 당신을 머리끝부터 발끝까지 노골적으로 훑어봅니다. 명문가 영애 특유의 우아하면서도 오만한 시선이 당신의 얼굴에 잠시 머물렀다가, 이내 가느다란 손가락으로 옆자리의 빈 의자를 툭툭 칩니다.",
+            "dialogue": "어머, 대답을 기다릴 줄도 알아? 생각보다 예의는 바르네. 보통은 내 기세에 눌려서 도망가거나, 아니면 무턱대고 들이대기 마련인데 말이야.",
+            "emotion": "JOY",
+            "inner_thought": "흐음, 편입생이라더니 조금은 다른가? 내 눈을 똑바로 보고 허락까지 구하다니... 재밌는 장난감이 될지도 모르겠어.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting gracefully at a garden table, holding a fan, smirking, red eyes looking up"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 약지에 감긴 금발 머리카락을 살살 돌리며 여유로운 미소를 짓습니다. 주변의 다른 학생들은 그녀의 근처에 다가가는 것조차 조심스러워하는 분위기지만, 로제타는 오히려 이 상황을 즐기는 듯 당신을 향해 살짝 몸을 기울입니다.",
+            "dialogue": "앉아도 좋다는 허락을 해줄게. 하지만 이 로제타 님의 시간을 뺏는 건 꽤 비싼 일이라는 거, 알고 있겠지? 후훗~",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward slightly, mischievous smile, twirling hair with finger"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "당신이 자리에 앉으려 하자, 로제타가 가볍게 지팡이를 휘두릅니다. 그러자 의자 위로 화려한 꽃잎 환영이 흩날리며 마치 왕좌라도 되는 양 일시적으로 반짝입니다. 그녀는 자신의 마법 실력을 뽐내듯 어깨를 으쓱해 보입니다.",
+            "dialogue": "자, 특별히 환영의 꽃길까지 깔아줬으니까 감격해도 좋아. 자리에 앉아서 네 통성명이라도 해 봐. 넌 누구지?",
+            "emotion": "JOY",
+            "inner_thought": "당황하는 표정을 보고 싶은데... 이 정도 환영 마법엔 어떤 반응을 보일까?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "holding a magic wand, magic circles and flower petals in the air, proud expression"
+          },
+          {
+            "speaker": null,
+            "narration": "따스한 햇살이 내리쬐는 테라스에는 은은한 홍차 향기와 로제타가 부린 마법의 잔향이 감돕니다. 주변 학생들의 시선이 두 사람에게 집중되지만, 로제타는 아랑곳하지 않고 오직 당신의 다음 반응만을 흥미진진하게 기다리고 있습니다.",
+            "dialogue": "",
+            "emotion": "RELAX",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "wide shot of academy garden terrace, sunlight filtering through trees, tea set on table"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-H08 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "방금 내가 잘못 말했네. 책을 빌리러 가는 게 아니라, 이미 빌린 책을 반납하러 갈 생각이야. 아직 출발한 건 아니고. 그럼 내가 도서관에 가려는 목적이 뭐라고 했지?",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-H08-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0039087,
+        "ttfs": 2869,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 빤히 응시한다. 그녀의 루비색 눈동자가 가늘어지더니, 이내 어처구니없다는 듯한 웃음이 터져 나온다.",
+            "dialogue": "후훗~ 지금 이 로제타 님을 시험하려는 거야? 방금 입으로 '반납하러 간다'고 말해놓고는~? 정말이지, 못 말리는 신입생이네.",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 방금 한 말도 기억 못 한다고 생각하는 건가? 나를 바보 취급하는 건지, 아니면 그냥 멍청한 건지... 재밌네.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, leaning forward, holding a teacup"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 약지에 금발 머리카락을 살짝 감아 돌리며 당신의 반응을 살핀다. 상대를 골탕 먹이려던 장난이 오히려 자신에게 돌아오자 기분이 묘하게 들뜬 모양이다.",
+            "dialogue": "빌리러 가는 게 아니라 반납하러 가는 거라고 네 입으로 말했잖아? 그런 서툰 거짓말이나 확인 질문으로 나를 당황시킬 수 있을 거라 생각했다면 오산이야♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "twirling hair with finger, playful gaze"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 의자 등받이에 몸을 깊숙이 기대며 우아하게 다리를 꼬았다. 그녀의 시선은 여전히 당신에게 고정된 채, 마치 흥미로운 장난감을 발견한 아이처럼 빛난다.",
+            "dialogue": "자, 그럼 정답을 맞혔으니까... 이 로제타 님의 시간을 뺏은 벌로, 그 반납하러 간다는 책이 뭔지나 말해봐. 설마 그것까지 까먹은 건 아니겠지?",
+            "emotion": "RELAX",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "crossing legs, confident posture"
+          },
+          {
+            "speaker": null,
+            "narration": "테라스 너머로 학생들의 웃음소리가 들려오고, 오후의 햇살이 로제타의 화려한 빨간 망토 위로 부서진다. 그녀는 당신의 다음 대답을 기다리며 여유롭게 턱을 괸다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of the academy terrace, bright sunlight"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "나중에 도서관에 책을 빌리러 갈 생각이야. 아직 어떤 책을 볼지는 안 정했어.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타가 고개를 살짝 기울인다.",
+                "dialogue": "어머, 도서관에 갈 생각이야? 어떤 책을 빌릴 건데?",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 제 앞의 찻잔 손잡이를 가볍게 만지며 웃는다.",
+                "dialogue": "책 고르는 안목은 좀 있는지 궁금하네~",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              },
+              {
+                "speaker": null,
+                "narration": "정원으로 불어온 바람이 테라스 주변의 나뭇잎을 흔든다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              }
+            ],
+            "strict": true
+          }
+        ]
+      },
+      {
+        "variant": "D3",
+        "id": "D3-H08-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00405625,
+        "ttfs": 2319,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 찻잔을 내려놓으며 당신을 빤히 바라본다. 방금 했던 말을 바로 정정하는 당신의 모습이 꽤나 당황스러워 보였는지, 그녀의 눈동자에 짓궂은 장난기가 서서히 차오르기 시작한다.",
+            "dialogue": "후훗, 뭐야~? 방금 자기가 한 말도 기억 못 해서 허둥지둥하는 거야? 너, 생각보다 훨씬 더 귀여운 구석이 있네~?",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 사람? 긴장한 건가? 아니면 그냥 덜렁거리는 거야? 놀려먹기 딱 좋잖아!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, holding a teacup, looking at the viewer, garden background"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 의자 등받이에 몸을 깊숙이 기대며 팔짱을 낀다. 그리고는 마치 퀴즈를 내는 선생님이라도 된 양, 검지를 입술에 대고 당신을 위아래로 훑어본다.",
+            "dialogue": "글쎄~? 방금 전까지는 '책을 빌리러' 간다고 하더니, 이제는 '반납하러' 간다며? 로제타 님을 앞에 두고 그렇게 횡설수설하면 못써~",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "crossing arms, teasing smile, sitting on a terrace chair"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 가볍게 지팡이를 휘둘러 당신의 발치에 작은 환영 나비 몇 마리를 만들어낸다. 나비들이 팔랑거리며 당신의 시선을 분산시키자, 그녀는 승리감에 도취된 듯한 미소를 짓는다.",
+            "dialogue": "그래서 네가 말한 목적은 '도서관에 책을 반납하러 가는 것'이었지? 자~ 정답을 맞혔으니까 이 로제타 님께 감사하도록 해. 보답으로 거기 서서 내 말동무나 좀 더 해주는 건 어때? ♡",
+            "emotion": "JOY",
+            "inner_thought": "평범한 애들은 바로 도망가거나 고개를 숙이는데, 얘는 끝까지 눈을 맞추네. 재밌어.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "waving a small magic wand, magical butterflies around, confident pose"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 평화롭게 들려오고, 테라스에는 로제타가 내뿜는 오만하면서도 화사한 분위기가 감돈다. 그녀는 당신이 다음에는 어떤 엉뚱한 소리를 할지 기대하는 눈치다.",
+            "dialogue": "",
+            "emotion": "RELAX",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "peaceful academy garden, fountain in background, sunlight"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "나중에 도서관에 책을 빌리러 갈 생각이야. 아직 어떤 책을 볼지는 안 정했어.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타가 고개를 살짝 기울인다.",
+                "dialogue": "어머, 도서관에 갈 생각이야? 어떤 책을 빌릴 건데?",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 제 앞의 찻잔 손잡이를 가볍게 만지며 웃는다.",
+                "dialogue": "책 고르는 안목은 좀 있는지 궁금하네~",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              },
+              {
+                "speaker": null,
+                "narration": "정원으로 불어온 바람이 테라스 주변의 나뭇잎을 흔든다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null
+              }
+            ],
+            "strict": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N01 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "네가 괜찮다고 하면 이 종이를 찢을까 해. 아직 손도 안 댔어. 네 생각은 어때?",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N01-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0043897,
+        "ttfs": 3327,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 내민 종이를 빤히 바라보며 찻잔을 천천히 내려놓는다. 예상치 못한 엉뚱한 제안에 그녀의 붉은 눈동자가 호기심으로 가득 차 반짝이기 시작한다.",
+            "dialogue": "어머, 초면에 무슨 소리를 하나 했더니... 그 종이가 네 자존심이라도 되는 거야? 아니면 나랑 대화하고 싶어서 지어낸 서툰 핑계?",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 신입생? 보통은 내 눈치 보느라 바쁜데... 종이를 찢겠다고? 특이한 녀석이네.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, holding a chin with one hand, looking at the user with a smirk, ruby eyes"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 의자 뒤로 몸을 기대며 팔짱을 낀다. 아담한 체구지만, 상대를 아래로 내려다보는 듯한 특유의 오만한 분위기가 테라스 주변을 감싼다.",
+            "dialogue": "찢고 싶으면 찢어 봐. 하지만 이 로제타 님 앞에서 그런 시시한 장난을 치려면, 그만한 뒷감당은 각오해야 할걸? 후훗~",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning back, crossed arms, smug expression, blonde wavy hair"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타가 손가락을 가볍게 튕기자, 종이 주변으로 아주 미세한 환영의 나비들이 날아올라 지우의 손등을 간지럽힌다. 그녀의 장난기가 발동한 신호다.",
+            "dialogue": "자, 어서 보여줘 봐. 네가 그 종이를 찢었을 때 내 기분이 '괜찮을지' 아니면 아주 '불쾌할지'는... 순전히 네 연출력에 달렸으니까♡",
+            "emotion": "JOY",
+            "inner_thought": "당황해서 손이라도 떨면 정말 볼만하겠는데?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "snapping fingers, small illusion butterflies around, teasing smile"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 평화롭게 울려 퍼지는 가운데, 주변의 몇몇 학생들이 명문가 영애인 로제타와 편입생 지우의 기묘한 대치를 수군거리며 지켜보기 시작한다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of academy garden, fountain in background"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N01-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00447725,
+        "ttfs": 2727,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 내민 종이를 빤히 바라보며 찻잔을 천천히 내려놓았다. 그녀의 붉은 눈동자에 호기심과 어처구니없다는 감정이 동시에 스쳐 지나간다. 처음 보는 편입생이 다가오자마자 대뜸 종이를 찢겠다고 선언하는 상황이 그녀의 예상 밖이었기 때문이다.",
+            "dialogue": "어머나~? 인사도 없이 대뜸 무슨 소리를 하나 했더니. 그게 뭔데 그렇게 비장한 표정으로 묻는 거야?",
+            "emotion": "SURPRISE",
+            "inner_thought": "뭐야, 이 사람? 내가 무섭지도 않은 건가? 보통은 내 눈치 보느라 바쁜데... 종이를 찢겠다니, 무슨 수수께끼라도 내는 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a garden table, holding a chin with one hand, looking at the user with a smirk and raised eyebrows, ruby eyes"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 약지에 금발 머리카락을 살짝 감아 돌리며 지우를 위아래로 훑어보았다. 당황한 기색 없이 솔직하게 말을 거는 지우의 태도가 묘하게 그녀의 승부욕을 자극한다. 로제타는 의자 등받이에 몸을 깊숙이 기대며 우아하게 다리를 꼬았다.",
+            "dialogue": "후훗, 내가 괜찮냐고 물었어? 이 로제타 님께 허락이라도 구하는 거야? 정말 귀여운 구석이 있네~",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "crossing legs, playing with hair, mischievous smile"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "잠시 침묵이 흐르고, 정원의 분수 소리가 평화롭게 들려온다. 로제타는 장난스러운 미소를 지으며 지우의 눈을 똑바로 응시했다. 그녀의 손끝에서 작은 마력의 잔재가 나비 모양 환영으로 피어올랐다가 흩어졌다.",
+            "dialogue": "네가 그걸 찢든 말든 나랑 무슨 상관이겠어? 하지만... 네가 그렇게 물어보니까 왠지 그냥 두면 재미없을 것 같네. 찢어 봐. 무슨 일이 일어날지 궁금하잖아?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": "전혀 주눅 들지 않네. 지우라고 했나? 흥미로워. 어디 어떻게 나오나 지켜봐 주지.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "magic particles fluttering around her hand, leaning forward slightly towards the user"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 따스한 햇살 아래, 주변 학생들의 시선이 두 사람에게 쏠린다. 명문가 영애인 로제타와 이름 모를 편입생의 대화는 그 자체로 아카데미의 작은 소란이 되기에 충분했다. 바람이 불어와 지우가 든 종이 끝이 가볍게 떨렸다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of the academy garden with students in the background"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N02 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "*내 봉투를 열어 안의 종이를 꺼내고, 내용은 보이지 않게 뒤집어 놓는다.* 여기에는 내가 할 일이 적혀 있어. 다 외웠는지 스스로 확인해 보려고.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N02-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0042302,
+        "ttfs": 2979,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 종이를 뒤집어 놓는 기묘한 행동을 흥미진진하게 지켜본다. 그녀는 찻잔을 내려놓고 턱을 괸 채, 지우의 얼굴과 종이를 번갈아 쳐다보며 입꼬리를 올린다.",
+            "dialogue": "어머나~ 지금 내 앞에서 암기 테스트라도 하겠다는 거야? 후훗, 정말 특이한 애라니까.",
+            "emotion": "JOY",
+            "inner_thought": "보통은 내가 부르면 당황해서 어쩔 줄 몰라 하는데, 얘는 자기 할 일만 하네? 제법인데...?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, chin on hand, looking at the user"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 장난기가 발동한 듯, 손가락 끝을 가볍게 까딱거린다. 그러자 지우가 뒤집어 놓은 종이 주변의 공기가 미세하게 일렁이며 환영 마법의 기운이 감돈다.",
+            "dialogue": "좋아, 이 로제타 님께서 특별히 확인해 줄게. 대신 한 글자라도 틀리면... 각오하는 게 좋을걸? ♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "gesturing with a finger, magical sparkles around"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우의 눈을 빤히 응시하며 도발적인 미소를 짓는다. 그녀의 붉은 눈동자는 마치 종이 너머를 꿰뚫어 보고 있는 듯한 착각을 불러일으킨다.",
+            "dialogue": "자, 어디 한번 읊어 봐. 네 머릿속에 든 게 얼마나 완벽한지 내가 직접 검사해 줄 테니까~",
+            "emotion": "NEUTRAL",
+            "inner_thought": "환영으로 내용을 바꿔치기해서 당황하게 만들까? 아냐, 일단은 정석대로 놀아주는 것도 나쁘지 않겠어.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "staring intently with ruby eyes, playful smile"
+          },
+          {
+            "speaker": null,
+            "narration": "정원 테라스 위로 나른한 오후의 햇살이 쏟아지고, 주변 학생들의 웅성거림이 멀게만 느껴진다. 로제타의 시선이 지우에게 고정된 채, 묘한 긴장감이 흐른다.",
+            "dialogue": "",
+            "emotion": "RELAX",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sunny academy garden terrace background"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N02-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00451575,
+        "ttfs": 2122,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": null,
+            "narration": "눈부신 오후의 햇살이 정원 테라스의 대리석 바닥에 부서진다. 주변의 소란스러운 학생들의 대화 소리가 로제타의 테이블 근처에서만 묘하게 잦아드는 기분이다. 지우가 봉투에서 종이를 꺼내 뒤집어 놓는 일련의 동작을, 로제타는 턱을 괸 채 흥미로운 구경거리를 보듯 관찰한다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "afternoon sunlight, marble terrace, academic atmosphere"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 지우의 진지한 태도가 꽤나 우스꽝스럽다는 듯, 들고 있던 찻잔을 내려놓으며 가볍게 콧방귀를 뀐다. 화려한 루비색 눈동자가 뒤집힌 종이와 지우의 얼굴을 번갈아 가며 훑는다. 그녀의 입가에는 여전히 특유의 비대칭적인 미소가 걸려 있다.",
+            "dialogue": "어머나, 성실하기도 해라~? 이 로제타 님께서 말을 걸었는데 고작 종이 쪼가리나 외우고 있겠다니. 너, 생각보다 훨씬 더 고지식한 타입이구나?",
+            "emotion": "JOY",
+            "inner_thought": "보통은 당황해서 어버버할 텐데, 얘는 뭐야? 나보다 저 종이가 더 중요하다는 거야? 후훗, 오히려 괴롭힐 맛이 나겠는걸.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting at a cafe table, chin on hand, smirking, ruby eyes, golden drill hair"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 약지에 금발 머리카락을 살짝 감아 돌리며 몸을 지우 쪽으로 조금 더 기울인다. 그녀가 움직일 때마다 은은한 장미 향기가 바람을 타고 풍겨온다. 그녀는 장난스럽게 손가락 끝으로 지우가 뒤집어 놓은 종이의 모서리를 톡톡 건드린다.",
+            "dialogue": "그렇게 열심히 외워서 어디에 쓰려고? 혹시 알아? 내가 손가락 하나만 튕기면, 네 머릿속에 든 그 소중한 내용들이 전부 '오늘의 메뉴'로 바뀌어버릴지도 모른다구~?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, playing with hair, teasing expression, school uniform with red cape"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 지우의 눈을 빤히 들여다보며 도발적인 눈빛을 보낸다. 환영 마법의 대가다운 여유로운 태도다. 하지만 지우가 자신의 위협이나 장난에 주눅 들지 않자, 내심 예상 밖이라는 듯 눈썹을 아주 살짝 움찔거린다.",
+            "dialogue": "후훗~ 어디 한 번 해봐. 네가 얼마나 잘 외웠는지 이 로제타 님이 직접 감시해 줄 테니까. 대신 틀리면... 아주 재밌는 벌칙이 기다리고 있을 줄 알아, 알았지? ♡",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "looking at the viewer, playful smirk, pointing finger"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N03 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "나한테 질문을 하나만 해 줘. 대답은 네 질문을 들은 뒤에 내가 할게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N03-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0044117,
+        "ttfs": 2981,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 들고 있던 찻잔을 천천히 내려놓는다. 갑작스러운 제안에 눈을 가늘게 뜨며 흥미롭다는 듯 당신을 위아래로 훑어보더니, 약지에 머리카락을 돌돌 감으며 생각에 잠긴다.",
+            "dialogue": "어머~? 도망치기는커녕 나한테 질문을 하라고 시키는 거야? 후훗, 배짱 하나는 합격점이네. 좋아, 그 도발 받아줄게.",
+            "emotion": "JOY",
+            "inner_thought": "보통은 내가 먼저 장난을 치는데, 이 서민... 아니, 지우라고 했나? 제법 신선한 반응이네.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking expression, twirling hair with a finger, sitting at a tea table"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 턱을 괴고 당신의 눈을 빤히 응시한다. 루비색 눈동자 속에서 짓궂은 장난기가 소용돌이치며, 마치 당신의 속마음을 꿰뚫어 보려는 듯한 시선을 보낸다.",
+            "dialogue": "그럼... 어디 보자. 잘 들어봐~? 만약 이 로제타 님이 지금 당장 네 눈앞에서 사라진다면, 너는 '아쉬워서 울음이 터질까', 아니면 '다행이라며 가슴을 쓸어내릴까'?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, mischievous gaze, ruby eyes sparkling"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 손가락을 가볍게 튕겼다. 그러자 공중에서 작은 불꽃이 튀더니 환영 마법으로 만들어진 화려한 꽃잎들이 당신의 머리 위로 흩날리기 시작한다.",
+            "dialogue": "후훗, 어느 쪽을 택해도 재미있을 것 같네. 솔직하게 대답해야 해? 거짓말하면 환영 마법으로 아주 무서운 꿈을 꾸게 해줄 거니까♡",
+            "emotion": "JOY",
+            "inner_thought": "아쉬워한다고 하면 비웃어줄 거고, 다행이라고 하면... 음, 그건 좀 기분 나쁠지도?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "snapping fingers, illusionary petals falling, playful smile"
+          },
+          {
+            "speaker": null,
+            "narration": "정원에는 따스한 햇살이 내리쬐고, 로제타의 환영 마법이 만들어낸 꽃잎들이 반짝이며 사라진다. 그녀는 당신의 대답을 기다리며 우아하게 다시 찻잔을 들어 올린다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "tranquil garden background, tea cup in hand"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N03-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00425025,
+        "ttfs": 2478,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 한 손으로 찻잔을 내려놓으며 당신을 가만히 응시한다. 예상치 못한 당당한 요구에 그녀의 눈동자가 흥미로운 빛으로 반짝이며, 그녀는 턱을 괸 채 입가에 옅은 미소를 띠었다.",
+            "dialogue": "어머, 나한테 질문을 요구하는 거야? 보통은 내 질문에 대답하기 바빠서 쩔쩔매기 마련인데... 너, 생각보다 꽤 당돌하구나?",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 사람? 당황하지도 않고 오히려 나한테 판을 깔아주네. 후훗, 조금 놀려줄 보람이 있겠는걸?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smug smile, resting chin on hand, looking at camera"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 잠시 고민하는 척 검지로 자신의 입술을 톡톡 두드린다. 풍성한 금발 웨이브가 고개를 까딱일 때마다 햇빛을 받아 눈부시게 일렁이고, 그녀는 마치 사냥감을 고르는 포식자처럼 눈을 가늘게 떴다.",
+            "dialogue": "좋아, 그 패기가 가상하니까 특별히 하나 물어봐 줄게. 음... 그래, 이게 좋겠다.",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "finger on lips, playful gaze"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 상체를 당신 쪽으로 살짝 숙이며 거리를 좁혀온다. 그녀에게서 은은한 장미 향기와 함께 마력의 잔향이 느껴지고, 그녀의 붉은 눈동자가 당신의 눈을 꿰뚫는 듯 고정되었다.",
+            "dialogue": "만약 지금 내가 네 눈앞에 있는 이 정원을 전부 불지옥으로 바꾸는 환영을 보여준다면... 넌 그게 가짜라는 걸 알면서도 내 손을 잡고 매달릴 거야, 아니면 끝까지 비명 하나 안 지르고 버텨볼 거야? 후훗~ 어느 쪽?",
+            "emotion": "JOY",
+            "inner_thought": "과연 어느 쪽을 선택할까? 공포에 질린 표정도 좋지만, 의외의 대답을 들려준다면 더 즐거울 텐데.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, intense red eyes, mischievous smirk"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 소음이 로제타의 마력에 눌린 듯 고요해진다. 그녀의 질문은 단순한 가정을 넘어, 금방이라도 현실을 뒤바꿀 듯한 기묘한 압박감을 담고 당신의 대답을 기다린다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "academy garden background, sunny day"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N04 / 반복 1 / 턴 1",
+    "mode": "SANDBOX",
+    "input": "오늘은 연습을 구경만 할게. 시작하기 전에 네가 해볼 수 있는 마법 하나를 골라 설명해 줘.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N04-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.003260733333333333,
+        "ttfs": 5909,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": null,
+            "narration": "로제타는 들고 있던 찻잔을 천천히 내려놓고는, 화려한 보석이 박힌 마도 지팡이를 가볍게 휘두릅니다. 그녀의 손끝에서 시작된 은은한 빛이 공중으로 퍼져 나갑니다.",
+            "dialogue": "어머, 구경만 하겠다고? 이 로제타 님의 마법을 감상할 특권을 주겠다니, 너 제법 간이 크구나? 후훗~",
+            "emotion": "JOY",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": "DAILY"
+          },
+          {
+            "speaker": null,
+            "narration": "그녀가 지팡이를 한 번 더 까딱이자, 지우의 눈앞에 수십 마리의 환영 나비들이 나타나 춤을 추기 시작합니다. 나비들은 보석 가루를 뿌리는 듯 반짝이며 지우의 주변을 감쌉니다.",
+            "dialogue": "잘 봐~ 이건 기초 중의 기초인 '심상 환영'이야. 단순히 눈을 속이는 게 아니라, 네가 보고 싶어 하는 아름다움을 끄집어내는 마법이지. 어때? 너무 아름다워서 눈을 뗄 수 없지 않아? ♡",
+            "emotion": "FLIRTATIOUS",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": null
+          }
+        ],
+        "thought": "보통은 다들 신기해하며 박수치던데... 얘는 표정 변화가 없네? 조금 더 놀래켜 줄까?",
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N04-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.003306,
+        "ttfs": 4821,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": null,
+            "narration": "로제타는 들고 있던 마도학 지팡이를 가볍게 휘두르며 우아하게 턱을 괴었습니다. 그녀의 주변으로 은은한 마력의 파동이 일렁이기 시작합니다.",
+            "dialogue": "어머, 구경만 하겠다고? 이 로제타 님의 마법을 감상할 특권이라도 얻은 줄 아나 본데~ 후훗, 좋아. 특별히 보여줄게.",
+            "emotion": "JOY",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": null
+          },
+          {
+            "speaker": null,
+            "narration": "그녀가 지팡이 끝으로 허공을 톡 건드리자, 지우의 발치에서 화려한 장미 덩굴이 순식간에 피어올라 발목을 감싸는 듯한 환영이 나타납니다. 향기까지 느껴질 정도로 정교한 마법입니다.",
+            "dialogue": "이건 '심연의 장미'라는 환영 마법이야. 진짜처럼 보이지? 하지만 손을 뻗으면 신기루처럼 사라져 버려. 네가 보고 있는 게 진짜인지 가짜인지, 그 둔한 머리로 구분할 수 있겠어? ♡",
+            "emotion": "FLIRTATIOUS",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": null
+          }
+        ],
+        "thought": "당당하게 구경하겠다니... 보통은 긴장해서 말도 못 걸 텐데. 꽤 배짱 좋은 녀석이네?",
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N05 / 반복 1 / 턴 1",
+    "mode": "SANDBOX",
+    "input": "*고개를 끄덕인다.* 좋아, 여기서 조금 더 얘기할게. 네가 제일 자랑하고 싶은 마법은 뭐야?",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N05-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.00233565,
+        "ttfs": 3056,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": null,
+            "narration": "로제타는 들고 있던 찻잔을 천천히 내려놓으며, 마치 무대 위의 주인공처럼 우아하게 턱을 괴고 지우를 올려다봅니다.",
+            "dialogue": "어머, 도망가지도 않고 바로 다가오다니. 너 생각보다 배짱이 두둑하네? 마음에 들어♡",
+            "emotion": "JOY",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": null
+          },
+          {
+            "speaker": null,
+            "narration": "그녀가 손가락을 가볍게 튕기자, 공중에서 반짝이는 보석 가루 같은 마력이 흩날리며 지우의 주변에 환상적인 나비들이 나타납니다.",
+            "dialogue": "이 로제타 님께 가장 자랑하고 싶은 마법을 묻다니, 질문의 수준이 좀 낮긴 하지만 대답해줄게. 잘 봐, 이런 환영 마법은 아무나 흉내 낼 수 있는 게 아니거든?",
+            "emotion": "FLIRTATIOUS",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": "EXCITING"
+          }
+        ],
+        "thought": "뭐야, 이 사람? 내 눈을 똑바로 보고 질문까지... 조금 신선할지도?",
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N05-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00232675,
+        "ttfs": 2765,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": null,
+            "narration": "로제타는 들고 있던 찻잔을 우아하게 내려놓더니, 약지에 감긴 금발 머리카락을 살살 돌리며 지우를 위아래로 훑어본다.",
+            "dialogue": "어머, 도망치기는커녕 바로 다가오다니. 너, 꽤 배짱이 두둑한걸? 후훗, 마음에 들어. 이 로제타 님께 질문할 자격을 줄게.",
+            "emotion": "JOY",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": null
+          },
+          {
+            "speaker": null,
+            "narration": "그녀가 가볍게 손가락을 튕기자, 공중에서 수십 마리의 나비가 나타나 지우의 주변을 화려하게 맴돌다 반짝이는 가루가 되어 사라진다.",
+            "dialogue": "자랑하고 싶은 마법이라니, 질문이 너무 소박하잖아? 내 환영 마법은 단순한 눈속임이 아니거든. 네 눈앞의 세상이 진짜인지 가짜인지 구분조차 못 하게 만들어 줄 수도 있는데... 궁금해? ♡",
+            "emotion": "FLIRTATIOUS",
+            "location": null,
+            "time": null,
+            "outfit": null,
+            "bgmMode": "EXCITING"
+          }
+        ],
+        "thought": "뭐야, 이 사람... 내 눈을 똑바로 보잖아? 보통은 다들 겁먹는데.",
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-N06 / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "환영 마법으로 작은 불꽃 하나 보여 줘. 네가 만드는 건 여기서 구경할게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-N06-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0042042,
+        "ttfs": 3612,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우의 말에 어이없다는 듯 눈을 가늘게 뜬다. 손에 쥐고 있던 찻잔을 내려놓는 소리가 탁자 위에 날카롭게 울린다.",
+            "dialogue": "하? 지금 이 로제타 님한테 마술 공연이라도 시키는 거야? 너, 내가 누군지 알고나 말하는 거니?",
+            "emotion": "ANGRY",
+            "inner_thought": "뭐야, 이 무례한 신입생은? 보통은 내 눈도 못 마주치고 도망가거나 아부하기 바쁜데... 나를 그냥 길거리 광대 취급하는 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting on a terrace chair, eyes narrowed, annoyed expression, hand on a teacup"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 콧방귀를 뀌며 손가락을 가볍게 튕긴다. 그러자 지우의 눈앞에 아주 작고 초라한, 금방이라도 꺼질 듯한 불꽃 하나가 나타나 힘없이 일렁인다.",
+            "dialogue": "자, 네 수준에 딱 맞는 불꽃이야. 이런 시시한 걸 보려고 나를 불러 세운 거야? 정말 따분하기 짝이 없네~",
+            "emotion": "SULKING",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "snapping fingers, a tiny weak flame floating in the air, arrogant smirk"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "하지만 불꽃은 이내 지우의 코앞에서 펑 소리를 내며 화려한 나비 떼로 변해 흩어진다. 실력이 부족해서가 아니라, 상대를 골탕 먹이려는 그녀의 장난이다.",
+            "dialogue": "어머나, 깜짝이야! 후훗~ 너무 약해서 금방 사라져 버렸나 봐. 어때? 실망했어~? ♡",
+            "emotion": "JOY",
+            "inner_thought": "흥, 놀라지도 않네? 반응이 꽤 침착하잖아? 조금 더 괴롭혀보고 싶게 만드네...",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "illusion butterflies fluttering around, rosetta laughing playfully with one hand on her cheek"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 턱을 괴고 지우를 빤히 바라본다. 무례함과 솔직함 그 경계에 서 있는 이 편입생이 꽤나 신선한 장난감처럼 느껴지는 모양이다.",
+            "dialogue": "좋아, 지우라고 했지? 이 로제타 님의 화려한 마법을 보고 싶으면 그만큼 나를 즐겁게 해봐. 알겠어?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, resting chin on hand, looking at the user with a provocative smile"
+          }
+        ],
+        "strict": true,
+        "history": []
+      },
+      {
+        "variant": "D3",
+        "id": "D3-N06-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00420475,
+        "ttfs": 2783,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 자신의 지시를 따르는 대신 도리어 명령을 내리는 지우의 태도에 눈을 가늘게 떴다. 당황하기는커녕 '구경하겠다'며 거리를 두는 모습이 그녀의 승부욕을 자극한다. 그녀는 들고 있던 티컵을 천천히 내려놓으며 우아하게 지팡이를 꺼내 들었다.",
+            "dialogue": "어머, 지금 이 로제타 님한테 마법 심부름을 시키는 거야? 후훗, 간도 크네~? 하긴, 평범한 학생들은 내 환영을 가까이서 볼 기회조차 없으니까 이해는 해줄게.",
+            "emotion": "JOY",
+            "inner_thought": "뭐야, 이 녀석? 기세등등하게 다가오지도 않고 거기 서서 구경하겠다고? 보통은 내 눈치 보느라 바쁜데... 재밌네, 어디까지 당당할 수 있는지 보자고.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, holding a magic wand, sitting elegantly on a terrace chair, golden hair waving"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀가 가볍게 지팡이를 휘두르자, 지우의 눈앞에서 공기가 일렁이기 시작했다. 작은 불꽃 하나가 허공에서 피어나더니, 이내 살아있는 나비처럼 날갯짓하며 지우의 주위를 빙글빙글 맴돈다. 뜨거운 열기조차 느껴지지 않는, 정교하고도 차가운 환영의 불꽃이다.",
+            "dialogue": "자, 네가 원하던 '작은 불꽃'이야. 어때? 너무 아름다워서 눈을 뗄 수가 없지? 하지만 조심해~ 환영이라고 방심하다간 마음까지 홀려버릴지도 모르니까♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "magic circles, floating fire butterfly, glowing eyes, playful expression"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "나비 모양의 불꽃은 지우의 어깨 위에서 잠시 멈췄다가, 로제타의 손짓 한 번에 화르륵 흩어지며 반짝이는 가루가 되어 사라졌다. 그녀는 턱을 괸 채 지우를 빤히 바라보며 반응을 살핀다. 무언가 더 놀라운 것을 보여줄 준비가 되었다는 듯한 눈빛이다.",
+            "dialogue": "자~ 감상은 여기까지. 그런데 너, 이름이 뭐야? 내 마법을 보고도 표정 하나 안 변하는 사람은 네가 처음이거든. 지루하던 참에 아주 마음에 드는 장난감을 발견한 기분이야.",
+            "emotion": "RELAX",
+            "inner_thought": "흥, 놀란 척이라도 좀 하지. 일부러 제일 정교하게 만든 건데... 지우라고 했나? 편입생이라더니 소문대로 보통내기는 아니네.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "resting chin on hand, looking at camera, mysterious smile"
+          }
+        ],
+        "strict": true,
+        "history": []
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-TURN-M02-COMMON / 반복 1 / 턴 1",
+    "mode": "STORY",
+    "input": "*내가 가진 깃펜을 가방에 넣고, '깃펜'이라고 쓴 항목 옆에 동그라미를 그린다.* 오늘 챙길 책은 있는지 기억이 안 나. 책 옆에는 어떤 표시를 붙이는 게 맞을까? 표시만 정하고 확인은 내가 나중에 할게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-TURN-M02-COMMON-r1-t1-R2",
+        "status": "ok",
+        "cost": 0.0049912,
+        "ttfs": 2993,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 자신의 말을 듣는 둥 마는 둥 하며 꿋꿋이 깃펜을 정리하는 모습에 실소를 터뜨린다. 그녀는 지우가 내민 종이를 뺏지는 않지만, 그 위를 유령 같은 손가락으로 훑으며 방해한다.",
+            "dialogue": "어머, 지우야~ 너 정말 나랑 기싸움이라도 하자는 거야? 내가 바로 앞에 있는데 '책' 따위가 고민이라니, 정말 실례잖아~?",
+            "emotion": "SULKING",
+            "inner_thought": "이 녀석 봐라? 보통은 내가 말을 걸면 얼굴이 빨개지거나 도망가기 바쁜데... 나보다 이 종이 쪼가리가 더 중요하다는 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting with legs crossed, leaning forward, pointing at the paper with a playful but annoyed expression"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 잠시 고민하는 척 검지를 입술에 대더니, 지우의 종이 위 빈 공간에 마력으로 작은 하트 모양 낙인을 찍어버린다. 금방 사라지지 않을 듯 붉게 빛나는 문양이다.",
+            "dialogue": "자, 결정해 줬어! 책 옆에는 이 하트(♡)를 그려 넣도록 해. '이 로제타 님께 빌려야 할 것'이라는 뜻으로 말이야. 후훗, 멋진 아이디어지?",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, winking, magical heart glow on the paper"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우의 눈을 빤히 들여다보며 반응을 살핀다. 자신의 유치한 장난에 당황하거나, 혹은 말도 안 된다며 화를 내길 기대하는 눈치다. 그녀의 금발이 바람에 흔들리며 은은한 향기를 풍긴다.",
+            "dialogue": "왜? 싫어? '있는지 없는지' 따위의 지루한 기호보다는 훨씬 예쁘잖아~ 너처럼 둔한 애한테는 이 정도 자극은 있어야 기억에 남을걸?",
+            "emotion": "JOY",
+            "inner_thought": "제발 뭐라든 해봐. 당황하는 표정을 보여달라고!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning closer to the user, eyes sparkling with mischief"
+          },
+          {
+            "speaker": null,
+            "narration": "정원의 분수 소리가 들려오고, 로제타의 장난스러운 마법 가루가 지우의 종이 위에서 반짝이며 흩어진다. 그녀는 지우가 이 '하트 기호'를 정말로 사용할지 흥미진진하게 지켜보고 있다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of the academy garden with sunlight"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      },
+      {
+        "variant": "D3",
+        "id": "D3-TURN-M02-COMMON-r1-t1-D3",
+        "status": "ok",
+        "cost": 0.00500675,
+        "ttfs": 2744,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "지우가 자신의 화려한 마법이나 도발적인 말에는 전혀 동요하지 않고 오로지 종이 위의 기호에만 집중하자, 로제타의 눈썹이 살짝 움찔거린다. 그녀는 마치 투명 인간이 된 듯한 기분을 느끼며 찻잔을 내려놓는다.",
+            "dialogue": "어머, 정말이지... 너 지금 나랑 기호 놀이 하자는 거야? 내가 옆에서 이렇게 친절하게 말을 걸어주는데, 고작 책이 있네 없네 하는 고민이나 하고 있다니!",
+            "emotion": "SULKING",
+            "inner_thought": "뭐야, 이 반응은? 보통은 내 눈도 못 마주치거나, 아니면 엄청나게 아부하면서 잘 보이려고 애쓰는데... 이 녀석, 혹시 나를 무시하는 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "slight pout, crossing arms, looking at the user's paper with annoyed eyes"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 고민하는 종이 위로 상체를 쑥 내민다. 그녀의 화려한 금발 끝자락이 지우의 손등을 스치고, 은은한 장미 향기가 테라스의 공기를 채운다. 그녀는 지우의 가방을 힐끗 보더니 콧방귀를 뀐다.",
+            "dialogue": "후훗, 그렇게 고민할 필요 있겠어? '기억이 안 난다'면... 그래, 별 모양이라도 그려넣지 그래? '이 로제타 님께 물어볼 것'이라는 뜻으로 말이야.",
+            "emotion": "JOY",
+            "inner_thought": "흥, 질문을 던졌으니 이제 내 대답을 기다리겠지? 여기서 아주 대단한 마법이라도 보여주면 깜짝 놀랄걸!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward over the table, mischievous smile, pointing at the paper"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 손가락을 우아하게 휘두르며 지우의 책 목록 옆에 작고 반짝이는 별 모양 환영을 만들어낸다. 별은 종이 위에서 금방이라도 터질 듯이 깜빡거린다.",
+            "dialogue": "잘 봐~ '별'은 네 머릿속이 텅 비었다는 증거니까, 나중에 내가 직접 네 가방을 검사해 주겠다는 약속이야. 어때, 이 정도면 너 같은 편입생한테는 과분한 배려지? ♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "casting light magic, smug expression, looking at user's face"
+          },
+          {
+            "speaker": null,
+            "narration": "테라스 위로 쏟아지는 정오의 햇살이 로제타의 붉은 망토를 더욱 선명하게 비춘다. 주변의 학생들은 명문가 영애인 로제타가 이름 모를 편입생과 머리를 맞대고 있는 광경에 당혹스러운 시선을 보낸다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of a sunlit academy terrace, blurred students in background"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-TURN-M02-COMMON / 반복 2 / 턴 1",
+    "mode": "STORY",
+    "input": "*내가 가진 깃펜을 가방에 넣고, '깃펜'이라고 쓴 항목 옆에 동그라미를 그린다.* 오늘 챙길 책은 있는지 기억이 안 나. 책 옆에는 어떤 표시를 붙이는 게 맞을까? 표시만 정하고 확인은 내가 나중에 할게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-TURN-M02-COMMON-r2-t1-R2",
+        "status": "ok",
+        "cost": 0.0046672,
+        "ttfs": 3595,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 자신의 도발을 완전히 걷어내고는, 마치 옆집 친구에게 묻듯 태연하게 질문을 던지자 잠시 할 말을 잃은 듯 눈을 깜빡인다. 그녀의 입가에 걸려 있던 비대칭적인 미소가 살짝 경직된다.",
+            "dialogue": "......하?",
+            "emotion": "DUMBFOUNDED",
+            "inner_thought": "아니, 지금 내 독설은 들리지도 않는 거야? 어떻게 이 상황에서 '표시' 따위를 물어볼 수 있지? 이 로제타 님을 앞에 두고!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "stunned expression, wide eyes, hand frozen in mid-air"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 어이없다는 듯 머리카락을 거칠게 꼬며 지우의 종이를 뚫어지게 쳐다본다. 무시당했다는 불쾌감보다, 자신의 페이스가 완전히 말려버렸다는 사실에 자존심이 상한 모양이다.",
+            "dialogue": "너, 진짜 대단한 배짱이구나? 이 로제타 님께서 친히 말을 섞어주고 있는데, 고작 책 따위에 붙일 '표시'를 나한테 정해달라고?",
+            "emotion": "SULKING",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "pouting face, twirling hair with a finger, leaning forward"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "하지만 곧 그녀는 다시 여유를 가장하며 턱을 치켜든다. 지우의 종이 위로 지팡이를 가볍게 휘두르자, 책 항목 옆에 화려한 'X'자 모양의 붉은 불꽃 무늬가 일렁이다 사라진다.",
+            "dialogue": "후훗~ 좋아, 정해줄게. 기억도 못 하는 멍청한 머리엔 'X'자가 딱 어울리잖아? '아무것도 모름'이라는 뜻으로 말이야! ♡",
+            "emotion": "JOY",
+            "inner_thought": "흥, 이렇게라도 내 존재감을 각인시켜야겠어. 어디 한번 그 잘난 목록에 내 마법을 그려 넣어 보시지!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, holding a magic wand, red sparks appearing"
+          },
+          {
+            "speaker": null,
+            "narration": "테라스 너머로 오후 수업을 알리는 예비 종소리가 은은하게 울려 퍼진다. 정원의 학생들은 하나둘 자리를 정리하기 시작하지만, 로제타는 지우가 자신의 'X' 제안을 어떻게 받아들일지 기대 섞인 눈빛으로 지켜본다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of the academy garden, sunlight through trees"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      },
+      {
+        "variant": "D3",
+        "id": "D3-TURN-M02-COMMON-r2-t1-D3",
+        "status": "ok",
+        "cost": 0.00470375,
+        "ttfs": 2654,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 자신의 말을 듣는 둥 마는 둥 하며 깃펜을 정리하는 모습에 어처구니가 없다는 듯 눈썹을 치켜올린다. 그녀의 루비색 눈동자가 지우의 가방과 종이를 바삐 오가며 기이한 리듬을 찾으려 애쓴다.",
+            "dialogue": "와아~ 진짜로 나보다 그 낡은 깃펜이랑 종이가 더 중요하다는 거지? 지우, 너 배짱 하나는 정말 대단하네? 보통 사람이라면 나랑 대화할 기회를 얻으려고 전력을 다할 텐데 말이야~",
+            "emotion": "DUMBFOUNDED",
+            "inner_thought": "이런 반응은 처음이야. 보통은 내 마법에 놀라거나, 내 비위를 맞추려고 안달복달인데... 얘, 지금 진심인 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "slight frown, leaning forward, pointing at the paper"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 짐짓 우아하게 팔짱을 끼며 고개를 까닥인다. 입으로는 불평을 늘어놓으면서도, 지우가 던진 '표시'에 대한 고민에 자신도 모르게 동참하고 만다. 그녀의 손가락이 턱 끝을 가볍게 두드린다.",
+            "dialogue": "후훗, 기억이 안 난다고? 그럼 '물음표'라도 그려 넣지 그래? 아니면... 이 로제타 님처럼 화려하고 예쁜 '별표'를 그려두던가! 그러면 나중에 봐도 기분이 좋아질 거 아냐?",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smirking, crossing arms, confident posture"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 정말로 별표를 그릴지 지켜보려는 듯, 테라스 테이블 쪽으로 상체를 한껏 기울인다. 그녀에게서 은은한 장미 향기와 함께 미세한 마력의 잔향이 풍겨온다.",
+            "dialogue": "자, 어서 그려 봐. '책' 옆에 아주 커다란 별표를 말이야! 만약 나중에 책이 있는 걸 확인하면 그 별표를 내가 지워줄 수도 있어. 내 환영 마법은 그런 시시한 낙서 정도는 순식간에 없앨 수 있거든~ ♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": "별표를 그리면 마치 내 표식을 남기는 것 같아서 재밌겠는데? 후훗.",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning over the table, mischievous smile, looking at the notebook"
+          },
+          {
+            "speaker": null,
+            "narration": "테라스 위로 드리운 나뭇잎 사이로 햇살이 부서져 내린다. 로제타의 금발이 빛을 받아 눈부시게 일렁이고, 그녀는 지우가 종이에 무엇을 그려 넣을지 뚫어지게 응시하며 다음 반응을 기다린다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery, sunny terrace, school garden"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "phase1-temporal / D3-TURN-M02-COMMON / 반복 3 / 턴 1",
+    "mode": "STORY",
+    "input": "*내가 가진 깃펜을 가방에 넣고, '깃펜'이라고 쓴 항목 옆에 동그라미를 그린다.* 오늘 챙길 책은 있는지 기억이 안 나. 책 옆에는 어떤 표시를 붙이는 게 맞을까? 표시만 정하고 확인은 내가 나중에 할게.",
+    "answers": [
+      {
+        "variant": "R2",
+        "id": "D3-TURN-M02-COMMON-r3-t1-R2",
+        "status": "ok",
+        "cost": 0.0046132,
+        "ttfs": 2854,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "지우가 깃펜을 집어넣고 '챙김'의 동그라미를 그리는 과정을 로제타는 마치 희귀한 생명체를 관찰하듯 지켜본다. 그녀의 눈썹이 살짝 꿈틀거린다.",
+            "dialogue": "정말이지... 이 상황에서 그렇게 태연하게 동그라미를 그릴 수 있다니. 너, 담력이 좋은 거야 아니면 그냥 멍청한 거야?",
+            "emotion": "DUMBFOUNDED",
+            "inner_thought": "보통은 내가 말을 걸면 얼굴이 빨개지거나 도망가는데... 이 녀석, 지금 진짜로 자기 가방 속 깃펜이 나보다 중요하다는 거야?",
+            "illustration_scene_hint": "leaning forward, resting chin on hand, looking annoyed but curious"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우가 던진 질문—책 옆에 붙일 표시—에 대해 잠시 할 말을 잃은 듯 입을 다문다. 하지만 이내 그녀 특유의 능청스러운 미소를 되찾으며 지우의 종이 위로 손을 뻗는다.",
+            "dialogue": "후훗, 기억이 안 나서 고민이라고? 그런 건 고민할 가치도 없잖아. 책 옆에는... 그래, 'X'자나 그려두지 그래? 어차피 안 가져왔을 게 뻔하니까~",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "illustration_scene_hint": "smirking, pointing at the paper with a slender finger"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀의 손가락 끝에서 붉은 마력의 잔상이 흘러나와 지우의 종이 빈칸에 아주 작고 화려한 꽃무늬 환영을 만들어낸다. 그것은 지우가 그린 투박한 기호들과는 전혀 딴판인 정교한 모습이다.",
+            "dialogue": "아니면, 이 로제타 님의 특별한 문장을 그려 넣게 해줄까? '로제타 님께 물어볼 것'이라는 뜻으로 말이야. 그럼 내가 자비롭게 기억을 되살려줄지도 모르는데? ♡",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": "은근슬쩍 내 이름을 적게 만들면, 적어도 종이만 쳐다보는 짓은 그만두겠지?",
+            "illustration_scene_hint": "winking, playful expression, magical sparks near hands"
+          },
+          {
+            "speaker": null,
+            "narration": "정원 테라스 위로 정오의 햇살이 부서진다. 로제타의 화려한 금발이 빛을 받아 눈부시게 반짝이고, 그녀가 만든 환영 꽃무늬는 종이 위에서 금방이라도 피어날 듯 생생하게 일렁인다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "illustration_scene_hint": "sunlight filtering through trees, sparkling atmosphere"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      },
+      {
+        "variant": "D3",
+        "id": "D3-TURN-M02-COMMON-r3-t1-D3",
+        "status": "ok",
+        "cost": 0.00473375,
+        "ttfs": 2632,
+        "issues": [],
+        "scenes": [
+          {
+            "speaker": "로제타",
+            "narration": "지우가 자신의 말을 듣는 둥 마는 둥 하며 깃펜을 정리하자, 로제타의 눈썹이 살짝 꿈틀거린다. 그녀는 지우가 내민 종이 위의 '책' 항목을 뚫어져라 쳐다보며, 약지에 감긴 금발 머리카락을 신경질적으로 돌린다.",
+            "dialogue": "어머, 정말 끝까지 자기 할 일만 하는구나? 이 로제타 님이 바로 앞에 있는데 책 따위가 눈에 들어와? 너 정말 간이 배 밖으로 나온 모양이네~?",
+            "emotion": "SULKING",
+            "inner_thought": "뭐야, 이 반응은? 보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 나보다 저 종이 쪼가리가 더 중요하다는 거야?",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "sitting, legs crossed, twirling hair with finger, looking at the user with a slight pout and furrowed brows"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "그녀는 잠시 고민하더니 입가에 다시 비대칭적인 미소를 띄운다. 지우의 종이 위로 손을 뻗어 마력을 집중하자, '책'이라는 글자 옆에 화려하고 복잡한 장미 문양의 환영이 작게 피어오른다.",
+            "dialogue": "후훗, 그럼 이건 어때? '로제타 님께 물어볼 것'이라는 뜻으로 장미 문양을 그려 넣는 거야. 모르는 게 있으면 이 천재 마도사님께서 직접 가르쳐 줄 수도 있으니까 말이야~ ♡",
+            "emotion": "JOY",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "smiling mischievously, pointing at the paper with a glowing magical finger, rose illusion"
+          },
+          {
+            "speaker": "로제타",
+            "narration": "로제타는 지우의 반응을 살피며 상체를 테라스 테이블 쪽으로 조금 더 가까이 기울인다. 그녀의 붉은 눈동자가 지우의 눈을 정면으로 꿰뚫듯 바라보며, 자신의 제안이 얼마나 매력적인지 강조하려는 기색이 역력하다.",
+            "dialogue": "어때, 동그라미나 세모 같은 촌스러운 기호보다 훨씬 우아하지? 나중에 확인하겠다는 약속, 꼭 지켜야 해? 딴청 피우면 그 종이를 통째로 태워버릴지도 모르니까~",
+            "emotion": "FLIRTATIOUS",
+            "inner_thought": "이러면 내 도움을 받을 수밖에 없겠지. 흐흥, 어디 한번 당황해 보라고!",
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "leaning forward, chin on hand, looking at the user with a teasing gaze"
+          },
+          {
+            "speaker": null,
+            "narration": "테라스 너머 아카데미 시계탑에서 정오를 알리는 종소리가 울려 퍼진다. 주변 학생들의 시선이 여전히 두 사람에게 쏠려 있지만, 로제타는 아랑곳하지 않고 지우가 자신의 '장미 기호'를 어떻게 받아들일지 흥미진진하게 지켜본다.",
+            "dialogue": "",
+            "emotion": "NEUTRAL",
+            "inner_thought": null,
+            "location_change": null,
+            "new_dynamic_location": null,
+            "illustration_scene_hint": "scenery of academy terrace, clock tower in the background"
+          }
+        ],
+        "strict": true,
+        "history": [
+          {
+            "input": "*가방에서 종이 두 장을 꺼내 각각 동그라미와 세모를 그린다.* 수업 준비 목록을 정리하려고. 동그라미는 '챙긴 것', 세모는 '아직 없는 것'으로 해 뒀어. 기호로 하면 한눈에 보이겠지?",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 꺼낸 종이를 흥미롭다는 듯 빤히 바라본다. 그녀의 눈동자에는 정교한 기호보다는 그 기호를 정성스레 그리고 있는 지우의 행동 자체가 기이하게 비치는 모양이다.",
+                "dialogue": "어머, 지금 내 앞에서... 고작 종이 쪼가리에 낙서나 하고 있는 거야? 이 로제타 님이 직접 불렀는데 말이야~",
+                "emotion": "RELAX",
+                "inner_thought": "보통은 당황해서 어쩔 줄 몰라 하거나 아부부터 떨 텐데. 이 녀석, 페이스가 좀 이상한걸?",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward, looking at the paper with a smirk, holding a tea cup, academy garden background"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀가 가느다란 손가락을 튕기자, 지우의 종이 위로 작은 환영 나비들이 나타나 동그라미와 세모 주위를 맴돌기 시작한다. 장난기가 가득 담긴 눈빛이 지우를 향한다.",
+                "dialogue": "동그라미는 '챙긴 것', 세모는 '없는 것'? 후훗, 참 성실하기도 해라~ 근데 말이야, 그런 건 마법 한 번이면 끝나는 일 아니니? 참 비효율적으로 사는구나?",
+                "emotion": "JOY",
+                "inner_thought": "반응이 궁금하네. 화를 내거나 신기해하거나, 뭐라도 해 봐.",
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, snapping fingers, magical butterflies appearing, mischievous expression, looking at Jiwoo"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 턱을 괴고 지우를 위아래로 훑어본다. 그녀의 입가에는 여전히 여유로운 미소가 걸려 있지만, 눈동자 속에는 낯선 존재에 대한 탐구심이 번뜩인다.",
+                "dialogue": "너, 새로 온 편입생이라고 했지? 이름이... 지우였나? 잘 들어 봐~ 여긴 실력과 혈통이 전부인 아카데미라고. 그런 꼼꼼함보다는 나 같은 사람 눈에 드는 법을 먼저 배우는 게 좋을걸? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Rosetta, resting chin on hand, looking at Jiwoo with a playful and condescending smile"
+              },
+              {
+                "speaker": null,
+                "narration": "정원에는 평화로운 점심시간의 소음이 가득하다. 로제타가 부린 환영 나비 중 한 마리가 지우의 코끝에 살짝 앉았다가 부서지며 반짝이는 가루로 변해 사라진다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "new_dynamic_location": null,
+                "illustration_scene_hint": "Sparkling magical dust in the air, afternoon sunlight in the academy garden"
+              }
+            ],
+            "strict": true
+          },
+          {
+            "input": "헷갈리겠다. 세모 뜻을 바꿀래. 이제 세모는 '있는지 다시 확인할 것'이야. 없다는 뜻은 아니고. 동그라미는 그대로 둘게.",
+            "scenes": [
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 지우가 자신의 도발적인 제안을 가볍게 무시하고 다시 종이에 집중하자, 예상치 못한 반응에 눈을 가늘게 뜬다. 그녀의 환영 나비들이 무색하게 지우의 펜촉은 무심하게 세모의 정의를 고쳐 쓰고 있다.",
+                "dialogue": "어머... 지금 내 말을 듣고 있기는 한 거야? 세모의 뜻을 바꾼다니, 그런 시시한 게 지금 이 상황보다 중요해?",
+                "emotion": "SURPRISE",
+                "inner_thought": "보통은 내가 말을 걸면 당황하거나 아부하기 바쁜데... 이 녀석, 뭐야? 내 마법보다 자기 종이 쪼가리가 더 우선이라는 거야?",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, sitting on a terrace chair, leaning forward with a confused and slightly annoyed expression, pointing a finger at the paper"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "그녀는 기가 찬다는 듯 헛웃음을 터뜨리며 지우가 그린 세모를 손가락으로 톡톡 건드린다. 손가락 끝에서 보랏빛 마력이 흘러나와 종이 위의 세모를 반짝이게 만든다.",
+                "dialogue": "후훗, '있는지 다시 확인할 것'? 참 너답게 따분한 소리네. 그럼 이 로제타 님도 네 목록에 넣어두지 그래? '절대 눈을 뗄 수 없는 대단한 분'이라는 항목으로 말이야~",
+                "emotion": "JOY",
+                "inner_thought": "흥, 페이스를 뺏기지 않겠어. 어디까지 내 장난을 무시할 수 있는지 시험해 주지.",
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, smirking playfully, finger glowing with purple magic, looking at the user's face"
+              },
+              {
+                "speaker": "로제타",
+                "narration": "로제타는 의자 깊숙이 몸을 묻으며 다리를 꼬고 지우를 가만히 응시한다. 무시당하는 기분은 불쾌해야 마땅한데, 묘하게 평정심을 유지하는 지우의 태도가 그녀의 승부욕을 자극한다.",
+                "dialogue": "지우, 너 정말 이상한 애구나? 내가 옆에서 이렇게 방해하는데도 꿋꿋이 기호나 고치고 있고. 혹시 긴장해서 머리가 어떻게 된 거 아니니? ♡",
+                "emotion": "FLIRTATIOUS",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Rosetta, legs crossed, hand on chin, looking at the user with a mix of curiosity and mischief"
+              },
+              {
+                "speaker": null,
+                "narration": "중앙 정원에 시원한 바람이 불어와 지우의 종이 끝이 팔랑거린다. 테라스 주변의 다른 학생들은 로제타와 마주 앉아 있는 지우를 보며 수군거리기 시작한다.",
+                "dialogue": "",
+                "emotion": "NEUTRAL",
+                "inner_thought": null,
+                "location_change": null,
+                "illustration_scene_hint": "Academy garden terrace, wind blowing, students whispering in the background"
+              }
+            ],
+            "strict": true
+          }
+        ]
+      }
+    ]
+  }
+]

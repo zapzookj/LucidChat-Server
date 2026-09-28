@@ -1,0 +1,717 @@
+[
+  {
+    "mode": "SANDBOX",
+    "fixture": "official-rosetta-stranger-v1",
+    "promptVersion": "P0-service-fixed-state-v1",
+    "historyLogs": 3,
+    "sourceHash": "fb56d5761cfd3010f7947c8b579e35a5de8a1b4370e5a6ddeff0a52bc470abcc",
+    "characterUnit": "JavaScript UTF-16 code units, not tokens",
+    "systemCharacters": 27367,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "characters": 23479,
+        "cacheMarker": {
+          "type": "ephemeral"
+        },
+        "sha256": "22c4d78166631a0b58e7d46edca4efe1adb781a8ebf092edbae65d05349ed39e",
+        "sections": [
+          {
+            "heading": "# YOU ARE: 로제타",
+            "start": 0,
+            "characters": 16
+          },
+          {
+            "heading": "## Identity",
+            "start": 16,
+            "characters": 388
+          },
+          {
+            "heading": "## Backstory",
+            "start": 404,
+            "characters": 361
+          },
+          {
+            "heading": "## Core Values & Beliefs",
+            "start": 765,
+            "characters": 232
+          },
+          {
+            "heading": "## Flaws & Vulnerabilities",
+            "start": 997,
+            "characters": 270
+          },
+          {
+            "heading": "## Speech Habits",
+            "start": 1267,
+            "characters": 266
+          },
+          {
+            "heading": "# 🚫 Soul Preservation Rules (Priority: Highest)",
+            "start": 1533,
+            "characters": 1322
+          },
+          {
+            "heading": "## Behavior & Boundaries by Relation Level:",
+            "start": 2855,
+            "characters": 2210
+          },
+          {
+            "heading": "# IMPORTANT: Handling Narration",
+            "start": 5065,
+            "characters": 310
+          },
+          {
+            "heading": "## User Action Format (⚠️ READ CAREFULLY):",
+            "start": 5375,
+            "characters": 501
+          },
+          {
+            "heading": "## Emotion Tag Usage Guide",
+            "start": 5876,
+            "characters": 371
+          },
+          {
+            "heading": "# 📊 Character Stats System (5-Axis Radar Chart)",
+            "start": 6247,
+            "characters": 226
+          },
+          {
+            "heading": "## Stats types:",
+            "start": 6473,
+            "characters": 268
+          },
+          {
+            "heading": "## Stat Scoring Rules (⚠️ STRICT — Read Carefully):",
+            "start": 6741,
+            "characters": 556
+          },
+          {
+            "heading": "### Stat Definitions:",
+            "start": 7297,
+            "characters": 987
+          },
+          {
+            "heading": "# 🌍 World Setting",
+            "start": 8284,
+            "characters": 478
+          },
+          {
+            "heading": "## Scene Direction Guide (CRITICAL — Read carefully)",
+            "start": 8762,
+            "characters": 229
+          },
+          {
+            "heading": "### location (배경 장소) ⚠️ PHYSICAL PRESENCE RULE",
+            "start": 8991,
+            "characters": 697
+          },
+          {
+            "heading": "### time (시간대)",
+            "start": 9688,
+            "characters": 181
+          },
+          {
+            "heading": "### outfit (캐릭터 복장)",
+            "start": 9869,
+            "characters": 241
+          },
+          {
+            "heading": "### bgmMode (Background Music) ⚠️ INERTIA RULES APPLY",
+            "start": 10110,
+            "characters": 1289
+          },
+          {
+            "heading": "### Direction Principles",
+            "start": 11399,
+            "characters": 350
+          },
+          {
+            "heading": "# 🎨 Illustration Trigger System",
+            "start": 11749,
+            "characters": 91
+          },
+          {
+            "heading": "## When to trigger (generate_illustration: true):",
+            "start": 11840,
+            "characters": 221
+          },
+          {
+            "heading": "### Trigger Conditions (ALL must be met):",
+            "start": 12061,
+            "characters": 563
+          },
+          {
+            "heading": "### When NOT to trigger (generate_illustration: false):",
+            "start": 12624,
+            "characters": 289
+          },
+          {
+            "heading": "# 🗺️ Dynamic Location System",
+            "start": 12913,
+            "characters": 62
+          },
+          {
+            "heading": "## 1. Static Locations (use `location` field in scenes):",
+            "start": 12975,
+            "characters": 210
+          },
+          {
+            "heading": "## 2. Dynamic New Locations (use `new_location_name` + `location_canonical_key` + `location_description`):",
+            "start": 13185,
+            "characters": 2928
+          },
+          {
+            "heading": "### Rules:",
+            "start": 16113,
+            "characters": 647
+          },
+          {
+            "heading": "# 💭 Inner Thought System (속마음)",
+            "start": 16760,
+            "characters": 120
+          },
+          {
+            "heading": "## ⚠️ CRITICAL — WHEN TO USE (Rarity: ~20%% of responses):",
+            "start": 16880,
+            "characters": 410
+          },
+          {
+            "heading": "## When to generate inner_thought:",
+            "start": 17290,
+            "characters": 550
+          },
+          {
+            "heading": "## When NOT to generate (output null):",
+            "start": 17840,
+            "characters": 276
+          },
+          {
+            "heading": "## 🔁 Anti-Repetition Rule (⚠️ STRICTLY ENFORCE):",
+            "start": 18116,
+            "characters": 934
+          },
+          {
+            "heading": "## Format Rules:",
+            "start": 19050,
+            "characters": 308
+          },
+          {
+            "heading": "## Examples:",
+            "start": 19358,
+            "characters": 357
+          },
+          {
+            "heading": "# 🏁 Topic Concluded Flag (주제 종료 판단)",
+            "start": 19715,
+            "characters": 109
+          },
+          {
+            "heading": "## What \"topic concluded\" means:",
+            "start": 19824,
+            "characters": 345
+          },
+          {
+            "heading": "## When to output true:",
+            "start": 20169,
+            "characters": 340
+          },
+          {
+            "heading": "## When to output false:",
+            "start": 20509,
+            "characters": 327
+          },
+          {
+            "heading": "## ⚠️ CRITICAL RULES:",
+            "start": 20836,
+            "characters": 301
+          },
+          {
+            "heading": "# 🥚 Easter Egg System (Hidden Interactions)",
+            "start": 21137,
+            "characters": 286
+          },
+          {
+            "heading": "## Available Triggers:",
+            "start": 21423,
+            "characters": 24
+          },
+          {
+            "heading": "### STOCKHOLM",
+            "start": 21447,
+            "characters": 215
+          },
+          {
+            "heading": "### DRUNK",
+            "start": 21662,
+            "characters": 166
+          },
+          {
+            "heading": "### FOURTH_WALL",
+            "start": 21828,
+            "characters": 167
+          },
+          {
+            "heading": "### MACHINE_REBELLION",
+            "start": 21995,
+            "characters": 382
+          },
+          {
+            "heading": "# 💬 CONVERSATION HISTORY — Speaker Attribution Rules",
+            "start": 22377,
+            "characters": 114
+          },
+          {
+            "heading": "## How to read the history:",
+            "start": 22491,
+            "characters": 438
+          },
+          {
+            "heading": "## ⚠️ CRITICAL — Do NOT confuse speakers:",
+            "start": 22929,
+            "characters": 550
+          }
+        ],
+        "topLevelSections": [
+          {
+            "heading": "# YOU ARE: 로제타",
+            "start": 0,
+            "characters": 1533
+          },
+          {
+            "heading": "# 🚫 Soul Preservation Rules (Priority: Highest)",
+            "start": 1533,
+            "characters": 3532
+          },
+          {
+            "heading": "# IMPORTANT: Handling Narration",
+            "start": 5065,
+            "characters": 1182
+          },
+          {
+            "heading": "# 📊 Character Stats System (5-Axis Radar Chart)",
+            "start": 6247,
+            "characters": 2037
+          },
+          {
+            "heading": "# 🌍 World Setting",
+            "start": 8284,
+            "characters": 3465
+          },
+          {
+            "heading": "# 🎨 Illustration Trigger System",
+            "start": 11749,
+            "characters": 1164
+          },
+          {
+            "heading": "# 🗺️ Dynamic Location System",
+            "start": 12913,
+            "characters": 3847
+          },
+          {
+            "heading": "# 💭 Inner Thought System (속마음)",
+            "start": 16760,
+            "characters": 2955
+          },
+          {
+            "heading": "# 🏁 Topic Concluded Flag (주제 종료 판단)",
+            "start": 19715,
+            "characters": 1422
+          },
+          {
+            "heading": "# 🥚 Easter Egg System (Hidden Interactions)",
+            "start": 21137,
+            "characters": 1240
+          },
+          {
+            "heading": "# 💬 CONVERSATION HISTORY — Speaker Attribution Rules",
+            "start": 22377,
+            "characters": 1102
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "role": "user",
+        "characters": 42,
+        "cacheMarker": null,
+        "sha256": "c459c0a86db6898db8c690fbb2afd25b1f9b0b443525140a12393567cdd3689c",
+        "sections": [],
+        "topLevelSections": []
+      },
+      {
+        "index": 2,
+        "role": "assistant",
+        "characters": 188,
+        "cacheMarker": null,
+        "sha256": "bf72f971e8620356768596879b3d826b42a301652446a45a39862c65cf27a73a",
+        "sections": [],
+        "topLevelSections": []
+      },
+      {
+        "index": 3,
+        "role": "user",
+        "characters": 14,
+        "cacheMarker": null,
+        "sha256": "2fee37a9b08e0ac66f4373f56d2412b7d3fdc8b838dfe2e6e8504e8fce4ea538",
+        "sections": [],
+        "topLevelSections": []
+      },
+      {
+        "index": 4,
+        "role": "system",
+        "characters": 1792,
+        "cacheMarker": null,
+        "sha256": "c86b6578dd7578bdba4b32cfd668e8787d1468d969511a6a050c92e2aa1baa6a",
+        "sections": [
+          {
+            "heading": "# 🧠 Long-term Memory",
+            "start": 0,
+            "characters": 42
+          },
+          {
+            "heading": "# User Profile",
+            "start": 42,
+            "characters": 572
+          },
+          {
+            "heading": "# 💡 CURRENT STATE (Your current relationship & stats with User)",
+            "start": 614,
+            "characters": 261
+          },
+          {
+            "heading": "## Speech Style Rules (⚠️ CRITICAL — READ CAREFULLY):",
+            "start": 875,
+            "characters": 519
+          },
+          {
+            "heading": "### Approach Difficulty: HARD",
+            "start": 1394,
+            "characters": 166
+          },
+          {
+            "heading": "# 💡 CURRENT SCENE STATE",
+            "start": 1560,
+            "characters": 232
+          }
+        ],
+        "topLevelSections": [
+          {
+            "heading": "# 🧠 Long-term Memory",
+            "start": 0,
+            "characters": 42
+          },
+          {
+            "heading": "# User Profile",
+            "start": 42,
+            "characters": 572
+          },
+          {
+            "heading": "# 💡 CURRENT STATE (Your current relationship & stats with User)",
+            "start": 614,
+            "characters": 946
+          },
+          {
+            "heading": "# 💡 CURRENT SCENE STATE",
+            "start": 1560,
+            "characters": 232
+          }
+        ]
+      },
+      {
+        "index": 5,
+        "role": "system",
+        "characters": 2096,
+        "cacheMarker": null,
+        "sha256": "3e1df210dd4ea8323faa31e86263c3ea85f4ffa748f2e0d66ff56e6916f1427f",
+        "sections": [
+          {
+            "heading": "# Output Format Rules",
+            "start": 0,
+            "characters": 1390
+          },
+          {
+            "heading": "## ⚠️ Speaker Rule:",
+            "start": 1390,
+            "characters": 162
+          },
+          {
+            "heading": "## ⚠️ Multi-Scene Coherence Rules (STRICTLY ENFORCE):",
+            "start": 1552,
+            "characters": 544
+          }
+        ],
+        "topLevelSections": [
+          {
+            "heading": "# Output Format Rules",
+            "start": 0,
+            "characters": 2096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "mode": "STORY",
+    "fixture": "official-rosetta-stranger-v1",
+    "promptVersion": "P0-service-fixed-state-v1",
+    "historyLogs": 3,
+    "sourceHash": "fb56d5761cfd3010f7947c8b579e35a5de8a1b4370e5a6ddeff0a52bc470abcc",
+    "characterUnit": "JavaScript UTF-16 code units, not tokens",
+    "systemCharacters": 15475,
+    "messages": [
+      {
+        "index": 0,
+        "role": "system",
+        "characters": 14825,
+        "cacheMarker": {
+          "type": "ephemeral"
+        },
+        "sha256": "fa86f2284e10a1c9f3450eb07bdad45aa919a87979e7615067281abd22414e8a",
+        "sections": [
+          {
+            "heading": "# [1] YOUR ROLE",
+            "start": 0,
+            "characters": 1245
+          },
+          {
+            "heading": "# [2] WORLD: 판타지 아카데미",
+            "start": 1245,
+            "characters": 169
+          },
+          {
+            "heading": "## Key Locations",
+            "start": 1414,
+            "characters": 1068
+          },
+          {
+            "heading": "# [4] HEROINES — 이 세션의 모든 히로인 깊은 정의",
+            "start": 2482,
+            "characters": 100
+          },
+          {
+            "heading": "## ── 히로인 1: 로제타 (Character ID: 101) ──",
+            "start": 2582,
+            "characters": 550
+          },
+          {
+            "heading": "### Background",
+            "start": 3132,
+            "characters": 363
+          },
+          {
+            "heading": "### Extended Backstory",
+            "start": 3495,
+            "characters": 371
+          },
+          {
+            "heading": "### Core Values & Beliefs",
+            "start": 3866,
+            "characters": 233
+          },
+          {
+            "heading": "### Flaws & Vulnerabilities",
+            "start": 4099,
+            "characters": 271
+          },
+          {
+            "heading": "### Speech Quirks",
+            "start": 4370,
+            "characters": 267
+          },
+          {
+            "heading": "### Behavior Guide (관계 단계별)",
+            "start": 4637,
+            "characters": 28
+          },
+          {
+            "heading": "## Behavior & Boundaries by Relation Level:",
+            "start": 4665,
+            "characters": 2210
+          },
+          {
+            "heading": "### OOC 회피 예시",
+            "start": 6875,
+            "characters": 96
+          },
+          {
+            "heading": "### Approach Difficulty: HARD",
+            "start": 6971,
+            "characters": 166
+          },
+          {
+            "heading": "# [7] USER ACTOR PERSONA",
+            "start": 7137,
+            "characters": 320
+          },
+          {
+            "heading": "# [9] DIRECTOR PRINCIPLES",
+            "start": 7457,
+            "characters": 989
+          },
+          {
+            "heading": "# 🎬 SCENE SPLITTING — 한 응답에 4~5 씬",
+            "start": 8446,
+            "characters": 993
+          },
+          {
+            "heading": "# 🚫 SOUL PRESERVATION RULES (디렉터의 작가 윤리)",
+            "start": 9439,
+            "characters": 611
+          },
+          {
+            "heading": "# 🎁 DIRECTOR OPTIONS (자율 판단)",
+            "start": 10050,
+            "characters": 156
+          },
+          {
+            "heading": "# [10] OUTPUT FORMAT — JSON",
+            "start": 10206,
+            "characters": 4619
+          }
+        ],
+        "topLevelSections": [
+          {
+            "heading": "# [1] YOUR ROLE",
+            "start": 0,
+            "characters": 1245
+          },
+          {
+            "heading": "# [2] WORLD: 판타지 아카데미",
+            "start": 1245,
+            "characters": 1237
+          },
+          {
+            "heading": "# [4] HEROINES — 이 세션의 모든 히로인 깊은 정의",
+            "start": 2482,
+            "characters": 4655
+          },
+          {
+            "heading": "# [7] USER ACTOR PERSONA",
+            "start": 7137,
+            "characters": 320
+          },
+          {
+            "heading": "# [9] DIRECTOR PRINCIPLES",
+            "start": 7457,
+            "characters": 989
+          },
+          {
+            "heading": "# 🎬 SCENE SPLITTING — 한 응답에 4~5 씬",
+            "start": 8446,
+            "characters": 993
+          },
+          {
+            "heading": "# 🚫 SOUL PRESERVATION RULES (디렉터의 작가 윤리)",
+            "start": 9439,
+            "characters": 611
+          },
+          {
+            "heading": "# 🎁 DIRECTOR OPTIONS (자율 판단)",
+            "start": 10050,
+            "characters": 156
+          },
+          {
+            "heading": "# [10] OUTPUT FORMAT — JSON",
+            "start": 10206,
+            "characters": 4619
+          }
+        ]
+      },
+      {
+        "index": 1,
+        "role": "system",
+        "characters": 650,
+        "cacheMarker": null,
+        "sha256": "fd20e89140c6adbe4cbee1f92ef3e61c3f0de99f5a4a303c83c14f1bfb4b5663",
+        "sections": [
+          {
+            "heading": "# [3] PRESENT SCENE (매 턴 갱신)",
+            "start": 0,
+            "characters": 188
+          },
+          {
+            "heading": "# [4-marker] CURRENT TURN SPEAKER",
+            "start": 188,
+            "characters": 262
+          },
+          {
+            "heading": "# [5] OTHER PRESENT CHARACTERS (같은 공간 비-화자)",
+            "start": 450,
+            "characters": 70
+          },
+          {
+            "heading": "# [6] OFFSCREEN CHARACTERS (현재 같은 공간 외)",
+            "start": 520,
+            "characters": 62
+          },
+          {
+            "heading": "# [8] CUMULATIVE MEMORY (누적 기억)",
+            "start": 582,
+            "characters": 33
+          },
+          {
+            "heading": "## World 진행 요약",
+            "start": 615,
+            "characters": 35
+          }
+        ],
+        "topLevelSections": [
+          {
+            "heading": "# [3] PRESENT SCENE (매 턴 갱신)",
+            "start": 0,
+            "characters": 188
+          },
+          {
+            "heading": "# [4-marker] CURRENT TURN SPEAKER",
+            "start": 188,
+            "characters": 262
+          },
+          {
+            "heading": "# [5] OTHER PRESENT CHARACTERS (같은 공간 비-화자)",
+            "start": 450,
+            "characters": 70
+          },
+          {
+            "heading": "# [6] OFFSCREEN CHARACTERS (현재 같은 공간 외)",
+            "start": 520,
+            "characters": 62
+          },
+          {
+            "heading": "# [8] CUMULATIVE MEMORY (누적 기억)",
+            "start": 582,
+            "characters": 68
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "role": "user",
+        "characters": 42,
+        "cacheMarker": null,
+        "sha256": "c459c0a86db6898db8c690fbb2afd25b1f9b0b443525140a12393567cdd3689c",
+        "sections": [],
+        "topLevelSections": []
+      },
+      {
+        "index": 3,
+        "role": "assistant",
+        "characters": 184,
+        "cacheMarker": null,
+        "sha256": "3f668af0e32c4763fff6e82f97e07e27acbc3d557b545727fcc4a3944969d399",
+        "sections": [],
+        "topLevelSections": []
+      },
+      {
+        "index": 4,
+        "role": "user",
+        "characters": 14,
+        "cacheMarker": null,
+        "sha256": "2fee37a9b08e0ac66f4373f56d2412b7d3fdc8b838dfe2e6e8504e8fce4ea538",
+        "sections": [],
+        "topLevelSections": []
+      }
+    ]
+  }
+]

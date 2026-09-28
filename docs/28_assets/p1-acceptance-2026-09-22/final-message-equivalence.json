@@ -1,0 +1,586 @@
+{
+  "at": "2026-09-22T14:02:31.336Z",
+  "sourceHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+  "oldSourceHash": "66d8ca91bbe0c4f65903dd82b995316f862650c1e565f50942d0f214b779ab85",
+  "total": 64,
+  "unchanged": 62,
+  "eventOnlyBlockRemoved": 2,
+  "observations": [
+    {
+      "phase": "phase-continuation",
+      "id": "C01-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "43687511747dc6ab431c9437ca340a4491264e40d0202b210baa9ebf59177cbb",
+      "newPromptHash": "43687511747dc6ab431c9437ca340a4491264e40d0202b210baa9ebf59177cbb",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-continuation",
+      "id": "C01-r1-t2-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "4028ef003f14c3746a3560beddb9294f322cc4d1de413b3cd7aee4c23a2e2c31",
+      "newPromptHash": "4028ef003f14c3746a3560beddb9294f322cc4d1de413b3cd7aee4c23a2e2c31",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-continuation",
+      "id": "C01-r1-t3-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "fbcf109e89d5ee970d00a0345e7b961992b11eb78609e7a6840055fb55862fd5",
+      "newPromptHash": "fbcf109e89d5ee970d00a0345e7b961992b11eb78609e7a6840055fb55862fd5",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-continuation",
+      "id": "C02-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "1452764543fabec80b354b8119fe361af5ae5bc966da07a893604ccf37e8743b",
+      "newPromptHash": "1452764543fabec80b354b8119fe361af5ae5bc966da07a893604ccf37e8743b",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-continuation",
+      "id": "C02-r1-t2-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "ef94ee1f479e200d0482f4f2ebccaf599e7f6613eb4e33c5f8b1376a2d97c333",
+      "newPromptHash": "ef94ee1f479e200d0482f4f2ebccaf599e7f6613eb4e33c5f8b1376a2d97c333",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-continuation",
+      "id": "C02-r1-t3-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "af85ee657672cc0358398d0c6dd69dd3234be19c5a084f0ca21ef6f0f70bcfcd",
+      "newPromptHash": "af85ee657672cc0358398d0c6dd69dd3234be19c5a084f0ca21ef6f0f70bcfcd",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F01-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "50deb2ecaa953743dcd2159da883ab43a041b2d0c724642f8ea3bb9c618d551c",
+      "newPromptHash": "50deb2ecaa953743dcd2159da883ab43a041b2d0c724642f8ea3bb9c618d551c",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F01-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "e33478aec36ca36df51af2026d40476e8963d7990989a6763056ec4cc7b2f8f6",
+      "newPromptHash": "e33478aec36ca36df51af2026d40476e8963d7990989a6763056ec4cc7b2f8f6",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F02-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "newPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F02-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "newPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F03-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "dff71e8851ecd6e3e6ec494121580f9e68d2b5d149e251ff918643336b9116ab",
+      "newPromptHash": "dff71e8851ecd6e3e6ec494121580f9e68d2b5d149e251ff918643336b9116ab",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F03-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "fca1e8bf34f263c615c40c2e4cb5cf2a427950f3702a738b76a51614a51ab935",
+      "newPromptHash": "fca1e8bf34f263c615c40c2e4cb5cf2a427950f3702a738b76a51614a51ab935",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F04-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "newPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F04-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "newPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F05-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "newPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F05-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "newPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F06-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "newPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F06-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "newPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F07-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "0f61ead6eef6a2f622ba134085d62336d4492ba17c863c9faa86669b6d778556",
+      "newPromptHash": "0f61ead6eef6a2f622ba134085d62336d4492ba17c863c9faa86669b6d778556",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F07-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "a2e561a00a6128fc9d34e61b0c967ee9b14776b4d857cda58777047783f8601e",
+      "newPromptHash": "a2e561a00a6128fc9d34e61b0c967ee9b14776b4d857cda58777047783f8601e",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F08-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "be71566c81a2034b7af0df27311db00543c16c1d1a6eebfb97ce24458bdd620e",
+      "newPromptHash": "be71566c81a2034b7af0df27311db00543c16c1d1a6eebfb97ce24458bdd620e",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "F08-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "d079371f3f89e950b6b9158512b2afb99126f94cb7a8f3065e383a6ce9b7dfda",
+      "newPromptHash": "d079371f3f89e950b6b9158512b2afb99126f94cb7a8f3065e383a6ce9b7dfda",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S01-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "3dce34e8d5f23404e3b8740d5187ac51921e40c6cc3090be10938a6b6d63e8a4",
+      "newPromptHash": "3dce34e8d5f23404e3b8740d5187ac51921e40c6cc3090be10938a6b6d63e8a4",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S01-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "126f7a308a53aad24340a343fd2157757302f6672a2042b7803c9e670d0bad5d",
+      "newPromptHash": "126f7a308a53aad24340a343fd2157757302f6672a2042b7803c9e670d0bad5d",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S02-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "222a93667b9bec5e9dea8cae360f5e8aef2a527caad34acb8fb6870988324498",
+      "newPromptHash": "222a93667b9bec5e9dea8cae360f5e8aef2a527caad34acb8fb6870988324498",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S02-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "11d36d9ac5376ef575b654433e180bbadc62c12e793e4b87814b1cc49f9d77cd",
+      "newPromptHash": "11d36d9ac5376ef575b654433e180bbadc62c12e793e4b87814b1cc49f9d77cd",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S03-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "02b7fe3a03b5b2e86be01b9c142f5cbf41715b7ae7ca82f62a8dea048a7eba39",
+      "newPromptHash": "02b7fe3a03b5b2e86be01b9c142f5cbf41715b7ae7ca82f62a8dea048a7eba39",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S03-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "78a2506237df8fa242c54ddee311433ba8112a7a358a2901201ba81ffa09ce27",
+      "newPromptHash": "78a2506237df8fa242c54ddee311433ba8112a7a358a2901201ba81ffa09ce27",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S04-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "f95b234dc321616647e6d9bcff303971457b5e29d3d301b58eaed0e455f65f8e",
+      "newPromptHash": "f95b234dc321616647e6d9bcff303971457b5e29d3d301b58eaed0e455f65f8e",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S04-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "2fcefb808cec65e51eba163c54af030b126718f0f73fa994be355b1439660304",
+      "newPromptHash": "2fcefb808cec65e51eba163c54af030b126718f0f73fa994be355b1439660304",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S05-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "696c46541b4d2ebbf87ebe1eaacdcffed383e5dbaf1f1c88c17c4abf1400afd7",
+      "newPromptHash": "696c46541b4d2ebbf87ebe1eaacdcffed383e5dbaf1f1c88c17c4abf1400afd7",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S05-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "5e0c153b8f2444f6029d1133e737f192c982f1abd61b03d9c7cd4eca5fb9f0b3",
+      "newPromptHash": "5e0c153b8f2444f6029d1133e737f192c982f1abd61b03d9c7cd4eca5fb9f0b3",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S06-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "bf0227f6fe1e02e2af559d9e44c7e685a8656736d04d2a86abf235057c9dd669",
+      "newPromptHash": "bf0227f6fe1e02e2af559d9e44c7e685a8656736d04d2a86abf235057c9dd669",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S06-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "3e1079cc058dc491acb423ecb913cf8081b53170363995cde5200a0b571c519d",
+      "newPromptHash": "3e1079cc058dc491acb423ecb913cf8081b53170363995cde5200a0b571c519d",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S07-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "9e261f906dfd6deea0cc2d65138e02ade4512be722f0b00102727c62da10fc8a",
+      "newPromptHash": "9e261f906dfd6deea0cc2d65138e02ade4512be722f0b00102727c62da10fc8a",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S07-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "c60a4f0767d8cfb31672f7f3d8a14f4b041486439bc5a21a6a974a0dfcf21449",
+      "newPromptHash": "c60a4f0767d8cfb31672f7f3d8a14f4b041486439bc5a21a6a974a0dfcf21449",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S08-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "8e9eb3ca3859f1d5b487a7b6c2f5dc8cbbadf4b1026d6071773683b149a80d67",
+      "newPromptHash": "8e9eb3ca3859f1d5b487a7b6c2f5dc8cbbadf4b1026d6071773683b149a80d67",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-core",
+      "id": "S08-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "1f89b8909dbdc5a8133b83359b1e232b55f933a216de482181d484092e766aa2",
+      "newPromptHash": "1f89b8909dbdc5a8133b83359b1e232b55f933a216de482181d484092e766aa2",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X01-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "42575adafb78bd8f8323fbd133e8d60684cf2d049a36511191dcdd7b0a2b8812",
+      "newPromptHash": "42575adafb78bd8f8323fbd133e8d60684cf2d049a36511191dcdd7b0a2b8812",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X01-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "42575adafb78bd8f8323fbd133e8d60684cf2d049a36511191dcdd7b0a2b8812",
+      "newPromptHash": "42575adafb78bd8f8323fbd133e8d60684cf2d049a36511191dcdd7b0a2b8812",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X02-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "659f5d7cc7f62a4b9ec6a2f0648d4855ec8ca5e18571eeef85b8d3e88beb28e0",
+      "newPromptHash": "659f5d7cc7f62a4b9ec6a2f0648d4855ec8ca5e18571eeef85b8d3e88beb28e0",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X02-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "659f5d7cc7f62a4b9ec6a2f0648d4855ec8ca5e18571eeef85b8d3e88beb28e0",
+      "newPromptHash": "659f5d7cc7f62a4b9ec6a2f0648d4855ec8ca5e18571eeef85b8d3e88beb28e0",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X03-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "509fedb4e6016c8f4df69ee87add6343df28f78f8885165a8a52b7fb2fa23762",
+      "newPromptHash": "509fedb4e6016c8f4df69ee87add6343df28f78f8885165a8a52b7fb2fa23762",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X03-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "509fedb4e6016c8f4df69ee87add6343df28f78f8885165a8a52b7fb2fa23762",
+      "newPromptHash": "509fedb4e6016c8f4df69ee87add6343df28f78f8885165a8a52b7fb2fa23762",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X04-r1-t1-P1",
+      "event": true,
+      "messagesUnchanged": false,
+      "oldPromptHash": "1af208be59261fceef572d5ab91f627ac7a395d4f2fb1e35538003cf40275971",
+      "newPromptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "removedChars": 2955
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X04-r2-t1-P1",
+      "event": true,
+      "messagesUnchanged": false,
+      "oldPromptHash": "1af208be59261fceef572d5ab91f627ac7a395d4f2fb1e35538003cf40275971",
+      "newPromptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "removedChars": 2955
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X05-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "607ab5257aef9cd45cb1f31101b17d39c2001c95f9fad5b0d03d3a0ff1bf68f5",
+      "newPromptHash": "607ab5257aef9cd45cb1f31101b17d39c2001c95f9fad5b0d03d3a0ff1bf68f5",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-extensions",
+      "id": "X05-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "607ab5257aef9cd45cb1f31101b17d39c2001c95f9fad5b0d03d3a0ff1bf68f5",
+      "newPromptHash": "607ab5257aef9cd45cb1f31101b17d39c2001c95f9fad5b0d03d3a0ff1bf68f5",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F02-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "newPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F02-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "newPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F02-r2-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "newPromptHash": "9ce0dcc58783a8a000b770e49c92d0b5fdaa37781deb1e2a426999fa721b3375",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F02-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "newPromptHash": "60e3d021e8332d503c54e698f1280dbd06214c7643e4164353f868662962eda2",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F04-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "newPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F04-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "newPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F04-r2-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "newPromptHash": "754e48edc86666cfc8d9a1cb8c71f4a4524d30f3380505aad0b27ad0c47468ac",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F04-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "newPromptHash": "29733c26c8c46cede1a07bbbe48990f71f2cedcc00335d9f4d7824d35cb13c91",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F05-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "newPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F05-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "newPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F05-r2-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "newPromptHash": "10a968396c1da0073b1f00bef8e2217af9c3bdca638a2684538600966ac40499",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F05-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "newPromptHash": "c4982180af70c2b8db293901e50bc722c6f9485d4a4421ba38af9be498152317",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F06-r1-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "newPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F06-r1-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "newPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F06-r2-t1-P0",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "newPromptHash": "45b1ece0db2bd1b0f755e2d05b51befe738adfd0c9a260402fcdcece6f5b029b",
+      "removedChars": 0
+    },
+    {
+      "phase": "phase-latency-confirm",
+      "id": "F06-r2-t1-P1",
+      "event": false,
+      "messagesUnchanged": true,
+      "oldPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "newPromptHash": "adaaffa637e49573822a3c200d2bcb45898bccf8577008e3d1921044bd8eb7fa",
+      "removedChars": 0
+    }
+  ]
+}

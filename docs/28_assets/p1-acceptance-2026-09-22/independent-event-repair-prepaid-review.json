@@ -1,0 +1,46 @@
+{
+  "reviewedAt": "2026-09-22T14:02:28.058Z",
+  "auditor": "independent experiment_audit",
+  "paidCallsByAuditor": 0,
+  "newRunner": "tools/llm-bakeoff/experiment-p1-event-repair.mjs",
+  "newRunnerSha256": "c33aae0a3b69d130467783a0b51539fe15fed96efd21b3ea341d7568cb316a82",
+  "copyDiffVerified": true,
+  "allowedDifferences": [
+    "sessionId",
+    "fifth previous session",
+    "independently reconciled 440/482 anchor",
+    "self filename in usage and labHash"
+  ],
+  "oldLabHashUnchanged": true,
+  "oldPreservedFilesVerified": 528,
+  "anchor": {
+    "count": 440,
+    "hash": "6115efca8af16deda138d6bfe10822b7b719bcfe70afaefba038e2b65c81b4ad",
+    "spent": 1.6996510500000013,
+    "globalCount": 482,
+    "globalHash": "5523ac051f9023df01f435f2a2ab4cddcec77dcdb2a7313366f44d38736dfbc7"
+  },
+  "authorization": {
+    "total": 3,
+    "spent": 1.6996510500000013,
+    "remaining": 1.3003489499999987,
+    "count": 440,
+    "entriesHash": "6115efca8af16deda138d6bfe10822b7b719bcfe70afaefba038e2b65c81b4ad"
+  },
+  "plan": {
+    "file": "docs/28_assets/p1-acceptance-2026-09-22/phase-event-repair.json",
+    "sha256": "09b97bd1f467172823d0454961da44fd262d2303c05df26db93615d060f3ad48",
+    "planHash": "c80fbde764b95745ace6804d82a4a53ab1ae7cb8468bbb16e5aacd3a39008305",
+    "calls": 4,
+    "sameFailedInput": true,
+    "sameFixture": true,
+    "candidate": "P1-service-repairs-v1"
+  },
+  "failureProbes": {
+    "raisedBudget": "blocked",
+    "missingPriorCharge": "blocked",
+    "unknownPriorCharge": "blocked",
+    "changedGlobalPrefix": "blocked"
+  },
+  "conclusion": "No additional billing or evidence-preservation blocker. Final code/runtime freeze and normal preflight remain prerequisites; four paid outputs are a targeted regression check, not proof of general event reliability."
+}

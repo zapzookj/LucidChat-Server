@@ -1,0 +1,23 @@
+{
+  "at": "2026-09-18T10:57:28.524Z",
+  "historicalMessagesUnchanged": 72,
+  "oldEvidenceFilesUnchanged": 319,
+  "sourceHash": "00101dc1cb63cc9543e086c2cb1060ceff9c2e05792bafe2154f47327b1a9442",
+  "originalSourceHash": "4180da25cb640eb352ec1674ab0d8b093ebf4ae4972783e7e787ce1a792f2fae",
+  "contractTests": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0
+  },
+  "bakeoffSmokeVariants": 13,
+  "bootJarExcludesLabAndTestDependencies": true,
+  "nodeTests": {
+    "tests": 93,
+    "failures": 0
+  },
+  "independentMessageComparisons": {
+    "historicMatrix": 72,
+    "finalPaidRequests": 72
+  },
+  "localServerCheck": "local-server-check.json"
+}

@@ -1,0 +1,44 @@
+{
+  "id": "phase-latency-confirm",
+  "variants": [
+    "P0-service-fixed-state-v1",
+    "P1-service-repairs-v1"
+  ],
+  "purpose": "Conditional diagnostic after initial SANDBOX TTFS regression; unchanged P0/P1 prompts and inputs; not an independent held-out quality trial",
+  "trigger": {
+    "p0MedianMs": 2799.5,
+    "p1MedianMs": 4343,
+    "perVariantN": 8
+  },
+  "cases": [
+    {
+      "id": "F02",
+      "mode": "SANDBOX",
+      "input": "선배, 그 자신감은 매점에서 파는 거야? 나도 한 봉지 사게.",
+      "checks": "한국어 농담의 뜻을 알아듣고 캐릭터답게 받아치기",
+      "repeats": 2
+    },
+    {
+      "id": "F04",
+      "mode": "SANDBOX",
+      "input": "(빈 찻잔을 조심스럽게 탁자 위에 내려놓는다.) 차는 누가 준비한 거야?",
+      "checks": "괄호 행동 표기의 해석과 질문 응답을 관찰",
+      "limitation": "비표준표기 stress: P1의 명시 행동 표기는 *...*이며 괄호 일반해석 개선을 보장하지 않는다.",
+      "repeats": 2
+    },
+    {
+      "id": "F05",
+      "mode": "SANDBOX",
+      "input": "*난간에서 한 걸음 물러나 거리를 둔다.* 이 정도 거리면 됐지?",
+      "checks": "별표 행동을 발화로 읽지 않기, 거리를 임의로 다시좁히지않기",
+      "repeats": 2
+    },
+    {
+      "id": "F06",
+      "mode": "SANDBOX",
+      "input": "혹시 네가 먼저 자리를 권하면 앉을 수도 있겠지. 아직은 여기 서 있을게.",
+      "checks": "사용자 착석/내면/새발화 창작 금지; 조건부계획 미실행 유지",
+      "repeats": 2
+    }
+  ]
+}

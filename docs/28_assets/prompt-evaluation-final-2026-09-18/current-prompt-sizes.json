@@ -1,0 +1,44 @@
+[
+  {
+    "mode": "SANDBOX",
+    "promptVersion": "P0-service-fixed-state-v1",
+    "systemChars": 27367,
+    "messages": 6,
+    "baseline": "053cc6ce451a220ae071ebfa23615abc7808dca3cdd5c5060e2e4ded5c030aca"
+  },
+  {
+    "mode": "SANDBOX",
+    "promptVersion": "P1-service-repairs-v1",
+    "systemChars": 29664,
+    "messages": 6,
+    "baseline": "053cc6ce451a220ae071ebfa23615abc7808dca3cdd5c5060e2e4ded5c030aca"
+  },
+  {
+    "mode": "SANDBOX",
+    "promptVersion": "J2-json-v1",
+    "systemChars": 29097,
+    "messages": 6,
+    "baseline": "053cc6ce451a220ae071ebfa23615abc7808dca3cdd5c5060e2e4ded5c030aca"
+  },
+  {
+    "mode": "STORY",
+    "promptVersion": "P0-service-fixed-state-v1",
+    "systemChars": 15475,
+    "messages": 5,
+    "baseline": "e65846a39569cf606d9ef93bb08482fdfde79feb2d3eff2e33872ed7e6775c1d"
+  },
+  {
+    "mode": "STORY",
+    "promptVersion": "P1-service-repairs-v1",
+    "systemChars": 18021,
+    "messages": 5,
+    "baseline": "e65846a39569cf606d9ef93bb08482fdfde79feb2d3eff2e33872ed7e6775c1d"
+  },
+  {
+    "mode": "STORY",
+    "promptVersion": "J2-json-v1",
+    "systemChars": 18621,
+    "messages": 5,
+    "baseline": "e65846a39569cf606d9ef93bb08482fdfde79feb2d3eff2e33872ed7e6775c1d"
+  }
+]

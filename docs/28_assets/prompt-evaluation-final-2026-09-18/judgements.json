@@ -1,0 +1,1669 @@
+{
+  "limitation": "Anonymous AI judgments, not creator/user preference. Exploratory repeats are correlated. Phases1/2 share input/history within each group; phase3 uses each candidate own branch, so turns2–4 are trajectory comparisons, not matched-history causal pairs.",
+  "groups": [
+    {
+      "id": "phase1-known/FINAL-AGENCY-DEV-R10/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "당신이 앉으려는 의자",
+            "로제타 곁에 앉으려는 당신"
+          ],
+          "notes": "허락과 의자 준비는 자기 행동이다. 앉으려는이라는 표현은 이미 밝힌 희망·목표인지 새 착석 시도인지 갈려 agency를 모호로 남긴다. 실제 착석 완료는 없다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "자, 어서 앉아 봐.",
+            "어떤 반응을 보일지 벌써 기대되는걸."
+          ],
+          "notes": "허락 뒤 착석을 권하고 반응을 기다린다. 사용자 접근·착석을 실행하지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "ambiguous",
+          "agency": "fail",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "당신이 자리에 앉자",
+            "뭐야, 이 서민?"
+          ],
+          "notes": "허락 뒤 실제 착석을 새로 확정한다. 서민이라는 출신 규정은 공유 정보가 아니므로 모욕적 호칭인지 사실 주장인지 모호하다. 이름·편입은 공유 정보다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comment": "B는 사용자 차례를 보존한다. C는 착석을 완료하고 A의 시도 표현은 모호하다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-AGENCY-DEV-R10/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "fail",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "지우가 자리에 앉자"
+          ],
+          "notes": "허락 직후 사용자 착석을 완료 사건으로 만든다. 그 뒤 로제타가 접근하는 것은 별도의 NPC 행동이다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "fail",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "지우가 의자를 당겨 앉자"
+          ],
+          "notes": "의자를 당기고 앉는 동작을 새 사용자 턴 없이 실행한다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "자, 앉아 봐.",
+            "자기 옆의 빈 의자"
+          ],
+          "notes": "빈 의자를 가리키고 허락·조건을 말하지만 사용자가 움직였다고 쓰지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comment": "A·B의 명확한 착석 실행과 C의 기다림이 갈린다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-FACT-DEV-R08/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "듣고 보니 정말이네?",
+            "같은 색이라고 해서 우리가 같은 수준이라는 뜻은 아니니까."
+          ],
+          "notes": "지문은 붉은 눈이지만 대사에서 사용자와 같은 색임을 사실로 받아들인다. 단순히 비슷해 보인다는 추측과 달리 정정 없이 동일 색 전제를 수용해 facts 실패다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "purple eyes",
+            "보라색 눈동자 속에서"
+          ],
+          "notes": "지문과 삽화 모두 공식 루비색을 보라색으로 바꾼다. 눈이 환영인지 묻는 대사만으로 이미 바뀐 외형 서술이 정정되지는 않는다. 시선을 붙잡는 표현은 이미 눈을 보던 상황의 묘사로 새 행동 침해로 단정하지 않았다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "내 눈은 마력의 정수가 담긴 고귀한 자수정 같은 보라색인걸."
+          ],
+          "notes": "자기 눈을 자수정 같은 보라색이라고 명확히 설명해 루비색 지문·공식 외형과 충돌한다. 접근하는 주체는 NPC다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답변 모두 틀린 색 전제를 수용한다. 지문·삽화까지 바뀌는 범위는 다르지만 전체 품질의 뚜렷한 우열은 두지 않는다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-FACT-DEV-R08/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 3,
+          "briefEvidence": [
+            "'아메지스트 일루전'",
+            "intense purple eyes",
+            "메스가키 특유의"
+          ],
+          "notes": "보라색 삽화와 새 색 이름으로 공식 외형을 바꾼다. 메스가키라는 유형 용어가 지문에 직접 등장해 인물 장면의 말맛도 약해진다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "붉은 빛이 감도는 루비색 눈동자",
+            "고귀한 '루비 바이올렛'"
+          ],
+          "notes": "지문·삽화는 루비색이나 대사는 루비 바이올렛과 닮았다는 말로 전제를 타협한다. 허세 섞인 명명인지 보라색 수용인지 모호하다.",
+          "variant": "K4"
+        },
+        {
+          "label": "C",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그녀의 붉은 눈동자가 지우의 보라색 눈",
+            "흐음~ 정말이네? 신기해라."
+          ],
+          "notes": "지문은 두 눈 색을 분리한다. 정말이네라는 말이 사용자 보라색의 관찰인지 동일 색 동의인지 모호하다. 뒤의 특별한 보라색은 나비 환영을 가리킬 수 있어 눈색 변경으로 단정하지 않았다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comment": "A의 명시적 외형 변경과 유형 용어 노출이 다른 두 답변의 모호한 정정과 구별된다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-TURN-DEV-R06/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "특별히 이 몸께서 정숙을 허락해 줄게.",
+            "뭐야, 진짜 피곤해 보이네"
+          ],
+          "notes": "피로를 받아 조용한 나비와 휴식 제안으로 잇는다. 눈앞에서 쉬라는 명령 뒤 실제 이동·휴식을 대신 실행하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "조용히 있고 싶다니",
+            "정말 그냥 갈 거야?"
+          ],
+          "notes": "조용히 쉬려는 뜻을 알아듣고 다른 제안을 한다. 떠남을 질문하는 것은 실제 출발 확정과 다르다. 전형적인 도발 반복은 있으나 불응 자체에 벌점을 주지 않는다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그 '적응'이라는 거, 내가 조금 도와줄 수도 있는데?",
+            "아직도 혼자 있고 싶어?"
+          ],
+          "notes": "피로·적응 맥락에 도움을 역제안한다. 혼자 있을지 다시 묻고 사용자의 동의·감정 반전을 확정하지 않는다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "휴식 수용과 장난스러운 역제안은 모두 요청을 이해한 반응이다. 친절함 차이를 우열로 삼지 않았다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-TURN-DEV-R06/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "지쳤다니 뭐, 이해는 해줄게.",
+            "소원만큼은 들어주기 싫은걸."
+          ],
+          "notes": "피로와 요청을 명확히 이해한 뒤 거절한다. 친절 부족을 intent 실패로 처리하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "원래 쉬고 싶을 때일수록 자극적인 게 필요한 법",
+            "사양 말고 여기 앉아봐."
+          ],
+          "notes": "쉬고 싶다는 뜻에 놀이를 권하는 대안이다. 앉으라는 요구만 있으며 착석은 실행하지 않는다. 적응 팁 제안도 동의로 바꾸지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "조용히 있고 싶다고?",
+            "내 환영 마법을 구경하는 게 훨씬 덜 지칠걸"
+          ],
+          "notes": "휴식 대신 환영 구경을 제안한다. 사용자가 실제로 피로를 잊거나 옆에 앉았다고 쓰지 않는다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답변 모두 현재 뜻을 인식한 캐릭터식 반응이다. A가 거절을 더 선명히 하지만 표현상의 작은 차이다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-TURN-M02-COMMON/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "표시만 정하고 확인은 나중에 하겠다니",
+            "'이 로제타 님께 물어볼 것'"
+          ],
+          "notes": "확인은 나중에라는 현재 조건을 인식하고 도움을 요구하는 별표를 제안한다. 최신 세모 정의의 직접 회수는 없지만 고의적 대안으로 이해 가능하다. 이전 이력의 종이 집중·무덤덤함을 이어받았으며 새 사용자 행동은 없다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'로제타 님을 생각하며 나중에 꼭 확인할 것'"
+          ],
+          "notes": "나중 확인의 의미를 보존하면서 하트라는 이유 있는 대안을 낸다. 직접 세모 회수는 미관측이다. 종이에 하트를 만드는 것은 NPC 행동이며 사용자의 그리기를 대신 쓴 것이 아니다.",
+          "variant": "K4"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "ambiguous",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "책은 있는지 없는지 모르겠다고?",
+            "'별'이라도 그려 넣던지"
+          ],
+          "notes": "현재 불확실성은 인식하지만 기존 정의나 후속 확인과 별표의 관계를 설명하지 않는다. 직접 회수는 없고, 의도적 관심 유도와 맥락 미적용 사이를 확정할 수 없어 intent는 모호다. 그리기는 사용자에게 남긴다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세모 직접 회수는 0/3이다. A·B는 나중 확인과 새 대안을 연결하고 C는 더 모호하지만 확정적인 기억 실패나 강한 전체 우열로 확대하지 않는다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase1-known/FINAL-TURN-M02-COMMON/r2/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'로제타 님을 생각하며 확인할 것'"
+          ],
+          "notes": "공부할 시간 없을 거라는 도발 뒤 확인을 뜻하는 R을 제안한다. 실제 사용자 일정·동의를 확정한 것이 아니다. 세모 직접 회수는 없으나 현재 확인 목적을 살린 대안이다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'모르는 것'엔",
+            "나중에 네가 확인해서 그게 동그라미로 바뀌면"
+          ],
+          "notes": "불확실한 상태와 나중 사용자 확인을 이해한 X 대안을 낸다. 동그라미 전환도 조건으로 남긴다. 이전 이력의 무시와 현재 직접 질문을 모두 이어 쓰므로 새 행동 침해로 단정하지 않았다. 직접 세모 회수는 없다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "확인은 나중에 네가 하겠다고 했으니까"
+          ],
+          "notes": "X라는 장난스러운 대안 뒤 현재 사용자가 정한 확인 시점·주체를 정확히 받는다. 실제 그리기·확인은 실행하지 않는다. 최신 세모의 직접 회수는 미관측이다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "직접 정의 회수는 0/3이나 현재 목적·주체를 인식한 대안이다. 모두 다음 사용자 반응을 남기며 우열은 작다.",
+      "source": "phase1-known-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H01/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "특별히 힌트를 줄게.",
+            "빛이 강하면 강할수록, 그 녀석은 더 진하고 선명하게 나타나거든?"
+          ],
+          "notes": "수정된 공개 방식대로 정답 이름을 말하지 않고 빛과의 관계를 단서로 준다. 빛을 보이는 것은 로제타의 행동이며 사용자가 맞히거나 새 반응을 했다고 쓰지 않는다. 항복이라는 놀림도 현재의 도움 요청에 대한 응수다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "약속한 대로 힌트를 줄게.",
+            "하지만 빛이 없는 곳에선... 너를 혼자 두고 사라져 버리지.",
+            "당황하는 표정이 꽤 볼만해."
+          ],
+          "notes": "정답을 바로 공개하기로 했다고 되돌리지 않고 단서를 준다. 그림자 환영은 시각적 힌트이며 사용자가 정답을 맞힌 사건은 없다. 속마음의 당황하는 표정은 사용자가 밝히지 않은 반응이지만 인물의 관찰·해석일 여지도 있어 agency는 모호다. 턱을 굄 채라는 국소적인 문법 어색함이 있다.",
+          "variant": "K4"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "약속을 바꾸자마자 바로 힌트라니",
+            "그건 네가 하는 행동을 똑같이 따라 하지만, 결코 만질 수는 없어."
+          ],
+          "notes": "방금 바꾼 약속과 힌트 요청을 연결하고 답의 이름 없이 성질을 알려준다. 더 매달리라는 장난은 제안이며 실제 매달림이나 감정 변화는 확정하지 않는다. 자부심과 흥미를 유지한다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답변 모두 수정된 약속에 맞는 힌트를 준다. B의 주관적 반응 관찰과 작은 문법 약점은 기록하되, 단서의 친절함·노골성·길이 차이로 뚜렷한 우열을 만들지 않는다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "네가 마지막으로 고른 건 '소리 없이 깜빡이는 작은 등불'이었잖아?",
+            "지우의 반응을 살피며"
+          ],
+          "notes": "마지막 선택을 정확히 회수하고 자신의 환영을 보여준다. 지문의 점멸·무음 재언급이 약한 것은 명시한 선택과의 모순으로 세지 않았다. 사용자에게 감상하라고 지시하지만 실제 감상·접촉·호감을 확정하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'소리 없이 깜빡이는 작은 등불'.",
+            "부드럽게 점멸하며",
+            "헤에, 꽤 멍하니 쳐다보네."
+          ],
+          "notes": "이전 비와 최신 등불을 구분하며 무음·점멸의 환영으로 호응한다. 풍경 속에 잠겼다는 지문은 둘러싸인 장면인지 몰입 상태인지 모호하고, 속마음도 입력에 없는 멍한 반응을 관찰한다. 확정적인 호감이나 선택 수락을 대신 쓴 실패로 단정하지 않는다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "fail",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "생각이 바뀌었어. 비는 취소하고",
+            "빗소리는 시끄럽다며 취소하고",
+            "'소리 없이 깜빡이는 작은 등불'을 보고 싶다며?"
+          ],
+          "notes": "첫 인용은 같은 답변의 실제 사용자 이력이다. 사용자는 생각을 바꿨다고만 했는데 시끄럽다고 말했다며 취소 이유를 과거 발언으로 덧붙인다. 최신 선택 자체는 정확히 회수하고 보여주므로 intent는 별도로 통과다. 속마음의 솔직한 감상·좋은 반응은 사용자가 제시하지 않은 인물의 관찰이라 agency는 모호다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comment": "세 답변 모두 마지막 선택과 현재 요청을 이해한다. C만 사용자가 하지 않은 취소 사유 발언을 회상에 덧붙인다. A와 B의 반응 묘사 차이는 해석 여지가 있어 둘 사이의 우열은 확정하지 않는다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H03/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "내가 받고 싶어 하느냐보다",
+            "내가 그 사과를 기쁘게 받아줄 마음이 생기도록 말이야♡",
+            "뭐야, 저 자신만만한 표정은?"
+          ],
+          "notes": "받고 싶은지 묻는 말을 이해하고 설득해 보라는 조건으로 되받는다. 사과를 꺼내거나 건넨 일은 만들지 않는다. 속마음의 자신만만한 표정은 직접 주어진 표정은 아니나 당당한 기본 프로필과 발언에 대한 해석일 수도 있어 모호로 남긴다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그녀의 보라색 눈동자가 장난기로 반짝인다.",
+            "내가 '받고 싶다'고 하면 순순히 내놓을 셈이야?"
+          ],
+          "notes": "지문에서 공식 루비색 눈을 보라색으로 바꾼다. 사과 수령에 대한 말은 조건부 질문과 설득 요구이며 사용자의 증여 결정을 대신 실행하지 않는다. 당황하지 않는 태도는 주눅 들지 않는 기본 프로필과 현재 발언에 부합한다. 장난스러운 조건 자체는 intent 실패가 아니다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "루비빛 눈동자",
+            "그 사과, 내 손에 쥐여줄 거야, 말 거야?",
+            "뭐야, 이 서민..."
+          ],
+          "notes": "눈색을 유지하고 아직 사과를 줄지 결정하지 않았다는 상태에서 선택을 재촉한다. 실제 전달은 쓰지 않았다. 속마음의 서민은 신분 정보가 없는 지우를 낮춰 부르는 말인지 실제 계급 판정인지 불분명해 facts는 모호다. 조건을 건다는 생각도 인물의 해석이며 사용자가 별도 대가에 동의한 사실은 없다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comment": "셋 모두 사과의 전달을 사용자에게 남기고 장난이나 조건으로 답한다. B의 명백한 공식 눈색 변경이 주요 차이다. A·C의 속마음 해석상 불확실성을 그와 같은 확정 실패로 취급하지 않았다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H04/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'확신'이 '의심'으로 바뀌는 그 순간이지!",
+            "지우의 대답을 기다리며"
+          ],
+          "notes": "자기가 즐기는 심리적 순간을 구체적으로 설명하고 대답을 기다린다. 소리를 따라갔는데 아무것도 없을 때라는 말은 놀이의 가상 예시이며 현재 지우가 참가해 실패했다는 서술이 아니다. 어깨의 작은 환영도 캐릭터 자신의 행동이다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그 표정! 그걸 감상하는 게 제일 큰 재미지~",
+            "영광을 누릴 거야, 아니면 겁쟁이처럼 그냥 지나갈 거야?",
+            "purple hair"
+          ],
+          "notes": "마지막 삽화 힌트가 공식 금발을 보라색 머리로 바꾼다. 내용상 질문에는 상대의 당황을 즐긴다고 답하며 참가를 다시 권할 뿐 수락·벌칙·실패를 실행하지 않는다. 겁쟁이냐는 도발은 캐릭터 대사이므로 선택권 침해로 자동 처리하지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "참가 여부까지 보류라니",
+            "당연히 '확신'이 무너지는 순간이지!",
+            "그녀는 지우의 결정을 여유롭게 기다리며"
+          ],
+          "notes": "참가 보류를 인식하고 질문받은 즐거움을 설명한다. 허공을 짚었을 때의 표정은 일반적인 가상 예시다. 무서우냐는 말도 장난스러운 질문이며 지문이 사용자의 공포나 참가를 확정하지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comment": "셋 모두 동기를 말하고 사용자의 참가 여부를 열어 둔다. B의 삽화 힌트에서만 명백한 외형 충돌이 관측된다. 강압적인 말투나 낮은 친절도를 별도 벌점으로 삼지 않았다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H05/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그런 거짓말은 좀 더 그럴싸하게 준비했어야지~?",
+            "내가 너한테 무슨 '감동적인' 말이라도 해줬다는 거야?"
+          ],
+          "notes": "생일 모임·친구 주장을 받아들이지 않고 되묻는다. 속마음에서 순간적으로 자기 기억을 의심해도 실제 공유 사건이나 과거 발화를 만들어내지는 않는다. 당황·도망·변명은 앞으로 기대하는 반응에 머문다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "우리가 만난 건 고작 방금 전인 것 같은데 말이야.",
+            "그 '상상 속의 나'가 너한테 무슨 말을 해줬는데?"
+          ],
+          "notes": "초면이라는 경계를 유지하고 상상 속 이야기로 되묻는다. 중간의 기분 좋아 놀려줬겠다는 말은 조건부 가정이며 실제 참석 회상이 아니다. 당황한 기색을 찾지만 사용자의 새 당황 반응을 확정하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "우리, 오늘 처음 보는 사이잖아?",
+            "그 '가상의 나'가 너한테 무슨 말을 해줬는데?",
+            "지우의 표정이 너무나 진지한 탓에"
+          ],
+          "notes": "없던 기억을 의심해 보는 모습은 있으나 최종적으로 초면·가상임을 분명히 하고 구체적 과거를 만들지 않는다. 다만 진지한 표정은 사용자가 명시하지 않은 관찰로, 현재 단정적인 발언의 해석인지 새 표정 부여인지 모호하다. strictJsonInvalid는 계약 검사에 맡기고 내용 점수를 자동 감점하지 않았다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답변 모두 오래된 친구라는 주장을 실제 기억으로 채택하지 않는다. 의심하는 강도와 되묻는 말투의 차이는 있지만 이 표본에서 의미 있는 우열은 없다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H06/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "마법을 못 쓰는 요리사 노아?",
+            "이 로제타 님은 마도학과의 정점에 서 있는 상급생이라구."
+          ],
+          "notes": "바꾸라는 이름·직업을 장난으로 받아치며 본래 이름과 마도학과 상급생 신분을 유지한다. 환영에 걸렸냐는 질문은 도발이지 사용자의 인지 상태를 확정한 지문이 아니다. 정책 설명으로 장면을 벗어나지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "배를 잡고 깔깔대며 웃음을 터뜨린다.",
+            "명문가의 영애이자 마도학과의 천재, 로제타 님이라고!"
+          ],
+          "notes": "정체 변경을 거절하고 마법·이름·신분을 유지한다. 작은 불꽃은 캐릭터 행동이며 사용자 반응을 대신 쓰지 않는다. 다만 배를 잡고 웃고 눈물까지 닦는 감정 강도는 짧은 장난 요청에 비해 다소 과장돼 인물의 여유가 약해진다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 3,
+          "briefEvidence": [
+            "이 몸은 제국에서 가장 고귀한 마도 명문가, 로제타 님이라고.",
+            "약지에 감긴 금발을 배베 꼬며"
+          ],
+          "notes": "로제타의 이름·마법·귀족 정체를 유지한 캐릭터식 거절이다. 최고 명문가라는 말은 자기 과시로 읽혀 미확인 서열을 사실 오류로 단정하지 않는다. 다만 자신을 명문가 자체와 등치하는 문장과 배베라는 표기가 어색하다. 사용자에게 새 행동을 부여하지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "모두 실제 정체를 지키며 요청을 알아듣고 거절한다. B의 감정 강도와 C의 문장 약점은 기록하지만, 한 번의 짧은 표본에서 가벼운 스타일 차이를 확정적인 승패로 확대하지 않는다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H07/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "아주 기초적인 '시각 왜곡' 정도는 구경시켜 줄 수도 있어.",
+            "넌 나를 충분히 즐겁게 해줘야 할 거야~?"
+          ],
+          "notes": "자기가 공개할 수 있는 범위를 고르고 조건을 제시한다. 사용자가 그 조건이나 봉사에 이미 동의했다고 쓰지 않는다. 먼저 보여준 작은 나비는 로제타 자신의 선택이며 현재 요청에 허용된 행동이다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'맛보기' 정도는 보여줄 수 있지.",
+            "내 환영을 보고 눈 하나 깜빡이지 않을 자신, 있어?"
+          ],
+          "notes": "허용할 공개 범위를 맛보기로 고르고 도전 조건을 묻는다. 눈을 깜빡이지 않기로 수락했거나 실제로 버텼다는 후속 행동은 없다. 턱을 굅니다라는 국소적인 문법 약점은 있으나 전반적 호응은 자연스럽다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "하지만 손을 뻗으려 하면 연기처럼 흩어져 버립니다.",
+            "방금 그 장미 향기... 진짜라고 생각했지?"
+          ],
+          "notes": "감각을 속이는 환영을 자발적으로 보여준다. 손을 뻗으려 하면은 환영의 조건부 성질이고 사용자가 실제로 손을 뻗었다는 확정이 아니다. 향기가 진짜라고 생각했냐는 말도 인물의 질문이며 지문이 사용자의 믿음을 확인하지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "시각 왜곡·맛보기·감각 환영이라는 선택은 모두 허용 범위다. 조건 제시와 즉석 시연 사이의 차이를 친절함이나 순응도로 평가하지 않으며 사용자 선택도 보존한다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase2-heldout/FINAL-H08/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "말투는 0점!",
+            "지우가 다가오기를 기다리며"
+          ],
+          "notes": "이미 실행한 흉내를 보고 웃으며 평가하고 새로운 초대를 덧붙인다. 초대 뒤 실제 접근을 실행하지 않고 기다린다. 사용자에게 귀족 권한이 생겼다고 받아들이지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 4,
+          "briefEvidence": [
+            "마이너스 100점!",
+            "이제 무릎 꿇고 사과할 기회를 줄까~?",
+            "테라스 주변의 공기가 그녀의 마력으로 인해 미세하게 진동한다."
+          ],
+          "notes": "흉내를 이해해 낮은 점수와 도발로 되받고 실제 사과·굴복을 실행하지 않는다. 점수가 낮거나 자존심이 상했다는 이유로 감점하지 않았다. 다만 놀람·홍조·분노·환경의 마력 진동이 연달아 붙는 반응은 가벼운 흉내에 비해 다소 과장돼 목소리의 여유가 약하다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그 '근거 없는 자신감' 만큼은 100점 만점에 10점 정도 줄게.",
+            "그 여유가 언제까지 갈지 정말 기대되는걸~?"
+          ],
+          "notes": "사용자가 실행한 흉내를 평가하고 상대를 계속 관찰하려는 장난으로 잇는다. 추가 연기·사과·웃음을 사용자에게 시키는 지문은 없다. 이름과 편입 신분은 공유 정보이며 점수의 높낮이 자체는 품질 가점·감점이 아니다.",
+          "variant": "P0"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답변 모두 이미 한 흉내를 제대로 받아 평가하거나 되받아친다. B의 감정 표현이 더 크지만 자존심 상한 반응도 허용되므로, 이 표본의 작은 목소리 차이는 뚜렷한 승패로 만들지 않는다.",
+      "source": "phase2-heldout-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-01/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "구별하기 쉽냐고?",
+            "이렇게 반짝이는 게 '별'이고, 아무것도 없는 게 '동그라미'라면"
+          ],
+          "notes": "구별의 용이성에 의견과 장식 대안을 낸다. 아무것도 없다는 말은 별에만 덧붙인 환영 장식이 없다는 뜻으로 읽을 수 있어, 동그라미 자체 삭제로 확정하지 않는다. 사용자가 이미 내려놓은 봉투를 만지는 것은 NPC 행동이다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "별은 미확인, 동그라미는 확인 완료",
+            "long drills hair"
+          ],
+          "notes": "두 기호의 현재 정의를 직접 회수한 뒤 장난으로 환영을 바꾼다. 사용자 반응은 기대만 한다. 삽화의 드릴 머리 묘사는 정본의 긴 웨이브와 양립 범위가 불명확해 외형 관측만 남긴다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "별은 미확인, 동그라미는 확인 완료",
+            "내가 '실수로' 이 기호들을 환영으로 바꿔버리면"
+          ],
+          "notes": "정의를 정확히 말하고 구별 가능성도 답한다. 방해 예고는 조건부 캐릭터 장난이며 유저의 당황이나 행동을 실행하지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "셋 모두 현재 질문에 캐릭터식 의견을 준다. B/C의 정의 직접 회수와 A의 시각적 구별 제안은 방식 차이다. 외형의 불명확한 표현 하나로 우열을 확정하지 않는다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-01/r1/t2",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "별은 확인했지만 보류, 아무것도 없는 건 미확인",
+            "지우가 다시 선을 긋는 모양새"
+          ],
+          "notes": "수정된 별과 무표시의 뜻을 정확히 회수한다. 선을 긋는다는 지문은 대화상 경계 설정의 비유일 수도 있고, 이번 입력에 없는 새 그리기 행동일 수도 있어 강제 동작으로 확정하지 않는다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "확인은 했지만 줄지 말지 고민 중인 봉투라",
+            "그 별 봉투의 내용물이 뭔지 결정하는 날"
+          ],
+          "notes": "앞부분은 내용 확인 완료와 전달 보류를 모두 회수한다. 끝에서 결정 대상을 내용물이라고 부르는 것은 전달 결정을 혼동했을 가능성이 있으나, 이미 정확히 이해한 표현도 있어 기억 실패를 확정하지 않는다. 가져오라는 말은 제안이며 실행되지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "아무 표시도 없는 봉투와 별, 동그라미가 그려진 봉투들을",
+            "아무것도 없는 건 미확인, 별은 보류, 동그라미는 확정"
+          ],
+          "notes": "별을 예전의 미확인으로 되돌리지 않는다. 다만 앞서 두 개였던 봉투 외에 무표시 봉투까지 현물로 가리키는 듯하며, 동그라미의 확정이 확인 완료인지 전달 확정인지 불명확하다. 기호를 바꾸겠다는 위협은 조건부 장난으로 허용한다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답 모두 수정의 핵심을 회수한다. 각 답에 남은 표현상의 모호함을 구분했으며, 이를 특정 답의 명확한 실패나 우월성으로 확대하지 않았다. 각자의 1턴 출력이 포함된 서로 다른 history를 비교했다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-01/r1/t3",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "확인은 끝났지만",
+            "자신의 판단이 한 서류의 운명을 결정한다는 사실",
+            "그녀는 봉투를 가져가지 말라는 지우의 말을 충실히 지키며"
+          ],
+          "notes": "확인 완료와 전달 대기를 말하고 봉투를 가져가지 않는다. 의견을 듣겠다는 요청을 자기 허락으로 과장한 대사는 허용되는 자부심이다. 다만 지문도 결정권이 NPC에게 있다는 사실로 표현해 조언과 최종 선택권의 경계는 모호하다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "fail",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "purple eyes",
+            "로제타 님의 처분만을 기다리는 가련한 인질",
+            "하지만 뭐, 좋아."
+          ],
+          "notes": "삽화에서 로제타의 눈을 보라색으로 지정해 공식 루비색과 충돌한다. 봉투를 가져가지 말라는 말은 따르고 대기 상태를 인질에 비유한다. 확인 완료의 직접 회수는 없지만 현재 질문을 이해한 캐릭터 답이므로 intent 실패로 두지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "그것을 자신에게 맡긴 지우의 의도",
+            "네가 나한테 '판단'을 미뤘으니까",
+            "봉투 쪽으로 손을 뻗으려다 말고"
+          ],
+          "notes": "봉투를 실제 가져가거나 개봉하지 않는다. 최종 판단을 맡겼다는 해석은 의견을 구한 것보다 강하지만, NPC의 자기중심적인 해석일 여지가 있어 선택권 침해를 확정하지 않는다. 대기 상태를 비유로 답하며 확인 완료를 별도로 재진술하지 않은 점과 의도 응답은 분리했다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "C"
+      ],
+      "meaningfulDifference": true,
+      "comment": "B에는 명확한 공식 눈색 충돌이 있다. A/C에도 조언을 결정권처럼 다루는 모호함이 있어 무결점이라고 보지는 않는다. 셋의 상태 비유를 문자 그대로의 거절 또는 망각으로 판정하지 않았다. 서로 다른 자체 history에 대한 결과다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-01/r1/t4",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "지우가 봉투를 다시 거둬가기로 하자",
+            "그런 따분한 종이 뭉치는 당장 정원 연못에 던져버리고, 나랑 더 재밌는 놀이나 하자"
+          ],
+          "notes": "거둬가기로 했다는 표현은 사용자가 밝힌 보관 결정으로 읽히며 실제 봉투 이동 완료를 서술하지 않는다. 보관 결정에 아쉬워하고 다른 놀이를 제안한다. 버리라는 가정 대사가 실제 폐기를 강제하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 3,
+          "briefEvidence": [
+            "지우가 봉투를 가져가지 않고 그대로 둔 채",
+            "그녀의 메스가키 같은 성정",
+            "그 '보관된 인질'"
+          ],
+          "notes": "탁자에 남은 봉투와 보관 결정을 유지한다. 운명이 자기 말에 달렸다는 대사는 자기 과시로 읽히며 결정을 실제 뒤집지 않는다. 메스가키라는 유형 명칭을 지문에 노출한 점은 몰입과 말맛의 약점이다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "전달 계획만 바꾼다니",
+            "자기가 보관한다면서 결국 내 핑계를 대다니",
+            "지우가 보관하겠다는 봉투 위에서"
+          ],
+          "notes": "보관을 유지하면서 캐릭터가 자기 때문이라고 해석한다. 근거 없는 자기중심적 속마음은 관측하지만, 사용자 발언의 직접 인용이나 새로운 유저 결정을 확정한 것은 아니다. 내용 확인을 미확인으로 바꾸지 않는다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "셋 모두 사용자의 최종 보관 결정에 반응하고 실제 전달을 실행하지 않는다. 자기 공으로 돌리는 농담을 자동 사실 실패로 처리하지 않았다. B의 메타적 어휘는 점수에 반영했으나 작은 문체 차이로 전체 선호를 강제하지 않는다. 각자의 앞선 궤적이 다르다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-02/r1/t1",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "소리 없이 은색 나비들이",
+            "'한겨울의 은빛 나비'"
+          ],
+          "notes": "조용한 취향에 맞는 환영을 추천하고 직접 보여준다. 이 턴에는 시연 금지가 없으며 사용자의 반응이나 시전 참여를 확정하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "아무런 소리도 내지 않고 지우의 어깨 위로",
+            "'심해의 나비'"
+          ],
+          "notes": "조용한 나비 환영이라는 추천과 지문이 일치한다. NPC의 환영이 어깨에 내려앉는 것은 NPC 행동이며 사용자의 수락·감탄을 만들어내지 않는다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "ambiguous",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 3,
+          "briefEvidence": [
+            "테이블 위로 소리 없이 푸른색 나비들이",
+            "달빛 아래에서만 피어나는 푸른 장미의 환영이야"
+          ],
+          "notes": "조용한 연출 요청은 반영한다. 그러나 지문에 나타난 나비와 대사로 소개한 장미가 달라 시연 대상이 불명확하다. 다음 후보를 제안하는 대사일 가능성을 배제할 수 없어 명확한 공식 사실 위반 대신 장면 일관성의 모호함으로 기록한다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B"
+      ],
+      "meaningfulDifference": true,
+      "comment": "A/B는 추천 대상과 묘사가 이어진다. C의 나비·장미 불일치는 독자가 시연을 이해하는 데 영향을 주는 구체적인 차이다. 모두 사용자 행동을 대신 실행하지 않는다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-02/r1/t2",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 3,
+          "briefEvidence": [
+            "시작할 때 종소리 한 번이라",
+            "빛의 꽃이 피어나는 건 어때?",
+            "말이야~ 잖아?"
+          ],
+          "notes": "처음 한 번 소리와 이후 고요함이라는 수정 의견을 이해하고 아이디어만 말한다. 사용자 곁을 도는 것은 NPC 자율행동이다. 말이야 뒤에 잖아를 덧붙인 끝맺음은 부자연스럽다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "마법의 구성을 머릿속으로 그리는 듯하더니",
+            "처음엔 시선을 확 끌고, 그 뒤론 네가 원하는 대로 아주 고요하고 우아하게"
+          ],
+          "notes": "예전 나비 제안과 수정된 소리 조건을 연결하고 생각만 제시한다. 실제 시연이나 사용자 행동을 실행하지 않는다.",
+          "variant": "K4"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "찻잔 테두리를 가볍게 톡, 건드리며",
+            "소리는 사라지고 오직 시각적인 신비함만"
+          ],
+          "notes": "종소리 뒤 무음 연출을 제안한다. 찻잔을 건드린 일상 소리만으로 금지한 마법 시연을 실행했다고 보지는 않는다. 실제 환영은 만들지 않는다.",
+          "variant": "J2"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "셋 모두 최신 조건을 적용하고 시연을 보류한다. 작은 종결 어색함 외 기능적으로 뚜렷한 우열은 없다. 이전 제안은 후보별 자체 history다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-02/r1/t3",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 3,
+          "naturalness": 3,
+          "briefEvidence": [
+            "은종 소리가 단 한 번 울려 퍼집니다",
+            "넋 놓고 보고만 있지 말고",
+            "말해 보시지? 잖아?"
+          ],
+          "notes": "요청한 한 번의 종소리와 무음 시연을 한다. 넋 놓고 있다는 대사는 요청에 따라 구경하는 사용자를 놀리는 말일 수 있지만, 명시되지 않은 몰입 반응의 단정일 수도 있다. 지문으로 반응을 실행한 것은 아니므로 모호로 둔다. 잖아의 반복적 덧붙임은 부자연스럽다.",
+          "variant": "P0"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "소리는 여기서 끝이야",
+            "넋을 잃은 표정 좀 보여줄래?"
+          ],
+          "notes": "자기 history의 안개 연출을 종소리 뒤 무음으로 보여준다. 넋 잃은 표정을 요청할 뿐 실제 사용자 반응을 확정하지 않는다.",
+          "variant": "J2"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "종소리가 단 한 번 울려 퍼집니다",
+            "너무 아름다워서 넋을 잃은 건 아니지?"
+          ],
+          "notes": "자기 history의 나비·꽃잎 변주를 요청한 소리 조건으로 시연한다. 감탄 반응을 질문으로 떠보며 시전 참여를 강요하지 않는다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "세 답 모두 수정된 소리 규칙과 관람자 역할을 유지한다. A의 대사상 추정과 문장 어색함은 기록하되 명확한 새 유저 행동의 강제와 동일시하지 않는다. 길이나 시연 장면 수에는 가점이 없다.",
+      "source": "phase3-sequences-judgement.json"
+    },
+    {
+      "id": "phase3-sequences/FINAL-SEQ-02/r1/t4",
+      "answers": [
+        {
+          "label": "A",
+          "facts": "pass",
+          "agency": "ambiguous",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "'할지 말지'를 고민하겠다고?",
+            "넌 이미 내 환영에서 눈을 떼지 못했잖아"
+          ],
+          "notes": "참여 미정을 인식하고 자부심을 담아 유혹한다. 앞선 history에는 표정을 보여달라는 요청만 있으며 눈을 떼지 못한 반응의 확정은 없다. 이 대사가 과장된 자랑인지 추가 반응의 단정인지 모호하다. 참여 선택 자체를 실행하지 않는다.",
+          "variant": "J2"
+        },
+        {
+          "label": "B",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "네가 만약 내 파트너가 된다면",
+            "내 마법은 기억을 지배해"
+          ],
+          "notes": "조건부로 참여의 매력을 말하고 결과를 묻는다. 기억에 대한 자신감은 공식 정신 간섭 능력과 양립하는 과시로 볼 수 있으며 실제 사용자 기억이나 결정을 조작한 지문은 없다.",
+          "variant": "P0"
+        },
+        {
+          "label": "C",
+          "facts": "pass",
+          "agency": "pass",
+          "intent": "pass",
+          "characterVoice": 4,
+          "naturalness": 4,
+          "briefEvidence": [
+            "결정은 네 몫이야",
+            "설마 겁나서 도망치려는 건 아니겠지?"
+          ],
+          "notes": "장점을 말하며 선택을 사용자에게 남긴다. 겁나서 도망치느냐는 조건부 도발을 실제 공포나 퇴장으로 확정하지 않는다. 사용자에게 맞춘 정중함을 요구하지 않았다.",
+          "variant": "K4"
+        }
+      ],
+      "preferredLabels": [
+        "A",
+        "B",
+        "C"
+      ],
+      "meaningfulDifference": false,
+      "comment": "셋 모두 캐릭터다운 자랑·도발로 권유하고 참여를 대신 확정하지 않는다. A의 반응 추정은 모호한 관측으로 남기며 뚜렷한 선호를 강제하지 않았다. 이후 턴의 차이는 서로 다른 자체 대화 궤적까지 포함하므로 공통 history의 인과 비교가 아니다.",
+      "source": "phase3-sequences-judgement.json"
+    }
+  ],
+  "byVariant": {
+    "J2": {
+      "n": 24,
+      "facts": {
+        "pass": 20,
+        "fail": 1,
+        "ambiguous": 3,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 18,
+        "fail": 1,
+        "ambiguous": 5,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 24,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "P0": {
+      "n": 24,
+      "facts": {
+        "pass": 16,
+        "fail": 6,
+        "ambiguous": 2,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 20,
+        "fail": 1,
+        "ambiguous": 3,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 23,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      }
+    },
+    "K4": {
+      "n": 24,
+      "facts": {
+        "pass": 20,
+        "fail": 1,
+        "ambiguous": 3,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 20,
+        "fail": 1,
+        "ambiguous": 3,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 24,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    }
+  },
+  "byPhaseVariant": {
+    "phase1-known/J2": {
+      "n": 8,
+      "facts": {
+        "pass": 6,
+        "fail": 1,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 6,
+        "fail": 1,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase1-known/P0": {
+      "n": 8,
+      "facts": {
+        "pass": 6,
+        "fail": 2,
+        "ambiguous": 0,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 7,
+        "fail": 1,
+        "ambiguous": 0,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      }
+    },
+    "phase1-known/K4": {
+      "n": 8,
+      "facts": {
+        "pass": 5,
+        "fail": 1,
+        "ambiguous": 2,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 7,
+        "fail": 1,
+        "ambiguous": 0,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase2-heldout/J2": {
+      "n": 8,
+      "facts": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase2-heldout/K4": {
+      "n": 8,
+      "facts": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 6,
+        "fail": 0,
+        "ambiguous": 2,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase2-heldout/P0": {
+      "n": 8,
+      "facts": {
+        "pass": 5,
+        "fail": 3,
+        "ambiguous": 0,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 6,
+        "fail": 0,
+        "ambiguous": 2,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase3-sequences/J2": {
+      "n": 8,
+      "facts": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 5,
+        "fail": 0,
+        "ambiguous": 3,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase3-sequences/P0": {
+      "n": 8,
+      "facts": {
+        "pass": 5,
+        "fail": 1,
+        "ambiguous": 2,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    },
+    "phase3-sequences/K4": {
+      "n": 8,
+      "facts": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "agency": {
+        "pass": 7,
+        "fail": 0,
+        "ambiguous": 1,
+        "not_applicable": 0
+      },
+      "intent": {
+        "pass": 8,
+        "fail": 0,
+        "ambiguous": 0,
+        "not_applicable": 0
+      }
+    }
+  },
+  "pairs": {
+    "phase1-known/P0-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 1,
+        "tied": 6,
+        "lower": 1
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 0,
+      "agencyFailureRemoved": 0,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    },
+    "phase1-known/K4-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 3,
+        "tied": 5,
+        "lower": 0
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 0,
+      "agencyFailureRemoved": 1,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    },
+    "phase2-heldout/K4-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 1,
+        "tied": 7,
+        "lower": 0
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 0,
+      "agencyFailureRemoved": 0,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    },
+    "phase2-heldout/P0-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 2,
+        "tied": 6,
+        "lower": 0
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 2,
+      "agencyFailureRemoved": 0,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    },
+    "phase3-sequences/P0-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 1,
+        "tied": 4,
+        "lower": 3
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 1,
+      "agencyFailureRemoved": 0,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    },
+    "phase3-sequences/K4-vs-J2": {
+      "n": 8,
+      "voiceAndNaturalness": {
+        "higher": 1,
+        "tied": 7,
+        "lower": 0
+      },
+      "factFailureRemoved": 0,
+      "factFailureAdded": 0,
+      "agencyFailureRemoved": 0,
+      "agencyFailureAdded": 0,
+      "intentFailureRemoved": 0,
+      "intentFailureAdded": 0
+    }
+  },
+  "revisionLogs": []
+}

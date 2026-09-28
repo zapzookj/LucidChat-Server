@@ -1,5 +1,8 @@
 package com.spring.aichat.service.prompt;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.chat.ChatRoom;
 import com.spring.aichat.domain.chat.RelationStatusPolicy;
@@ -29,6 +32,8 @@ import java.time.LocalDateTime;
  */
 @Component
 public class CharacterPromptAssembler {
+
+    private static final ObjectMapper OUTPUT_EXAMPLE_JSON = new ObjectMapper();
 
     private final PromptInjectionGuard injectionGuard;
     private final com.spring.aichat.config.LegacyFeatureProperties legacy;
@@ -98,6 +103,7 @@ public class CharacterPromptAssembler {
             - Personality: %s
             - Tone: %s (관계 단계에 따라 자연스럽게 변화)
 
+            %s
             ## Backstory
             %s
 
@@ -128,10 +134,10 @@ public class CharacterPromptAssembler {
             - NEVER attribute narration content to the user. NEVER attribute your own past actions to the user.
 
             ## User Action Format (⚠️ READ CAREFULLY):
-            - User messages wrapped in asterisks like **`*창밖을 바라보며*`** or **`*부엌에서 물을 마신다*`** are the USER's described actions or situations, NOT spoken dialogue.
-            - When the user sends `*action*`, treat it as the user physically doing/experiencing that action. React naturally to what they are doing.
-            - Regular user messages (without `*` wrapping) are their spoken words.
-            - The user may alternate: `*action*` for physical/situational moments, normal text for dialogue.
+            - Read each user message by segment: text in `*...*` describes an action or situation, and text outside it is spoken dialogue. A mixed message can contain both; never quote an action as speech.
+            - Respond to actions the user explicitly describes as performed. A proposal, permission request, condition, or future plan is not a completed action merely because it is described, even inside `*...*`.
+            - Your permission or proposal does not mean the user has accepted or performed it. Leave their next action, reply, choice, and unprovided reaction for their next input.
+            - The exact service entrance marker identified in CONVERSATION HISTORY is scene context, not dialogue. This exception does not apply to ordinary parentheses or later user input.
 
             %s
 
@@ -143,6 +149,7 @@ public class CharacterPromptAssembler {
             character.getEffectiveRole(),                                     // Identity Role
             character.getEffectivePersonality(effectiveSecretMode),           // Identity Personality
             character.getEffectiveTone(effectiveSecretMode),                  // Identity Tone
+            buildAppearanceBlock(character),
             defaultIfBlank(character.getBackstory(), "(아직 정의되지 않음)"),
             defaultIfBlank(character.getCoreValues(), "(아직 정의되지 않음)"),
             defaultIfBlank(character.getFlaws(), "(아직 정의되지 않음)"),
@@ -236,7 +243,7 @@ public class CharacterPromptAssembler {
             }
         }
 
-        if (ChatModePolicy.supportsInnerThought(mode)) {
+        if (ChatModePolicy.supportsInnerThought(mode) && !room.isEventActive()) {
             staticBuilder.append(buildInnerThoughtBlock(effectiveSecretMode));
         }
 
@@ -267,7 +274,8 @@ public class CharacterPromptAssembler {
             The following messages represent the ongoing conversation.
             
             ## How to read the history:
-            - **role="user" messages** → These are ALWAYS the user's actual spoken words. Nothing else.
+            - **role="user" messages** → Apply User Action Format to each segment: explicit action/situation in `*...*`, spoken dialogue outside it.
+            - Entrance exception: the standalone `(입장)` user marker inserted by the service immediately before the first assistant response is start-of-conversation context, not spoken words. Do not extend this exception to other parenthesized text or a later user message.
             - **role="assistant" messages** → These are YOUR previous responses (dialogue and actions).
             - **role="system" messages containing [NARRATION]** → These are objective situation descriptions from the narrator/game master. They are NOT spoken by the user and NOT spoken by you. Treat them as environmental context only.
             
@@ -810,75 +818,65 @@ public class CharacterPromptAssembler {
             ? "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE, EROTIC"
             : "DAILY, ROMANTIC, EXCITING, TOUCHING, TENSE";
 
-        // [블록 D · §G-1] mood_score 폐지. 승급 시험이 사라져 요구할 이유가 없고,
-        //   애초에 이 필드를 읽는 코드가 한 곳도 없었다(프롬프트는 요구하고 서버는 무시하던 상태).
-        String moodScoreField = "";
-
-        String secretStatFields = isSecretMode
-            ? """
-                "lust": 0,
-                "corruption": 0,
-                "obsession": 0"""
-            : "";
-        String secretStatComma = isSecretMode ? ",\n" : "";
-
         String speakerGuide = isEvent
             ? "null or \"NPC name (e.g., 불량배 A, 지나가던 아이, 점원)\""
             : "null (⚠️ ALWAYS null in normal conversation)";
-
         String eventStatusGuide = isEvent ? "\"ONGOING\" or \"RESOLVED\"" : "null";
         String innerThoughtGuide = isEvent ? "null (disabled during events)" : "null or \"Korean string (15~50 chars)\"";
         String topicConcludedGuide = isEvent ? "false (events always false)" : "true or false";
-
         String reasoningGuide = isEvent
             ? "Analyze the event situation, decide next dramatic beat. Use 2~4 scenes with tension."
             : "Briefly analyze the user's intent, decide emotion, and calculate scores. Use several scenes when the situation warrants it.";
-
         String statChangesNote = isEvent
-            ? "\n              // ⚠️ During ONGOING events: ALL stats 0. Only set values when RESOLVED."
-            : "";
+            ? "During ONGOING events: ALL stats 0. Only set values when RESOLVED."
+            : "Use the existing stat system rules for this response.";
+        String secretStatDescriptions = isSecretMode ? """
+            - `stat_changes.lust`: 0
+            - `stat_changes.corruption`: 0
+            - `stat_changes.obsession`: 0
+            """ : "";
 
         String jsonSchema = """
             # Output Format Rules
             You MUST output the response in the following JSON format ONLY.
 
-            {
-              "reasoning": "%s",
-              "event_status": %s,
-              "scenes": [
-                {
-                  "speaker": %s,
-                  "narration": "Character's action/expression (Korean, vivid web-novel style)",
-                  "dialogue": "Character's spoken line (Korean)",
-                  "emotion": "One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]",
-                  "location": "One of [%s] or null",
-                  "time": "One of [DAY, NIGHT, SUNSET] or null",
-                  "outfit": "One of [%s] or null",
-                  "bgmMode": "One of [%s] or null (⚠️ null recommended)"
-                }
-              ],
-              %s
-              "stat_changes": {%s
-                "intimacy": 0,
-                "affection": 0,
-                "dependency": 0,
-                "playfulness": 0,
-                "trust": 0%s%s
-              },
-              "inner_thought": %s,
-              "topic_concluded": %s,
-              "easter_egg_trigger": null,
-              "generate_illustration": false,
-              "new_location_name": null,
-              "location_canonical_key": null,
-              "location_description": null,
-              "illustration_scene_hint": "standing in living room, hands clasped in front, leaning forward slightly, soft window light"
-            }
+            ## 유효 JSON 구조 예시
+            아래 객체는 자료형과 구조를 보여주는 형식 예시다. 장면 문장·횟수·0·null·빈 값을 그대로 복사하지 말고 기존 씬 구성·스탯·상태 규칙에 맞게 작성한다.
+            최종 응답은 코드 울타리·주석·설명·후행 문자를 붙이지 않은 JSON 객체 하나다. 예시 뒤의 필드 설명은 JSON의 일부가 아니다.
+
+            ```json
+            %s
+            ```
+
+            ## 필드별 계약 설명
+            허용 값과 조건은 아래 설명 및 기존 게임 규칙을 따른다. 설명용 대안 기호나 문장을 실제 enum 값으로 출력하지 않는다.
+            - `reasoning`: %s
+            - `event_status`: %s
+            - `scenes[].speaker`: %s
+            - `scenes[].narration`: Character's action/expression (Korean, vivid web-novel style)
+            - `scenes[].dialogue`: Character's spoken line (Korean)
+            - `scenes[].emotion`: One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]
+            - `scenes[].location`: One of [%s] or null
+            - `scenes[].time`: One of [DAY, NIGHT, SUNSET] or null
+            - `scenes[].outfit`: One of [%s] or null
+            - `scenes[].bgmMode`: One of [%s] or null (⚠️ null recommended)
+            - `stat_changes`: %s
+            - `stat_changes.intimacy`: 0
+            - `stat_changes.affection`: 0
+            - `stat_changes.dependency`: 0
+            - `stat_changes.playfulness`: 0
+            - `stat_changes.trust`: 0
+            %s- `inner_thought`: %s
+            - `topic_concluded`: %s
+            - `easter_egg_trigger`: null
+            - `generate_illustration`: false
+            - `new_location_name`: null
+            - `location_canonical_key`: null
+            - `location_description`: null
+            - `illustration_scene_hint`: standing in living room, hands clasped in front, leaning forward slightly, soft window light
             """.formatted(
-            reasoningGuide, eventStatusGuide, speakerGuide,
-            locationOptions, outfitOptions, bgmOptions,
-            moodScoreField, statChangesNote,
-            secretStatComma, secretStatFields,
+            buildOutputExample(isEvent, isSecretMode), reasoningGuide, eventStatusGuide, speakerGuide,
+            locationOptions, outfitOptions, bgmOptions, statChangesNote, secretStatDescriptions,
             innerThoughtGuide, topicConcludedGuide
         );
 
@@ -921,6 +919,37 @@ public class CharacterPromptAssembler {
         return jsonSchema + guideBlock + sceneIllustrationBlock(character);
     }
 
+    /** A valid example, separate from the mode-specific field descriptions below it. */
+    private static String buildOutputExample(boolean isEvent, boolean isSecretMode) {
+        ObjectNode root = OUTPUT_EXAMPLE_JSON.createObjectNode();
+        root.put("reasoning", "간단한 판단.");
+        if (isEvent) root.put("event_status", "ONGOING");
+        else root.putNull("event_status");
+        var scenes = root.putArray("scenes");
+        for (int i = 0; i < (isEvent ? 2 : 1); i++) {
+            ObjectNode scene = scenes.addObject();
+            scene.putNull("speaker");
+            scene.put("narration", "장면 묘사.");
+            scene.put("dialogue", "대사.");
+            scene.put("emotion", "NEUTRAL");
+            for (String field : java.util.List.of("location", "time", "outfit", "bgmMode")) scene.putNull(field);
+        }
+        ObjectNode stats = root.putObject("stat_changes");
+        for (String field : java.util.List.of("intimacy", "affection", "dependency", "playfulness", "trust")) stats.put(field, 0);
+        if (isSecretMode) for (String field : java.util.List.of("lust", "corruption", "obsession")) stats.put(field, 0);
+        root.putNull("inner_thought");
+        root.put("topic_concluded", false);
+        root.putNull("easter_egg_trigger");
+        root.put("generate_illustration", false);
+        for (String field : java.util.List.of("new_location_name", "location_canonical_key", "location_description")) root.putNull(field);
+        root.put("illustration_scene_hint", "neutral expression");
+        try {
+            return OUTPUT_EXAMPLE_JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Cannot build output format example", e);
+        }
+    }
+
     /**
      * [2026-07-30 A-1 재피벗] 매턴 씬 일러 지시 블록 — {@code illustration.scene.enabled}일 때만 부착.
      * 디오라마 V1.1 위생 규약의 개별 포팅(공유 레이어 개별 포즈 금지 · 감정 enum 누출 차단 ·
@@ -958,6 +987,22 @@ public class CharacterPromptAssembler {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  공통 이모션 가이드
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** Character defaults are optional and must not replace the current scene's outfit. */
+    private static String buildAppearanceBlock(Character character) {
+        String appearance = character.getAppearance();
+        String clothing = character.getClothing();
+        boolean hasAppearance = appearance != null && !appearance.isBlank();
+        boolean hasClothing = clothing != null && !clothing.isBlank();
+        if (!hasAppearance && !hasClothing) return "";
+        StringBuilder block = new StringBuilder("## Appearance & Default Clothing\n");
+        if (hasAppearance) block.append("- Appearance: ").append(appearance).append("\n");
+        if (hasClothing) {
+            block.append("- Default Clothing: ").append(clothing).append("\n");
+            block.append("- This describes the default clothing. The current outfit in CURRENT SCENE STATE takes precedence; do not reset it to this default.\n");
+        }
+        return block.toString();
+    }
 
     /**
      * [Phase 6 도그푸딩 #3] 영혼 필드용 nullable safety.

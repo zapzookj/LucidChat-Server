@@ -1,0 +1,96 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileTestJava
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:7: error: cannot find symbol
+import com.spring.aichat.config.LegacyFeatureProperties;
+                               ^
+  symbol:   class LegacyFeatureProperties
+  location: package com.spring.aichat.config
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:8: error: cannot find symbol
+import com.spring.aichat.config.SceneIllustrationProperties;
+                               ^
+  symbol:   class SceneIllustrationProperties
+  location: package com.spring.aichat.config
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:17: error: cannot find symbol
+import com.spring.aichat.service.story.WorldView;
+                                      ^
+  symbol:   class WorldView
+  location: package com.spring.aichat.service.story
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:18: error: cannot find symbol
+import com.spring.aichat.service.story.WorldViewService;
+                                      ^
+  symbol:   class WorldViewService
+  location: package com.spring.aichat.service.story
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:41: error: cannot find symbol
+    private final WorldViewService worlds = mock(WorldViewService.class);
+                  ^
+  symbol:   class WorldViewService
+  location: class StoryDirectorPromptAssemblerContractTest
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:92: error: method getAllowedLocations in class Character cannot be applied to given types;
+        assertThat(output).contains("One of [" + String.join(", ", character.getAllowedLocations(room.getStatusLevel(), secret, false)) + "] or null");
+                                                                            ^
+  required: RelationStatus,boolean
+  found:    RelationStatus,boolean,boolean
+  reason: actual and formal argument lists differ in length
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:93: error: method getAllowedOutfits in class Character cannot be applied to given types;
+        assertThat(output).contains("One of [" + String.join(", ", character.getAllowedOutfits(room.getStatusLevel(), secret, false)) + "] or null");
+                                                                            ^
+  required: RelationStatus,boolean
+  found:    RelationStatus,boolean,boolean
+  reason: actual and formal argument lists differ in length
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:147: error: method getAllowedLocations in class Character cannot be applied to given types;
+            assertThat(payload.outputFormat()).contains("One of [" + String.join(", ", character.getAllowedLocations(room.getStatusLevel(), secret, false)) + "] or null");
+                                                                                                ^
+  required: RelationStatus,boolean
+  found:    RelationStatus,boolean,boolean
+  reason: actual and formal argument lists differ in length
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:211: error: cannot find symbol
+            new SceneIllustrationProperties(auto, auto ? "auto" : "manual", null, null, null, null), new LegacyFeatureProperties());
+                ^
+  symbol:   class SceneIllustrationProperties
+  location: class CharacterPromptAssemblerContractTest
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:211: error: cannot find symbol
+            new SceneIllustrationProperties(auto, auto ? "auto" : "manual", null, null, null, null), new LegacyFeatureProperties());
+                                                                                                         ^
+  symbol:   class LegacyFeatureProperties
+  location: class CharacterPromptAssemblerContractTest
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:41: error: cannot find symbol
+    private final WorldViewService worlds = mock(WorldViewService.class);
+                                                 ^
+  symbol:   class WorldViewService
+  location: class StoryDirectorPromptAssemblerContractTest
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:54: error: cannot find symbol
+        var world = mock(WorldView.class);
+                         ^
+  symbol:   class WorldView
+  location: class StoryDirectorPromptAssemblerContractTest
+C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\StoryDirectorPromptAssemblerContractTest.java:56: error: package WorldView does not exist
+        when(world.locations()).thenReturn(List.of(new WorldView.LocationView(
+                                                                ^
+13 errors
+
+> Task :compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///C:/Users/zapza/Desktop/MuseLab/aichat/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestJava'.
+> Compilation failed; see the compiler output below.
+  C:\Users\zapza\Desktop\MuseLab\aichat\src\test\java\com\spring\aichat\service\prompt\CharacterPromptAssemblerContractTest.java:7: error: cannot find symbol
+  import com.spring.aichat.config.LegacyFeatureProperties;
+                                 ^
+    symbol:   class LegacyFeatureProperties
+    location: package com.spring.aichat.config
+  13 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to generate a Build Scan (powered by Develocity).
+
+BUILD FAILED in 35s
+3 actionable tasks: 1 executed, 2 up-to-date

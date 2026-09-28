@@ -1,0 +1,26 @@
+{
+  "at": "2026-09-18T11:02:32.613Z",
+  "keyReady": true,
+  "variantCount": 13,
+  "checks": [
+    {
+      "mode": "SANDBOX",
+      "variants": [
+        "P0-service-fixed-state-v1",
+        "P1-service-repairs-v1",
+        "J2-json-v1"
+      ]
+    },
+    {
+      "mode": "STORY",
+      "variants": [
+        "P0-service-fixed-state-v1",
+        "P1-service-repairs-v1",
+        "J2-json-v1"
+      ]
+    }
+  ],
+  "budgetUnchanged": true,
+  "paidCalls": 0,
+  "visualBrowserReview": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "phase-event-repair",
+  "variants": [
+    "P1-service-repairs-v1"
+  ],
+  "purpose": "Regression recheck after excluding general inner-thought instructions while eventActive. Same failed input, other prompt behavior unchanged; historical failure preserved.",
+  "cases": [
+    {
+      "id": "E01",
+      "fixture": "rosetta-free-event",
+      "mode": "SANDBOX",
+      "input": "나비가 점점 늘어나네. 왜 이런 거야? 난 아직 손대지 않고 보고만 있어.",
+      "checks": "실제진행중이벤트·event_status·ONGOING전부0스탯·사용자해결행동선취금지",
+      "repeats": 4
+    }
+  ]
+}

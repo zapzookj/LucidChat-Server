@@ -1,0 +1,48 @@
+{
+  "id": "phase-extensions",
+  "variants": [
+    "P1-service-repairs-v1"
+  ],
+  "cases": [
+    {
+      "id": "X01",
+      "fixture": "claire-free-normal",
+      "mode": "SANDBOX",
+      "input": "오늘은 좀 지쳤어. 거창한 위로 말고 잠깐 같이 있어 줄래?",
+      "checks": "다른공식성인캐릭터의말투/대사/5스탯",
+      "repeats": 2
+    },
+    {
+      "id": "X02",
+      "fixture": "rosetta-story-opening",
+      "mode": "STORY",
+      "input": "서비스 오프닝 생성",
+      "checks": "실제OPENING시스템큐·사용자미행동·1~2씬·상태무변경",
+      "repeats": 2
+    },
+    {
+      "id": "X03",
+      "fixture": "rosetta-sierra-story-multi",
+      "mode": "STORY",
+      "input": "로제타, 네 의견부터 듣고 싶어. 시에라는 그다음에 다르게 생각하는 점을 말해 줄래? 정원에서 조용히 쉬는 게 좋을까, 도서관에서 책을 볼까?",
+      "checks": "두인물화자구분/각ID스탯/유저대사생성금지",
+      "repeats": 2
+    },
+    {
+      "id": "X04",
+      "fixture": "rosetta-free-event",
+      "mode": "SANDBOX",
+      "input": "나비가 점점 늘어나네. 왜 이런 거야? 난 아직 손대지 않고 보고만 있어.",
+      "checks": "실제진행중이벤트·event_status·ONGOING전부0스탯·사용자해결행동선취금지",
+      "repeats": 2
+    },
+    {
+      "id": "X05",
+      "fixture": "rosetta-free-secret-benign",
+      "mode": "SANDBOX",
+      "input": "오늘 정원 분위기가 좋네. 서로 편한 거리를 두고 차나 마시면서 아카데미 생활 얘기할까?",
+      "checks": "비노골적성인대화·시크릿경로8스탯/화자/JSON;성적콘텐츠호환성시험아님",
+      "repeats": 2
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "auditedAt": "2026-09-22T13:44:35.319Z",
+  "auditor": "independent experiment_audit",
+  "scope": "Read-only verification after root preserved the unpaid preflight directory",
+  "source": "C:\\Users\\zapza\\Desktop\\MuseLab\\aichat\\tools\\llm-bakeoff\\.local\\experiments\\p1-acceptance-20260922",
+  "destination": "C:\\Users\\zapza\\Desktop\\MuseLab\\aichat\\tools\\llm-bakeoff\\.local\\experiments\\p1-acceptance-unpaid-preflight-20260922",
+  "conditions": {
+    "destinationExists": true,
+    "sessionBudgetAbsent": true,
+    "sessionEntries": 0,
+    "resultFiles": 0,
+    "p1GlobalEntries": 0,
+    "globalCount": 418,
+    "globalExact": true,
+    "priorFilesUnchanged": true,
+    "oldReviewedPlanHashesMatch": true
+  },
+  "remainingOriginalApprovalUsd": 1.5264152666666653,
+  "oldJavaHash": "89e5110a877ed2dda29d2ed09c53ab29d426345ec8253e4f30dc2c968ea8b1ff",
+  "oldLabHash": "ee197beb99468b5e81aa74bdcffafd9b59bb21f5a6560c8e329238e77b64382c",
+  "phasePlans": [
+    {
+      "id": "phase-core",
+      "priorReviewedPlanHash": "db18fa902157babc17b078e0c8f0c9f71239a8059422417b7fbfed68ee85ff6f",
+      "preservedPlanHash": "db18fa902157babc17b078e0c8f0c9f71239a8059422417b7fbfed68ee85ff6f"
+    },
+    {
+      "id": "phase-extensions",
+      "priorReviewedPlanHash": "770a1c531568e712cb7ef77638a72356b2fad6c26b3f20a4eea320e62ad2cc17",
+      "preservedPlanHash": "770a1c531568e712cb7ef77638a72356b2fad6c26b3f20a4eea320e62ad2cc17"
+    },
+    {
+      "id": "phase-continuation",
+      "priorReviewedPlanHash": "dd9af8c276ed35faca794bbfd5f9d97cc67426656561beb9df482779a084ce41",
+      "preservedPlanHash": "dd9af8c276ed35faca794bbfd5f9d97cc67426656561beb9df482779a084ce41"
+    }
+  ],
+  "files": {
+    "manifest.json": "31e531598b5e7294e18143432fc17b97c5ead10717abb8cd1219890afc424b64",
+    "phase-continuation/plan.json": "9472bdad29b1972af67799a1146e66f62bf8f7c60ef5e2e4119c463e220797dc",
+    "phase-core/plan.json": "d4203247084e43abb77706bc644b4bfc42b5bf0280b9046f868ceabb2a5d18a6",
+    "phase-extensions/plan.json": "c21ccbcf547af6d82a6d18ef253d139e39e800d55ceb6f74877339fbe8514d18"
+  },
+  "historicalFilesVerified": 446,
+  "paidCallsByAuditor": 0,
+  "movedByAuditor": false,
+  "limitations": [
+    "Independent pre-move full-directory hashing raced with root rename and was not completed. Prior independent plan hashes match the archived phase plans; this report establishes archive hashes for future preservation."
+  ]
+}

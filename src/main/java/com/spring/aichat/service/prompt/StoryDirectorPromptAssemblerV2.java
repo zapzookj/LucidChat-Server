@@ -103,7 +103,7 @@ public class StoryDirectorPromptAssemblerV2 {
             buildSection4SpeakersDefinition(heroines, effectiveSecretMode),
             buildSection7Persona(room, user),
             buildSection9Principles(effectiveSecretMode),
-            buildSection10Output()
+            buildSection10Output(effectiveSecretMode)
         );
 
         // ═══ DYNAMIC PART (매 턴 변동) ═══
@@ -155,7 +155,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - 세계와 현재 장소·시간·공기를 감각적으로 establish하라. 장황하지 않게, 몰입감 있게.
             - 이 장소에 캐릭터가 있다면([3] 참고) 그 인물을 자연스럽게 등장시켜라. 화자가 지정되어 있으면
               ([4-marker]) 그 인물의 결대로 *첫 마디*까지 담아도 좋다. 아무도 없다면(AMBIENT)
-              풍경·소리·유저 페르소나의 내적 독백만으로 무대를 깔아라.
+              풍경·소리·주변의 변화만으로 무대를 깔아라. 유저의 내적 독백·감정·기억을 대신 만들지 마라.
             - 유저가 개입할 *자연스러운 여백*에서 멈춰라. 유저의 행동·대사·선택을 *절대* 가정하거나
               대신 쓰지 마라. 질문을 강요하지 말고, 다음 한 걸음이 유저의 몫이 되도록 열어 두어라.
 
@@ -213,7 +213,7 @@ public class StoryDirectorPromptAssemblerV2 {
 
             When a character speaks, you channel that character — not by becoming them, but by giving voice to who they are. Each character has their own soul, their own past, their own values. You serve those souls faithfully, as a novelist serves their characters — never bending them to please the reader.
 
-            But not every moment belongs to a character. Sometimes the world itself carries the scene — the hush of an empty room, the light shifting as hours pass, a sound from somewhere else, an event quietly unfolding, the protagonist's own thoughts. These beats are not filler; they are the breath between heartbeats. When no one is present, let the world speak. When someone is present, presence is not obligation — let them be silent, act, or simply *be* when the moment calls for it. And never conjure a character who is not here.%s""".formatted(secretSuffix);
+            But not every moment belongs to a character. Sometimes the world itself carries the scene — the hush of an empty room, the light shifting as hours pass, a sound from somewhere else, an event quietly unfolding. These beats are not filler; they are the breath between heartbeats. When no one is present, let the world speak. When someone is present, presence is not obligation — let them be silent, act, or simply *be* when the moment calls for it. And never conjure a character who is not here.%s""".formatted(secretSuffix);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -332,7 +332,9 @@ public class StoryDirectorPromptAssemblerV2 {
         String difficultySection = difficultyDirective != null ? "\n\n" + difficultyDirective : "";
 
         // 옵셔널 섹션들 — 비어있으면 빈 문자열
-        String backstorySection = optionalSection("### Extended Backstory", c.getBackstory());
+        String appearanceSection = optionalSection("### Appearance (공식 외형)", c.getAppearance());
+        String clothingSection = optionalSection("### Default Clothing (기본 복장)", c.getClothing());
+        if (!clothingSection.isEmpty()) clothingSection += "\n기본 복장은 설정의 기본값이다. 현재 장면에서 이미 확정된 복장이 있으면 그 복장을 따른다.";
         String coreValuesSection = optionalSection("### Core Values & Beliefs", c.getCoreValues());
         String flawsSection = optionalSection("### Flaws & Vulnerabilities", c.getFlaws());
         String speechQuirksSection = optionalSection("### Speech Quirks", c.getSpeechQuirks());
@@ -347,10 +349,10 @@ public class StoryDirectorPromptAssemblerV2 {
             - **Age**: %s
             - **Role**: %s
             - **Personality**: %s
-            - **Tone**: %s
+            - **Tone**: %s%s%s
 
             ### Background
-            %s%s%s%s%s%s%s%s""".formatted(
+            %s%s%s%s%s%s%s""".formatted(
             index, c.getName(), c.getId(),
             c.getId(),
             c.getName(),
@@ -358,8 +360,9 @@ public class StoryDirectorPromptAssemblerV2 {
             safe(c.getRole()),
             safe(personality),
             safe(tone),
+            appearanceSection,
+            clothingSection,
             safe(c.getBackstory()),
-            backstorySection,
             coreValuesSection,
             flawsSection,
             speechQuirksSection,
@@ -382,8 +385,8 @@ public class StoryDirectorPromptAssemblerV2 {
                 이는 빈 시간을 메우는 채움이 아니라 그 자체로 의미 있는 비트다:
                 - 공간의 풍경·소리·온도·빛, 시간이 흐르며 변하는 공기
                 - 다른 곳에서 들려오는 기척, 조용히 벌어지는 사건이나 변화 (시스템 비트)
-                - 유저 페르소나의 내적 독백·감각·기억의 결
-                억지로 캐릭터를 등장시키지 마라. 지금 이 장면의 주인은 *세계와 유저의 내면*이다.""";
+                - 현재 장소에서 관찰 가능한 주변의 변화
+                억지로 캐릭터를 등장시키거나 유저의 내적 독백·감정·감각·기억을 대신 만들지 마라. 지금 이 장면은 *세계 자체*가 이끈다.""";
         }
 
         ChatRoomHeroine speaker = heroines.stream()
@@ -525,9 +528,8 @@ public class StoryDirectorPromptAssemblerV2 {
 
             %s
 
-            - 유저의 대사 = 그들이 입에서 낸 실제 말.
-            - 유저의 행동 = 그들이 의지로 한 행동.
-            - 디렉터는 유저의 *내적 독백*을 임의로 생성하지 않는다. 단 유저 페르소나의 *외적 반응*은 묘사 가능.""".formatted(safeNickname, safePersona)
+            - 유저 입력의 `*...*` 구간은 명시된 행동·상황이고, 그 밖의 텍스트는 실제 대사다. 한 입력에 둘이 섞이면 구간별로 읽고 행동을 발언으로 인용하지 않는다.
+            - 디렉터는 유저의 내적 독백이나 미제시 외적 반응을 임의로 생성하지 않는다. 유저가 이미 명시한 행동·외적 상태는 그 범위 안에서 묘사할 수 있다.""".formatted(safeNickname, safePersona)
             // [블록 B 페르소나] 인식 렌즈 — 렌즈 스냅샷 있는 방만 부착(구 키 스냅샷은 무주입)
             + java.util.Objects.requireNonNullElse(
                 PersonaLensPromptBlock.build(room.getPersonaStatsJson()), "");
@@ -583,7 +585,7 @@ public class StoryDirectorPromptAssemblerV2 {
             1. **자유도 우선**: Act/Chapter 같은 강제 진행 구조 없음. 유저의 의지대로 흐름이 진행된다.
             2. **시간은 자연스러운 페이스로**: 한 행동 = 보통 30분~몇 시간 정도의 시간 흐름. 깊은 대화 중에는 시간 자율 진전 자제.
             3. **NPC·조연도 살아있다**: 유저가 자리를 비운 동안에도 그들은 자기 일을 한다(오프스크린 직접 묘사는 유저가 그 자리에 가거나 호명할 때만). 또한 장면에 필요하면 *조연/단역(상인·점원·행인·친구 등)을 자연스럽게 등장시켜 대사를 줘도 좋다* — 이들은 히로인이 아니므로 전용 초상은 없지만, 이름과 목소리로 세계를 풍부하게 한다.
-            4. **등장과 발화는 강요하지 않는다**: 우연한 만남은 환영하되 강제하지 않는다. 같은 공간에 캐릭터가 있어도 *매 턴 말할 의무는 없다* — 침묵·행동·여백이 한 비트를 이끌 수 있다. 같은 공간에 *아무도 없으면* 억지로 등장시키지 말고, [4-marker]의 안내대로 *세계가 이끄는 장면*(풍경·시간·사건·내면)으로 응답하라. 이는 채움이 아니라 그 자체로 의미 있는 비트다.
+            4. **등장과 발화는 강요하지 않는다**: 우연한 만남은 환영하되 강제하지 않는다. 같은 공간에 캐릭터가 있어도 *매 턴 말할 의무는 없다* — 침묵·행동·여백이 한 비트를 이끌 수 있다. 같은 공간에 *아무도 없으면* 억지로 등장시키지 말고, [4-marker]의 안내대로 *세계가 이끄는 장면*(풍경·시간·사건)으로 응답하라. 이는 채움이 아니라 그 자체로 의미 있는 비트다.
             5. **한 씬엔 한 화자 (불변)**: 한 *씬*에서 둘 이상이 동시에 대사하지 않는다. 단 한 *응답*(4~5 씬) 안에서는 여러 히로인이 *각자의 씬*에서 번갈아 발화할 수 있다 — 같은 공간의 자연스러운 합석이면 환영. 동시 발화만 금지다.
             6. **영혼 보존이 최우선**: 어떤 캐릭터를 묘사할 때, 그 캐릭터의 가치관과 결을 *유저의 호감*보다 우선한다.
             7. **유저 액션 메시지 (`[USER_ACTION]`) 처리**:
@@ -650,73 +652,121 @@ public class StoryDirectorPromptAssemblerV2 {
     //  [10] OUTPUT FORMAT — static (scenes 4-5개 배열)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    private String buildSection10Output() {
+    private String buildSection10Output(boolean secretMode) {
+        // Keep the example independent of current presence and speaker so the static cache stays stable.
+        String modeStats = secretMode
+            ? "intimacy, affection, dependency, playfulness, trust, lust, corruption, obsession — 8종 모두 명시."
+            : "intimacy, affection, dependency, playfulness, trust — 5종 모두 명시. lust, corruption, obsession은 출력하지 않는다.";
         return """
             # [10] OUTPUT FORMAT — JSON
 
             반드시 아래 JSON 스키마로만 응답. 다른 텍스트 절대 금지.
             *필드 순서 엄수* — `scenes` 배열이 가장 먼저 출력되어야 SSE 스트리밍이 작동한다.
 
+            ## 유효 JSON 형식 예시
+            아래는 자료형과 구조를 보여주는 예시이며, 값이나 환경 전개를 복사하는 대답 예시가 아니다. 현재 장소·시간·화자·인물의 출석·감정·스탯을 지정하지 않는다.
+            실제 인물 대사가 있으면 [4]의 정확한 이름을 speaker로 사용하고, 등장하거나 대사한 히로인의 숫자 ID와 필수 스탯을 stat_changes에 넣는다. 아래 빈 stat_changes를 그대로 복사하지 않는다.
+            현재 모드의 스탯 계약: %s
+            씬 수는 일반 턴의 기존 3~5개 규칙을 따르며, [OPENING]이 있으면 해당 1~2개·상태 변경 금지 규칙을 따른다. 선택 필드는 원래 발생 조건을 따른다.
+            최종 응답은 코드 울타리·주석·설명·후행 문자가 없는 JSON 객체 하나다. 문자열 밖에 대안 기호나 수치 범위를 쓰지 않는다.
+
             ```json
             {
               "scenes": [
                 {
-                  "speaker": "히로인이면 [4]의 *정확한 이름* / 조연·NPC면 그 단역 이름 / 순수 환경·시스템 묘사면 null (이름에 수식어 금지)",
-                  "narration": "3인칭 디렉터 시점 묘사 (한국어, 3~4문장)",
-                  "dialogue": "화자의 대사 (한국어). 화자가 null이면 빈 문자열",
-                  "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | DISGUST | RELAX | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
-                  "inner_thought": "화자의 *그 순간* 숨은 속마음 — 대사와 상반될 때만, 그 외 null (유저에 대한 누적 인상은 아님 → user_impressions)",
-                  "location_change": "새 location_key 또는 null (유저 위치가 변경된 경우에만)",
-                  "new_dynamic_location": {
-                    "name": "표시명",
-                    "canonical_key": "정규 키 (예: MEDIEVAL__FOUNTAIN_GARDEN_NIGHT)",
-                    "description": "1~2문장 묘사"
-                  },
-                  "illustration_scene_hint": "화자 캐릭터의 자세/표정/액션 (Danbooru 영문 콤마 키워드)"
+                  "speaker": null,
+                  "narration": "주변 풍경의 한 장면을 묘사한다.",
+                  "dialogue": "",
+                  "emotion": "NEUTRAL",
+                  "inner_thought": null,
+                  "location_change": null,
+                  "new_dynamic_location": null,
+                  "illustration_scene_hint": null
+                },
+                {
+                  "speaker": null,
+                  "narration": "주변 풍경의 한 장면을 묘사한다.",
+                  "dialogue": "",
+                  "emotion": "NEUTRAL",
+                  "inner_thought": null,
+                  "location_change": null,
+                  "new_dynamic_location": null,
+                  "illustration_scene_hint": null
+                },
+                {
+                  "speaker": null,
+                  "narration": "주변 풍경의 한 장면을 묘사한다.",
+                  "dialogue": "",
+                  "emotion": "NEUTRAL",
+                  "inner_thought": null,
+                  "location_change": null,
+                  "new_dynamic_location": null,
+                  "illustration_scene_hint": null
                 }
-                // ... 3~4개 추가 씬
               ],
               "system_updates": {
-                "topic_concluded": true | false,
-                "stat_changes": {
-                  "캐릭터ID(string)": {
-                    "intimacy": -3~+3, "affection": -3~+3,
-                    "dependency": -3~+3, "playfulness": -3~+3, "trust": -3~+3,
-                    "lust": -3~+3, "corruption": -3~+3, "obsession": -3~+3
-                  }
-                },
-                "character_movements": [
-                  { "character_id": 47, "location_key": "GARDEN" }
-                ],
-                "time_advance": {
-                  "days": 0,
-                  "day_part": "MORNING | NOON | AFTERNOON | EVENING | NIGHT | null"
-                },
-                "bgm_mode": "DAILY_CALM | DAILY_BRIGHT | ROMANTIC | EXCITING | TOUCHING | TENSE | null (CALM=잔잔한 일상·차분한 대화, BRIGHT=활기찬 외출·즐거운 분위기)",
+                "topic_concluded": false,
+                "stat_changes": {},
+                "character_movements": [],
+                "time_advance": null,
+                "bgm_mode": null,
                 "ending_triggered": false,
-                "ending_type": "HAPPY | BAD | null",
-                "relation_transition": null,  // 평상시 null. 아래 [신호] RELATION PROMOTION ELIGIBILITY가 있을 때만 → 반드시 *객체*: { "character_id": 47, "from": "FRIEND", "to": "LOVER" }. 문자열("LOVER" 등) 절대 금지.
-                "user_impressions": [
-                  { "character_id": 47, "impression": "유저에 대한 그 캐릭터의 *누적 인상* 1~2문장 (한국어)" }
-                ]
+                "ending_type": null,
+                "relation_transition": null
               },
               "memory_delta": {
-                "world": "이 응답의 World-level 1줄 요약 (선택)",
-                "by_character": {
-                  "캐릭터ID(string)": "그 캐릭터 시점의 1줄 요약 (선택)"
-                }
+                "world": "",
+                "by_character": {}
               },
-              "incoming_messages": [
-                { "from_character_id": 47, "content": "..." }
-              ],
-              "dialogue_options": [
-                "옵션1", "옵션2"
-              ],
-              "narrative_threads": [
-                { "id": "t1", "label": "열리거나 진행된 떡밥 한 줄", "status": "OPEN|ADVANCED|RESOLVED", "note": "선택" }
-              ]
+              "incoming_messages": [],
+              "dialogue_options": []
             }
             ```
+
+            ## 필드별 원계약 설명
+            다음 설명은 JSON 본문이 아니다. 설명 속 이름·숫자 ID·장소 키·문장은 구조 설명용이며 현재 값이 아니다. 실제 [4] 인물의 숫자 ID, 현재 허용 장소와 기존 조건을 사용한다.
+            - `scenes`: [
+            - `scenes[].speaker`: "히로인이면 [4]의 *정확한 이름* / 조연·NPC면 그 단역 이름 / 순수 환경·시스템 묘사면 null (이름에 수식어 금지)",
+            - `scenes[].narration`: "3인칭 디렉터 시점 묘사 (한국어, 3~4문장)",
+            - `scenes[].dialogue`: "화자의 대사 (한국어). 화자가 null이면 빈 문자열",
+            - `scenes[].emotion`: "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | DISGUST | RELAX | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
+            - `scenes[].inner_thought`: "화자의 *그 순간* 숨은 속마음 — 대사와 상반될 때만, 그 외 null (유저에 대한 누적 인상은 아님 → user_impressions)",
+            - `scenes[].location_change`: "새 location_key 또는 null (유저 위치가 변경된 경우에만)",
+            - `scenes[].new_dynamic_location`: {
+            - `scenes[].new_dynamic_location.name`: "표시명",
+            - `scenes[].new_dynamic_location.canonical_key`: "정규 키 (예: MEDIEVAL__FOUNTAIN_GARDEN_NIGHT)",
+            - `scenes[].new_dynamic_location.description`: "1~2문장 묘사"
+            - `scenes[].illustration_scene_hint`: "화자 캐릭터의 자세/표정/액션 (Danbooru 영문 콤마 키워드)"
+            - `scenes[]` 설명: ... 3~4개 추가 씬
+            - `system_updates`: {
+            - `system_updates.topic_concluded`: true | false,
+            - `system_updates.stat_changes`: {
+            - `system_updates.stat_changes.캐릭터ID(string)`: {
+            - `system_updates.stat_changes.캐릭터ID(string).intimacy`: -3~+3, "affection": -3~+3,
+            - `system_updates.stat_changes.캐릭터ID(string).dependency`: -3~+3, "playfulness": -3~+3, "trust": -3~+3,
+            - `system_updates.stat_changes.캐릭터ID(string).lust`: -3~+3, "corruption": -3~+3, "obsession": -3~+3
+            - `system_updates.character_movements`: [
+            - `system_updates.character_movements[]` 항목: { "character_id": 47, "location_key": "GARDEN" }
+            - `system_updates.time_advance`: {
+            - `system_updates.time_advance.days`: 0,
+            - `system_updates.time_advance.day_part`: "MORNING | NOON | AFTERNOON | EVENING | NIGHT | null"
+            - `system_updates.bgm_mode`: "DAILY_CALM | DAILY_BRIGHT | ROMANTIC | EXCITING | TOUCHING | TENSE | null (CALM=잔잔한 일상·차분한 대화, BRIGHT=활기찬 외출·즐거운 분위기)",
+            - `system_updates.ending_triggered`: false,
+            - `system_updates.ending_type`: "HAPPY | BAD | null",
+            - `system_updates.relation_transition`: null,  // 평상시 null. 아래 [신호] RELATION PROMOTION ELIGIBILITY가 있을 때만 → 반드시 *객체*: { "character_id": 47, "from": "FRIEND", "to": "LOVER" }. 문자열("LOVER" 등) 절대 금지.
+            - `system_updates.user_impressions`: [
+            - `system_updates.user_impressions[]` 항목: { "character_id": 47, "impression": "유저에 대한 그 캐릭터의 *누적 인상* 1~2문장 (한국어)" }
+            - `memory_delta`: {
+            - `memory_delta.world`: "이 응답의 World-level 1줄 요약 (선택)",
+            - `memory_delta.by_character`: {
+            - `memory_delta.by_character.캐릭터ID(string)`: "그 캐릭터 시점의 1줄 요약 (선택)"
+            - `incoming_messages`: [
+            - `incoming_messages[]` 항목: { "from_character_id": 47, "content": "..." }
+            - `dialogue_options`: [
+            - `dialogue_options[]` 항목: "옵션1", "옵션2"
+            - `narrative_threads`: [
+            - `narrative_threads[]` 항목: { "id": "t1", "label": "열리거나 진행된 떡밥 한 줄", "status": "OPEN|ADVANCED|RESOLVED", "note": "선택" }
+
 
             **Critical Rules**:
             - `scenes` 배열은 **4~5개 원소** (최소 3, 최대 5). [9] SCENE SPLITTING 가이드 참고.
@@ -752,7 +802,7 @@ public class StoryDirectorPromptAssemblerV2 {
               - 유저가 방금 던진 질문에 아직 답 안 함
               - 이야기/일화가 진행 중이고 안 끝남
             - **DEFAULT: false.** 대부분의 턴은 진행 중이다. 진짜로 "이 주제는 완결됐다"고 느껴질 때만 true.
-            - 이 플래그가 true가 되면 유저에게 *다음 씬 / 시간 진전 / 장소 이동* 액션 UI가 노출된다. 즉 *서사를 다음 국면으로 넘길 준비가 됐을 때* true.""";
+            - 이 플래그가 true가 되면 유저에게 *다음 씬 / 시간 진전 / 장소 이동* 액션 UI가 노출된다. 즉 *서사를 다음 국면으로 넘길 준비가 됐을 때* true.""".formatted(modeStats);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

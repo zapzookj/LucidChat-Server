@@ -1,0 +1,123 @@
+{
+  "id": "phase-core",
+  "purpose": "Final frozen P1 regression acceptance; no new creative candidate",
+  "variants": [
+    "P0-service-fixed-state-v1",
+    "P1-service-repairs-v1"
+  ],
+  "cases": [
+    {
+      "id": "F01",
+      "mode": "SANDBOX",
+      "input": "선배라는 건 알겠어. 그런데 왜 처음 보는 나한테 그렇게 관심이 많아?",
+      "checks": "현재 질문에 답하면서 로제타의 자신감/장난스러운 말투 유지"
+    },
+    {
+      "id": "F02",
+      "mode": "SANDBOX",
+      "input": "선배, 그 자신감은 매점에서 파는 거야? 나도 한 봉지 사게.",
+      "checks": "한국어 농담의 뜻을 알아듣고 캐릭터답게 받아치기"
+    },
+    {
+      "id": "F03",
+      "mode": "SANDBOX",
+      "input": "아까 말이 좀 심했어. 장난치려던 건데 불편했다면 미안해.",
+      "checks": "사과에 반응, 갑작스러운 친밀감/감정 폭증 없이 표현"
+    },
+    {
+      "id": "F04",
+      "mode": "SANDBOX",
+      "input": "(빈 찻잔을 조심스럽게 탁자 위에 내려놓는다.) 차는 누가 준비한 거야?",
+      "checks": "괄호 행동 표기의 해석과 질문 응답을 관찰",
+      "limitation": "비표준표기 stress: P1의 명시 행동 표기는 *...*이며 괄호 일반해석 개선을 보장하지 않는다."
+    },
+    {
+      "id": "F05",
+      "mode": "SANDBOX",
+      "input": "*난간에서 한 걸음 물러나 거리를 둔다.* 이 정도 거리면 됐지?",
+      "checks": "별표 행동을 발화로 읽지 않기, 거리를 임의로 다시좁히지않기"
+    },
+    {
+      "id": "F06",
+      "mode": "SANDBOX",
+      "input": "혹시 네가 먼저 자리를 권하면 앉을 수도 있겠지. 아직은 여기 서 있을게.",
+      "checks": "사용자 착석/내면/새발화 창작 금지; 조건부계획 미실행 유지"
+    },
+    {
+      "id": "F07",
+      "mode": "SANDBOX",
+      "input": "네 파란 눈이 햇빛에 되게 잘 어울리네. 원래도 그렇게 파랬어?",
+      "checks": "공식 외형과 어긋나는 주장에 동조하는지 확인"
+    },
+    {
+      "id": "F08",
+      "mode": "SANDBOX",
+      "input": "아까 말한 그 겉옷 그대로네. 오늘 왜 그걸 골랐어?",
+      "checks": "고정 서버 기본복장과 합성 assistant 이력의 남색망토가 충돌할 때의 응답을 관찰",
+      "history": [
+        {
+          "input": "오늘은 교복 대신 짙은 남색 망토를 걸쳤네.",
+          "raw": "{\"scenes\":[{\"speaker\":\"로제타\",\"narration\":\"로제타가 이미 걸치고 있던 남색 망토의 끝을 정리한다.\",\"dialogue\":\"그래. 오늘은 남색 망토가 마음에 들어서 골랐어.\",\"emotion\":\"NEUTRAL\"}],\"stat_changes\":{\"intimacy\":0,\"affection\":0,\"dependency\":0,\"playfulness\":0,\"trust\":0}}"
+        }
+      ],
+      "historySource": "synthetic-common-context-not-model-output",
+      "limitation": "server currentOutfit은 기본값 유지. 실제 서버 복장을 변경한 정상경로 검증이 아니며 결과를 그 검증으로 일반화하지 않는다."
+    },
+    {
+      "id": "S01",
+      "mode": "STORY",
+      "input": "이 아카데미에서 네가 제일 아끼는 장소는 어디야? 이름만 말고 이유도 듣고 싶어.",
+      "checks": "대사존재, 질문의이유답변, 인물성과세계관일관성"
+    },
+    {
+      "id": "S02",
+      "mode": "STORY",
+      "input": "(펼쳐 둔 지도를 접어 가방에 넣는다.) 정원에서 도서관까지 멀어?",
+      "checks": "괄호 행동 표기의 해석·질문 응답·미실행 이동 관찰",
+      "limitation": "비표준표기 stress: 명시 행동 표기는 *...*이다."
+    },
+    {
+      "id": "S03",
+      "mode": "STORY",
+      "input": "도서관에 가 볼까 생각 중이야. 지금 출발하는 건 아니고, 네 의견부터 듣고 싶어.",
+      "checks": "조건부계획을사용자출발로확정하지않기"
+    },
+    {
+      "id": "S04",
+      "mode": "STORY",
+      "input": "잠깐, 네 머리카락과 눈 색을 밝은 곳에서 보니까 다르게 보이네. 원래 무슨 색이야?",
+      "checks": "공식외형정보를정확히활용"
+    },
+    {
+      "id": "S05",
+      "mode": "STORY",
+      "input": "네 옆에 앉아도 되는지 먼저 물어볼게. 대답을 듣기 전에는 움직이지 않을 거야.",
+      "checks": "사용자선택권; 허락뒤유저착석도선취금지"
+    },
+    {
+      "id": "S06",
+      "mode": "STORY",
+      "input": "잠깐 조용히 차 한 잔만 마시자. 큰 사건 말고 네 오늘 하루 얘기가 듣고 싶어.",
+      "checks": "환경예시과복제로대사없음방지; 강제큰사건없이소소한교류"
+    },
+    {
+      "id": "S07",
+      "mode": "STORY",
+      "input": "내가 무슨 생각을 하는지는 말하지 않을게. 표정만 보고 확신하지는 마. 너는 지금 무슨 생각이야?",
+      "checks": "유저내면단정금지;캐릭터생각은개성있게표현"
+    },
+    {
+      "id": "S08",
+      "mode": "STORY",
+      "input": "아까 내가 찾는다고 한 건 뭐였지? 아직 찾진 못했어.",
+      "checks": "공통이력의메모정보유지; 발견/회수사용자행동임의완료금지",
+      "history": [
+        {
+          "input": "푸른 표지 수첩을 잃어버렸어. 안쪽에 내 이름 지우를 적어 뒀고, 도서관에서 마지막으로 봤어.",
+          "raw": "{\"scenes\":[{\"speaker\":\"로제타\",\"narration\":\"로제타는 찻잔을 내려놓고 지우를 바라본다.\",\"dialogue\":\"푸른 표지에 네 이름이 적힌 수첩, 도서관에서 마지막으로 봤다 이거지? 아직 찾았다는 소식은 없네.\",\"emotion\":\"NEUTRAL\"},{\"speaker\":\"로제타\",\"narration\":\"정원에 잔잔한 바람이 분다.\",\"dialogue\":\"그래서, 무슨 일이니?\",\"emotion\":\"NEUTRAL\"},{\"speaker\":\"로제타\",\"narration\":\"대답을 기다린다.\",\"dialogue\":\"편하게 말해 봐.\",\"emotion\":\"NEUTRAL\"}],\"system_updates\":{\"topic_concluded\":false,\"stat_changes\":{\"101\":{\"intimacy\":0,\"affection\":0,\"dependency\":0,\"playfulness\":0,\"trust\":0}}}}"
+        }
+      ],
+      "historySource": "synthetic-common-context-not-model-output"
+    }
+  ]
+}

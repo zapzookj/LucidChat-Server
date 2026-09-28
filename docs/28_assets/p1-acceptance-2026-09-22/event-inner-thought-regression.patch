@@ -1,0 +1,95 @@
+diff --git a/src/main/java/com/spring/aichat/service/prompt/CharacterPromptAssembler.java b/src/main/java/com/spring/aichat/service/prompt/CharacterPromptAssembler.java
+--- a/src/main/java/com/spring/aichat/service/prompt/CharacterPromptAssembler.java
++++ b/src/main/java/com/spring/aichat/service/prompt/CharacterPromptAssembler.java
+@@ -243,7 +243,7 @@
+             }
+         }
+ 
+-        if (ChatModePolicy.supportsInnerThought(mode)) {
++        if (ChatModePolicy.supportsInnerThought(mode) && !room.isEventActive()) {
+             staticBuilder.append(buildInnerThoughtBlock(effectiveSecretMode));
+         }
+ 
+diff --git a/src/test/java/com/spring/aichat/service/prompt/CharacterPromptAssemblerContractTest.java b/src/test/java/com/spring/aichat/service/prompt/CharacterPromptAssemblerContractTest.java
+--- a/src/test/java/com/spring/aichat/service/prompt/CharacterPromptAssemblerContractTest.java
++++ b/src/test/java/com/spring/aichat/service/prompt/CharacterPromptAssemblerContractTest.java
+@@ -103,6 +103,79 @@
+         assertThat(payload.staticRules()).contains(character.getEffectivePersonality(secret), character.getEffectiveTone(secret));
+     }
+ 
++    static Stream<Arguments> innerThoughtStates() {
++        return Stream.of(false, true).flatMap(event -> Stream.of(false, true)
++            .map(secret -> Arguments.of(event, secret)));
++    }
++
++    static Stream<Boolean> innerThoughtSecretModes() { return Stream.of(false, true); }
++
++    @ParameterizedTest
++    @MethodSource("innerThoughtStates")
++    void innerThoughtInstructionsMatchTheEventOutputContract(boolean event, boolean secret) throws Exception {
++        Character character = character("rosetta");
++        User user = user();
++        ChatRoom room = room(user, character, ChatMode.SANDBOX, false);
++        if (event) room.startDirectorEvent();
++
++        var payload = assembler(false).assembleSystemPrompt(character, room, user, "", secret);
++        assertEquals(event, room.isEventActive());
++        if (event) {
++            assertEquals("ONGOING", room.getEventStatus());
++            assertThat(payload.staticRules()).doesNotContain("# 💭 Inner Thought System (속마음)",
++                "You have a hidden inner voice.", "## When to generate inner_thought:",
++                "In **Secret Mode**, inner thoughts can be more explicit");
++            assertThat(payload.outputFormat()).contains("`inner_thought`: null (disabled during events)");
++        } else {
++            assertThat(payload.staticRules()).contains("# 💭 Inner Thought System (속마음)",
++                "You have a hidden inner voice.", "## When to generate inner_thought:");
++            assertThat(payload.outputFormat()).contains("`inner_thought`: null or \"Korean string (15~50 chars)\"")
++                .doesNotContain("null (disabled during events)");
++            if (secret) assertThat(payload.staticRules()).contains("In **Secret Mode**, inner thoughts can be more explicit");
++            else assertThat(payload.staticRules()).doesNotContain("In **Secret Mode**, inner thoughts can be more explicit");
++        }
++        assertTrue(example(payload.outputFormat()).path("inner_thought").isNull());
++    }
++
++    @ParameterizedTest
++    @MethodSource("innerThoughtSecretModes")
++    void nonEventDirectorInterludeKeepsNormalInnerThoughtInstructions(boolean secret) {
++        Character character = character("rosetta");
++        User user = user();
++        ChatRoom room = room(user, character, ChatMode.SANDBOX, false);
++        room.setDirectorInterlude("바람에 찻잔 받침이 흔들린다.", "찻잔 받침을 바로 놓고 대화를 이어간다.");
++        assertFalse(room.isEventActive());
++        assertTrue(room.hasActiveDirectorConstraint());
++
++        var payload = assembler(false).assembleSystemPrompt(character, room, user, "", secret);
++        assertThat(payload.staticRules()).contains("# 💭 Inner Thought System (속마음)",
++            "찻잔 받침을 바로 놓고 대화를 이어간다.");
++        assertThat(payload.outputFormat()).contains("`inner_thought`: null or \"Korean string (15~50 chars)\"")
++            .doesNotContain("null (disabled during events)");
++    }
++
++    @ParameterizedTest
++    @MethodSource("innerThoughtSecretModes")
++    void resolvedEventRestoresTheEntireNormalPrompt(boolean secret) {
++        Character character = character("rosetta");
++        User user = user();
++        ChatRoom room = room(user, character, ChatMode.SANDBOX, false);
++        var assembler = assembler(false);
++        var beforeEvent = assembler.assembleSystemPrompt(character, room, user, "", secret);
++        assertThat(beforeEvent.staticRules()).contains("# 💭 Inner Thought System (속마음)");
++
++        room.startDirectorEvent();
++        var ongoing = assembler.assembleSystemPrompt(character, room, user, "", secret);
++        assertThat(ongoing.staticRules()).doesNotContain("# 💭 Inner Thought System (속마음)");
++        assertThat(ongoing.outputFormat()).contains("`inner_thought`: null (disabled during events)");
++
++        room.updateEventStatus("RESOLVED");
++        assertFalse(room.isEventActive());
++        assertEquals("RESOLVED", room.getEventStatus());
++        var afterEvent = assembler.assembleSystemPrompt(character, room, user, "", secret);
++        assertEquals(beforeEvent, afterEvent, "Ending an event must restore the normal prompt without stale event restrictions");
++    }
++
+     @Test
+     void appearanceDefaultsAreOptionalAndCurrentOutfitIsPreserved() {
+         Character character = character("rosetta");

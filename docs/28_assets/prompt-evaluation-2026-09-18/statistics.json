@@ -1,0 +1,469 @@
+{
+  "at": "2026-09-18T07:43:25.167Z",
+  "total": {
+    "n": 148,
+    "costUsd": 0.5275483500000001,
+    "ttfsMedianMs": 3007.5,
+    "totalMedianMs": 6413,
+    "inputTokensMedian": 8341,
+    "outputTokensMedian": 688.5,
+    "cachedTokensMedian": 7839,
+    "parserInvalid": 2,
+    "strictJsonInvalid": 18
+  },
+  "byPhase": {
+    "phase1-development": {
+      "n": 48,
+      "costUsd": 0.16735734999999996,
+      "ttfsMedianMs": 2863.5,
+      "totalMedianMs": 6760.5,
+      "inputTokensMedian": 8171,
+      "outputTokensMedian": 895,
+      "cachedTokensMedian": 8002.5,
+      "parserInvalid": 1,
+      "strictJsonInvalid": 5
+    },
+    "phase2-novel": {
+      "n": 24,
+      "costUsd": 0.0850348,
+      "ttfsMedianMs": 3026.5,
+      "totalMedianMs": 7569,
+      "inputTokensMedian": 8201.5,
+      "outputTokensMedian": 917,
+      "cachedTokensMedian": 8002.5,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 5
+    },
+    "phase3-branches": {
+      "n": 24,
+      "costUsd": 0.10471204999999999,
+      "ttfsMedianMs": 3064,
+      "totalMedianMs": 6641,
+      "inputTokensMedian": 8552.5,
+      "outputTokensMedian": 971.5,
+      "cachedTokensMedian": 7271,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 2
+    },
+    "phase4-repetitions": {
+      "n": 48,
+      "costUsd": 0.15137535000000002,
+      "ttfsMedianMs": 2946.5,
+      "totalMedianMs": 5312.5,
+      "inputTokensMedian": 8430.5,
+      "outputTokensMedian": 661,
+      "cachedTokensMedian": 8259.5,
+      "parserInvalid": 1,
+      "strictJsonInvalid": 6
+    },
+    "phase5-clarification": {
+      "n": 4,
+      "costUsd": 0.0190688,
+      "ttfsMedianMs": 2936,
+      "totalMedianMs": 7788.5,
+      "inputTokensMedian": 9023,
+      "outputTokensMedian": 1205,
+      "cachedTokensMedian": 7532,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    }
+  },
+  "byVariant": {
+    "C1": {
+      "n": 37,
+      "costUsd": 0.12926069999999998,
+      "ttfsMedianMs": 2781,
+      "totalMedianMs": 6518,
+      "inputTokensMedian": 8520,
+      "outputTokensMedian": 672,
+      "cachedTokensMedian": 7271,
+      "parserInvalid": 2,
+      "strictJsonInvalid": 10
+    },
+    "E1": {
+      "n": 37,
+      "costUsd": 0.1321099,
+      "ttfsMedianMs": 3177,
+      "totalMedianMs": 6752,
+      "inputTokensMedian": 9378,
+      "outputTokensMedian": 681,
+      "cachedTokensMedian": 8166,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "P0": {
+      "n": 37,
+      "costUsd": 0.1322503,
+      "ttfsMedianMs": 2870,
+      "totalMedianMs": 6244,
+      "inputTokensMedian": 8006,
+      "outputTokensMedian": 701,
+      "cachedTokensMedian": 6966,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 2
+    },
+    "S1": {
+      "n": 37,
+      "costUsd": 0.13392745,
+      "ttfsMedianMs": 3082,
+      "totalMedianMs": 6697,
+      "inputTokensMedian": 9005,
+      "outputTokensMedian": 697,
+      "cachedTokensMedian": 7793,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 6
+    }
+  },
+  "byModeAndVariant": {
+    "SANDBOX/C1": {
+      "n": 20,
+      "costUsd": 0.055343100000000006,
+      "ttfsMedianMs": 2812,
+      "totalMedianMs": 4579,
+      "inputTokensMedian": 8526,
+      "outputTokensMedian": 650,
+      "cachedTokensMedian": 8353,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "SANDBOX/E1": {
+      "n": 20,
+      "costUsd": 0.057333800000000004,
+      "ttfsMedianMs": 3309,
+      "totalMedianMs": 5404,
+      "inputTokensMedian": 9384,
+      "outputTokensMedian": 651,
+      "cachedTokensMedian": 9211,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "SANDBOX/P0": {
+      "n": 20,
+      "costUsd": 0.0558437,
+      "ttfsMedianMs": 3021.5,
+      "totalMedianMs": 4844.5,
+      "inputTokensMedian": 8012,
+      "outputTokensMedian": 635.5,
+      "cachedTokensMedian": 7839,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 1
+    },
+    "SANDBOX/S1": {
+      "n": 20,
+      "costUsd": 0.05695065,
+      "ttfsMedianMs": 3105.5,
+      "totalMedianMs": 5010,
+      "inputTokensMedian": 9011,
+      "outputTokensMedian": 656.5,
+      "cachedTokensMedian": 8838,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "STORY/C1": {
+      "n": 17,
+      "costUsd": 0.0739176,
+      "ttfsMedianMs": 2769,
+      "totalMedianMs": 7742,
+      "inputTokensMedian": 7446,
+      "outputTokensMedian": 1232,
+      "cachedTokensMedian": 7271,
+      "parserInvalid": 2,
+      "strictJsonInvalid": 10
+    },
+    "STORY/E1": {
+      "n": 17,
+      "costUsd": 0.07477610000000001,
+      "ttfsMedianMs": 3008,
+      "totalMedianMs": 8474,
+      "inputTokensMedian": 8341,
+      "outputTokensMedian": 1220,
+      "cachedTokensMedian": 8166,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "STORY/P0": {
+      "n": 17,
+      "costUsd": 0.07640659999999999,
+      "ttfsMedianMs": 2588,
+      "totalMedianMs": 7702,
+      "inputTokensMedian": 7141,
+      "outputTokensMedian": 1281,
+      "cachedTokensMedian": 6966,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 1
+    },
+    "STORY/S1": {
+      "n": 17,
+      "costUsd": 0.0769768,
+      "ttfsMedianMs": 3008,
+      "totalMedianMs": 8301,
+      "inputTokensMedian": 7968,
+      "outputTokensMedian": 1278,
+      "cachedTokensMedian": 7793,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 6
+    }
+  },
+  "initialUniqueByModeAndVariant": {
+    "SANDBOX/C1": {
+      "n": 9,
+      "costUsd": 0.023356516666666667,
+      "ttfsMedianMs": 2687,
+      "totalMedianMs": 4211,
+      "inputTokensMedian": 8526,
+      "outputTokensMedian": 654,
+      "cachedTokensMedian": 8353,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "SANDBOX/E1": {
+      "n": 9,
+      "costUsd": 0.02386161666666667,
+      "ttfsMedianMs": 3587,
+      "totalMedianMs": 5617,
+      "inputTokensMedian": 9384,
+      "outputTokensMedian": 645,
+      "cachedTokensMedian": 9211,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "SANDBOX/P0": {
+      "n": 9,
+      "costUsd": 0.022796550000000002,
+      "ttfsMedianMs": 3010,
+      "totalMedianMs": 4902,
+      "inputTokensMedian": 8012,
+      "outputTokensMedian": 637,
+      "cachedTokensMedian": 7839,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "SANDBOX/S1": {
+      "n": 9,
+      "costUsd": 0.023988600000000002,
+      "ttfsMedianMs": 3080,
+      "totalMedianMs": 4867,
+      "inputTokensMedian": 9011,
+      "outputTokensMedian": 668,
+      "cachedTokensMedian": 8838,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "STORY/C1": {
+      "n": 9,
+      "costUsd": 0.03911828333333334,
+      "ttfsMedianMs": 2758,
+      "totalMedianMs": 7761,
+      "inputTokensMedian": 7443,
+      "outputTokensMedian": 1248,
+      "cachedTokensMedian": 7271,
+      "parserInvalid": 1,
+      "strictJsonInvalid": 5
+    },
+    "STORY/E1": {
+      "n": 9,
+      "costUsd": 0.038959200000000006,
+      "ttfsMedianMs": 3008,
+      "totalMedianMs": 8474,
+      "inputTokensMedian": 8338,
+      "outputTokensMedian": 1276,
+      "cachedTokensMedian": 8166,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 0
+    },
+    "STORY/P0": {
+      "n": 9,
+      "costUsd": 0.0395332,
+      "ttfsMedianMs": 2547,
+      "totalMedianMs": 7702,
+      "inputTokensMedian": 7138,
+      "outputTokensMedian": 1251,
+      "cachedTokensMedian": 6966,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 1
+    },
+    "STORY/S1": {
+      "n": 9,
+      "costUsd": 0.04077818333333334,
+      "ttfsMedianMs": 2955,
+      "totalMedianMs": 8301,
+      "inputTokensMedian": 7965,
+      "outputTokensMedian": 1278,
+      "cachedTokensMedian": 7793,
+      "parserInvalid": 0,
+      "strictJsonInvalid": 4
+    }
+  },
+  "failures": [
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R08-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00474705
+    },
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R09-r1-t1-C1",
+      "status": "invalid",
+      "strictJson": true,
+      "issues": [
+        "Unknown emotion"
+      ],
+      "cost": 0.00422955
+    },
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R09-r1-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00458565
+    },
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R10-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00392655
+    },
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R10-r1-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00445665
+    },
+    {
+      "phase": "phase1-development",
+      "id": "DEV-R12-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00419005
+    },
+    {
+      "phase": "phase2-novel",
+      "id": "NEW-R04-r1-t1-P0",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.0047848
+    },
+    {
+      "phase": "phase2-novel",
+      "id": "NEW-R05-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00432505
+    },
+    {
+      "phase": "phase2-novel",
+      "id": "NEW-R05-r1-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00425815
+    },
+    {
+      "phase": "phase2-novel",
+      "id": "NEW-R06-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00415905
+    },
+    {
+      "phase": "phase2-novel",
+      "id": "NEW-R06-r1-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00420315
+    },
+    {
+      "phase": "phase3-branches",
+      "id": "NEW-M02-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00403805
+    },
+    {
+      "phase": "phase3-branches",
+      "id": "NEW-M02-r1-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00420815
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R04-r2-t1-P0",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00228195
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R07-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.004608966666666666
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R07-r2-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00421905
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R08-r1-t1-C1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00407805
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R08-r2-t1-C1",
+      "status": "invalid",
+      "strictJson": false,
+      "issues": [
+        "Unknown emotion"
+      ],
+      "cost": 0.00420705
+    },
+    {
+      "phase": "phase4-repetitions",
+      "id": "DEV-R08-r2-t1-S1",
+      "status": "ok",
+      "strictJson": false,
+      "issues": [],
+      "cost": 0.00437715
+    }
+  ],
+  "reconciliation": {
+    "baselineUnchanged": true,
+    "baselineN": 42,
+    "globalNewN": 148,
+    "sessionN": 148,
+    "recordsN": 148,
+    "uniqueRunIds": 148,
+    "globalNewKnown": 0.5275483500000001,
+    "sessionKnown": 0.5275483500000001,
+    "resultsKnown": 0.5275483500000001,
+    "globalHeld": 0,
+    "sessionHeld": 0,
+    "allResultCostsMatch": true
+  }
+}

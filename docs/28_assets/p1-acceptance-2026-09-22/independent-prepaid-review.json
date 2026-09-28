@@ -1,0 +1,76 @@
+{
+  "reviewedAt": "2026-09-22T13:38:30.957Z",
+  "auditor": "independent experiment_audit",
+  "scope": "Offline billing, resumption, evidence preservation, and acceptance-plan review; no paid dispatch",
+  "paidCallsPerformed": 0,
+  "authorization": {
+    "total": 3,
+    "spent": 1.4735847333333347,
+    "remaining": 1.5264152666666653,
+    "count": 376,
+    "entriesHash": "47457502ef0bb007534d1efb4a189905423a1e588478b820c6006bff294a5b5d"
+  },
+  "oldGlobalPrefixPreserved": true,
+  "currentGlobalEntries": 418,
+  "historicalFilesVerified": 446,
+  "changedHistoricalFiles": [],
+  "plans": [
+    {
+      "id": "phase-core",
+      "sha256": "b3af4c969d7a0a5fcb1bc595cb15fa08e27beb7d6ac104ab7ec7be1705b99168",
+      "planHash": "db18fa902157babc17b078e0c8f0c9f71239a8059422417b7fbfed68ee85ff6f",
+      "calls": 32,
+      "variants": {
+        "P0-service-fixed-state-v1": 16,
+        "P1-service-repairs-v1": 16
+      }
+    },
+    {
+      "id": "phase-extensions",
+      "sha256": "fdc015b566e993b3acfd2c25c60fb5c6d0ec2b6851f3b7966cd57fdc9edddc78",
+      "planHash": "770a1c531568e712cb7ef77638a72356b2fad6c26b3f20a4eea320e62ad2cc17",
+      "calls": 10,
+      "variants": {
+        "P1-service-repairs-v1": 10
+      }
+    },
+    {
+      "id": "phase-continuation",
+      "sha256": "83353b8eeb0bec20e4b25d11c766677e7caace7e60702ae9feb0614939870612",
+      "planHash": "dd9af8c276ed35faca794bbfd5f9d97cc67426656561beb9df482779a084ce41",
+      "calls": 6,
+      "variants": {
+        "P1-service-repairs-v1": 6
+      }
+    }
+  ],
+  "totalPlannedCalls": 48,
+  "reviewedLabHash": "ee197beb99468b5e81aa74bdcffafd9b59bb21f5a6560c8e329238e77b64382c",
+  "regression": {
+    "command": "node --test tools/llm-bakeoff/test/experiment-p1-acceptance.test.mjs tools/llm-bakeoff/test/experiment.test.mjs",
+    "passed": 25,
+    "failed": 0,
+    "newAcceptanceTests": 14,
+    "existingPersistenceBoundaryTests": 11,
+    "testFileSha256": "1b63282ef52f1d7d1a6c8798f251b3265399d1ffff1076ac0e4b97da2f120449"
+  },
+  "resolvedFindings": [
+    {
+      "issue": "Fresh response gate previously allowed missing actualModel/provider/tier, while resume rejected it.",
+      "resolution": "Root changed to strict comparisons; normal, missing and mismatched provenance tested."
+    },
+    {
+      "issue": "Continuation dry-run attempted to load ungenerated paid predecessor files.",
+      "resolution": "Root explicitly skips later dry-run turns as requires-paid-predecessor, preserving truthful limits of preflight."
+    }
+  ],
+  "conclusion": "No additional billing blocker in the reviewed runner. Final Java/resource freeze and fixture-preparation checks remain root/fixture reviewer prerequisites before dispatch.",
+  "interpretationLimits": [
+    "Core is 16 P0/P1 paired situations, not a powered universal-quality estimate.",
+    "The ten extension outputs and six continuation outputs are P1-only acceptance coverage, not comparative superiority evidence.",
+    "Continuation follows actual candidate outputs with server state frozen; long-term state/memory persistence is outside this experiment.",
+    "Secret-path inputs are benign; this does not validate sexual-content compatibility.",
+    "No upstream account invoice query; USD amounts are locally preserved final provider usage."
+  ],
+  "writes": "This report and the new regression test only; historical evidence, ledgers, keys, and runner source not modified by this auditor."
+}

@@ -46,3 +46,7 @@ src/main/resources/application.zip
 
 # [남캐 PoC] 매트릭스 산출 이미지
 poc/out/
+
+# Local LLM bakeoff keys, conversations, billing reservations and results
+tools/llm-bakeoff/.env.local
+tools/llm-bakeoff/.local/

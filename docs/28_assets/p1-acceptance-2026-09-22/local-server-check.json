@@ -1,0 +1,59 @@
+{
+  "at": "2026-09-22T14:12:49.162Z",
+  "baseUrl": "http://127.0.0.1:18767",
+  "entryStatus": 200,
+  "keyReady": true,
+  "busy": false,
+  "sourceVersion": {
+    "git": "ca27320c1b788fe8dd88edb320cfcc2ce735aa89",
+    "javaSourceHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+    "labSourceHash": "c1fcd4fc1f8c2e264557a411a71a4679c5bab511bbaf2250eb346e7b545231fb"
+  },
+  "previews": [
+    {
+      "mode": "SANDBOX",
+      "variants": [
+        {
+          "version": "P0-service-fixed-state-v1",
+          "promptHash": "0f46e1d02b5883684f3bca836351148077d6909262a77ec2bcfdbe937afaa14c",
+          "messageCount": 6
+        },
+        {
+          "version": "P1-service-repairs-v1",
+          "promptHash": "eb853cdd665163586ab149a30a36dc679b20be6d5794fce56706dbf3ece345fe",
+          "messageCount": 6
+        },
+        {
+          "version": "P1-service-repairs-v1",
+          "promptHash": "eb853cdd665163586ab149a30a36dc679b20be6d5794fce56706dbf3ece345fe",
+          "messageCount": 6
+        }
+      ],
+      "snapshotHash": "d477b5841f49fed8fb549443a99323efe9be72a88cd5010a735875c901d106ef"
+    },
+    {
+      "mode": "STORY",
+      "variants": [
+        {
+          "version": "P0-service-fixed-state-v1",
+          "promptHash": "66d51e6a3b9a4d8750041b892a80840a080ae9223d67c857dc6f30dac463bb2b",
+          "messageCount": 5
+        },
+        {
+          "version": "P1-service-repairs-v1",
+          "promptHash": "e9d888372b1621c912d3c06a2d3cb8bb6679b5af16f408fa3c86553dbafdfa44",
+          "messageCount": 5
+        },
+        {
+          "version": "P1-service-repairs-v1",
+          "promptHash": "e9d888372b1621c912d3c06a2d3cb8bb6679b5af16f408fa3c86553dbafdfa44",
+          "messageCount": 5
+        }
+      ],
+      "snapshotHash": "72ff51cbf84f8c299cd13e717f559135ef6bf430ae3e6df63a8b0de6c136448e"
+    }
+  ],
+  "ledgerUnchanged": true,
+  "paidCalls": 0,
+  "scope": "HTTP bootstrap/status/real-Java P0/P1 preview; no browser rendering or model inference"
+}

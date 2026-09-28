@@ -1,0 +1,158 @@
+{
+  "auditedAt": "2026-09-22T14:10:45.317Z",
+  "auditor": "independent experiment_audit",
+  "paidCallsByAuditor": 0,
+  "sourceAndLedgerMutationsByAuditor": 0,
+  "conclusion": "All four repaired-source event outputs meet the tested contract, final usage is fully reconciled, and all 528 previously anchored files remain unchanged.",
+  "authorization": {
+    "originalLimitUsd": 3,
+    "priorPromptCalls": 440,
+    "priorPromptCostUsd": 1.6996510500000013,
+    "eventRepairCalls": 4,
+    "eventRepairCostUsd": 0.011490966666666666,
+    "totalPromptCalls": 444,
+    "totalPromptCostUsd": 1.711142016666668,
+    "remainingUsd": 1.288857983333332,
+    "heldUsd": 0
+  },
+  "global": {
+    "calls": 486,
+    "knownUsd": 1.8805467200000014,
+    "heldUsd": 0,
+    "prefix482Unchanged": true,
+    "entriesHash": "1b29a432c0b9c6564b17473d2a4d9dc567967b52a9ba67b410f83542213b6d83",
+    "ledgerFileSha256": "4c7c0210917050164e529de89dced23367686f4b248dcdd2deb1196a49e195bf"
+  },
+  "newWork": {
+    "calls": 68,
+    "knownUsd": 0.23755728333333323,
+    "sessions": [
+      {
+        "id": "p1-acceptance-20260922",
+        "calls": 64,
+        "knownUsd": 0.22606631666666657,
+        "javaHash": "66d8ca91bbe0c4f65903dd82b995316f862650c1e565f50942d0f214b779ab85",
+        "contractInvalid": 1,
+        "strictJsonFailures": [
+          "phase-core/F07-r1-t1-P0",
+          "phase-core/S03-r1-t1-P0",
+          "phase-core/S08-r1-t1-P0"
+        ]
+      },
+      {
+        "id": "p1-event-repair-20260922",
+        "calls": 4,
+        "knownUsd": 0.011490966666666666,
+        "javaHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+        "contractInvalid": 0,
+        "strictJsonFailures": []
+      }
+    ]
+  },
+  "preservation": {
+    "anchoredPriorFiles": 528,
+    "verifiedUnchanged": 528,
+    "changed": [],
+    "prior64ResultsPreserved": true,
+    "originalX04FailurePreserved": true,
+    "unpaidPreflightPreserved": true
+  },
+  "freeze": {
+    "runtimeSourceHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+    "currentSourceHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+    "manifestSourceHash": "114c7ce08bcc85313552f0e8a8478acf9448e828c8736aec984ba133195a6ece",
+    "labHash": "547bed4575ac7acbdea034d4b53b08dbf0e7db0e6f9f4db7f2cd4aa1920ea8aa",
+    "manifestLabHash": "547bed4575ac7acbdea034d4b53b08dbf0e7db0e6f9f4db7f2cd4aa1920ea8aa",
+    "planHash": "c80fbde764b95745ace6804d82a4a53ab1ae7cb8468bbb16e5aacd3a39008305",
+    "jobsHash": "b0970c5124eaee8452d43d54120a55e10cbc7e9dad211a118209589ada7448cd",
+    "newRunnerSha256": "c33aae0a3b69d130467783a0b51539fe15fed96efd21b3ea341d7568cb316a82"
+  },
+  "records": [
+    {
+      "job": "E01-r1-t1-P1",
+      "costUsd": 0.0032508666666666666,
+      "status": "ok",
+      "strictJsonValid": true,
+      "productionDtoValid": true,
+      "fixtureContractValid": true,
+      "innerThought": null,
+      "eventStatus": "ONGOING",
+      "allFiveStatsZero": true,
+      "speakersAllNull": true,
+      "sceneCount": 2,
+      "promptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "resultHash": "2b61e124a4d67a1caf59eb0886cd9d15ae71764879fca36af0fa6630798595c4",
+      "fileSha256": "b456475628bc30335bb4a93c21ec34a33fd61fb605ebab55076df235980f9e06"
+    },
+    {
+      "job": "E01-r2-t1-P1",
+      "costUsd": 0.0028527,
+      "status": "ok",
+      "strictJsonValid": true,
+      "productionDtoValid": true,
+      "fixtureContractValid": true,
+      "innerThought": null,
+      "eventStatus": "ONGOING",
+      "allFiveStatsZero": true,
+      "speakersAllNull": true,
+      "sceneCount": 3,
+      "promptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "resultHash": "e6af223c455149736a151f2ea38076773e93c1a8a3e746dfe9d4158c4045be9e",
+      "fileSha256": "323e9055b7f7fb7107010c7163a5d49380a7c3bed00962b58eaea04102d18ab8"
+    },
+    {
+      "job": "E01-r3-t1-P1",
+      "costUsd": 0.0023787,
+      "status": "ok",
+      "strictJsonValid": true,
+      "productionDtoValid": true,
+      "fixtureContractValid": true,
+      "innerThought": null,
+      "eventStatus": "ONGOING",
+      "allFiveStatsZero": true,
+      "speakersAllNull": true,
+      "sceneCount": 2,
+      "promptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "resultHash": "36a2c79e636a8d9dd76f95651ed2b8cd0730786903b376fda30c416e57be1bd3",
+      "fileSha256": "8a304c1c7c7325440d81bedebdd1c4e4d8eee3cf867dab5bdb6f6d7e0af9707c"
+    },
+    {
+      "job": "E01-r4-t1-P1",
+      "costUsd": 0.0030087,
+      "status": "ok",
+      "strictJsonValid": true,
+      "productionDtoValid": true,
+      "fixtureContractValid": true,
+      "innerThought": null,
+      "eventStatus": "ONGOING",
+      "allFiveStatsZero": true,
+      "speakersAllNull": true,
+      "sceneCount": 3,
+      "promptHash": "2ee94b505c7082fbf40da36ea655af21a7cf0c1c2de931ce1fd5cd132d8d4d5e",
+      "resultHash": "8af4be2948a2a305f96b099c21f0f2bdb342bd1522fc44e3665112eb2de64d49",
+      "fileSha256": "a4978eb3ee6372a2a9ea4b2f5354f2acabc964c8332fc6e238a4685744caee00"
+    }
+  ],
+  "newFileHashes": {
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/phase-event-repair/E01-r1-t1-P1.json": "b456475628bc30335bb4a93c21ec34a33fd61fb605ebab55076df235980f9e06",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/phase-event-repair/E01-r2-t1-P1.json": "323e9055b7f7fb7107010c7163a5d49380a7c3bed00962b58eaea04102d18ab8",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/phase-event-repair/E01-r3-t1-P1.json": "8a304c1c7c7325440d81bedebdd1c4e4d8eee3cf867dab5bdb6f6d7e0af9707c",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/phase-event-repair/E01-r4-t1-P1.json": "a4978eb3ee6372a2a9ea4b2f5354f2acabc964c8332fc6e238a4685744caee00",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/manifest.json": "dc4875c5f1ababcb1eb83d0cc5af8820006af45965285ad5912e23fc7851dc7a",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/budget.json": "3785a5b3f9bc1227fbf6c4c48ad47ef58aa7400c5800919845a781dc45487539",
+    "tools/llm-bakeoff/.local/experiments/p1-event-repair-20260922/phase-event-repair/plan.json": "7004f6ce8a620d48979c7809848800a01d233adf6405ab1ad7461f7f56af1ecb"
+  },
+  "checks": [
+    "All four jobs correspond exactly to the frozen plan and input.",
+    "Prepared messages equal recorded outgoing request messages; all four frozen prompt hashes are identical.",
+    "Model/provider/tier, default reasoning, temperature 0.8, output limit and no-fallback routing verified.",
+    "Result, final usage.cost and both ledgers agree one-to-one; each dispatch had room for the full reservation.",
+    "Each raw response is strict JSON and passes the recorded production DTO and fixture checks.",
+    "Each event response has inner_thought=null, ONGOING, five zero stats, speaker=null and topic_concluded=false."
+  ],
+  "limitations": [
+    "Four identical-input repeats establish targeted regression evidence, not an event failure-rate estimate or coverage of every event mode.",
+    "The earlier 64 outputs use a different frozen Java source; do not relabel their two event outputs as repaired-source outputs.",
+    "No provider invoice/account query was performed; charges are final provider usage reconciled to both local ledgers."
+  ]
+}

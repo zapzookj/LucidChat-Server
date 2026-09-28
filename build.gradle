@@ -73,3 +73,44 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// Local LLM lab only. Never included in bootJar or the production component scan.
+sourceSets {
+    bakeoff {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    bakeoffImplementation.extendsFrom testImplementation
+    bakeoffRuntimeOnly.extendsFrom testRuntimeOnly
+}
+tasks.register('prepareBakeoff') {
+    dependsOn tasks.named('bakeoffClasses')
+    doLast {
+        def launcher = javaToolchains.launcherFor(java.toolchain).get()
+        def target = layout.buildDirectory.file('bakeoff/runtime.json').get().asFile
+        target.parentFile.mkdirs()
+        def arguments = layout.buildDirectory.file('bakeoff/java.args').get().asFile
+        arguments.setText('-cp\n"' + sourceSets.bakeoff.runtimeClasspath.asPath.replace('\\', '/') + '"\ncom.spring.aichat.bakeoff.PromptBridge\n', 'UTF-8')
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        (sourceSets.main.allSource.files + sourceSets.bakeoff.allSource.files).sort { relativePath(it).replace('\\', '/') }.each { file ->
+            digest.update(relativePath(file).replace('\\', '/').getBytes('UTF-8'))
+            digest.update((byte) 0)
+            digest.update(file.bytes)
+        }
+        target.text = groovy.json.JsonOutput.toJson([
+            java: launcher.executablePath.asFile.absolutePath,
+            classpath: sourceSets.bakeoff.runtimeClasspath.asPath,
+            argsFile: arguments.absolutePath,
+            sourceHash: digest.digest().encodeHex().toString()
+        ])
+    }
+}
+tasks.register('bakeoffSmoke', JavaExec) {
+    dependsOn tasks.named('bakeoffClasses')
+    classpath = sourceSets.bakeoff.runtimeClasspath
+    mainClass = 'com.spring.aichat.bakeoff.PromptBridge'
+    args '--self-test'
+    javaLauncher = javaToolchains.launcherFor(java.toolchain)
+}

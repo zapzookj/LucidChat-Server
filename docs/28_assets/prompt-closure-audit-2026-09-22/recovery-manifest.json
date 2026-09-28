@@ -1,0 +1,28 @@
+{
+  "at": "2026-09-22T13:06:08.619Z",
+  "currentBranch": "feature/diorama",
+  "currentHead": "4e58311731c88f6e869b6c295b8970123a5ceae5",
+  "patch": "docs/28_assets/prompt-closure-audit-2026-09-22/repairs-against-ca27320.patch",
+  "patchSha256": "fa99448e1a1ba47e3307e04bf53120e89468ae4b358305647b8bca0ad2b8f336",
+  "appliedToProductionCheckout": false,
+  "appliedOnlyToIgnoredScratchBase": true,
+  "lineEndingNote": "git apply used Windows CRLF; normalize CRLF to LF to reproduce the saved proposal hashes exactly.",
+  "files": [
+    {
+      "path": "src/main/java/com/spring/aichat/service/prompt/CharacterPromptAssembler.java",
+      "baseGitRef": "ca27320",
+      "baseGitBlobSha256": "9ac004dda477611fc0e9421c6c86703b24a356e8ba2ab0d6fbba0389d4c856a3",
+      "repairedSha256": "71d380d613affcceaad210b36d72d47e8e0b642342f30343b8c50f32e0be844f",
+      "currentCheckoutSha256": "2b14dc06b8b1d4ec6dabd5786b94e96ff0443dd0026c85a58c305baf68171ece",
+      "reconstructionMatchesAfterLineEndingNormalization": true
+    },
+    {
+      "path": "src/main/java/com/spring/aichat/service/prompt/StoryDirectorPromptAssemblerV2.java",
+      "baseGitRef": "ca27320",
+      "baseGitBlobSha256": "a622309303bd59399288541fce18a6be23e4a270697d8f217e13914bbd616619",
+      "repairedSha256": "3e7f49516473734ad1c7c1d2fc295876c0b39daec83576988448b847d7f38d1e",
+      "currentCheckoutSha256": "1876a99a1e7af6dafbeefb81820eba21c8a5948304b22ab83d74f0c8dbdd0ab0",
+      "reconstructionMatchesAfterLineEndingNormalization": true
+    }
+  ]
+}

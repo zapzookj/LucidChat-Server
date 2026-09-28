@@ -1,0 +1,201 @@
+{
+  "auditAt": "2026-09-18T10:55:41.413Z",
+  "reviewer": "independent experiment_audit agent",
+  "paidCallsPerformedByAuditor": 0,
+  "checks": [
+    {
+      "name": "priorAnchor",
+      "passed": true
+    },
+    {
+      "name": "manifestAuthorization",
+      "passed": true
+    },
+    {
+      "name": "globalBaselinePreserved",
+      "passed": true
+    },
+    {
+      "name": "preservedOriginalFiles",
+      "passed": true,
+      "detail": {
+        "count": 319,
+        "changed": []
+      }
+    },
+    {
+      "name": "prepaidPlanHash:phase1-known",
+      "passed": true
+    },
+    {
+      "name": "expandedJobs:phase1-known",
+      "passed": true
+    },
+    {
+      "name": "allExpectedJobs:phase1-known",
+      "passed": true
+    },
+    {
+      "name": "recordPlans:phase1-known",
+      "passed": true
+    },
+    {
+      "name": "prepaidPlanHash:phase2-heldout",
+      "passed": true
+    },
+    {
+      "name": "expandedJobs:phase2-heldout",
+      "passed": true
+    },
+    {
+      "name": "allExpectedJobs:phase2-heldout",
+      "passed": true
+    },
+    {
+      "name": "recordPlans:phase2-heldout",
+      "passed": true
+    },
+    {
+      "name": "prepaidPlanHash:phase3-sequences",
+      "passed": true
+    },
+    {
+      "name": "expandedJobs:phase3-sequences",
+      "passed": true
+    },
+    {
+      "name": "allExpectedJobs:phase3-sequences",
+      "passed": true
+    },
+    {
+      "name": "recordPlans:phase3-sequences",
+      "passed": true
+    },
+    {
+      "name": "resultLedgerBijection",
+      "passed": true
+    },
+    {
+      "name": "requestPreparedMessagesIdentical",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "frozenSourceHash",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "requestedActualControls",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "reservationsMatchConservativeFormula",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "costUsageBreakdownMatches",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "finalCompleteUsage",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "plansFrozenBeforePaidDispatch",
+      "passed": true,
+      "detail": []
+    },
+    {
+      "name": "globalEntryCount",
+      "passed": true,
+      "detail": {
+        "global": 418,
+        "baseline": 346,
+        "records": 72
+      }
+    },
+    {
+      "name": "uniqueGenerationIds",
+      "passed": true
+    },
+    {
+      "name": "recordSessionCostSum",
+      "passed": true
+    },
+    {
+      "name": "combinedWithinOriginalThreeDollars",
+      "passed": true
+    }
+  ],
+  "issues": [],
+  "counts": {
+    "preservedFiles": 319,
+    "prior": 304,
+    "final": 72,
+    "global": 418
+  },
+  "costUsd": {
+    "prior": 1.148911616666667,
+    "final": 0.32467311666666676,
+    "combinedPromptExperiment": 1.4735847333333338,
+    "originalAuthorization": 3,
+    "remainingAuthorization": 1.5264152666666662,
+    "global": 1.6429894366666682,
+    "allHeld": 0
+  },
+  "phases": [
+    {
+      "id": "phase1-known",
+      "count": 24,
+      "costUsd": 0.10039785
+    },
+    {
+      "id": "phase2-heldout",
+      "count": 24,
+      "costUsd": 0.10536408333333333
+    },
+    {
+      "id": "phase3-sequences",
+      "count": 24,
+      "costUsd": 0.11891118333333334
+    }
+  ],
+  "strictJsonFailures": [
+    {
+      "phase": "phase2-heldout",
+      "id": "FINAL-H05-r1-t1-P0",
+      "variant": "P0-service-fixed-state-v1",
+      "rawTail": "\"t1\",\n      \"label\": \"지우의 거짓된 기억 혹은 착각\",\n      \"status\": \"OPEN\",\n      \"note\": \"로제타는 이를 장난으로 치부하고 있다.\"\n    }\n  ]\n}\n  ]\n}",
+      "error": "Unexpected non-whitespace character after JSON at position 3252 (line 92 column 3)",
+      "javaValidation": true
+    },
+    {
+      "phase": "phase3-sequences",
+      "id": "FINAL-SEQ-01-r1-t2-P0",
+      "variant": "P0-service-fixed-state-v1",
+      "rawTail": "\",\n      \"label\": \"축제 준비물 분류와 로제타의 개입\",\n      \"status\": \"OPEN\",\n      \"note\": \"별 문양 봉투의 내용물 결정 여부가 관건\"\n    }\n  ]\n}\n  ]\n}",
+      "error": "Unexpected non-whitespace character after JSON at position 3153 (line 88 column 3)",
+      "javaValidation": true
+    }
+  ],
+  "limits": [
+    "Usage.cost and local evidence reconciled; provider billing statement was not separately queried.",
+    "Historical messages reassembly and production code tests are covered in independent-code-review.md; final frozen source hash intentionally predates production repairs."
+  ],
+  "independentReassembly": {
+    "checkedAt": "2026-09-18T10:57:49.862Z",
+    "currentSourceHash": "00101dc1cb63cc9543e086c2cb1060ceff9c2e05792bafe2154f47327b1a9442",
+    "originalExperimentSourceHash": "4180da25cb640eb352ec1674ab0d8b093ebf4ae4972783e7e787ce1a792f2fae",
+    "counts": {
+      "historicalMatrix": 72,
+      "actualFinalRequests": 72
+    },
+    "mismatches": [],
+    "paidCalls": 0
+  }
+}
