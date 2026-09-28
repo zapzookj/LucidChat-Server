@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-09-28T14:22:45.308Z",
+  "deploymentCommit": "c403bb99a2b7e33ea5321373834b9e601a7d7f6f",
+  "runningImage": "sha256:d7d8ab48f903710ea230cd0b3811dc7dc143e873c574ec86bec55655f03d5447",
+  "commitImage": "sha256:d7d8ab48f903710ea230cd0b3811dc7dc143e873c574ec86bec55655f03d5447",
+  "exactImageMatch": true,
+  "health": {
+    "internal": "OK",
+    "externalStatus": 200,
+    "externalBody": "OK"
+  },
+  "storedCharacterModels": "google/gemini-3-flash-preview|26",
+  "latestMigration": "37|t",
+  "modelOverrides": [],
+  "packagedModelLines": [
+    "model: google/gemini-3-flash-preview",
+    "  sentiment-model: google/gemini-3-flash-preview",
+    "  pro-model: google/gemini-3.1-pro-preview",
+    "    model: ${UGC_VLM_PREFILTER_MODEL:google/gemini-3-flash-preview}  # 비전 지원 비사고 모델"
+  ],
+  "paidModelCalls": 0,
+  "scope": "Exact running image, health, model defaults/overrides and aggregate DB state. No end-user chat or full browser regression."
+}

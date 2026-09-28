@@ -25,4 +25,13 @@
 
 커밋 전 비밀값 검사에서 미추적 `.env.example`의 채워진 API 키를 발견해 빈값으로 교체했다. 실제 `.env.local`과 원장은 보존·Git 제외한다. 키가 들어 있던 예제 파일은 커밋하거나 푸시하지 않았다. 배포 소스의 whitespace 검사는 통과하며, 보존된 과거 patch 2개와 실험용 PromptRoundThree text block의 공백 경고는 원문 유지 항목으로 구분한다.
 
-실제 커밋·Actions·운영 확인 결과는 배포 후 아래에 덧붙인다.
+## 실제 배포 완료
+
+- **릴리스 커밋:** [`c403bb99a2b7e33ea5321373834b9e601a7d7f6f`](https://github.com/zapzookj/LucidChat-Server/commit/c403bb99a2b7e33ea5321373834b9e601a7d7f6f), master 푸시 완료. 검증한 격리 checkout의 stage tree와 실제 커밋의 tree가 `e480024afec2587f8c09fdb0a142584cd5c6c3c2`로 일치한다.
+- **CI/CD:** [Actions 36435081892](https://github.com/zapzookj/LucidChat-Server/actions/runs/36435081892) 전체 success. Linux Java 17의 단위 테스트/빌드 → GHCR 이미지 업로드 → SSH 배포/헬스 게이트를 통과했다.
+- **운영 확인:** 2026-09-28 23:22 KST, 실행 컨테이너 이미지와 해당 커밋 태그의 registry manifest digest가 모두 `sha256:d7d8ab48f903710ea230cd0b3811dc7dc143e873c574ec86bec55655f03d5447`로 일치했다. 최신 태그라는 이름만 확인한 것이 아니다.
+- **서비스 상태:** 컨테이너 내부 `/health` OK, 공개 `https://api.lucid-chat.com/health` HTTP 200/OK. 라이브 JAR의 기본·보조·VLM 기본값은 3 Flash이고 Pro는 3.1 Pro를 유지했다. 해당 모델의 환경변수 override는 없었다.
+- **DB 상태:** 캐릭터 26행 전부 3 Flash, Flyway 최신 V37 성공으로 배포 전과 같다. 이번 릴리스에서 DB 모델 변환이나 신규 migration은 실행하지 않았다.
+- **검증 한계:** 운영 사용자 계정으로 대화/결제/이미지 생성을 실행하지 않았고 추가 유료 모델 호출도 없다. HTTP 기동 확인과 모델 적용 확인을 사용자 체감 품질의 새 검증으로 확대하지 않는다. 9/22의 지연 증가·잔여 의미 오류는 여전히 관측 한계로 남는다.
+
+[배포 후 확인 JSON](prompt-release-2026-09-28/production-verification.json). 이 서버의 Docker `.Image`/`.Id`는 manifest digest였으므로 registry **Descriptor.digest**와 대조했다. image config digest와 혼동해 배포 불일치로 판정하지 않는다.
