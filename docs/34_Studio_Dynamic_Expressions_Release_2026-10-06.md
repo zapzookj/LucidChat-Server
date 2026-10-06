@@ -41,4 +41,14 @@ V38은 캐릭터와 생성 작업에 nullable catalog, 생성 작업에 nullable
 
 배포 전 운영 RunPod 관측: 최소 0·최대 0, 실제 worker 0, 대기/진행 작업 0. Neutral 생성과 WF-3 누끼가 작동할 수 있도록 최소 0·최대 1로 복구한다. 이는 요청 시 worker가 뜨는 설정이며 상시 최소 worker를 두지 않는다. 최대 0으로 변경된 과거 경위는 확인되지 않았다.
 
-커밋 SHA, CI·Vercel 결과, 실행 이미지 digest, Flyway·운영 health와 최종 RunPod 설정은 배포 후 실측을 덧붙인다.
+### 운영 반영 완료
+
+- BE `48eef00f1b5e9f3334622e9c3c8ac9ce18a5d7a0`, FE `e24a97e1aae176392c2157d5370fd3aba58f7979`, Admin `321a5d446235990b3d066d13f3d47b4a8bafe90c`를 각각 master에 커밋·푸시했다. 디오라마·UIUX 연구의 별도 미커밋 변경은 제외했다.
+- [Actions 37420830732](https://github.com/zapzookj/LucidChat-Server/actions/runs/37420830732) 전체 단계 성공. 실제 운영 이미지의 RepoDigest와 해당 커밋 태그의 registry manifest digest가 모두 `sha256:391e2415254e4abbf7f6acdc05f0c965ce1ca12addc3401b63edd543cd4448cb`로 일치했다. 서버는 latest 태그만 pull하므로 커밋 태그가 로컬에 없다는 이유로 배포 실패로 판단하면 안 된다. 현재 Docker의 `.Image`는 manifest digest와 일치하므로 config digest 대신 RepoDigest로 대조했다.
+- Flyway 최신 `38|character expression catalog|success`, 새 컬럼 3개 nullable 확인. 기존 캐릭터 26개 catalog null, 기존 작업 22개 pipeline version null로 유지됨을 읽기 전용으로 확인했다. 배포 전 V37 DB dump 423,839bytes는 서버 접근 제한 백업 디렉터리에 보존했다.
+- 컨테이너 `/health`와 공개 `https://api.lucid-chat.com/health` 모두 OK. fal key·RunPod key/endpoint는 값 노출 없이 설정 존재만 확인했다.
+- [FE Vercel Production](https://vercel.com/zapzookjs-projects/lucid-chat-front/Csve6WJcNwjs2xAo5FKm9qXJALU7) 성공, GitHub deployment `6876785122` SHA 일치. [관리자 Vercel Production](https://vercel.com/zapzookjs-projects/lucid-chat-admin/6MiFwfUiSGrVkBSm72QThpi2ckSd) 성공, deployment `6876787568` SHA 일치.
+- 운영 FE `/`, `/story`, `/login`, `/studio`, 새 JS `/assets/index-wvrA6K3C.js` HTTP 200. 운영 관리자 `/`와 JS `/assets/index-Sa9Cvesl.js` HTTP 200. 배포 번들에서 새 catalog/표시 필드를 확인했고 운영 브라우저에서 로비·스튜디오 로그인 진입을 확인했다. 로그인 후 생성 시연은 미실행이다.
+- RunPod 최소 0·최대 1 적용, 다른 설정 변경 없음. 대기·진행 작업 0인 관측 시점에 실제 worker 0은 정상적인 요청 대기 상태다. 최대 0으로 된 과거 변경 경위는 미확인이다.
+
+관측은 2026-10-06 05:55–05:58 UTC(한국 14:55–14:58) 배포 조회에 근거한다. 유료 이미지 생성·대화 추가 호출 없이 검증했다. 이 배포 이후 TTS 계약·UI 검토/구현으로 넘어간다.
