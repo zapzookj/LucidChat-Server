@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit;
 class TtsContractTest {
     @Test void performanceTagsCannotChangeSpokenWords() {
         assertThat(TtsText.validate("안녕!", "[excited] 안녕!")).isEqualTo("[excited] 안녕!");
+        assertThat(TtsText.validate("...왜?", "[bored] ...왜?")).isEqualTo("[bored] ...왜?");
+        assertThat(TtsText.validate("죄, 죄송해요!", "[scared] 죄, 죄송해요!")).isEqualTo("[scared] 죄, 죄송해요!");
         assertThat(TtsText.validate("안녕!", "[excited] 안녕하세요!")).isNull();
         assertThat(TtsText.validate("안녕!", "[explosion] 안녕!")).isNull();
         assertThat(TtsText.validate("안녕!", "[calm][sad][angry]안녕!")).isNull();

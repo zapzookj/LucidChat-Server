@@ -1,0 +1,23 @@
+{
+  "total": 26,
+  "updated": 9,
+  "untouched": 17,
+  "nonAppearanceFieldsUnchanged": 26,
+  "yeonhwaPreserved": true,
+  "observedAt": "2026-10-06T08:09:41.653295+00:00",
+  "mode": "apply",
+  "commitAcknowledged": true,
+  "independentReadVerified": true,
+  "transactionSha256": "8d9a3fc77c0f4b672451288653e44a6e50cd2435071bcdc861e2d0a27ce8493c",
+  "targetSlugs": [
+    "airi",
+    "taeri",
+    "luna",
+    "rosetta",
+    "claire",
+    "chaerin",
+    "sierra",
+    "edel",
+    "seolah"
+  ]
+}

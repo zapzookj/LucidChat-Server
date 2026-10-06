@@ -1,0 +1,118 @@
+{
+  "recordedAt": "2026-10-06T08:01:10.285433+00:00",
+  "selected": 10,
+  "userReplacements": 7,
+  "retainedOriginals": 3,
+  "clips": [
+    {
+      "slug": "airi",
+      "hash": "e41e732ba300eba259579a2b75ec538e7c818d89cf95d956d3e7f958cbcc50a4",
+      "objectKey": "greetings/airi/e41e732ba300eba259579a2b75ec538e7c818d89cf95d956d3e7f958cbcc50a4.mp3",
+      "bytes": 198993,
+      "audioSha256": "b63733de7255e16629d2c2f41583f6c07a1bf9d7e071bfd5f2c51093f5f5b981",
+      "source": "retained-original",
+      "model": "eleven_v4",
+      "originalAudioSha256": "b63733de7255e16629d2c2f41583f6c07a1bf9d7e071bfd5f2c51093f5f5b981",
+      "originalObjectKey": "greetings/airi/e41e732ba300eba259579a2b75ec538e7c818d89cf95d956d3e7f958cbcc50a4.mp3"
+    },
+    {
+      "slug": "taeri",
+      "hash": "d36f34f0f91fab71e9f30e0c05b6683d86a022c8f464192fcf1c24888ddff732",
+      "objectKey": "greetings/taeri/d36f34f0f91fab71e9f30e0c05b6683d86a022c8f464192fcf1c24888ddff732.mp3",
+      "bytes": 45777,
+      "audioSha256": "fa9a3223933106e2b908ae28bd1054509c1060be52e7cb816ec06db81ca48cac",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "8e54d68fb9f2f718455e0d541cae71587447a36ed741d0edd0eac1a972fc11c5",
+      "originalObjectKey": "greetings/taeri/d36f34f0f91fab71e9f30e0c05b6683d86a022c8f464192fcf1c24888ddff732.mp3"
+    },
+    {
+      "slug": "luna",
+      "hash": "dc339b42c4cf43cde1ee24bf7e5fa4b015ba0c33e12dfd418ae6e066e0c7231d",
+      "objectKey": "greetings/luna/dc339b42c4cf43cde1ee24bf7e5fa4b015ba0c33e12dfd418ae6e066e0c7231d.mp3",
+      "bytes": 78795,
+      "audioSha256": "902d5ff6ff777ff48d4d96d788a088398568004364f509b26d227c2590a071cd",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "a7fa5c000b956f29d64ce28502c47ea9dd6e1191e8972c401346108ba36f6354",
+      "originalObjectKey": "greetings/luna/dc339b42c4cf43cde1ee24bf7e5fa4b015ba0c33e12dfd418ae6e066e0c7231d.mp3"
+    },
+    {
+      "slug": "yeonhwa",
+      "hash": "961a4215c9923c2ecdfad7506ad3e901d62161c517f48800403812ec9f1ca738",
+      "objectKey": "greetings/yeonhwa/961a4215c9923c2ecdfad7506ad3e901d62161c517f48800403812ec9f1ca738.mp3",
+      "bytes": 122391,
+      "audioSha256": "bf83f9e4b374f88f64e1e8e979f2f4eaa8dac731285d572a2d06cc817b84a8cc",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "4d0fb4fc55560232963c4fd01533b77c9e00dcbb5a3f38b12a3cbcd903fd6d9e",
+      "originalObjectKey": "greetings/yeonhwa/961a4215c9923c2ecdfad7506ad3e901d62161c517f48800403812ec9f1ca738.mp3"
+    },
+    {
+      "slug": "rosetta",
+      "hash": "01d3fcd80b3f5969d691c6dc98f9924783b11ca8616d7213504bb4f8b1120c33",
+      "objectKey": "greetings/rosetta/01d3fcd80b3f5969d691c6dc98f9924783b11ca8616d7213504bb4f8b1120c33.mp3",
+      "bytes": 128661,
+      "audioSha256": "c324ac00b8f9eb644f841b64daf11764aa5509935ff0463cd4680a7dfa24d84d",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "7132260c71cdddb1566a8001ec6952c6fc39e87324a04ccf003bdd80f07ceed2",
+      "originalObjectKey": "greetings/rosetta/01d3fcd80b3f5969d691c6dc98f9924783b11ca8616d7213504bb4f8b1120c33.mp3"
+    },
+    {
+      "slug": "claire",
+      "hash": "8d0f7f5bc5bac6133362d3be3219b61c623d81e047904c810986efc5a3249c7d",
+      "objectKey": "greetings/claire/8d0f7f5bc5bac6133362d3be3219b61c623d81e047904c810986efc5a3249c7d.mp3",
+      "bytes": 175890,
+      "audioSha256": "da10dc959d210fc0fbd762ee7ba725cd6a918f67e2ed256c2d35cd01a8849094",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "8a8548ed28b848a4e5bbf1fdbc561820a6b08ac9c2ef3ad12813e6bdba6757f9",
+      "originalObjectKey": "greetings/claire/8d0f7f5bc5bac6133362d3be3219b61c623d81e047904c810986efc5a3249c7d.mp3"
+    },
+    {
+      "slug": "chaerin",
+      "hash": "8020c4df5e064d3d24072f2da49ea2930e56f5d537121461e02d405d26477640",
+      "objectKey": "greetings/chaerin/8020c4df5e064d3d24072f2da49ea2930e56f5d537121461e02d405d26477640.mp3",
+      "bytes": 78795,
+      "audioSha256": "047e78411dfdf7d7815853e569dc7095e7ab048f717a6a4cc909225d5d9ca6f4",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "89441669f897cf4fd951be4d2c225f6009e0298cdcc37e06b25af41f3fc4a79d",
+      "originalObjectKey": "greetings/chaerin/f43a38e92bdc64df3e7f0e6366fa79773dfc5dda7e43c6b50baf7bf24c562756.mp3"
+    },
+    {
+      "slug": "sierra",
+      "hash": "16af8d88785ad815d2c96f08611d0d86d4ecf49489680cfff6eeca9b2d1d577e",
+      "objectKey": "greetings/sierra/16af8d88785ad815d2c96f08611d0d86d4ecf49489680cfff6eeca9b2d1d577e.mp3",
+      "bytes": 145494,
+      "audioSha256": "92beffd6ceabd3858f7037615ee0f0d3da588f946968f52ce13e6013f76102a6",
+      "source": "retained-original",
+      "model": "eleven_v4",
+      "originalAudioSha256": "92beffd6ceabd3858f7037615ee0f0d3da588f946968f52ce13e6013f76102a6",
+      "originalObjectKey": "greetings/sierra/16af8d88785ad815d2c96f08611d0d86d4ecf49489680cfff6eeca9b2d1d577e.mp3"
+    },
+    {
+      "slug": "edel",
+      "hash": "f61edc6bdb211f7ceea189de61d5ba4f4cd3957435db9c8691b3659d132ad104",
+      "objectKey": "greetings/edel/f61edc6bdb211f7ceea189de61d5ba4f4cd3957435db9c8691b3659d132ad104.mp3",
+      "bytes": 42015,
+      "audioSha256": "738c2ed0af701bef97bc810ce51a3bb07d007891dc2b1db299a414f17f2c28d8",
+      "source": "user-selected-replacement",
+      "model": "user-supplied",
+      "originalAudioSha256": "bcd8e6651ee36f84f1443058623428b2961c2ef5b94328cc58e7cb0adb084aee",
+      "originalObjectKey": "greetings/edel/6eea9c4ebbd07dc4d010ecb1fbfc86808663c796ec75bc5f05113437afbf8eed.mp3"
+    },
+    {
+      "slug": "seolah",
+      "hash": "bef1cb740b23e7115df615e46107c26191418d3305aa33944dce0ce75b40dc56",
+      "objectKey": "greetings/seolah/bef1cb740b23e7115df615e46107c26191418d3305aa33944dce0ce75b40dc56.mp3",
+      "bytes": 100355,
+      "audioSha256": "2523c18cea38d2915c84b0fba0291b746230492a94b6fcb3bc022f9193aa3297",
+      "source": "retained-original",
+      "model": "eleven_v4",
+      "originalAudioSha256": "2523c18cea38d2915c84b0fba0291b746230492a94b6fcb3bc022f9193aa3297",
+      "originalObjectKey": "greetings/seolah/bef1cb740b23e7115df615e46107c26191418d3305aa33944dce0ce75b40dc56.mp3"
+    }
+  ]
+}

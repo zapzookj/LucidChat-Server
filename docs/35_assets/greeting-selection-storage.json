@@ -1,0 +1,71 @@
+{
+  "observedAt": "2026-10-06T08:11:47.546826+00:00",
+  "source": "Successful run_storage.py output observed in this session; authenticated GET compared exact bytes in TtsStoragePrepare",
+  "expected": 10,
+  "verified": 10,
+  "userReplacements": 7,
+  "retainedOriginals": 3,
+  "publicDomainControlPlaneChecked": false,
+  "greetings": [
+    {
+      "slug": "airi",
+      "audioSha256": "b63733de7255e16629d2c2f41583f6c07a1bf9d7e071bfd5f2c51093f5f5b981",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "taeri",
+      "audioSha256": "fa9a3223933106e2b908ae28bd1054509c1060be52e7cb816ec06db81ca48cac",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "luna",
+      "audioSha256": "902d5ff6ff777ff48d4d96d788a088398568004364f509b26d227c2590a071cd",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "yeonhwa",
+      "audioSha256": "bf83f9e4b374f88f64e1e8e979f2f4eaa8dac731285d572a2d06cc817b84a8cc",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "rosetta",
+      "audioSha256": "c324ac00b8f9eb644f841b64daf11764aa5509935ff0463cd4680a7dfa24d84d",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "claire",
+      "audioSha256": "da10dc959d210fc0fbd762ee7ba725cd6a918f67e2ed256c2d35cd01a8849094",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "chaerin",
+      "audioSha256": "047e78411dfdf7d7815853e569dc7095e7ab048f717a6a4cc909225d5d9ca6f4",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "sierra",
+      "audioSha256": "92beffd6ceabd3858f7037615ee0f0d3da588f946968f52ce13e6013f76102a6",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "edel",
+      "audioSha256": "738c2ed0af701bef97bc810ce51a3bb07d007891dc2b1db299a414f17f2c28d8",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    },
+    {
+      "slug": "seolah",
+      "audioSha256": "2523c18cea38d2915c84b0fba0291b746230492a94b6fcb3bc022f9193aa3297",
+      "authenticatedGetExactBytes": true,
+      "unsignedS3HttpStatus": 400
+    }
+  ]
+}

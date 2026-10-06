@@ -20,9 +20,13 @@ public class TtsSourceResolver {
     private final ObjectMapper mapper;
     private final ChatLogMongoRepository logs;
     private final ChatRoomHeroineRepository heroines;
-    public record Clip(int sceneIndex, String dialogue, String voiceId, String input, String objectKey) {
-        public Clip withInput(String text) { return new Clip(sceneIndex, dialogue, voiceId, text, objectKey); }
-        public Clip withKey(String key) { return new Clip(sceneIndex, dialogue, voiceId, input, key); }
+    public record PerformanceContext(String speaker, String personality, String speakingTone, String emotion, String narration) {}
+    public record Clip(int sceneIndex, String dialogue, String voiceId, String input, String objectKey, PerformanceContext context) {
+        public Clip(int sceneIndex, String dialogue, String voiceId, String input, String objectKey) {
+            this(sceneIndex, dialogue, voiceId, input, objectKey, null);
+        }
+        public Clip withInput(String text) { return new Clip(sceneIndex, dialogue, voiceId, text, objectKey, context); }
+        public Clip withKey(String key) { return new Clip(sceneIndex, dialogue, voiceId, input, key, context); }
     }
     public record Source(String hash, List<Clip> clips, String greetingSlug) {}
 
@@ -60,7 +64,12 @@ public class TtsSourceResolver {
                     if (Objects.equals(raw.path("dialogue").asText(), dialogue) && raw.path("tts_input").isTextual())
                         input = TtsText.validate(dialogue, raw.path("tts_input").asText());
                 }
-                clips.add(new Clip(i, dialogue, voice, input, null));
+                // Only this spoken scene and authoritative character traits inform acting; no thoughts or chat history.
+                var context = new PerformanceContext(character.getName(),
+                    character.getEffectivePersonality(room.isSecretModeActive()),
+                    character.getEffectiveTone(room.isSecretModeActive()),
+                    scene.path("emotion").asText(""), scene.path("narration").asText(""));
+                clips.add(new Clip(i, dialogue, voice, input, null, context));
             }
             return new Source(hash, List.copyOf(clips), null);
         } catch (Exception e) { throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "저장된 대사를 읽을 수 없습니다."); }

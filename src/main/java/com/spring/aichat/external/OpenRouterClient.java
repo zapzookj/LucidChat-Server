@@ -285,7 +285,8 @@ public class OpenRouterClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {
-                log.warn("🤖 [LLM-JSON] HTTP {} | body: {}", response.statusCode(), response.body());
+                // A provider error may echo private dialogue or acting context.
+                log.warn("🤖 [LLM-JSON] HTTP {}", response.statusCode());
                 throw new ExternalApiException("LLM 호출 실패 (HTTP " + response.statusCode() + ")");
             }
 
@@ -303,8 +304,9 @@ public class OpenRouterClient {
             return new CompletionResult(content.asText(), finishReason);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            log.error("🤖 [LLM-JSON] Request failed: {}", e.getMessage());
-            throw new ExternalApiException("LLM 요청 실패: " + e.getMessage(), e);
+            log.error("🤖 [LLM-JSON] Request failed | type={}", e.getClass().getSimpleName());
+            // Parser exceptions can contain fragments of the provider body; do not retain the cause.
+            throw new ExternalApiException("LLM 요청 실패 (" + e.getClass().getSimpleName() + ")");
         }
     }
 }

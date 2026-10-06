@@ -29,6 +29,10 @@ python tools/tts/review_greetings.py
 
 run_storage는 이미 생성된 파일만 저장한다. 인증 GET 바이트 일치, 서명 없는 S3 URL의 접근 거부, 10개 전체 개수를 대조한다. 서명 없는 API 거부만으로 Cloudflare의 모든 공개 도메인 설정을 확인했다고 판단하지 않는다. 제어판의 r2.dev·커스텀 도메인 비활성 설정도 유지한다.
 
+2026-10-06 사용자 청취 후 7개 교체본과 3개 유지본을 `.local/greetings-selected`에 선정했다. 원본 `greetings-v4`의 유료 합성 영수증과 MP3는 보존한다. 선택본의 별도 영수증은 출처·원본/선택 SHA-256·현재 firstGreeting+voice 매핑 키를 기록하며, 사용자 제공 파일의 실제 합성 모델/요청 지연을 추정하지 않는다. [선정 원장](../../docs/35_assets/greeting-selection.json).
+
+`run_storage`·`verify_greetings`·`review_greetings`는 선택 디렉터리가 있으면 우선 사용한다. `run_storage.py --check-only`는 네트워크 없이 10종 집합·중복·파일 크기·영수증/키 형식·선택 음성 SHA를 전량 검증한다. SHA가 없는 예외는 기존 `.local/greetings-v4` 경로의 source 없는 레거시 영수증만 허용한다. 선정본과 모든 다른 경로는64hex SHA 필수다. 업로드도 이 검증을 첫 네트워크 작업 전에 수행한다. `verify_greetings`도 로컬 SHA/전체 집합을 네트워크 전에 검사하고, 실제 운영 firstGreeting과 현재 로컬 매핑으로 object key를 재계산한다. 테스트용 `--samples`는 다른 샘플 디렉터리를 지정한다. 이는 배치 배정/파일 무결성 확인이며 MP3 내용의 발화나 보이스를 역으로 인증하는 검사는 아니다.
+
 ## 제품 설정
 
 `TTS_ENABLED` 기본 false. 활성화 시 `ELEVENLABS_API_KEY`/`TTS_VOICE_*`, `TTS_AUDIO_BUCKET`, `TTS_S3_ACCESS_KEY`/`TTS_S3_SECRET_KEY`/`TTS_S3_ENDPOINT`를 서버 비밀 환경변수로 설정한다. 개발용으로는 `TTS_SECRET_FILE`, `TTS_STORAGE_SECRET_FILE`을 읽을 수 있다. FE에 키를 전달하지 않는다.

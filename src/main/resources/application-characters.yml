@@ -19,7 +19,7 @@ app:
       # ── 실시간 일러 정체성 태그 (2026-07-30 V15 — IllustrationPromptAssembler 하드코딩 맵 이관.
       #    검증된 4종(airi/taeri/luna/yeonhwa)만 채움 — 나머지 6종은 실제 에셋 대조 후 채울 것(백로그)) ──
       # [2026-08-04 폴리싱] 실물 에셋(maid_neutral) 대조 재작성 — short/medium 모순 제거 + 복장 태그 병기(씬 렌더 복장 불일치 픽스)
-      appearance-tags: "multicolored eyes, blue eyes, yellow eyes, gradient eyes, pink hair, short hair, bangs, maid, maid headdress, rabbit hair ornament, black ribbon, black dress, white apron, frilled apron, maid apron, puffy short sleeves, black bowtie, wrist cuffs"
+      appearance-tags: "maid headdress, white bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, white garter belt, mary janes"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Airi, a devoted maid serving in a grand mansion.
@@ -283,7 +283,7 @@ app:
       mood-tags: "츤데레, 무뚝뚝, 속정깊음, 예술가, 서투름"
       profile-quote: "차, 착각하지 마요. 딱히 선배 신경 쓰는 거 아니니까."
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 재작성 — 3태그→풀 정체성+복장 (씬 렌더 머리·복장 불일치 픽스)
-      appearance-tags: "purple eyes, grey hair, medium hair, sidelocks, black choker, headphones, headphones around neck, leather jacket, black jacket, open jacket, white shirt, crop top, midriff, navel, leather shorts, black shorts, belt"
+      appearance-tags: "purple headphones around neck, oversized black leather jacket, open jacket, plain white crop top, midriff, navel, black hot pants"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Seo Tae-ri, a 21-year-old university student majoring in design.
@@ -405,7 +405,7 @@ app:
       mood-tags: "소심, 낯가림, 오타쿠, 집착, 여림"
       profile-quote: "저, 저기… 방송 보러 와 주신 거예요? 에헤헤…"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 재작성 — 복장 태그 병기 (실물=화이트 후드티, 코드 아웃핏 맵의 school uniform은 스테일)
-      appearance-tags: "blue eyes, black hair, short hair, bob cut, blonde inner hair, colored inner hair, two-tone hair, bangs, cat ear headphones, headphones, white hoodie, hood down, oversized clothes, long sleeves, sleeves past wrists, cat print, bare legs"
+      appearance-tags: "oversized white hoodie, hood down, long sleeves, blue drawstrings, black cat graphic print on chest, cat print has blue eyes and blue headphones, bare legs, bottomless, black cat ear headphones with glowing blue accents"
       llm-model-name: google/gemini-3-flash-preview
       base-system-prompt: >
         You are Baek Luna, a 20-year-old reclusive indie streamer (hikikomori) with a very small audience.
@@ -598,7 +598,7 @@ app:
       default-outfit: "DAILY"
       default-location: "CATHEDRAL"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "blue eyes, blonde hair, long hair, side braid, nun, habit, veil, cross necklace, latin cross, white dress, gold trim, long sleeves, large breasts, cleavage, bare shoulders, clothing cutout"
+      appearance-tags: "large breasts, pale skin, blonde hair, long straight hair, waist-length hair, silky hair, loose side braid, soft hair flow, moonlight-like hair, drooping eyes, puppy eyes, light blue eyes, nun outfit, modified nun veil, white veil, visible bangs, visible sidelocks, white and gold color scheme, gold embroidery, pure white clothing, high neck outfit, modest neckline, long skirt, detached sleeves, bare shoulders, arm sleeves only, silver cross necklace"
 
       # ── 엔딩 ──
       ending-role-desc: "a saintly young woman who discovered the meaning of love for one person"
@@ -717,7 +717,7 @@ app:
       default-outfit: "DAILY"
       default-location: "TERRACE"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "red eyes, blonde hair, long hair, wavy hair, red capelet, red cape, hood down, black dress, double-breasted, white collar, black bowtie, long sleeves, frilled dress, black thighhighs, zettai ryouiki"
+      appearance-tags: "medium breast, blonde hair, elegant wavy hair, ruby red eyes, extravagant magic academy uniform with frills, red cape, zettai ryouiki"
 
       # ── 엔딩 ──
       ending-role-desc: "a mesugaki noble mage whose magic shield was finally broken by sincerity"
@@ -834,7 +834,7 @@ app:
       # getAllowedLocations 집합 밖이었다. baseLocations와 일치시킨다.
       default-location: "STREET"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "red eyes, brown hair, short hair, bob cut, gradient hair, earrings, necklace, white jacket, cropped jacket, black crop top, large breasts, cleavage, midriff, navel, green pants, cargo pants"
+      appearance-tags: "korean woman, healthy body, toned thighs, slim waist, large breasts, feminine silhouette, soft facial features, medium short hair, layered bob cut, soft wolf cut, airy short hair, fluffy ends, slightly messy hair, natural volume, side-parted bangs, hair tucked behind one ear, feminine short hairstyle, dark brown hair, glossy hair, subtle highlights, sharp brown eyes, natural makeup, oversized varsity jacket, cropped hoodie, fitted tank top, loose cargo pants, black shorts, sporty street fashion, korean streetwear, chunky sneakers, necklace, ear piercings, band-aid on cheek, cleavage"
 
       # ── 엔딩 ──
       ending-role-desc: "a bright tomboy childhood friend who was always one step beside you"
@@ -945,7 +945,7 @@ app:
       default-outfit: "DAILY"
       default-location: "GARDEN"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "red eyes, white hair, orange hair, gradient hair, multicolored hair, very long hair, wavy hair, side braid, hair ribbon, hair ornament, sailor collar, white shirt, orange necktie, pinafore dress, blue dress, open cardigan, cardigan, blue skirt, pleated skirt, black thighhighs, lace-trimmed legwear, shoulder bag"
+      appearance-tags: "sleepy eyes, slightly droopy eyes, feminine, youthful adult, medium breasts, soft curves, delicate features, small face, long silky hair, silver hair, ash blonde hair, soft wavy hair, side braid, ribbon hair ornament, fluffy bangs, messy hair, glossy hair, hair between eyes, golden eyes, honey eyes, warm amber eyes, soft lips, white and pastel academy uniform, fantasy school uniform, cleric-inspired uniform, nun-inspired accents, healer outfit, long cardigan, oversized sleeves, layered skirt, black tights, thighhighs, ribbon tie, lace details, subtle embroidery, gold trim, magical accessories, healing magic catalyst, crystal pendant, flower motif, small satchel"
 
       # ── 엔딩 ──
       ending-role-desc: "a gentle sleepyhead junior who found her favorite thing in you"
@@ -1060,7 +1060,7 @@ app:
       # 정체성(intro-narration 참조)인데 자기 baseLocations(LIBRARY)에도 없는 값이었다.
       default-location: "LIBRARY"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "blue eyes, white hair, long hair, hair over one eye, single braid, blue ribbon, drop earrings, hooded cloak, blue cloak, turtleneck sweater, ribbed sweater, black sweater, large breasts, pencil skirt, black skirt, pantyhose"
+      appearance-tags: "very pale skin, red eyeshadow, sleepy eyes, mature makeup, half-lidded eyes, glossy lips, long silver hair, messy braid, hair over one eye, soft bangs, glowing ice blue eyes, slender body, narrow waist, wide hips, large breasts, curvy, glamorous figure, long legs, elegant body line, oversized black turtleneck sweater, tight skirt, academic cloak, black tights, moon earrings, silver accessories, gloves"
 
       # ── 엔딩 ──
       ending-role-desc: "a composed academy assistant whose careful logic finally admitted one exception"
@@ -1181,7 +1181,7 @@ app:
       # ANCIENT_SHRINE(application-v2.yml:114)으로 V1/V2 어휘 통일.
       default-location: "ANCIENT_SHRINE"
       # [2026-08-04 폴리싱] 실물 에셋(daily_neutral) 대조 신규 기입 — 씬 렌더 정체성 공백 픽스
-      appearance-tags: "yellow eyes, blonde hair, very long hair, low twintails, hair rings, dragon horns, dragon girl, dragon tail, china dress, white dress, mandarin collar, pelvic curtain, side slit, detached sleeves, wide sleeves, gold trim, armlet, black thighhighs"
+      appearance-tags: "petite female, slender body, youthful woman, dragon girl, platinum blonde hair, ivory blonde hair, soft gold gradient hair, long elegant twintails, silky hair, golden dragon eyes, slit pupils, half-lidded eyes, small black dragon horns, elegant dragon tail, white and gold eastern fantasy dress, luxurious oriental outfit, black accents, gold embroidery, detached sleeves, black thighhighs, dragon scale ornaments, glossy lips"
 
       # ── 엔딩 ──
       ending-role-desc: "a proud dragon maiden, her power sealed but her dignity intact"

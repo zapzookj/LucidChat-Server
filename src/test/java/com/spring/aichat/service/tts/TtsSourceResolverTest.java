@@ -71,4 +71,26 @@ class TtsSourceResolverTest {
         when(airi.getSource()).thenReturn(CharacterSource.UGC); assertThat(resolver.officialVoice(airi)).isNull();
         when(airi.getSource()).thenReturn(CharacterSource.OFFICIAL); when(airi.isHidden()).thenReturn(true); assertThat(resolver.officialVoice(airi)).isNull();
     }
+
+    @Test void manualContextUsesSavedSceneAndEffectiveCharacterOnly() {
+        when(airi.getEffectivePersonality(false)).thenReturn("냉소적");
+        when(airi.getEffectiveTone(false)).thenReturn("무심한 말투");
+        var saved = log("[{\"speaker\":\"아이리\",\"dialogue\":\"왜?\",\"emotion\":\"bored\",\"narration\":\"시큰둥하게 고개를 돌린다\",\"innerThought\":\"비공개 생각\"}]", null);
+        when(logs.findById("log")).thenReturn(Optional.of(saved));
+        var clip = resolver.resolve(room, "log").clips().get(0);
+        assertThat(clip.context()).isEqualTo(new TtsSourceResolver.PerformanceContext("아이리", "냉소적", "무심한 말투", "bored", "시큰둥하게 고개를 돌린다"));
+        verify(airi, never()).getEffectivePersonality(true);
+    }
+
+    @Test void activeSecretModeSelectsItsCharacterToneAndRawScaredHintSurvives() {
+        when(room.isSecretModeActive()).thenReturn(true);
+        when(airi.getEffectivePersonality(true)).thenReturn("유효 성격");
+        when(airi.getEffectiveTone(true)).thenReturn("유효 말투");
+        var saved = log("[{\"speaker\":\"아이리\",\"dialogue\":\"깜짝이야!\"}]", "{\"scenes\":[{\"dialogue\":\"깜짝이야!\",\"tts_input\":\"[scared] 깜짝이야!\"}]}");
+        when(logs.findById("log")).thenReturn(Optional.of(saved));
+        var clip = resolver.resolve(room, "log").clips().get(0);
+        assertThat(clip.input()).isEqualTo("[scared] 깜짝이야!");
+        assertThat(clip.context().speakingTone()).isEqualTo("유효 말투");
+        verify(airi, never()).getEffectiveTone(false);
+    }
 }

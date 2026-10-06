@@ -1,0 +1,1948 @@
+{
+  "recordedAt": "2026-10-06T08:01:09.464169+00:00",
+  "sourceAttachmentSha256": "8a1d87ab1a04e89afb6162869705ca3279ced9f2069a5521c3a532b90159daf3",
+  "providedCharacters": 10,
+  "updatedCharacters": 9,
+  "preservedCharacters": [
+    "yeonhwa"
+  ],
+  "characters": [
+    {
+      "slug": "airi",
+      "name": "아이리",
+      "positiveSource": "masterpiece, best quality, highres, 1girl, solo, simple background, white background, (cowboy shot:1.3), standing, maid headdress, white bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, white garter belt, mary janes, neutral, gentle smile, looking at viewer, politely folded hand, polite posture, warm vibe",
+      "negativeSource": "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5), (cropped, out of frame, cut off head:1.4), (text, signature, watermark:1.5), worst quality, low quality, dynamic angle, high angle, from above, from below, dutch angle, foreshortening, bad eyes, deformed eyes, bad anatomy, bad proportions, extra arms, missing limbs",
+      "positiveCount": 24,
+      "keptCount": 9,
+      "excludedPositiveCount": 15,
+      "negativeCount": 17,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "highres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "(cowboy shot:1.3)",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "maid headdress",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white bunny hair ornament",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "classic maid outfit",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black dress",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white frilled apron",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black ribbon bowtie",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "short puffy sleeves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white garter belt",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "mary janes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "neutral",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "gentle smile",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "politely folded hand",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "polite posture",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "warm vibe",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5)",
+        "(cropped, out of frame, cut off head:1.4)",
+        "(text, signature, watermark:1.5)",
+        "worst quality",
+        "low quality",
+        "dynamic angle",
+        "high angle",
+        "from above",
+        "from below",
+        "dutch angle",
+        "foreshortening",
+        "bad eyes",
+        "deformed eyes",
+        "bad anatomy",
+        "bad proportions",
+        "extra arms",
+        "missing limbs"
+      ],
+      "appearanceTags": "maid headdress, white bunny hair ornament, classic maid outfit, black dress, white frilled apron, black ribbon bowtie, short puffy sleeves, white garter belt, mary janes"
+    },
+    {
+      "slug": "taeri",
+      "name": "서태리",
+      "positiveSource": "lcn_char03, game character sprite, straight-on, eye level, masterpiece, best quality, highres, 1girl, solo, simple background, white background, cowboy shot, purple headphones around neck, oversized black leather jacket, open jacket, plain white crop top, textless, midriff, navel, black hot pants, hands in pockets, cool vibe, slightly tilted head, <lora:lucid_taeri_v1:1>",
+      "negativeSource": "(text, english text, signature, watermark, lettering, typography, writing, words:1.5), worst quality, low quality, dynamic angle, high angle, from above, from below, dutch angle, foreshortening, bad eyes, deformed eyes, bad anatomy, bad proportions, (chibi, super deformed, character sheet, multiple views, multiple girls:1.5)",
+      "positiveCount": 24,
+      "keptCount": 7,
+      "excludedPositiveCount": 17,
+      "negativeCount": 14,
+      "classifiedPositive": [
+        {
+          "tag": "lcn_char03",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "game character sprite",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "straight-on",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "eye level",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "highres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "purple headphones around neck",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "oversized black leather jacket",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "open jacket",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "plain white crop top",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "textless",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "midriff",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "navel",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black hot pants",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hands in pockets",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cool vibe",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "slightly tilted head",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:lucid_taeri_v1:1>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "(text, english text, signature, watermark, lettering, typography, writing, words:1.5)",
+        "worst quality",
+        "low quality",
+        "dynamic angle",
+        "high angle",
+        "from above",
+        "from below",
+        "dutch angle",
+        "foreshortening",
+        "bad eyes",
+        "deformed eyes",
+        "bad anatomy",
+        "bad proportions",
+        "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5)"
+      ],
+      "appearanceTags": "purple headphones around neck, oversized black leather jacket, open jacket, plain white crop top, midriff, navel, black hot pants"
+    },
+    {
+      "slug": "luna",
+      "name": "백루나",
+      "positiveSource": "cn_char01, game character sprite, straight-on, eye level, masterpiece, best quality, highres, 1girl, solo, simple background, white background, cowboy shot, standing, looking at viewer, oversized white hoodie, hood down, long sleeves, blue drawstrings, black cat graphic print on chest, cat print has blue eyes and blue headphones, bare legs, bottomless, black cat ear headphones with glowing blue accents, neutral, timid, clenched one hand near chest, sweatdrop, slight blush, detailed beautiful eyes, <lora:lucid_luna_v2:1>",
+      "negativeSource": "worst quality, low quality, (text:1.5), (english text:1.5), signature, watermark, (lettering:1.5), (typography:1.5), (writing:1.5), (words:1.5), tail, shadow, dynamic angle, high angle, from above, from below, dutch angle, foreshortening, bad eyes, deformed eyes, bad anatomy, bad proportions, choker, snood",
+      "positiveCount": 30,
+      "keptCount": 9,
+      "excludedPositiveCount": 21,
+      "negativeCount": 24,
+      "classifiedPositive": [
+        {
+          "tag": "cn_char01",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "game character sprite",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "straight-on",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "eye level",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "highres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "oversized white hoodie",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hood down",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long sleeves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "blue drawstrings",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black cat graphic print on chest",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "cat print has blue eyes and blue headphones",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "bare legs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "bottomless",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black cat ear headphones with glowing blue accents",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "neutral",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "timid",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "clenched one hand near chest",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "sweatdrop",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "slight blush",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "detailed beautiful eyes",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:lucid_luna_v2:1>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "worst quality",
+        "low quality",
+        "(text:1.5)",
+        "(english text:1.5)",
+        "signature",
+        "watermark",
+        "(lettering:1.5)",
+        "(typography:1.5)",
+        "(writing:1.5)",
+        "(words:1.5)",
+        "tail",
+        "shadow",
+        "dynamic angle",
+        "high angle",
+        "from above",
+        "from below",
+        "dutch angle",
+        "foreshortening",
+        "bad eyes",
+        "deformed eyes",
+        "bad anatomy",
+        "bad proportions",
+        "choker",
+        "snood"
+      ],
+      "appearanceTags": "oversized white hoodie, hood down, long sleeves, blue drawstrings, black cat graphic print on chest, cat print has blue eyes and blue headphones, bare legs, bottomless, black cat ear headphones with glowing blue accents"
+    },
+    {
+      "slug": "rosetta",
+      "name": "로제타",
+      "positiveSource": "masterpiece,best quality,amazing quality, (game character sprite, visual novel sprite:0.8), straight-on, eye level, (cowboy shot:1.3), standing, simple background, white background, 1girl, solo, Arrogant noble girl, medium breast, blonde hair, elegant wavy hair, ruby red eyes, smug expression, extravagant magic academy uniform with frills, red cape, zettai ryouiki, hand down, one hand on hip, empty hand, looking at viewer, <lora:details:0.4>",
+      "negativeSource": "bad quality,worst quality,worst detail,sketch,censor, (chibi, super deformed, character sheet, multiple views, multiple girls:1.5), dynamic angle, high angle, from above, from below, dutch angle",
+      "positiveCount": 26,
+      "keptCount": 7,
+      "excludedPositiveCount": 19,
+      "negativeCount": 11,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "amazing quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "(game character sprite, visual novel sprite:0.8)",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "straight-on",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "eye level",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "(cowboy shot:1.3)",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "Arrogant noble girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "medium breast",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "blonde hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "elegant wavy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ruby red eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "smug expression",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "extravagant magic academy uniform with frills",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "red cape",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "zettai ryouiki",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hand down",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "one hand on hip",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "empty hand",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:details:0.4>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "bad quality",
+        "worst quality",
+        "worst detail",
+        "sketch",
+        "censor",
+        "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5)",
+        "dynamic angle",
+        "high angle",
+        "from above",
+        "from below",
+        "dutch angle"
+      ],
+      "appearanceTags": "medium breast, blonde hair, elegant wavy hair, ruby red eyes, extravagant magic academy uniform with frills, red cape, zettai ryouiki"
+    },
+    {
+      "slug": "claire",
+      "name": "클레어",
+      "positiveSource": "anime style, visual novel style, flat color, game character sprite, straight-on, eye level, masterpiece, best quality, highres, 1girl, solo, simple background, white background, cowboy shot, large breasts, pale skin, blonde hair, long straight hair, waist-length hair, silky hair, loose side braid, soft hair flow, moonlight-like hair, drooping eyes, puppy eyes, light blue eyes, nun outfit, modified nun veil, white veil, visible bangs, visible sidelocks, white and gold color scheme, gold embroidery, pure white clothing, high neck outfit, modest neckline, long skirt, detached sleeves, bare shoulders, arm sleeves only, silver cross necklace, warm vibe, gentle smile",
+      "negativeSource": "worst quality, low quality, dynamic angle, high angle, from above, from below, dutch angle, foreshortening, bad eyes, deformed eyes, bad anatomy, bad proportions, (chibi, super deformed, character sheet, multiple views, multiple girls:1.5)",
+      "positiveCount": 43,
+      "keptCount": 27,
+      "excludedPositiveCount": 16,
+      "negativeCount": 13,
+      "classifiedPositive": [
+        {
+          "tag": "anime style",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "visual novel style",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "flat color",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "game character sprite",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "straight-on",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "eye level",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "highres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "large breasts",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "pale skin",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "blonde hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long straight hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "waist-length hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "silky hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "loose side braid",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft hair flow",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "moonlight-like hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "drooping eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "puppy eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "light blue eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "nun outfit",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "modified nun veil",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white veil",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "visible bangs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "visible sidelocks",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white and gold color scheme",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "gold embroidery",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "pure white clothing",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "high neck outfit",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "modest neckline",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long skirt",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "detached sleeves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "bare shoulders",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "arm sleeves only",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "silver cross necklace",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "warm vibe",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "gentle smile",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "worst quality",
+        "low quality",
+        "dynamic angle",
+        "high angle",
+        "from above",
+        "from below",
+        "dutch angle",
+        "foreshortening",
+        "bad eyes",
+        "deformed eyes",
+        "bad anatomy",
+        "bad proportions",
+        "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5)"
+      ],
+      "appearanceTags": "large breasts, pale skin, blonde hair, long straight hair, waist-length hair, silky hair, loose side braid, soft hair flow, moonlight-like hair, drooping eyes, puppy eyes, light blue eyes, nun outfit, modified nun veil, white veil, visible bangs, visible sidelocks, white and gold color scheme, gold embroidery, pure white clothing, high neck outfit, modest neckline, long skirt, detached sleeves, bare shoulders, arm sleeves only, silver cross necklace"
+    },
+    {
+      "slug": "chaerin",
+      "name": "강채린",
+      "positiveSource": "masterpiece, best quality, newest, absurdres, highly detailed, korean woman, modern south korea, energetic tomboy girl, sporty beauty, playful grin, confident expression, tomboy attitude with feminine charm, healthy body, toned thighs, slim waist, large breasts, gap moe, feminine silhouette, natural sex appeal, soft facial features, pretty face, youthful charm,  \n  \nmedium short hair, layered bob cut, soft wolf cut, airy short hair, fluffy ends, slightly messy hair, natural volume, side-parted bangs, hair tucked behind one ear, feminine short hairstyle, dark brown hair, glossy hair, subtle highlights,  \n  \nsharp brown eyes, lively eyes, mischievous smile, subtle blush, natural makeup,  \n  \noversized varsity jacket, cropped hoodie, fitted tank top, loose cargo pants, black shorts, sporty street fashion, korean streetwear, chunky sneakers, necklace, ear piercings, band-aid on cheek, cleavage,  \n  \nhands in pockets, relaxed pose, energetic posture, approachable aura, cool girl energy, simple background, white background, cowboy shot, looking at viewer, soft front lighting, even lighting, flat lighting, minimal shadows, front view, standing, subculture heroine design, <lora:details:0.4>",
+      "negativeSource": "worst quality, low quality, blurry, photorealistic, masculine face, masculine haircut, buzz cut, undercut, shaved side, flat chest, childlike, loli, excessive muscles, bad anatomy, ugly face, extra fingers, deformed hands, boring design, dull eyes, nsfw, bikini, lingerie, exposed nipples, excessive cleavage, watermark, logo, text",
+      "positiveCount": 69,
+      "keptCount": 34,
+      "excludedPositiveCount": 35,
+      "negativeCount": 27,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "newest",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "absurdres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "highly detailed",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "korean woman",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "modern south korea",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "energetic tomboy girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "sporty beauty",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "playful grin",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "confident expression",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "tomboy attitude with feminine charm",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "healthy body",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "toned thighs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slim waist",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "large breasts",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "gap moe",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "feminine silhouette",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "natural sex appeal",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft facial features",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "pretty face",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "youthful charm",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "medium short hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "layered bob cut",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft wolf cut",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "airy short hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "fluffy ends",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slightly messy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "natural volume",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "side-parted bangs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hair tucked behind one ear",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "feminine short hairstyle",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "dark brown hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "glossy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "subtle highlights",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "sharp brown eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "lively eyes",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "mischievous smile",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "subtle blush",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "natural makeup",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "oversized varsity jacket",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "cropped hoodie",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "fitted tank top",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "loose cargo pants",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black shorts",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "sporty street fashion",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "korean streetwear",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "chunky sneakers",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "necklace",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ear piercings",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "band-aid on cheek",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "cleavage",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hands in pockets",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "relaxed pose",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "energetic posture",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "approachable aura",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cool girl energy",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft front lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "even lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "flat lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "minimal shadows",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "front view",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "subculture heroine design",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:details:0.4>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "worst quality",
+        "low quality",
+        "blurry",
+        "photorealistic",
+        "masculine face",
+        "masculine haircut",
+        "buzz cut",
+        "undercut",
+        "shaved side",
+        "flat chest",
+        "childlike",
+        "loli",
+        "excessive muscles",
+        "bad anatomy",
+        "ugly face",
+        "extra fingers",
+        "deformed hands",
+        "boring design",
+        "dull eyes",
+        "nsfw",
+        "bikini",
+        "lingerie",
+        "exposed nipples",
+        "excessive cleavage",
+        "watermark",
+        "logo",
+        "text"
+      ],
+      "appearanceTags": "korean woman, healthy body, toned thighs, slim waist, large breasts, feminine silhouette, soft facial features, medium short hair, layered bob cut, soft wolf cut, airy short hair, fluffy ends, slightly messy hair, natural volume, side-parted bangs, hair tucked behind one ear, feminine short hairstyle, dark brown hair, glossy hair, subtle highlights, sharp brown eyes, natural makeup, oversized varsity jacket, cropped hoodie, fitted tank top, loose cargo pants, black shorts, sporty street fashion, korean streetwear, chunky sneakers, necklace, ear piercings, band-aid on cheek, cleavage"
+    },
+    {
+      "slug": "sierra",
+      "name": "시에라",
+      "positiveSource": "masterpiece, best quality, ultra detailed, absurdres, 1girl, solo, fantasy academy, anime style, soft healing girl, iyashikei aura, gentle atmosphere, warm smile, caring expression, kind eyes, sleepy eyes, slightly droopy eyes, soft gaze, elegant posture, graceful movements, calm demeanor, nurturing vibe, comforting presence, feminine, beautiful girl, youthful adult, medium breasts, soft curves, delicate features, small face, devoted heroine, loyal, self-sacrificing, always waiting, protective healer,  \n  \nlong silky hair, silver hair, ash blonde hair, soft wavy hair, side braid, ribbon hair ornament, fluffy bangs, messy hair, glossy hair, hair between eyes,  \n  \ngolden eyes, honey eyes, warm amber eyes, subtle blush, soft lips,  \n  \nwhite and pastel academy uniform, fantasy school uniform, cleric-inspired uniform, nun-inspired accents, healer outfit, long cardigan, oversized sleeves, layered skirt, black tights, thighhighs, ribbon tie, lace details, subtle embroidery, gold trim, magical accessories, healing magic catalyst, crystal pendant, flower motif, small satchel,  \n  \nsoft lighting, warm color palette, cozy atmosphere, dreamy mood, simple background, white background, cowboy shot, soft front lighting, even lighting, flat lighting, minimal shadows, front view, standing,  \n  \nsubtle sex appeal, approachable beauty, protective older-sister vibe, devoted personality, affectionate aura, emotionally supportive, soothing presence, elegant and pure, hidden loneliness, emotionally reserved but kind, <lora:AddMicroDetails_Illustrious_v6:0.4>",
+      "negativeSource": "bad quality,worst quality,worst detail,sketch,censor, (chibi, super deformed, character sheet, multiple views, multiple girls:1.5), dramatic lighting, cinematic lighting, rim light, backlighting, strong shadows, high contrast, bloom, lens flare",
+      "positiveCount": 92,
+      "keptCount": 41,
+      "excludedPositiveCount": 51,
+      "negativeCount": 14,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "ultra detailed",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "absurdres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "fantasy academy",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "anime style",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft healing girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "iyashikei aura",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "gentle atmosphere",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "warm smile",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "caring expression",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "kind eyes",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "sleepy eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slightly droopy eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft gaze",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "elegant posture",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "graceful movements",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "calm demeanor",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "nurturing vibe",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "comforting presence",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "feminine",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "beautiful girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "youthful adult",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "medium breasts",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft curves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "delicate features",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "small face",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "devoted heroine",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "loyal",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "self-sacrificing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "always waiting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "protective healer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "long silky hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "silver hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ash blonde hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft wavy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "side braid",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ribbon hair ornament",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "fluffy bangs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "messy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "glossy hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hair between eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "golden eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "honey eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "warm amber eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "subtle blush",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft lips",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white and pastel academy uniform",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "fantasy school uniform",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "cleric-inspired uniform",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "nun-inspired accents",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "healer outfit",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long cardigan",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "oversized sleeves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "layered skirt",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black tights",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "thighhighs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ribbon tie",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "lace details",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "subtle embroidery",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "gold trim",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "magical accessories",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "healing magic catalyst",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "crystal pendant",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "flower motif",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "small satchel",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "warm color palette",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cozy atmosphere",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "dreamy mood",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft front lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "even lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "flat lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "minimal shadows",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "front view",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "subtle sex appeal",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "approachable beauty",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "protective older-sister vibe",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "devoted personality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "affectionate aura",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "emotionally supportive",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soothing presence",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "elegant and pure",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "hidden loneliness",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "emotionally reserved but kind",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:AddMicroDetails_Illustrious_v6:0.4>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [
+        "bad quality",
+        "worst quality",
+        "worst detail",
+        "sketch",
+        "censor",
+        "(chibi, super deformed, character sheet, multiple views, multiple girls:1.5)",
+        "dramatic lighting",
+        "cinematic lighting",
+        "rim light",
+        "backlighting",
+        "strong shadows",
+        "high contrast",
+        "bloom",
+        "lens flare"
+      ],
+      "appearanceTags": "sleepy eyes, slightly droopy eyes, feminine, youthful adult, medium breasts, soft curves, delicate features, small face, long silky hair, silver hair, ash blonde hair, soft wavy hair, side braid, ribbon hair ornament, fluffy bangs, messy hair, glossy hair, hair between eyes, golden eyes, honey eyes, warm amber eyes, soft lips, white and pastel academy uniform, fantasy school uniform, cleric-inspired uniform, nun-inspired accents, healer outfit, long cardigan, oversized sleeves, layered skirt, black tights, thighhighs, ribbon tie, lace details, subtle embroidery, gold trim, magical accessories, healing magic catalyst, crystal pendant, flower motif, small satchel"
+    },
+    {
+      "slug": "edel",
+      "name": "에델",
+      "positiveSource": "masterpiece, best quality, newest, absurdres,  \n  \n1girl,  \nsolo,  \n  \nkuudere,  \ngenius mage,  \nfantasy academy professor,  \n  \nvery pale skin,  \nred eyeshadow,  \nsleepy eyes,  \nseductive eyes,  \nmature makeup,  \nhalf-lidded eyes,  \nexpressionless,  \nmelancholic,  \nfragile beauty,  \ncold beauty,  \nglossy lips,  \n  \nlong silver hair,  \nmessy braid,  \nhair over one eye,  \nsoft bangs,  \nglowing ice blue eyes,  \n  \nslender body,  \nnarrow waist,  \nwide hips,  \nlarge breasts,  \ncurvy,  \nglamorous figure,  \nlong legs,  \nelegant body line,  \n  \noversized black turtleneck sweater,  \ntight skirt,  \nacademic cloak,  \nblack tights,  \nmoon earrings,  \nsilver accessories,  \ngloves,  \n  \nstanding,  \nrelaxed posture,  \nthree-quarter view,  \nslightly turned body,  \nlooking at viewer,  \nidle pose,  \n  \nholding closed book in one hand,  \none arm crossed,  \nnatural hand pose,  \n  \ncowboy shot,  \nupper thighs visible,  \ncenter composition,  \ncharacter focus,  \nclean silhouette,  \n  \nsimple background,  \nminimal background,  \nvisual novel sprite,  \ngame character asset,  \n  \nsoft ambient lighting,  \nsubtle shadows,  \nmuted colors,  \nblue-gray color palette,  \n  \n<lora:AddMicroDetails_Illustrious_v6:0.4>",
+      "negativeSource": "",
+      "positiveCount": 63,
+      "keptCount": 26,
+      "excludedPositiveCount": 37,
+      "negativeCount": 0,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "newest",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "absurdres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "kuudere",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "genius mage",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "fantasy academy professor",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "very pale skin",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "red eyeshadow",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "sleepy eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "seductive eyes",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "mature makeup",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "half-lidded eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "expressionless",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "melancholic",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "fragile beauty",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cold beauty",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "glossy lips",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long silver hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "messy braid",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "hair over one eye",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft bangs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "glowing ice blue eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slender body",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "narrow waist",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "wide hips",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "large breasts",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "curvy",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "glamorous figure",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long legs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "elegant body line",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "oversized black turtleneck sweater",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "tight skirt",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "academic cloak",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black tights",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "moon earrings",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "silver accessories",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "gloves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "relaxed posture",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "three-quarter view",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "slightly turned body",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "idle pose",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "holding closed book in one hand",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "one arm crossed",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "natural hand pose",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "upper thighs visible",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "center composition",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "character focus",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "clean silhouette",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "minimal background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "visual novel sprite",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "game character asset",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "soft ambient lighting",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "subtle shadows",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "muted colors",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "blue-gray color palette",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:AddMicroDetails_Illustrious_v6:0.4>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [],
+      "appearanceTags": "very pale skin, red eyeshadow, sleepy eyes, mature makeup, half-lidded eyes, glossy lips, long silver hair, messy braid, hair over one eye, soft bangs, glowing ice blue eyes, slender body, narrow waist, wide hips, large breasts, curvy, glamorous figure, long legs, elegant body line, oversized black turtleneck sweater, tight skirt, academic cloak, black tights, moon earrings, silver accessories, gloves"
+    },
+    {
+      "slug": "seolah",
+      "name": "설아",
+      "positiveSource": "masterpiece, best quality, amazing quality, absurdres, very aesthetic,  \n  \n1girl, solo,  \n  \npetite female, slender body, youthful woman, dragon girl,  \n  \nplatinum blonde hair, ivory blonde hair, soft gold gradient hair, long elegant twintails, silky hair,  \n  \ngolden dragon eyes, slit pupils, half-lidded eyes, smug smile, arrogant expression,  \n  \nsmall black dragon horns, elegant dragon tail,  \n  \nwhite and gold eastern fantasy dress, luxurious oriental outfit, black accents, gold embroidery, detached sleeves, black thighhighs, dragon scale ornaments,  \n  \nsmall body with mature atmosphere, elegant posture, noble aura,  \n  \ncute but seductive, bratty expression, teasing smile,  \n  \nsimple background, white background, three-quarter view, cowboy shot, standing, looking at viewer, visual novel sprite, game character asset,  \n  \nhigh detail anime face, glossy lips, beautiful eyes, anime key visual, light novel illustration,  \n  \n<lora:AddMicroDetails_Illustrious_v6:0.4>",
+      "negativeSource": "",
+      "positiveCount": 50,
+      "keptCount": 22,
+      "excludedPositiveCount": 28,
+      "negativeCount": 0,
+      "classifiedPositive": [
+        {
+          "tag": "masterpiece",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "best quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "amazing quality",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "absurdres",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "very aesthetic",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "1girl",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "solo",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "petite female",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slender body",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "youthful woman",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "dragon girl",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "platinum blonde hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "ivory blonde hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "soft gold gradient hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "long elegant twintails",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "silky hair",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "golden dragon eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "slit pupils",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "half-lidded eyes",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "smug smile",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "arrogant expression",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "small black dragon horns",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "elegant dragon tail",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "white and gold eastern fantasy dress",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "luxurious oriental outfit",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black accents",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "gold embroidery",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "detached sleeves",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "black thighhighs",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "dragon scale ornaments",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "small body with mature atmosphere",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "elegant posture",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "noble aura",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cute but seductive",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "bratty expression",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "teasing smile",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "simple background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "white background",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "three-quarter view",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "cowboy shot",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "standing",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "looking at viewer",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "visual novel sprite",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "game character asset",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "high detail anime face",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "glossy lips",
+          "decision": "keep-appearance"
+        },
+        {
+          "tag": "beautiful eyes",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "anime key visual",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "light novel illustration",
+          "decision": "exclude-non-appearance"
+        },
+        {
+          "tag": "<lora:AddMicroDetails_Illustrious_v6:0.4>",
+          "decision": "exclude-non-appearance"
+        }
+      ],
+      "excludedNegative": [],
+      "appearanceTags": "petite female, slender body, youthful woman, dragon girl, platinum blonde hair, ivory blonde hair, soft gold gradient hair, long elegant twintails, silky hair, golden dragon eyes, slit pupils, half-lidded eyes, small black dragon horns, elegant dragon tail, white and gold eastern fantasy dress, luxurious oriental outfit, black accents, gold embroidery, detached sleeves, black thighhighs, dragon scale ornaments, glossy lips"
+    }
+  ]
+}

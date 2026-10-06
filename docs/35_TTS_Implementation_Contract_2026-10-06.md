@@ -33,7 +33,7 @@ V1/V2 final_result·현재 첫 씬·final-only 오프닝·큐·복원 이력·�
 
 [모델 문서](https://elevenlabs.io/docs/overview/models)와 [TTD WebSocket 계약](https://elevenlabs.io/docs/eleven-api/guides/how-to/websockets/realtime-tdd)의 v4/Turbo를 따른다. `/v1/text-to-dialogue/stream-input`에 모델을 명시하고 voice 등록→inputs→close_socket, base64 audio/is_final을 받는다. Turbo의 연결당 voice 1개 제한에 맞춰 두 모델 모두 씬당 한 화자/연결이다. HTTP TTD 기본 v3 예제를 v4 계약으로 대신하지 않는다.
 
-사용자 키는 models_read가 없어 목록 조회 401이지만 **공식 10종 v4 합성 모두 성공**했다. 합성에 불필요한 키 권한을 확대하지 않았다. 실제 MP3/호출 전 영수증은 ignored `tools/tts/.local/greetings-v4`에 있다. 캐릭터별 첫 후보이며 사람의 최상 샘플 선정은 미실행. [10종 청취](http://127.0.0.1:18773/index.html).
+사용자 키는 models_read가 없어 목록 조회 401이지만 **공식 10종 v4 합성 모두 성공**했다. 합성에 불필요한 키 권한을 확대하지 않았다. 초기 MP3/호출 전 영수증은 ignored `tools/tts/.local/greetings-v4`에 보존한다. 이후 사용자가 직접 청취해 7개 교체본과 3개 유지본을 선정했다. [선정 10종 청취](http://127.0.0.1:18773/index.html).
 
 [가격 페이지](https://elevenlabs.io/pricing/api)의 10/6 관측은 v4 $0.022/1,000자(정상 $0.08), Turbo $0.011(정상 $0.04), 10/12까지 할인 표기였다. 실제 계정 청구/요금제와 구별한다. 1E는 사용자 초기 선택이며 운영 전체의 수익성 검증값은 아니다. Enterprise 전용 zero-retention을 현재 계정 기능으로 가정하지 않는다.
 
@@ -49,7 +49,21 @@ V1/V2 final_result·현재 첫 씬·final-only 오프닝·큐·복원 이력·�
 - 실제 컴포넌트+v4 MP3: 수동·무료 인사·자동 새 응답 재생, 멈춤/무료 재생(모의 지갑), 상태 조회 실패/무료 복구, 다운로드 중 삭제 후 늦은 재생 차단, Shift+Tab/focus, 390px 넘침 없음/44px 버튼 확인. [데스크톱](35_assets/tts-ui/desktop.png), [모바일 재생](35_assets/tts-ui/mobile-playing.png), [실패/환불](35_assets/tts-ui/mobile-failed.png). 실제 계정·지갑·채팅 LLM 통합 E2E와 구별한다.
 - 독립 컨텍스트 소스 검토의 과금 잠금·늦은 PUT·초기화/삭제·FE 식별 지적을 수정했다. 최종 cancel 경계 `1bf40aef…` 재검토에서 추가 문제 없음. 검토자는 키 조회·유료 호출·테스트를 하지 않았다.
 
-미실행: Turbo 실제 합성/품질, 계정 청구/요금제, 사람의 샘플 선정, 운영 로그인/유료 자동·수동 E2E, 실제 autoplay 거부 환경, PostgreSQL 다중 인스턴스 동시성. 추가 전체 `test`의 `AichatApplicationTests.contextLoads`는 로컬 JWT placeholder Base64 해석 실패로 통과하지 못했다. 외부 DB/env가 필요한 이 검사는 기존 CI의 `*Test` 범위에서 제외된다.
+미실행: Turbo 실제 합성/품질, 계정 청구/요금제, 운영 로그인/유료 자동·수동 E2E, 실제 autoplay 거부 환경, PostgreSQL 다중 인스턴스 동시성. 추가 전체 `test`의 `AichatApplicationTests.contextLoads`는 로컬 JWT placeholder Base64 해석 실패로 통과하지 못했다. 외부 DB/env가 필요한 이 검사는 기존 CI의 `*Test` 범위에서 제외된다.
+
+## 사용자 청취 후 보완 (2026-10-06)
+
+- 사용자 MP3 7개(taeri·luna·yeonhwa·claire·rosetta·chaerin·edel), 기존 3개(airi·sierra·seolah)를 `.local/greetings-selected`에 별도 선정했다. 원본 유료 영수증/MP3는 덮어쓰지 않았다. chaerin·edel의 새 voice ID는 로컬 비밀 매핑만 변경하며 서버 env는 배포 때 적용한다. [선정 원장](35_assets/greeting-selection.json), [브라우저 10종 로딩 기록](35_assets/greeting-selection-browser.json), [청취 화면](35_assets/greeting-selection.png).
+- `[bored]`·`[scared]`의 사용자 실측을 태그 허용/검증/자동 프롬프트에 반영했다. `[sarcastic]`는 [ElevenLabs의 공식 보이스 태그 예](https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices)에 근거한다. 태그 두 개 이내와 대사 불변 검증은 유지한다. 장면이 캐릭터의 고정 이미지보다 우선하며, 소심함을 일괄 속삭임으로 만들지 않는다.
+- 수동 formatter는 해당 화자의 유효 personality/tone 및 저장된 해당 씬의 emotion/narration을 함께 받는다. innerThought·다른 채팅 이력·전체 cleanContent는 추가하지 않는다. 맥락은 태그 선택에만 쓰고 발화에 들어가면 검증에서 버린다. 입력/출력 객체 복사에서도 맥락이 보존되고, 이전 잡의 context 없는 snapshot도 읽힌다.
+- `test --tests '*Test' bootJar prepareBakeoff` 통과: **46클래스/318검사**, 실패·오류·스킵0. 별도 기존 디오라마10개 제외 릴리스308개, TTS29개와 공유 JSON 클라이언트 개인정보3개. 추가6개는 장면/유효 모드·수동 formatter payload/본문 불변·자동 힌트 재사용·옛 snapshot 호환 검증이다. FE 소스 변화가 없어 기존 FE 검증을 반복하지 않았다.
+- 독립 검토의 개인정보 로그 지적을 반영해 `OpenRouterClient.completeJsonOnce`가 HTTP 실패 본문·파서 메시지/cause를 기록하지 않도록 했다. 상태/오류 type만 남긴다. 실제 localhost HTTP 서버에서 private marker를 반사한400·본문 파싱 실패200·정상200으로 경계를 검사했다. 외부 provider 호출은 없다.
+- 저장 도구는 첫 네트워크 쓰기 전 전량10종·중복·크기·영수증/키 형식·선택 음성 SHA를 대조한다. SHA 없는 예외는 기존 `.local/greetings-v4`의 원본 레거시 영수증에만 둔다. 다른 경로는64hex SHA 필수다. 준비 음성의 key는 운영 firstGreeting+현재 로컬 매핑으로 10/10 일치했다. 이는 배정/파일 검사이며 MP3 발화 내용·사용 보이스를 역으로 인증한 것은 아니다. 사용자 교체 파일의 모델/합성 지연은 미확인으로 남긴다.
+- 선정한10개를 private R2에 저장하고 인증 GET 원본 바이트 일치10/10, 익명 S3 HTTP400 10/10을 확인했다. [선정본 저장 검증 기록](35_assets/greeting-selection-storage.json). 이전 파일/유료 영수증은 로컬에 보존했으며 새 ID로 키가 바뀐 두 기존 객체는 복구용으로 유지한다. 공개 도메인 설정은 앞서 요청한 비활성 조건이며 이번에 제어판으로 독립 확인하지 않았다.
+- 최종 정상 선정10개와 원본 레거시10개가 Java preflight를 통과했다. SHA손상·캐릭터누락·SHA누락/null/빈값/비hex·다른경로의 레거시이름 위장 등 **실패7종**은 Java와 Python 양쪽에서 네트워크 전에 거부됐다. 독립 검토자가 최종 저장본에서 추가 계약 누락을 찾지 못했다. 검토자는 키 조회·합성·운영 쓰기·검사 재실행을 하지 않았다.
+- 공식9종 외형 태그 교정은 [docs/36](36_Official_Appearance_Tags_Correction_2026-10-06.md)에 별도 기록한다. 연화는 보존한다.
+
+이 보완에서 추가 유료 음성 합성은 없다. 새 연기 지시의 실제 합성 품질과 운영 전체 채팅 E2E는 아직 검사하지 않았다.
 
 ## 운영 상태·적용 순서
 

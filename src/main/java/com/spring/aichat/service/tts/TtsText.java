@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 public final class TtsText {
     private TtsText() {}
-    public static final Set<String> TAGS = Set.of("whispers", "laughs", "sighs", "sad", "excited", "angry", "curious", "nervous", "calm", "softly");
+    public static final Set<String> TAGS = Set.of("whispers", "laughs", "sighs", "sad", "excited", "angry", "curious", "nervous", "calm", "softly", "bored", "scared", "sarcastic");
     private static final Pattern TAG = Pattern.compile("\\[([^\\[\\]]+)\\]");
     public static String validate(String dialogue, String input) {
         if (dialogue == null || dialogue.isBlank() || input == null || input.isBlank()) return null;
@@ -30,9 +30,13 @@ public final class TtsText {
             # Voice performance output (enabled for this response)
             Each scene with spoken dialogue MUST also contain a string `tts_input`.
             Copy dialogue verbatim, adding at most TWO subtle English performance tags from this list:
-            [whispers], [laughs], [sighs], [sad], [excited], [angry], [curious], [nervous], [calm], [softly].
+            [whispers], [laughs], [sighs], [sad], [excited], [angry], [curious], [nervous], [calm], [softly], [bored], [scared], [sarcastic].
             Do not add narration, inner thoughts, speaker names, translations, new words, or sound effects.
-            Keep performance natural and consistent with the character. Plain verbatim dialogue is valid when no tag helps.
+            Choose audible delivery from the speaker's personality and speaking tone AND the current scene's emotion and situation.
+            A cynical, dismissive line may use [bored] or [sarcastic]; a frightened reaction may use [scared].
+            A shy character is not always whispering; a confident character is not always excited.
+            Scene-specific delivery takes priority over a stock character stereotype. Never force a fixed tag on every line.
+            Context is acting guidance only and must never be spoken. Plain verbatim dialogue is valid when no tag helps.
             A scene without spoken dialogue has tts_input: null. Displayed dialogue never contains audio tags.
             """;
     }
