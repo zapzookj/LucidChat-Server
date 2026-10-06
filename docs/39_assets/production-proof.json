@@ -1,0 +1,26 @@
+{
+  "observedAt": "2026-10-06T15:31:34.117565+00:00",
+  "backendSha": "b0f8f1f21e10d95ca3456183ccacc8157f0cf2b2",
+  "frontendSha": "a85ef381e387bfcdacd3054c0db3da610f49fa40",
+  "container": "running",
+  "health": null,
+  "imageMatchesTargetCommit": true,
+  "imageDigest": "sha256:6c4a5134ee0960ae7c8fae7c0f02172e069da3f4c7d3489338df6323c1b7e72f",
+  "environmentUnchanged": true,
+  "envFileMode": "600",
+  "migration": 39,
+  "charactersBefore": 26,
+  "charactersAfter": 26,
+  "priorCharacterRowsUnchanged": 26,
+  "publicHealthHttp": 200,
+  "publicHealth": {
+    "text": "OK"
+  },
+  "frontendBundles": [
+    {
+      "path": "/assets/index-BrKvZIUq.js",
+      "targetCommitProductionDeploymentSucceeded": true,
+      "matchesNormalizedTargetCommitBuild": true
+    }
+  ]
+}

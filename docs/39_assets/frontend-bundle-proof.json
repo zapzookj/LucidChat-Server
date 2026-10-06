@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-10-06T15:31:06.199808+00:00",
+  "frontendSha": "a85ef381e387bfcdacd3054c0db3da610f49fa40",
+  "publicUrl": "https://lucid-chat.com",
+  "productionBundle": "/assets/index-BrKvZIUq.js",
+  "localBundle": "index-DwJ3BvDx.js",
+  "productionRawSha256": "dc48b5a1e36a4f16c4db7c7cdef131fd034b11686f8fd469046f610dc3bd412c",
+  "localRawSha256": "6c8453522e5c506c85ef7a41e423df4db9938b6bf9734d91e51faeba5fc632f6",
+  "normalization": "Remove escaped carriage-return before LF in Windows-built template literals",
+  "replacementCount": 55,
+  "normalizedFullBundleMatches": true
+}

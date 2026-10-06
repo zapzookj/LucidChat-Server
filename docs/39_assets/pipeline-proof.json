@@ -1,0 +1,85 @@
+{
+  "observedAt": "2026-10-06T15:28:22.795531+00:00",
+  "backend": [
+    {
+      "id": 37487036828,
+      "name": "Deploy backend to Vultr",
+      "head_sha": "b0f8f1f21e10d95ca3456183ccacc8157f0cf2b2",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/zapzookj/LucidChat-Server/actions/runs/37487036828",
+      "jobs": [
+        {
+          "name": "deploy",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Set up JDK 17",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build jar (unit tests only)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Login to GHCR",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Build & push image",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Deploy over SSH",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Login to GHCR",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Set up JDK 17",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Checkout",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "frontend": [
+    {
+      "sha": "a85ef381e387bfcdacd3054c0db3da610f49fa40",
+      "environment": "Production",
+      "state": "success",
+      "url": "https://lucid-chat-front-jps5wt0ok-zapzookjs-projects.vercel.app"
+    }
+  ]
+}
