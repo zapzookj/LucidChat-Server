@@ -1,5 +1,40 @@
 {
-  "before": {
+  "initial": {
+    "observedAt": "2026-10-06T08:49:46+00:00",
+    "source": "Initial same-session tool output transcribed; settings also checked against saved original endpoint configurations",
+    "rawInitialHealthSnapshotRetained": false,
+    "endpoints": [
+      {
+        "kind": "ugc",
+        "settings": {
+          "workersMin": 0,
+          "workersMax": 1
+        },
+        "jobs": {
+          "inQueue": 2,
+          "inProgress": 0,
+          "completed": 1241,
+          "failed": 9
+        },
+        "actualWorkerTotal": 0
+      },
+      {
+        "kind": "scene",
+        "settings": {
+          "workersMin": 0,
+          "workersMax": 2
+        },
+        "jobs": {
+          "inQueue": 0,
+          "inProgress": 0
+        },
+        "workers": {
+          "ready": 1
+        }
+      }
+    ]
+  },
+  "afterAllocation": {
     "observedAt": "2026-10-06T08:55:04.169101+00:00",
     "endpoints": [
       {
@@ -107,6 +142,33 @@
           "unhealthy": 0
         }
       }
+    ]
+  },
+  "configurationPreservation": {
+    "source": "Saved full endpoint GET snapshots before warming, after warming and after restoration",
+    "warmChangedOnlyWorkersMin": true,
+    "restoredMatchesOriginalExceptVersion": true,
+    "otherSettingsPreserved": true,
+    "unexpectedWarmFields": [],
+    "unexpectedRestoredFields": [],
+    "checkedFieldNames": [
+      "createdAt",
+      "executionTimeoutMs",
+      "flashboot",
+      "gpuCount",
+      "gpuTypeIds",
+      "id",
+      "idleTimeout",
+      "minCudaVersion",
+      "name",
+      "networkVolumeId",
+      "scalerType",
+      "scalerValue",
+      "templateId",
+      "userId",
+      "workersMax",
+      "workersMin",
+      "workersStandby"
     ]
   },
   "temporaryMinWorkers": 1,

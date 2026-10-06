@@ -25,7 +25,7 @@
 
 ## UGC 큐 정체와 복구
 
-초기 17:49 KST(08:49 UTC) 관측에서 UGC는 **min0/max1**, 큐2·진행0·실제 워커0이었다. 씬은 **min0/max2**, 큐0·ready1로 `max=0` 장애가 없었다. 두 endpoint의 과거 max0 상태를 오늘의 원인으로 그대로 가져오지 않았다.
+초기 17:49 KST(08:49 UTC) 관측에서 UGC는 **min0/max1**, 큐2·진행0·실제 워커0이었다. 씬은 **min0/max2**, 큐0·ready1로 `max=0` 장애가 없었다. 이 최초 health는 세션 도구 출력에서 옮긴 관측이며 독립 원시 health 파일은 남지 않았다. min/max는 보존한 원본 endpoint GET과도 대조했다. 전후 JSON의 `initial`은 이를 명시하고, 별도 파일이 보존된17:55 이후 관측은 `afterAllocation`/`after`로 구분한다. 두 endpoint의 과거 max0 상태를 오늘의 원인으로 그대로 가져오지 않았다.
 
 17:54경 UGC workersMin만 잠시1로 올려 할당을 유도했다. 최대1·GPU/template/volume/scaler/timeout은 보존했다. INITIALIZING→RUNNING 관측 뒤 17:58경 min0으로 복원했다. **RUNNING 표시만으로 handler 처리 성공이라고 판정하지 않았다.** 워커 로그에는 이미지 pull과 17:59:46의 `error creating container ... context deadline exceeded`가 있었고 당시 container 로그는 없었다. 이후 공급자 재시도로 container/ComfyUI가 기동해 요청을 처리했다. 임의 요청 재제출·취소·새 유료 테스트는 하지 않았다.
 
@@ -34,7 +34,7 @@
 - 최종 UGC **min0/max1**, 씬 **min0/max2·ready2·큐0**. 최소 워커를 상시1로 남기지 않았다. 두 endpoint의 raw worker 목록과 health 집계는 시점·범위가 달라 숫자가 일치하지 않을 수 있으며, 원시 워커 수를 최대 동시 처리 수로 단정하지 않았다.
 - [전후 관측](37_assets/runpod-queue-recovery.json), [앱 상태](37_assets/ugc-job-status.json), [원래 요청 완료](37_assets/ugc-original-status.json).
 
-이번 관측은 **최대 워커0이 아닌 할당/콜드스타트 정체와 일시적인 컨테이너 생성 타임아웃**이다. 최소 워커 변경 후 기존 요청이 완료됐다는 복구 증거는 있으나, 최초83분 정체 전 구간의 공급자 scheduler/audit 이력이 없어 전체 원인을 확정하거나 재발 방지를 완료했다고 표현하지 않는다. 모델/워크플로 오류·영구적인 GPU 변경 필요성은 확인되지 않았다.
+이번에는 **최대 워커가 정상인데 실제 워커0인 큐 정체와, 기동 중 일시적인 컨테이너 생성 타임아웃**을 관측했다. 최소 워커 변경 후 기존 요청이 완료됐다는 복구 증거는 있으나, 최초83분 정체 전 구간의 공급자 scheduler/audit 이력이 없어 전체 원인을 확정하거나 재발 방지를 완료했다고 표현하지 않는다. 모델/워크플로 오류·영구적인 GPU 변경 필요성은 확인되지 않았다.
 
 ## 무요청 자동 축소 정책과 운영 참고
 
