@@ -53,6 +53,7 @@ public class GuestBrowseRateLimitFilter extends OncePerRequestFilter {
 
     /** SecurityConfig의 게스트 permitAll 목록과 반드시 동기 유지할 것. */
     private static final List<String> GUEST_BROWSE_PREFIXES = List.of(
+        "/api/v1/tts/greetings/",
         "/api/v1/lobby/characters",
         "/api/v1/lobby/feed",
         "/api/v1/lobby/worlds",

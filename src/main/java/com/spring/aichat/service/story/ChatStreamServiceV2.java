@@ -94,6 +94,7 @@ public class ChatStreamServiceV2 {
     private final UserRepository userRepository;
     private final ChatLogMongoRepository chatLogRepository;
     private final ChatLogPersister chatLogPersister;
+    private final com.spring.aichat.service.tts.TtsService ttsService;
     private final TransactionTemplate txTemplate;
     private final OpenRouterStreamClient streamClient;
     private final LlmCircuitBreaker llmCircuitBreaker;
@@ -1450,6 +1451,7 @@ public class ChatStreamServiceV2 {
                 response.dialogueOptions(),
                 hasInnerThought,
                 assistantLogId);
+            ttsService.onResponse(response.roomId(), assistantLogId);
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));
         } catch (Exception e) {

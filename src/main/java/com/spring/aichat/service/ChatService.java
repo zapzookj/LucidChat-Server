@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 public class ChatService {
 
     private final ChatRoomRepository chatRoomRepository;
+    private final com.spring.aichat.service.tts.TtsService ttsService;
     private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final ChatLogMongoRepository chatLogRepository;
     private final OpenRouterClient openRouterClient;
@@ -350,6 +351,7 @@ public class ChatService {
     @Transactional
     public void deleteChatRoom(Long roomId) {
         chatLogRepository.deleteByRoomId(roomId);
+        ttsService.cancelRoomAfterCommit(roomId);
         ChatRoom room = chatRoomRepository.findById(roomId).orElseThrow(
             () -> new NotFoundException("채팅방이 존재하지 않습니다. roomId=" + roomId)
         );
@@ -475,6 +477,7 @@ public class ChatService {
         }
 
         chatLogRepository.deleteById(logId);
+        ttsService.cancelLog(roomId, logId);
         log.info("🗑️ [DELETE] Single log deleted: logId={}, roomId={}, role={}, hidden={}",
             logId, roomId, doc.getRole(), doc.isHidden());
     }

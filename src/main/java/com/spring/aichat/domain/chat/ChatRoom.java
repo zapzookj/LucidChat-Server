@@ -152,6 +152,17 @@ public class ChatRoom {
     @Column(name = "topic_concluded", nullable = false)
     private boolean topicConcluded = false;
 
+    @Column(name = "tts_enabled", nullable = false)
+    private boolean ttsEnabled = false;
+
+    @Column(name = "tts_energy_cost_accepted")
+    private Integer ttsEnergyCostAccepted;
+
+    public void setTtsMode(boolean enabled, int acceptedCost) {
+        this.ttsEnabled = enabled;
+        this.ttsEnergyCostAccepted = enabled ? acceptedCost : null;
+    }
+
     /**
      * 이 채팅방에서의 시크릿 모드 활성 여부.
      * 두 모드 공통. STORY 모드에서는 추가로 {@code World.secretAllowed} 게이팅 적용.
@@ -840,6 +851,7 @@ public class ChatRoom {
      */
     public void resetAll() {
         requireSandbox();
+        setTtsMode(false, 0);
         resetAffection();
         resetSceneState();
         // promotion/event/director 메서드들은 모두 private clearXxx로 정의됨 → 직접 필드 리셋

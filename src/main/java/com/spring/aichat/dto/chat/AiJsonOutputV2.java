@@ -68,6 +68,7 @@ public record AiJsonOutputV2(
     //  Scene (V2 — outfit 없음, 동적 장소·일러스트 hint 포함)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(value = "tts_input")
     public record SceneV2(
         String speaker,
         String narration,

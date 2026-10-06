@@ -83,6 +83,7 @@ public class SecurityConfig {
             //   주의: /api/v1/notices는 published 미검사 결함(docs/13 B-12)이 남아 있어
             //   버그 픽스 세션 전까지 게스트 개방 보류.
             .requestMatchers(HttpMethod.GET,
+                "/api/v1/tts/greetings/*",
                 "/api/v1/lobby/characters",              // 캐릭터 목록 (hidden 필터 검수됨)
                 "/api/v1/lobby/characters/*/profile",    // 프로필 (게스트 분기 — PUBLIC만)
                 "/api/v1/lobby/feed",                    // 홈 피드 (게스트 안전 DTO)

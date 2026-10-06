@@ -132,6 +132,7 @@ public class StoryDirectorPromptAssemblerV2 {
         //   유저 행동 전에 디렉터가 첫 장면을 직접 연다(기획 3.7: "유저가 먼저 행동하는 구조 ❌").
         if (openingMode) dynamicSections.add(buildOpeningDirective());
 
+        if (room.isTtsEnabled()) dynamicSections.add(com.spring.aichat.service.tts.TtsText.prompt());
         return new SystemPromptPayload(staticPart, String.join("\n\n", dynamicSections));
     }
 

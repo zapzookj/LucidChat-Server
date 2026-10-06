@@ -68,6 +68,7 @@ public class StoryV2Service {
     private final CharacterRepository characterRepository;
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
+    private final com.spring.aichat.service.tts.TtsService ttsService;
     private final StoryV2StateRepository storyV2StateRepository;
     private final ChatRoomHeroineRepository heroineRepository;
     private final CharacterPresenceRepository presenceRepository;
@@ -825,6 +826,8 @@ public class StoryV2Service {
 
         // 8. ChatLogDocument (대화 로그)
         chatLogMongoRepository.deleteByRoomId(roomId);
+        room.setTtsMode(false, 0);
+        ttsService.cancelRoomAfterCommit(roomId);
 
         // 9. [D-5/E-2b] StoryV2State 서사 thread 리셋 — 방은 유지하므로 row 보존 + 빈 배열로.
         storyV2StateRepository.findByRoomId(roomId).ifPresent(st -> {

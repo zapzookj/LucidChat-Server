@@ -112,6 +112,7 @@ public class ChatStreamService {
     private final TheaterInterventionService theaterInterventionService;
     /** [Phase6/Tier3 / C-9] ASSISTANT log retry + deadletter wrapper */
     private final ChatLogPersister chatLogPersister;
+    private final com.spring.aichat.service.tts.TtsService ttsService;
 
     private static final long USER_TURN_MEMORY_CYCLE = 10;
     private static final long RAG_SKIP_LOG_THRESHOLD = USER_TURN_MEMORY_CYCLE * 2;
@@ -1254,6 +1255,7 @@ public class ChatStreamService {
                 response.topicConcluded(), response.eventStatus(),
                 generateIllustration, locationTransition, null, sceneIllustration);
 
+            ttsService.onResponse(response.roomId(), assistantLogId);
             emitter.send(SseEmitter.event().name("final_result")
                 .data(objectMapper.writeValueAsString(finalResponse)));
         } catch (Exception e) {

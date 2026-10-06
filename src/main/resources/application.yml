@@ -256,11 +256,38 @@ aws:
     endpoint: "${S3_ENDPOINT:}"
 
 # ────────────────────────────────────────────────
+# TTS — 개인 음성은 공개 이미지와 별도 비공개 버킷에 저장
+# ────────────────────────────────────────────────
+tts:
+  enabled: ${TTS_ENABLED:false}
+  api-key: ${ELEVENLABS_API_KEY:}
+  secret-file: ${TTS_SECRET_FILE:}
+  model: ${TTS_MODEL:eleven_v4}
+  formatter-model: ${TTS_FORMATTER_MODEL:google/gemini-3-flash-preview}
+  energy-cost: ${TTS_ENERGY_COST:1}
+  audio-bucket: ${TTS_AUDIO_BUCKET:}
+  storage-secret-file: ${TTS_STORAGE_SECRET_FILE:}
+  audio-access-key: ${TTS_S3_ACCESS_KEY:}
+  audio-secret-key: ${TTS_S3_SECRET_KEY:}
+  audio-endpoint: ${TTS_S3_ENDPOINT:}
+  voices:
+    airi: ${TTS_VOICE_AIRI:}
+    yeonhwa: ${TTS_VOICE_YEONHWA:}
+    taeri: ${TTS_VOICE_TAERI:}
+    luna: ${TTS_VOICE_LUNA:}
+    claire: ${TTS_VOICE_CLAIRE:}
+    rosetta: ${TTS_VOICE_ROSETTA:}
+    chaerin: ${TTS_VOICE_CHAERIN:}
+    sierra: ${TTS_VOICE_SIERRA:}
+    edel: ${TTS_VOICE_EDEL:}
+    seolah: ${TTS_VOICE_SEOLAH:}
+
+# ────────────────────────────────────────────────
 # UGC 캐릭터 생성 파이프라인 (스튜디오)
 # ────────────────────────────────────────────────
-# 이미지 트랙: WF-1/2/3 = RunPod Serverless(worker-comfyui 5.x, ugc.runpod.* 전용 네임스페이스 —
-# 레거시 runpod.*와 무관) · 자세/감정 편집 = fal.ai Qwen(기존 FAL_API_KEY 재사용, SDK subscribe).
-# 실값(엔드포인트 ID/키/시크릿)은 환경변수로 주입 — 미설정 시 빈 값으로 기동은 되되 호출 시점 검증.
+# Neutral은 기존 Qwen+RunPod 후처리. 감정 파생은 fal GPT Image 2.5+WF-3 누끼.
+# RunPod는 ugc.runpod.* 전용 네임스페이스이며 레거시 runpod.*와 무관하다.
+# 실값(엔드포인트 ID/키/시크릿)은 환경변수로 주입한다.
 ugc:
   # [2026-07-31 에픽 A] UGC 월드 STORY/THEATER 개방 게이트 — 기본 off(스키마·플래그는 휴면 선반영).
   # 격리 확정: 개방 대상은 'UGC 캐릭터 + UGC 월드' 조합만 — 공식 월드 캐스트에는 절대 미합류.

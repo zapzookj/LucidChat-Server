@@ -103,6 +103,7 @@ public record AiJsonOutput(
     /**
      * [Phase 5.5-NPC] speaker 필드가 있는 Scene
      */
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(value = "tts_input")
     public record Scene(
         String speaker,
         String narration, String dialogue, String emotion,

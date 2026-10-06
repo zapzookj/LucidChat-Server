@@ -1,0 +1,48 @@
+{
+  "observedAt": "2026-10-06T07:15:59.846323+00:00",
+  "expected": 10,
+  "found": 10,
+  "greetings": [
+    {
+      "slug": "taeri",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "luna",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "yeonhwa",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "rosetta",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "sierra",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "airi",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "claire",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "seolah",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "edel",
+      "matchesProductionTextAndVoice": true
+    },
+    {
+      "slug": "chaerin",
+      "matchesProductionTextAndVoice": true
+    }
+  ],
+  "matched": 10
+}

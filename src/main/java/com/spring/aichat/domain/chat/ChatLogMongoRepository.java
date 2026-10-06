@@ -44,6 +44,7 @@ import java.util.Optional;
  *    → 사용처: ChatService.deleteChatRoom (방 초기화 시 전체 삭제)
  */
 public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument, String> {
+    Optional<ChatLogDocument> findTop1ByRoomIdAndRoleAndHiddenFalseOrderByCreatedAtAsc(Long roomId, ChatRole role);
 
     /**
      * 최근 20건 조회 (히스토리 구성용)

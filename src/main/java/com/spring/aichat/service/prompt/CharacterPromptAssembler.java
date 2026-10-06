@@ -376,6 +376,7 @@ public class CharacterPromptAssembler {
         // ═══ OUTPUT FORMAT ═══
         String outputFormat = buildOutputFormat(room, effectiveSecretMode, mode);
 
+        if (room.isTtsEnabled()) outputFormat += "\n" + com.spring.aichat.service.tts.TtsText.prompt();
         return new SystemPromptPayload(staticRules, dynamicRules, outputFormat);
     }
 

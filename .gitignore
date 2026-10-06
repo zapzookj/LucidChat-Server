@@ -50,3 +50,7 @@ poc/out/
 # Local LLM bakeoff keys, conversations, billing reservations and results
 tools/llm-bakeoff/.env.local
 tools/llm-bakeoff/.local/
+
+# Local TTS credentials, generated audio and preparation receipts
+tools/tts/.local/
+tools/tts/__pycache__/
