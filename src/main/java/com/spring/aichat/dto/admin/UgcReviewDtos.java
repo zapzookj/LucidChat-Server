@@ -114,8 +114,10 @@ public final class UgcReviewDtos {
         String refinePositiveJoy,
         /** FaceDetailer 와일드카드 (얼굴 일관성 주입분) */
         String faceDetailWildcard,
-        /** 네거티브 (템플릿 동결 상수) */
+        /** WF-2 네거티브 (기존 필드명 호환 유지) */
         String negative,
+        /** WF-1 네거티브 — 원화 스타일 보강분 포함, 현재 코드로 재구성한 템플릿 */
+        String goldenShotNegative,
         /** Qwen 패스1 — 자세 표준화 */
         String qwenPosePrompt,
         /** Qwen 패스2 — 배경 클린업 (BG_COLOR 주입본) */

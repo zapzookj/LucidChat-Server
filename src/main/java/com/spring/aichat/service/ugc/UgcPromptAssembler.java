@@ -28,6 +28,12 @@ public class UgcPromptAssembler {
 
     /** 검증 Export 값 (wf1/wf2 node 12 프리픽스). */
     static final String QUALITY_PREFIX = "masterpiece, best quality, newest, absurdres";
+    // [2026-10-06] WF-1 only: quality tags alone did not hold the requested 2D anime style.
+    static final String GOLDEN_ART_STYLE = "anime illustration, 2d, cel shading";
+    private static final java.util.Set<String> GOLDEN_STYLE_CONFLICTS = java.util.Set.of(
+        "photo", "photograph", "photography", "fashion photography", "photorealistic", "photorealism",
+        "3d", "3d render", "3d rendering", "cgi", "octane render", "unreal engine", "ray tracing",
+        "subsurface scattering", "disney", "disney style", "pixar", "pixar style");
 
     static final String WF2_POSE_TAGS = "standing, cowboy shot, looking at viewer";
 
@@ -171,11 +177,12 @@ public class UgcPromptAssembler {
      */
     public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags,
                                      List<String> sceneTags, boolean male) {
-        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(anchor(male));
+        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(GOLDEN_ART_STYLE)
+            .append(", ").append(anchor(male));
         java.util.Set<String> seen = seedSeen(male);
-        appendTags(sb, appearanceTags, seen);
-        appendTags(sb, personaTags, seen);
-        appendTags(sb, sceneTags, seen);
+        appendGoldenTags(sb, appearanceTags, seen);
+        appendGoldenTags(sb, personaTags, seen);
+        appendGoldenTags(sb, sceneTags, seen);
         return sb.toString();
     }
 
@@ -373,6 +380,16 @@ public class UgcPromptAssembler {
             Stay true to the persona defined in your identity section at all times — \
             your personality, values, flaws, and speech habits are who you are.
             You speak natural Korean that matches your defined tone.""".formatted(profile.name(), role);
+    }
+
+    private static void appendGoldenTags(StringBuilder sb, List<String> tags, java.util.Set<String> seen) {
+        if (tags == null) return;
+        appendTags(sb, tags.stream().filter(tag -> {
+            if (tag == null) return false;
+            String canonical = tag.trim().toLowerCase(java.util.Locale.ROOT).replace('_', ' ')
+                .replaceAll("^\\((.+):\\s*[0-9.]+\\)$", "$1").replaceAll("\\s+", " ");
+            return !GOLDEN_STYLE_CONFLICTS.contains(canonical);
+        }).toList(), seen);
     }
 
     private static void appendTags(StringBuilder sb, List<String> tags, java.util.Set<String> seen) {

@@ -61,8 +61,12 @@ class UgcWorkflowFactoryTest {
         assertThat(wf.path("6").path("inputs").path("width").asInt()).isEqualTo(1024);
         assertThat(wf.path("6").path("inputs").path("height").asInt()).isEqualTo(1024);
 
-        // negative는 서버 상수(검증 Export 값) 유지
-        assertThat(wf.path("13").path("inputs").path("text").asText()).contains("multiple girls:1.5");
+        // [2026-10-06] 원화 스타일 negative 보강, 기존 구도·인원 가드 보존.
+        assertThat(wf.path("13").path("inputs").path("text").asText()).contains("multiple girls:1.5", "3d, cgi, photorealistic", "disney, pixar");
+        assertThat(factory.goldenShotNegative(false)).isEqualTo(wf.path("13").path("inputs").path("text").asText());
+        assertThat(factory.templateNegative(false)).doesNotContain("disney, pixar");
+        assertThat(factory.goldenShotNegative(true)).isEqualTo(factory.buildGoldenShot("p", "x", 1L, 2L, true)
+            .path("13").path("inputs").path("text").asText());
     }
 
     @Test
@@ -148,6 +152,7 @@ class UgcWorkflowFactoryTest {
         knobbedFactory.loadTemplates();
         ObjectNode knobbedWf = knobbedFactory.buildGoldenShot("1boy, test", "x", 1L, 2L, true);
         assertThat(knobbedWf.path("13").path("inputs").path("text").asText()).contains("(mature male:1.2)");
+        assertThat(knobbedFactory.goldenShotNegative(true)).isEqualTo(knobbedWf.path("13").path("inputs").path("text").asText());
 
         // 여캐 경로 무영향
         ObjectNode femaleWf = maleFactory.buildGoldenShot("1girl, test", "job_t_golden", 1L, 2L, false);

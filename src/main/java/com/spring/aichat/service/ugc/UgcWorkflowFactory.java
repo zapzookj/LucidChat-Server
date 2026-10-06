@@ -244,13 +244,19 @@ public class UgcWorkflowFactory {
     }
 
     /**
-     * [어드민 프롬프트 인스펙션] 템플릿 동결 네거티브 (wf2 node 13 — wf1과 동일 값).
+     * [어드민 프롬프트 인스펙션] WF-2 네거티브 (wf2 node 13).
+     * WF-1은 2026-10-06 스타일 보강으로 달라졌으므로 goldenShotNegative를 별도 제공한다.
      * <p>[E-6.1.b] 남캐 잡이면 실제 제출과 동일하게 male-negative 노브를 이어붙인다.
      * §2-6대로 무인자 오버로드는 남기지 않는다 — 호출부가 조용히 여캐 값으로 컴파일되면
      * 인스펙션 화면이 다시 거짓이 된다.
      */
     public String templateNegative(boolean male) {
         String base = wf2Template.path("13").path("inputs").path("text").asText();
+        return male ? withMaleNegative(base) : base;
+    }
+
+    public String goldenShotNegative(boolean male) {
+        String base = wf1Template.path("13").path("inputs").path("text").asText();
         return male ? withMaleNegative(base) : base;
     }
 

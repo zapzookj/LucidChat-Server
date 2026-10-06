@@ -277,6 +277,7 @@ public class AdminUgcReviewService {
             // (faceDetailWildcard는 파이프라인도 무성별 오버로드를 쓴다 — UgcPipelineWorker:366. 일치.)
             promptAssembler.faceDetailWildcard(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY),
             workflowFactory.templateNegative(male),
+            workflowFactory.goldenShotNegative(male),
             promptAssembler.qwenPosePrompt(concept.basePose()),
             promptAssembler.qwenBackgroundPrompt(job.getBgColor()),
             promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint,
