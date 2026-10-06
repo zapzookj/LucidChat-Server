@@ -124,7 +124,8 @@ public record LlmSceneBatchOutput(
         @JsonProperty("time") String time,
         @JsonProperty("outfit") String outfit,
         @JsonProperty("bgm_mode") String bgmMode,
-        @JsonProperty("stat_reflection_hint") String statReflectionHint
+        @JsonProperty("stat_reflection_hint") String statReflectionHint,
+        @JsonProperty("expression_id") String expressionId
     ) {
         /**
          * 하위 호환 헬퍼 — protagonist_inner가 비었고 inner_narration이

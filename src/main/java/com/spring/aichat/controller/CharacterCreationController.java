@@ -1,5 +1,7 @@
 package com.spring.aichat.controller;
 
+import com.spring.aichat.service.ugc.ExpressionCatalog;
+
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.enums.EmotionTag;
 import com.spring.aichat.domain.ugc.CharacterCreationJob;
@@ -134,7 +136,7 @@ public class CharacterCreationController {
         Authentication authentication
     ) {
         guardRate(authentication);
-        creationService.rerollEmotion(authentication.getName(), jobId, parseEmotion(tag));
+        creationService.rerollEmotion(authentication.getName(), jobId, tag.toUpperCase(java.util.Locale.ROOT));
         return ResponseEntity.ok().build();
     }
 
@@ -150,7 +152,7 @@ public class CharacterCreationController {
             throw new BadRequestException("versionIndex가 필요합니다.");
         }
         creationService.selectEmotionVersion(
-            authentication.getName(), jobId, parseEmotion(tag), request.versionIndex());
+            authentication.getName(), jobId, tag.toUpperCase(java.util.Locale.ROOT), request.versionIndex());
         return ResponseEntity.ok().build();
     }
 
@@ -279,11 +281,11 @@ public class CharacterCreationController {
         }
 
         Map<String, UgcDtos.EmotionCutView> emotionViews = new LinkedHashMap<>();
-        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+        Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
         emotions.forEach((tag, state) -> {
             List<String> versions = state.history().stream().map(assetService::publicUrl).toList();
             int selected = state.key() == null ? -1 : state.history().indexOf(state.key());
-            emotionViews.put(tag.name(), new UgcDtos.EmotionCutView(
+            emotionViews.put(tag, new UgcDtos.EmotionCutView(
                 state.status(), assetService.publicUrl(state.key()),
                 versions, selected < 0 ? null : selected,
                 state.isFreeReroll()));
@@ -321,7 +323,9 @@ public class CharacterCreationController {
             job.getRequestedDifficultyOrNull() != null ? job.getRequestedDifficultyOrNull().name() : null,
             job.getFailReason(),
             job.getCharacterId(),
-            job.getExpiresAt()
+            job.getExpiresAt(),
+            ExpressionCatalog.read(job.getExpressionCatalogJson()),
+            job.getExpressionPipelineVersion()
         );
     }
 

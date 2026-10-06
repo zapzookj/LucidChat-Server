@@ -80,9 +80,8 @@ public class AdminUgcReviewService {
         Character c = findUgc(characterId);
 
         Map<String, String> emotionAssets = new LinkedHashMap<>();
-        for (EmotionTag tag : EmotionTag.values()) {
-            emotionAssets.put(tag.name(),
-                assetService.publicUrl("characters/" + c.getSlug() + "/default_" + tag.name().toLowerCase() + ".png"));
+        for (String id : com.spring.aichat.service.ugc.ExpressionCatalog.expectedIds(c.getExpressionCatalogJson())) {
+            emotionAssets.put(id, assetService.publicUrl("characters/" + c.getSlug() + "/default_" + id.toLowerCase(java.util.Locale.ROOT) + ".png"));
         }
 
         return new UgcReviewDtos.DetailResponse(
@@ -92,7 +91,8 @@ public class AdminUgcReviewService {
             c.getBackstory(), c.getCoreValues(), c.getFlaws(), c.getSpeechQuirks(),
             c.getFirstGreeting(), c.getReviewNote(), c.isSecretEligible(),
             emotionAssets,
-            buildWorldSection(c)
+            buildWorldSection(c),
+            com.spring.aichat.service.ugc.ExpressionCatalog.read(c.getExpressionCatalogJson())
         );
     }
 

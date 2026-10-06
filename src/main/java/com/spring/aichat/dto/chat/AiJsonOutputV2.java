@@ -77,8 +77,13 @@ public record AiJsonOutputV2(
         /** 유저 위치 변경 시 새 location_key (WorldLocation 참조). null이면 위치 변경 없음. */
         @JsonProperty("location_change") String locationChange,
         @JsonProperty("new_dynamic_location") NewDynamicLocation newDynamicLocation,
-        @JsonProperty("illustration_scene_hint") String illustrationSceneHint
+        @JsonProperty("illustration_scene_hint") String illustrationSceneHint,
+        @JsonProperty("expression_id") String expressionId
     ) {
+        public SceneV2(String speaker, String narration, String dialogue, String emotion, String innerThought,
+                       String locationChange, NewDynamicLocation newDynamicLocation, String illustrationSceneHint) {
+            this(speaker, narration, dialogue, emotion, innerThought, locationChange, newDynamicLocation, illustrationSceneHint, null);
+        }
         public boolean hasInnerThought() {
             return innerThought != null && !innerThought.isBlank();
         }

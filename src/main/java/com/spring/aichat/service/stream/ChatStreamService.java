@@ -1024,7 +1024,7 @@ public class ChatStreamService {
                     scene.speaker(),
                     sanitizedNarration, sanitizedDialogue, emotion,
                     LlmOutputParser.safeUpperCase(scene.location()), LlmOutputParser.safeUpperCase(scene.time()),
-                    LlmOutputParser.safeUpperCase(scene.outfit()), LlmOutputParser.safeUpperCase(scene.bgmMode()));
+                    LlmOutputParser.safeUpperCase(scene.outfit()), LlmOutputParser.safeUpperCase(scene.bgmMode())).withExpression((scene.speaker() == null || scene.speaker().isBlank() || com.spring.aichat.service.ugc.ExpressionResolver.matches(room.getCharacter(), scene.speaker())) ? room.getCharacter() : null, scene.expressionId());
                 emitter.send(SseEmitter.event().name("first_scene")
                     .data(objectMapper.writeValueAsString(firstScene)));
             } catch (Exception e) {
@@ -1131,7 +1131,7 @@ public class ChatStreamService {
                     s.dialogue(), sanitizerSpeakers),
                 LlmOutputParser.parseEmotion(s.emotion()),
                 LlmOutputParser.safeUpperCase(s.location()), LlmOutputParser.safeUpperCase(s.time()),
-                LlmOutputParser.safeUpperCase(s.outfit()), LlmOutputParser.safeUpperCase(s.bgmMode())))
+                LlmOutputParser.safeUpperCase(s.outfit()), LlmOutputParser.safeUpperCase(s.bgmMode())).withExpression((s.speaker() == null || s.speaker().isBlank() || com.spring.aichat.service.ugc.ExpressionResolver.matches(room.getCharacter(), s.speaker())) ? room.getCharacter() : null, s.expressionId()))
             .collect(Collectors.toList());
 
         // [Phase 5.5-Fix] scenesJson: 씬 배열 구조화 저장 (재로딩 시 씬별 분리 복원용)
@@ -1565,6 +1565,8 @@ public class ChatStreamService {
                 if (s.emotion() != null) m.put("emotion", s.emotion().name());
                 // [2026-08-07 리플레이] 씬 컨텍스트 보존(additive) — 과거 씬 재현 시 복장·장소·
                 // 시간 복원용. 레거시 로그(필드 없음)는 프론트가 현재값 폴백.
+                if (s.expressionId() != null) m.put("expressionId", s.expressionId());
+                if (s.expressionImageUrl() != null) m.put("expressionImageUrl", s.expressionImageUrl());
                 if (s.location() != null) m.put("location", s.location());
                 if (s.time() != null) m.put("time", s.time());
                 if (s.outfit() != null) m.put("outfit", s.outfit());

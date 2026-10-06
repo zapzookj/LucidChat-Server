@@ -345,6 +345,19 @@ public class UgcPromptAssembler {
         return QWEN_NEGATIVE;
     }
 
+    public String gptExpressionPrompt(com.spring.aichat.dto.ugc.CharacterExpression entry) {
+        return """
+            Edit the reference standing illustration into the character's '%s' expression variation.
+            Facial expression: %s.
+            Upper-body gesture: %s.
+            Keep the emotion readable but the facial expression restrained and anatomically natural.
+            Preserve the exact character identity, face length, facial proportions, eye shape, hairstyle,
+            outfit, illustration style, framing, camera distance, lighting and plain background.
+            Allow the described natural upper-body motion. Keep the same standing composition.
+            Avoid exaggerated eyes, a distorted mouth, added text, props or a changed background.
+            """.formatted(entry.label(), entry.expression(), entry.pose());
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  UGC baseSystemPrompt 골격 (공식 캐릭터 프롬프트 골격의 템플릿화)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

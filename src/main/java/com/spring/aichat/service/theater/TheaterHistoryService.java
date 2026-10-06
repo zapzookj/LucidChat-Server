@@ -118,7 +118,8 @@ public class TheaterHistoryService {
             log.getOutfit(),
             log.getBgmMode(),
             log.getIllustrationUrl(),
-            log.getCreatedAt()
+            log.getCreatedAt(),
+            log.getExpressionId(), log.getExpressionImageUrl()
         );
     }
 

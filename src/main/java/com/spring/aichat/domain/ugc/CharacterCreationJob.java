@@ -83,6 +83,20 @@ public class CharacterCreationJob {
     @Column(name = "emotion_assets_json", columnDefinition = "TEXT")
     private String emotionAssetsJson;
 
+    @Column(name = "expression_pipeline_version")
+    private Integer expressionPipelineVersion;
+
+    @Column(name = "expression_catalog_json", columnDefinition = "TEXT")
+    private String expressionCatalogJson;
+
+    public boolean usesDynamicExpressions() { return Integer.valueOf(2).equals(expressionPipelineVersion); }
+    public void enableDynamicExpressions() { this.expressionPipelineVersion = 2; }
+    public void freezeExpressionCatalog(String catalog) {
+        if (expressionCatalogJson != null && !expressionCatalogJson.equals(catalog))
+            throw new IllegalStateException("Expression catalog is already frozen");
+        this.expressionCatalogJson = catalog;
+    }
+
     /** 진행 중 외부 잡 추적(JSON — RunPod job id/fal request id). 디버깅·폴링 폴백용. */
     @Column(name = "external_jobs_json", columnDefinition = "TEXT")
     private String externalJobsJson;

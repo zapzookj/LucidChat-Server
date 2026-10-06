@@ -137,7 +137,9 @@ public final class TheaterResponses {
         int affection,
         int lastChapterDelta,
         int totalScenes,
-        boolean confirmedMain
+        boolean confirmedMain,
+        String defaultImageUrl,
+        String defaultOutfit
     ) {}
 
     public record PlaySettings(
@@ -205,7 +207,8 @@ public final class TheaterResponses {
         /** 이 씬에서 자동 생성된 일러스트 (프롬프트 큐 → 비동기 로드) */
         String illustrationUrl,
         /** 스탯 효과 키워드 ("매력이 낮은 주인공의 어색함이 드러난다" 등) */
-        String statReflectionHint
+        String statReflectionHint,
+        String expressionId, String expressionImageUrl
     ) {}
 
     public record BranchSignal(
@@ -506,7 +509,8 @@ public final class TheaterResponses {
         String outfit,
         String bgmMode,
         String illustrationUrl,
-        java.time.LocalDateTime createdAt
+        java.time.LocalDateTime createdAt,
+        String expressionId, String expressionImageUrl
     ) {}
 
     /** 대화 기록 페이지 응답 */

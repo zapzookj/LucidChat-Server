@@ -45,6 +45,16 @@ import java.util.*;
 @Table(name = "characters")
 public class Character {
 
+    @Column(name = "expression_catalog_json", columnDefinition = "TEXT")
+    private String expressionCatalogJson;
+
+    public void assignExpressionCatalog(String catalog) {
+        com.spring.aichat.service.ugc.ExpressionCatalog.read(catalog);
+        if (expressionCatalogJson != null && !expressionCatalogJson.equals(catalog))
+            throw new IllegalStateException("Character expressions are immutable");
+        this.expressionCatalogJson = catalog;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "character_id")

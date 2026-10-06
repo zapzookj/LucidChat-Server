@@ -805,7 +805,9 @@ public class TheaterLobbyService {
                 a.getAffection(),
                 a.getLastChapterDelta(),
                 a.getTotalScenes(),
-                a.isConfirmedMain()
+                a.isConfirmedMain(),
+                a.getCharacter().getDefaultImageUrl(),
+                a.getCharacter().getDefaultOutfit()
             )).toList();
 
         PlaySettings playSettings = new PlaySettings(

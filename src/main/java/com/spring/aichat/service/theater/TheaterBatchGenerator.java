@@ -500,6 +500,8 @@ public class TheaterBatchGenerator {
                 .heroineId(heroineId)
                 .sceneType(scene.sceneType())
                 .emotion(emotion)
+                .expressionId(scene.expressionId())
+                .expressionImageUrl(scene.expressionImageUrl())
                 .location(scene.location())
                 .timeOfDay(scene.time())
                 .outfit(scene.outfit())
@@ -760,6 +762,8 @@ public class TheaterBatchGenerator {
             String resolvedProtagonistInner = s.resolvedProtagonistInner();
             String resolvedSceneType = s.sceneType(); // null 가능 — LLM이 빠뜨려도 무방
 
+            var resolvedExpression = com.spring.aichat.service.ugc.ExpressionResolver.resolve(
+                com.spring.aichat.service.ugc.ExpressionResolver.matches(speaker, s.speaker()) ? speaker : null, s.expressionId(), parseEmotion(s.emotion()));
             scenes.add(new TheaterScene(
                 seq++,
                 resolveSpeakerName(s.speaker(), speaker, state),
@@ -775,7 +779,8 @@ public class TheaterBatchGenerator {
                 sanitizedOutfit,
                 sanitizedBgm,
                 null,
-                s.statReflectionHint()
+                s.statReflectionHint(),
+                resolvedExpression.id(), resolvedExpression.imageUrl()
             ));
         }
 

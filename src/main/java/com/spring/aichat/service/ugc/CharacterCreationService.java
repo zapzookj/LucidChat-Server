@@ -154,7 +154,8 @@ public class CharacterCreationService {
             userRepository.save(user);
 
             CharacterCreationJob job = CharacterCreationJob.start(user.getId(), name, concept, charge);
-            job.markStagedBilling(); // 신규 잡은 전부 단계 과금 — null=레거시 선차감 잡
+            job.markStagedBilling();
+            job.enableDynamicExpressions(); // 신규 잡은 전부 단계 과금 — null=레거시 선차감 잡
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
             job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
             job.assignRequestedDifficulty(finalDifficulty);  // [난이도] null=미지정(바인딩 미설정 유지)
@@ -420,15 +421,17 @@ public class CharacterCreationService {
     /** [적대적 리뷰 P3] 키 없는 DERIVING/REFINING을 '유실'로 판정하는 무진행 시간(분) — Qwen ~1분 대비 여유. */
     private static final int LOST_REROLL_MINUTES = 5;
 
-    public void rerollEmotion(String username, Long jobId, EmotionTag tag) {
-        if (tag == EmotionTag.NEUTRAL) {
+    public void rerollEmotion(String username, Long jobId, EmotionTag tag) { rerollEmotion(username, jobId, tag.name()); }
+
+    public void rerollEmotion(String username, Long jobId, String tag) {
+        if ("NEUTRAL".equals(tag)) {
             throw new BadRequestException("기본 표정은 다시 뽑을 수 없어요.");
         }
         boolean charged = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.REVIEW_WAIT);
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             EmotionAssetState state = emotions.get(tag);
             if (state == null) {
                 throw new BadRequestException("알 수 없는 감정 컷입니다.");
@@ -442,7 +445,7 @@ public class CharacterCreationService {
                 //   죽은 것이다(Qwen ~1분). 종전엔 30분 스테일 스윕까지 유저가 400에 갇혔고, 다른 컷 리롤이 updatedAt을 갱신하면
                 //   더 밀렸다. 무과금으로 같은 컷을 재제출한다(상태는 DERIVING 유지). 키가 있으면 진짜 진행 중 — 거부 유지.
                 boolean keyless = !json.readScratch(job.getExternalJobsJson())
-                    .containsKey(UgcPipelineWorker.externalKey(UgcStage.EMOTION_REFINE, tag.name()));
+                    .containsKey(UgcPipelineWorker.externalKey(UgcStage.EMOTION_REFINE, tag));
                 boolean stale = job.getUpdatedAt() != null
                     && job.getUpdatedAt().isBefore(java.time.LocalDateTime.now().minusMinutes(LOST_REROLL_MINUTES));
                 if (keyless && stale) {
@@ -475,21 +478,24 @@ public class CharacterCreationService {
     /**
      * [2026-07-20 리롤 누적] 감정 컷 버전 골라잡기 — 누적된 완성본(history) 중 하나를 선택본으로 (무과금).
      */
-    public void selectEmotionVersion(String username, Long jobId, EmotionTag tag, int versionIndex) {
+    public void selectEmotionVersion(String username, Long jobId, EmotionTag tag, int index) { selectEmotionVersion(username, jobId, tag.name(), index); }
+
+    public void selectEmotionVersion(String username, Long jobId, String tag, int versionIndex) {
         txTemplate.executeWithoutResult(tx -> {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.REVIEW_WAIT);
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             EmotionAssetState state = emotions.get(tag);
             if (state == null || state.history().isEmpty()) {
                 throw new BadRequestException("선택할 수 있는 버전이 없습니다.");
             }
+            if (!state.is(EmotionAssetState.READY)) throw new BadRequestException("다시 만드는 중에는 버전을 선택할 수 없어요.");
             if (versionIndex < 0 || versionIndex >= state.history().size()) {
                 throw new BadRequestException("잘못된 버전 선택입니다.");
             }
             emotions.put(tag, state.selectVersion(versionIndex));
-            job.updateEmotionAssets(json.writeEmotions(emotions));
+            job.updateEmotionAssets(json.writeExpressionAssets(emotions));
         });
     }
 
@@ -499,8 +505,8 @@ public class CharacterCreationService {
             CharacterCreationJob job = lockOwnedJob(username, jobId);
             requireStatus(job, CreationJobStatus.REVIEW_WAIT);
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
-            boolean allReady = emotions.size() == EmotionTag.values().length
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
+            boolean allReady = emotions.keySet().equals(ExpressionCatalog.expectedIds(job.getExpressionCatalogJson()))
                 && emotions.values().stream().allMatch(s -> s.is(EmotionAssetState.READY));
             if (!allReady) {
                 throw new BadRequestException("아직 완성되지 않은 컷이 있어요. 실패한 컷을 다시 시도해 주세요.");

@@ -130,7 +130,9 @@ public final class UgcDtos {
         String difficulty,
         String failReason,
         Long characterId,
-        LocalDateTime expiresAt
+        LocalDateTime expiresAt,
+        List<CharacterExpression> expressionCatalog,
+        Integer expressionPipelineVersion
     ) {}
 
     /** 내 UGC 캐릭터 카드 (상태 뱃지: visibility × secretReviewStatus). */

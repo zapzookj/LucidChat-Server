@@ -94,11 +94,22 @@ public record SendChatResponse(
     public record SceneResponse(
         String speaker,
         String narration, String dialogue, EmotionTag emotion,
-        String location, String time, String outfit, String bgmMode
+        String location, String time, String outfit, String bgmMode,
+        String expressionId, String expressionImageUrl
     ) {
+        public SceneResponse(String speaker, String narration, String dialogue, EmotionTag emotion,
+                             String location, String time, String outfit, String bgmMode) {
+            this(speaker, narration, dialogue, emotion, location, time, outfit, bgmMode, null, null);
+        }
         public SceneResponse(String narration, String dialogue, EmotionTag emotion,
                              String location, String time, String outfit, String bgmMode) {
             this(null, narration, dialogue, emotion, location, time, outfit, bgmMode);
+        }
+
+        public SceneResponse withExpression(com.spring.aichat.domain.character.Character character, String requested) {
+            var resolved = com.spring.aichat.service.ugc.ExpressionResolver.resolve(character, requested, emotion);
+            return new SceneResponse(speaker, narration, dialogue, emotion, location, time, outfit, bgmMode,
+                resolved.id(), resolved.imageUrl());
         }
     }
 

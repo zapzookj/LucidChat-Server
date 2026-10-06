@@ -78,6 +78,7 @@ public class CharacterPromptAssembler {
 
         // ═══ STATIC RULES (캐시 타겟) ═══
         StringBuilder staticBuilder = new StringBuilder();
+        staticBuilder.append(com.spring.aichat.service.ugc.ExpressionCatalog.prompt(character.getExpressionCatalogJson()));
 
         // [D-20 · docs/19 §C-D 'Age: null 리터럴 억제'] age는 nullable(Character.java:95)이고
         // UGC 캐릭터는 전량 null이다(Stage 0이 산출해도 바인딩에서 버려짐). 그대로 %s에 넣으면
@@ -855,6 +856,7 @@ public class CharacterPromptAssembler {
             - `scenes[].speaker`: %s
             - `scenes[].narration`: Character's action/expression (Korean, vivid web-novel style)
             - `scenes[].dialogue`: Character's spoken line (Korean)
+            - `scenes[].expression_id`: Choose an ID from YOUR available expression catalog for your dialogue (including speaker=null). NPC scenes or characters without a catalog: null. Keep emotion as its semantic meaning.
             - `scenes[].emotion`: One of [NEUTRAL, JOY, SAD, ANGRY, SHY, SURPRISE, PANIC, DISGUST, RELAX, FRIGHTENED, FLIRTATIOUS, HEATED, DUMBFOUNDED, SULKING, PLEADING]
             - `scenes[].location`: One of [%s] or null
             - `scenes[].time`: One of [DAY, NIGHT, SUNSET] or null
@@ -932,6 +934,7 @@ public class CharacterPromptAssembler {
             scene.put("narration", "장면 묘사.");
             scene.put("dialogue", "대사.");
             scene.put("emotion", "NEUTRAL");
+            scene.putNull("expression_id");
             for (String field : java.util.List.of("location", "time", "outfit", "bgmMode")) scene.putNull(field);
         }
         ObjectNode stats = root.putObject("stat_changes");

@@ -369,7 +369,7 @@ public class StoryDirectorPromptAssemblerV2 {
             behaviorGuideSection,
             oocSection,
             difficultySection
-        );
+        ) + com.spring.aichat.service.ugc.ExpressionCatalog.prompt(c.getExpressionCatalogJson());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -730,6 +730,7 @@ public class StoryDirectorPromptAssemblerV2 {
             - `scenes[].narration`: "3인칭 디렉터 시점 묘사 (한국어, 3~4문장)",
             - `scenes[].dialogue`: "화자의 대사 (한국어). 화자가 null이면 빈 문자열",
             - `scenes[].emotion`: "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | DISGUST | RELAX | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
+            - `scenes[].expression_id`: 해당 화자 히로인의 표현 목록에서 상황에 맞는 ID. 다른 히로인의 목록을 사용하지 않는다. 시스템·NPC·목록 없는 캐릭터는 null.
             - `scenes[].inner_thought`: "화자의 *그 순간* 숨은 속마음 — 대사와 상반될 때만, 그 외 null (유저에 대한 누적 인상은 아님 → user_impressions)",
             - `scenes[].location_change`: "새 location_key 또는 null (유저 위치가 변경된 경우에만)",
             - `scenes[].new_dynamic_location`: {

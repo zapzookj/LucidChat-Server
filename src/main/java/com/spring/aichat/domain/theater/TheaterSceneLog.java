@@ -47,6 +47,9 @@ import java.time.LocalDateTime;
 @Builder
 public class TheaterSceneLog {
 
+    private String expressionId;
+    private String expressionImageUrl;
+
     @Id
     private String id;
 

@@ -72,12 +72,166 @@ public class UgcPipelineWorker {
     private final UgcWorkflowFactory workflowFactory;
     private final UgcComfyClient comfyClient;
     private final PoseEditClient poseEditClient;
+    private final com.spring.aichat.external.FalGptEmotionEditClient gptEmotionClient;
     private final UgcAssetService assetService;
     private final UgcJobJson json;
     private final RedisCacheService cacheService;
     private final NotificationService notificationService;
     private final UgcRoutineGenerationService routineGenerationService; // [P2 STORY 개방 1단]
     private final TransactionTemplate txTemplate;
+
+    private final java.util.Set<String> gptPolls = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void runDynamicExpressionStage(Long jobId) {
+        try {
+            CharacterCreationJob job = jobRepository.findById(jobId).orElseThrow();
+            if (job.getExpressionCatalogJson() == null) {
+                var catalog = conceptStructuringService.deriveExpressionCatalog(json.readConcept(job.getStructuredConceptJson()));
+                String encoded = ExpressionCatalog.write(catalog);
+                txTemplate.executeWithoutResult(tx -> {
+                    CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElseThrow();
+                    if (locked.getStatus() != CreationJobStatus.EMOTIONS_PROCESSING || locked.getExpressionCatalogJson() != null) return;
+                    locked.freezeExpressionCatalog(encoded);
+                    Map<String, EmotionAssetState> assets = json.readExpressionAssets(locked.getEmotionAssetsJson());
+                    for (var e : catalog) if (!"NEUTRAL".equals(e.id())) assets.put(e.id(), EmotionAssetState.deriving(0));
+                    locked.updateEmotionAssets(json.writeExpressionAssets(assets));
+                });
+            }
+            CharacterCreationJob frozen = jobRepository.findById(jobId).orElseThrow();
+            if (frozen.getStatus() != CreationJobStatus.EMOTIONS_PROCESSING) return;
+            for (var e : ExpressionCatalog.read(frozen.getExpressionCatalogJson())) {
+                if (!"NEUTRAL".equals(e.id())) submitGptExpression(jobId, e.id());
+            }
+        } catch (Exception e) {
+            txTemplate.executeWithoutResult(tx -> {
+                CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                if (locked != null && locked.getStatus() == CreationJobStatus.EMOTIONS_PROCESSING
+                    && locked.getExpressionCatalogJson() == null) failAndRefund(jobId, "캐릭터 연출 목록 생성 실패");
+            });
+        }
+    }
+
+    private void submitGptExpression(Long jobId, String id) {
+        String receiptKey = "K_GPT_RECEIPT_" + id;
+        String reservation = "SUBMITTING:" + System.currentTimeMillis() + ":" + java.util.UUID.randomUUID();
+        String stored = txTemplate.execute(tx -> {
+            CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (job == null || !(job.getStatus() == CreationJobStatus.EMOTIONS_PROCESSING || job.getStatus() == CreationJobStatus.REVIEW_WAIT)) return null;
+            var state = json.readExpressionAssets(job.getEmotionAssetsJson()).get(id);
+            if (state == null || !state.is(EmotionAssetState.DERIVING) || "NEUTRAL".equals(id)) return null;
+            Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+            String previous = scratch.get(receiptKey);
+            if (previous != null) return previous;
+            scratch.put(receiptKey, reservation);
+            scratch.putIfAbsent("K_GPT_QUALITY_" + id, "low");
+            job.updateExternalJobs(json.writeScratch(scratch));
+            return reservation;
+        });
+        if (stored == null) return;
+        if (stored.startsWith("SUBMITTING:") && !stored.equals(reservation)) {
+            String[] pieces = stored.split(":", 3);
+            if (pieces.length == 3 && System.currentTimeMillis() - Long.parseLong(pieces[1]) < 120_000) return;
+            // A restart or ambiguous POST has no safe receipt to resume. Stop; manual retry is free.
+            settleAmbiguousGpt(jobId, id, stored);
+            return;
+        }
+        String active = stored;
+        com.spring.aichat.external.FalGptEmotionEditClient.Receipt receipt;
+        try {
+            if (stored.equals(reservation)) {
+                CharacterCreationJob job = jobRepository.findById(jobId).orElseThrow();
+                var entry = ExpressionCatalog.read(job.getExpressionCatalogJson()).stream().filter(e -> e.id().equals(id)).findFirst().orElseThrow();
+                String quality = json.readScratch(job.getExternalJobsJson()).get("K_GPT_QUALITY_" + id);
+                receipt = gptEmotionClient.submit(promptAssembler.gptExpressionPrompt(entry),
+                    assetService.presignGet(job.getBaseStandingKey(), PRESIGN_TTL), quality);
+                active = json.writeScratch(Map.of("requestId", receipt.requestId(), "statusUrl", receipt.statusUrl(), "responseUrl", receipt.responseUrl()));
+                String accepted = active;
+                Boolean persisted = txTemplate.execute(tx -> {
+                    CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                    if (locked == null || locked.getStatus().isTerminal()) return false;
+                    var scratch = json.readScratch(locked.getExternalJobsJson());
+                    if (!reservation.equals(scratch.get(receiptKey))) return false;
+                    scratch.put(receiptKey, accepted);
+                    locked.updateExternalJobs(json.writeScratch(scratch));
+                    return true;
+                });
+                if (!Boolean.TRUE.equals(persisted)) return;
+            } else {
+                var saved = json.readScratch(stored);
+                receipt = new com.spring.aichat.external.FalGptEmotionEditClient.Receipt(saved.get("requestId"), saved.get("statusUrl"), saved.get("responseUrl"));
+            }
+        } catch (Exception e) {
+            if (stored.equals(reservation)) settleAmbiguousGpt(jobId, id, reservation);
+            log.warn("[UGC-GPT] request could not be resumed: job={}, expression={}", jobId, id);
+            return;
+        }
+        String generation = active;
+        String pollKey = jobId + ":" + id + ":" + receipt.requestId();
+        if (!gptPolls.add(pollKey)) return;
+        gptEmotionClient.await(receipt).whenComplete((result, error) -> {
+            try {
+                if (error != null) {
+                    Throwable cause = error;
+                    while (cause.getCause() != null) cause = cause.getCause();
+                    if (cause instanceof com.spring.aichat.external.FalGptEmotionEditClient.ProviderFailure) {
+                        Boolean retry = txTemplate.execute(tx -> {
+                            CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                            if (!currentGptAttempt(locked, id, generation)) return false;
+                            var scratch = json.readScratch(locked.getExternalJobsJson());
+                            scratch.remove(receiptKey);
+                            locked.updateExternalJobs(json.writeScratch(scratch));
+                            var assets = json.readExpressionAssets(locked.getEmotionAssetsJson());
+                            var state = assets.get(id);
+                            int next = state.retryCount() + 1;
+                            boolean repeat = next <= props.job().emotionRetries();
+                            assets.put(id, repeat ? state.derivingAgain(next)
+                                : state.hasCompletedVersion() ? state.revertToReady() : state.failed());
+                            locked.updateEmotionAssets(json.writeExpressionAssets(assets));
+                            checkEmotionsSettled(locked, assets);
+                            return repeat;
+                        });
+                        if (Boolean.TRUE.equals(retry)) submitGptExpression(jobId, id);
+                    }
+                    // Timeout/network failure keeps the receipt. Recovery polls the same paid request.
+                    return;
+                }
+                if (!currentGptAttempt(jobRepository.findById(jobId).orElse(null), id, generation)) return;
+                String key = assetService.storeFromUrl(result.imageUrl(), jobId, "emo_" + id.toLowerCase());
+                txTemplate.executeWithoutResult(tx -> {
+                    CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                    if (!currentGptAttempt(locked, id, generation)) return;
+                    var assets = json.readExpressionAssets(locked.getEmotionAssetsJson());
+                    assets.put(id, assets.get(id).readyWith(key));
+                    locked.updateEmotionAssets(json.writeExpressionAssets(assets));
+                    var scratch = json.readScratch(locked.getExternalJobsJson());
+                    scratch.remove(receiptKey);
+                    locked.updateExternalJobs(json.writeScratch(scratch));
+                    checkEmotionsSettled(locked, assets);
+                });
+            } catch (Exception e) {
+                log.warn("[UGC-GPT] result storage deferred: job={}, expression={}", jobId, id);
+            } finally { gptPolls.remove(pollKey); }
+        });
+    }
+
+    private boolean currentGptAttempt(CharacterCreationJob job, String id, String receipt) {
+        if (job == null || !(job.getStatus() == CreationJobStatus.EMOTIONS_PROCESSING || job.getStatus() == CreationJobStatus.REVIEW_WAIT)) return false;
+        var state = json.readExpressionAssets(job.getEmotionAssetsJson()).get(id);
+        return state != null && state.is(EmotionAssetState.DERIVING)
+            && receipt.equals(json.readScratch(job.getExternalJobsJson()).get("K_GPT_RECEIPT_" + id));
+    }
+
+    private void settleAmbiguousGpt(Long jobId, String id, String reservation) {
+        txTemplate.executeWithoutResult(tx -> {
+            CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (!currentGptAttempt(locked, id, reservation)) return;
+            var assets = json.readExpressionAssets(locked.getEmotionAssetsJson());
+            var state = assets.get(id);
+            assets.put(id, state.hasCompletedVersion() ? state.revertToReady() : state.failed());
+            locked.updateEmotionAssets(json.writeExpressionAssets(assets));
+            checkEmotionsSettled(locked, assets);
+        });
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  Stage 0 → Stage 1 (컨셉 구조화 → 황금샷 제출)
@@ -335,12 +489,12 @@ public class UgcPipelineWorker {
 
     /** 베이스 확정 직후 감정 상태 맵 초기화 — 서비스 계층(select TX) 전용. NEUTRAL은 베이스 자체로 즉시 READY. */
     void initEmotionAssets(CharacterCreationJob job, String baseKey) {
-        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(null);
-        emotions.put(EmotionTag.NEUTRAL, EmotionAssetState.ready(baseKey));
-        for (EmotionTag tag : UgcPromptAssembler.derivedEmotions()) {
+        Map<String, EmotionAssetState> emotions = json.readExpressionAssets(null);
+        emotions.put("NEUTRAL", EmotionAssetState.ready(baseKey));
+        if (!job.usesDynamicExpressions()) for (String tag : UgcPromptAssembler.derivedEmotions().stream().map(Enum::name).toList()) {
             emotions.put(tag, EmotionAssetState.deriving(0));
         }
-        job.updateEmotionAssets(json.writeEmotions(emotions));
+        job.updateEmotionAssets(json.writeExpressionAssets(emotions));
     }
 
     /**
@@ -383,11 +537,13 @@ public class UgcPipelineWorker {
         CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
         if (job == null || job.getStatus() != CreationJobStatus.EMOTIONS_PROCESSING) return;
 
+        if (job.usesDynamicExpressions()) { runDynamicExpressionStage(jobId); return; }
+
         // [2026-07-21 컨셉 반영 감정] 캐릭터별 동적 표정·자세 산출 — 잡에 저장(리롤 재현성).
         // 실패는 서버 상수 폴백으로 흡수 (파이프라인 비차단).
         deriveEmotionPromptsSafely(jobId);
 
-        for (EmotionTag tag : UgcPromptAssembler.derivedEmotions()) {
+        for (String tag : UgcPromptAssembler.derivedEmotions().stream().map(Enum::name).toList()) {
             submitEmotionDerivation(jobId, tag, job.getBaseEditSeed());
         }
     }
@@ -411,16 +567,18 @@ public class UgcPipelineWorker {
 
     /** 감정 1종 개별 리롤/재시도 — 리롤은 새 seed(변화 유도), 자동 재시도도 새 seed. */
     @Async
-    public void runEmotionReroll(Long jobId, EmotionTag tag) {
+    public void runEmotionReroll(Long jobId, String tag) {
         submitEmotionDerivation(jobId, tag, null);
     }
 
     /**
      * 감정 1종 파생: Qwen(베이스에서 직접) → WF-2. fal은 SDK subscribe라 콜백 체인으로 WF-2 제출.
      */
-    private void submitEmotionDerivation(Long jobId, EmotionTag tag, Long fixedSeed) {
+    private void submitEmotionDerivation(Long jobId, String tag, Long fixedSeed) {
         CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
         if (job == null || job.getStatus().isTerminal() || job.getBaseStandingKey() == null) return;
+
+        if (job.usesDynamicExpressions()) { submitGptExpression(jobId, tag); return; }
 
         StructuredConcept concept = json.readConcept(job.getStructuredConceptJson());
         String bgColor = job.getBgColor();
@@ -429,9 +587,9 @@ public class UgcPipelineWorker {
         String personaHint = (concept.personaTags() == null || concept.personaTags().isEmpty())
             ? null : String.join(", ", concept.personaTags());
         // [2026-07-21] 캐릭터별 동적 감정 연출 (없으면 상수 폴백 — qwenEmotionPrompt 내부 처리)
-        StructuredConcept.EmotionPromptOverride override = concept.emotionPromptFor(tag.name());
+        StructuredConcept.EmotionPromptOverride override = concept.emotionPromptFor(tag);
         poseEditClient.edit(new PoseEditClient.EditRequest(
-                promptAssembler.qwenEmotionPrompt(tag, personaHint, override), promptAssembler.qwenNegative(), baseUrl, fixedSeed))
+                promptAssembler.qwenEmotionPrompt(EmotionTag.valueOf(tag), personaHint, override), promptAssembler.qwenNegative(), baseUrl, fixedSeed))
             .orTimeout(qwenTimeoutMinutes(), java.util.concurrent.TimeUnit.MINUTES)   // [적대적 리뷰 P3] 스윕 창 내 강제 종료
             .whenComplete((result, err) -> {
                 if (err != null) {
@@ -448,14 +606,14 @@ public class UgcPipelineWorker {
                         return;
                     }
                     String editKey = assetService.storeFromUrl(result.imageUrl(), jobId,
-                        "emo_" + tag.name().toLowerCase() + "_edit");
+                        "emo_" + tag.toLowerCase() + "_edit");
                     mutateJob(jobId, j -> {
-                        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(j.getEmotionAssetsJson());
+                        Map<String, EmotionAssetState> emotions = json.readExpressionAssets(j.getEmotionAssetsJson());
                         EmotionAssetState state = emotions.getOrDefault(tag, EmotionAssetState.deriving(0));
                         emotions.put(tag, state.refining());
-                        j.updateEmotionAssets(json.writeEmotions(emotions));
+                        j.updateEmotionAssets(json.writeExpressionAssets(emotions));
                     });
-                    submitRefine(jobId, editKey, concept, tag, UgcStage.EMOTION_REFINE, tag.name(), bgColor);
+                    submitRefine(jobId, editKey, concept, EmotionTag.valueOf(tag), UgcStage.EMOTION_REFINE, tag, bgColor);
                 } catch (Exception e) {
                     log.warn("[UGC-WORKER] 감정 WF-2 제출 실패: jobId={}, tag={}, {}", jobId, tag, e.getMessage());
                     handleEmotionFailure(jobId, tag);
@@ -464,22 +622,23 @@ public class UgcPipelineWorker {
     }
 
     /** 감정 컷 실패 — 자동 재시도(무과금, 상한 초과 시 해당 컷만 FAILED 마킹 후 진행). */
-    private void handleEmotionFailure(Long jobId, EmotionTag tag) {
+    private void handleEmotionFailure(Long jobId, String tag) {
         boolean retry = Boolean.TRUE.equals(txTemplate.execute(status -> {
             CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (job == null || job.getStatus().isTerminal()) return false;
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
-            EmotionAssetState state = emotions.getOrDefault(tag, EmotionAssetState.deriving(0));
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
+            EmotionAssetState state = emotions.get(tag);
+            if (state == null || !(state.is(EmotionAssetState.DERIVING) || state.is(EmotionAssetState.REFINING))) return false;
             int next = state.retryCount() + 1;
             if (next <= props.job().emotionRetries()) {
                 emotions.put(tag, state.derivingAgain(next)); // 기존 버전 유지한 채 재시도
-                job.updateEmotionAssets(json.writeEmotions(emotions));
+                job.updateEmotionAssets(json.writeExpressionAssets(emotions));
                 return true;
             }
             // 소진: 이전 완성본이 있으면 그리로 복귀(리롤 실패가 기존 결과를 파괴하지 않도록), 없으면 FAILED
             emotions.put(tag, state.hasCompletedVersion() ? state.revertToReady() : state.failed());
-            job.updateEmotionAssets(json.writeEmotions(emotions));
+            job.updateEmotionAssets(json.writeExpressionAssets(emotions));
             checkEmotionsSettled(job, emotions);
             return false;
         }));
@@ -498,13 +657,13 @@ public class UgcPipelineWorker {
         if (job == null || job.getStatus() != CreationJobStatus.POSTPROCESSING) return;
 
         try {
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             mutateJob(jobId, j -> {
-                Map<EmotionTag, EmotionAssetState> m = json.readEmotions(j.getEmotionAssetsJson());
+                Map<String, EmotionAssetState> m = json.readExpressionAssets(j.getEmotionAssetsJson());
                 m.replaceAll((t, s) -> s.cutting());
-                j.updateEmotionAssets(json.writeEmotions(m));
+                j.updateEmotionAssets(json.writeExpressionAssets(m));
             });
-            for (Map.Entry<EmotionTag, EmotionAssetState> entry : emotions.entrySet()) {
+            for (Map.Entry<String, EmotionAssetState> entry : emotions.entrySet()) {
                 submitCutout(jobId, entry.getKey(), entry.getValue().key());
             }
         } catch (Exception e) {
@@ -512,14 +671,70 @@ public class UgcPipelineWorker {
         }
     }
 
-    private void submitCutout(Long jobId, EmotionTag tag, String refinedKey) {
+    private void submitCutout(Long jobId, String tag, String refinedKey) {
+        CharacterCreationJob observed = jobRepository.findById(jobId).orElse(null);
+        if (observed == null || observed.getStatus() != CreationJobStatus.POSTPROCESSING) return;
+        if (observed.usesDynamicExpressions()) { submitDynamicCutout(jobId, tag, refinedKey); return; }
         byte[] bytes = assetService.download(refinedKey);
-        String inputName = "job_" + jobId + "_" + tag.name().toLowerCase() + "_cut_in.png";
-        var workflow = workflowFactory.buildCutout(inputName, "job_" + jobId + "_cut_" + tag.name().toLowerCase());
+        String inputName = "job_" + jobId + "_" + tag.toLowerCase() + "_cut_in.png";
+        var workflow = workflowFactory.buildCutout(inputName, "job_" + jobId + "_cut_" + tag.toLowerCase());
         var submit = comfyClient.submit(workflow,
             List.of(new UgcComfyClient.InputImage(inputName, Base64.getEncoder().encodeToString(bytes))),
-            webhookUrl(jobId, UgcStage.CUTOUT, tag.name()));
-        recordExternalJob(jobId, externalKey(UgcStage.CUTOUT, tag.name()), submit.jobId());
+            webhookUrl(jobId, UgcStage.CUTOUT, tag));
+        recordExternalJob(jobId, externalKey(UgcStage.CUTOUT, tag), submit.jobId());
+    }
+
+    private void submitDynamicCutout(Long jobId, String id, String sourceKey) {
+        String reservationKey = "K_CUT_SUBMITTING_" + id;
+        String reservation = System.currentTimeMillis() + ":" + java.util.UUID.randomUUID();
+        String claim = txTemplate.execute(tx -> {
+            CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (locked == null || locked.getStatus() != CreationJobStatus.POSTPROCESSING) return null;
+            var state = json.readExpressionAssets(locked.getEmotionAssetsJson()).get(id);
+            if (state == null || !state.is(EmotionAssetState.CUTTING)) return null;
+            var scratch = json.readScratch(locked.getExternalJobsJson());
+            if (scratch.containsKey(externalKey(UgcStage.CUTOUT, id)) || scratch.containsKey("K_CUT_LOST_REQUEST_" + id)) return null;
+            String previous = scratch.get(reservationKey);
+            if (previous != null) return previous;
+            scratch.put(reservationKey, reservation);
+            locked.updateExternalJobs(json.writeScratch(scratch));
+            return reservation;
+        });
+        if (claim == null) return;
+        if (!claim.equals(reservation)) {
+            if (System.currentTimeMillis() - Long.parseLong(claim.substring(0, claim.indexOf(':'))) >= 120_000) {
+                txTemplate.executeWithoutResult(tx -> {
+                    CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                    if (locked == null || locked.getStatus() != CreationJobStatus.POSTPROCESSING) return;
+                    var scratch = json.readScratch(locked.getExternalJobsJson());
+                    if (claim.equals(scratch.get(reservationKey)) && !scratch.containsKey(externalKey(UgcStage.CUTOUT, id)))
+                        failAndRefund(jobId, "누끼 요청 접수를 확인하지 못했어요. 사용한 에너지를 환불했어요.");
+                });
+            }
+            return;
+        }
+        boolean sent = false;
+        try {
+            byte[] bytes = assetService.download(sourceKey);
+            String inputName = "job_" + jobId + "_" + id.toLowerCase(java.util.Locale.ROOT) + "_cut_in.png";
+            var workflow = workflowFactory.buildCutout(inputName, "job_" + jobId + "_cut_" + id.toLowerCase(java.util.Locale.ROOT));
+            sent = true;
+            var receipt = comfyClient.submit(workflow,
+                List.of(new UgcComfyClient.InputImage(inputName, Base64.getEncoder().encodeToString(bytes))),
+                webhookUrl(jobId, UgcStage.CUTOUT, id));
+            txTemplate.executeWithoutResult(tx -> {
+                CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+                if (locked == null || locked.getStatus() != CreationJobStatus.POSTPROCESSING) return;
+                var scratch = json.readScratch(locked.getExternalJobsJson());
+                if (!reservation.equals(scratch.get(reservationKey))) return;
+                scratch.remove(reservationKey);
+                scratch.put(externalKey(UgcStage.CUTOUT, id), receipt.jobId());
+                locked.updateExternalJobs(json.writeScratch(scratch));
+            });
+        } catch (RuntimeException e) {
+            if (!sent) mutateJob(jobId, j -> removeExternalJob(j, reservationKey));
+            throw e;
+        }
     }
 
     /** Stage 4 바인딩 — Character 생성·에셋 승격·알림. */
@@ -531,14 +746,26 @@ public class UgcPipelineWorker {
         try {
             StructuredConcept concept = json.readConcept(job.getStructuredConceptJson());
             StructuredConcept.CharacterProfile profile = concept.character();
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
 
             String slug = uniqueSlug(jobId);
 
             // 확정 에셋 승격 — 프런트 규약 characters/{slug}/{outfit}_{emotion}.png (outfit=default)
-            for (Map.Entry<EmotionTag, EmotionAssetState> entry : emotions.entrySet()) {
+            for (Map.Entry<String, EmotionAssetState> entry : emotions.entrySet()) {
                 assetService.promoteToCharacterAsset(entry.getValue().cutoutKey(), slug,
-                    "default_" + entry.getKey().name().toLowerCase() + ".png");
+                    "default_" + entry.getKey().toLowerCase() + ".png");
+            }
+            // Cached older clients and non-dialogue scenes still address semantic emotion filenames.
+            // These are aliases of the frozen repertoire, never additional generated expressions.
+            if (job.usesDynamicExpressions()) {
+                var catalog = ExpressionCatalog.read(job.getExpressionCatalogJson());
+                for (EmotionTag semantic : EmotionTag.values()) {
+                    if (semantic == EmotionTag.NEUTRAL) continue;
+                    String id = catalog.stream().filter(e -> e.emotion() == semantic).map(e -> e.id())
+                        .findFirst().orElse("NEUTRAL");
+                    assetService.promoteToCharacterAsset(emotions.get(id).cutoutKey(), slug,
+                        "default_" + semantic.name().toLowerCase(java.util.Locale.ROOT) + ".png");
+                }
             }
             assetService.promoteToCharacterAsset(job.getSelectedGoldenShotKey(), slug, "thumbnail.png");
 
@@ -602,6 +829,7 @@ public class UgcPipelineWorker {
                 Character character = Character.createUgc(spec);
                 // [2026-08-04 남캐] 위저드 선택 성별 영속 — 씬 렌더 캐스트·일러 앵커의 단일 기준
                 character.updateGender(job.getGenderOrDefault());
+                character.assignExpressionCatalog(job.getExpressionCatalogJson());
                 // [2026-08-05 난이도] 위저드 지정 난이도 주입 — 미지정(null)은 미설정 유지
                 // (소비처 getDifficultyOrDefault의 null→NORMAL 폴백 계약 보존)
                 if (job.getRequestedDifficultyOrNull() != null) {
@@ -649,8 +877,8 @@ public class UgcPipelineWorker {
         switch (stage) {
             case GOLDEN -> onGoldenResult(jobId, status);
             case BASE_REFINE -> onBaseRefineResult(jobId, parseIndex(token), status);
-            case EMOTION_REFINE -> onEmotionRefineResult(jobId, parseEmotionToken(token), status);
-            case CUTOUT -> onCutoutResult(jobId, parseEmotionToken(token), status);
+            case EMOTION_REFINE -> onEmotionRefineResult(jobId, token, status);
+            case CUTOUT -> onCutoutResult(jobId, token, status);
         }
     }
 
@@ -719,48 +947,58 @@ public class UgcPipelineWorker {
         }
     }
 
-    private void onEmotionRefineResult(Long jobId, EmotionTag tag, UgcComfyClient.JobStatus status) {
+    private void onEmotionRefineResult(Long jobId, String tag, UgcComfyClient.JobStatus status) {
         if (tag == null) return;
+        CharacterCreationJob observed = jobRepository.findById(jobId).orElse(null);
+        if (observed == null || observed.usesDynamicExpressions()) return;
+        EmotionAssetState pending = json.readExpressionAssets(observed.getEmotionAssetsJson()).get(tag);
+        if (pending == null || !pending.is(EmotionAssetState.REFINING)) return;
         if (!status.completed() || status.images().isEmpty()) {
             handleEmotionFailure(jobId, tag);
             return;
         }
         String key = assetService.storeFromUrl(status.images().get(0).data(), jobId,
-            "emo_" + tag.name().toLowerCase());
+            "emo_" + tag.toLowerCase());
         txTemplate.executeWithoutResult(tx -> {
             CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (job == null || job.getStatus().isTerminal()) return;
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
-            EmotionAssetState state = emotions.getOrDefault(tag, EmotionAssetState.deriving(0));
+            if (job.usesDynamicExpressions()) return;
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
+            EmotionAssetState state = emotions.get(tag);
+            if (state == null || !state.is(EmotionAssetState.REFINING)) return;
             emotions.put(tag, state.readyWith(key));
-            job.updateEmotionAssets(json.writeEmotions(emotions));
-            removeExternalJob(job, externalKey(UgcStage.EMOTION_REFINE, tag.name()));
+            job.updateEmotionAssets(json.writeExpressionAssets(emotions));
+            removeExternalJob(job, externalKey(UgcStage.EMOTION_REFINE, tag));
             checkEmotionsSettled(job, emotions);
         });
     }
 
-    private void onCutoutResult(Long jobId, EmotionTag tag, UgcComfyClient.JobStatus status) {
+    private void onCutoutResult(Long jobId, String tag, UgcComfyClient.JobStatus status) {
         if (tag == null) return;
+        if (!cutoutRequestMatches(jobRepository.findById(jobId).orElse(null), tag, status.jobId())) return;
         if (!status.completed() || status.images().isEmpty()) {
             // 누끼 실패 — 컷 단위 재시도, 소진 시 파이프라인 실패(전액 환불)
             // 판정 3상태: RETRY(재제출) / EXHAUSTED(실패 종결) / IGNORE(스테일 이벤트 — 아무것도 안 함)
             String verdict = txTemplate.execute(tx -> {
                 CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
                 if (job == null || job.getStatus() != CreationJobStatus.POSTPROCESSING) return "IGNORE";
-                Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+                if (!cutoutRequestMatches(job, tag, status.jobId())) return "IGNORE";
+                Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
                 EmotionAssetState state = emotions.get(tag);
-                if (state == null) return "IGNORE";
+                if (state == null || !state.is(EmotionAssetState.CUTTING)) return "IGNORE";
                 int next = state.retryCount() + 1;
                 if (next > props.job().emotionRetries()) return "EXHAUSTED";
                 emotions.put(tag, state.withRetry(next));
-                job.updateEmotionAssets(json.writeEmotions(emotions));
+                job.updateEmotionAssets(json.writeExpressionAssets(emotions));
+                removeExternalJob(job, externalKey(UgcStage.CUTOUT, tag));
+                removeExternalJob(job, "K_CUT_LOST_REQUEST_" + tag);
                 return "RETRY";
             });
             if ("RETRY".equals(verdict)) {
                 CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
                 if (job != null) {
-                    Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+                    Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
                     submitCutout(jobId, tag, emotions.get(tag).key());
                 }
             } else if ("EXHAUSTED".equals(verdict)) {
@@ -770,19 +1008,21 @@ public class UgcPipelineWorker {
         }
 
         String cutKey = assetService.storeFromUrl(status.images().get(0).data(), jobId,
-            "cut_" + tag.name().toLowerCase());
+            "cut_" + tag.toLowerCase());
         boolean allDone = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (job == null || job.getStatus() != CreationJobStatus.POSTPROCESSING) return false;
+            if (!cutoutRequestMatches(job, tag, status.jobId())) return false;
 
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             EmotionAssetState state = emotions.get(tag);
-            if (state == null) return false;
+            if (state == null || !state.is(EmotionAssetState.CUTTING)) return false;
             emotions.put(tag, state.doneWith(cutKey));
-            job.updateEmotionAssets(json.writeEmotions(emotions));
-            removeExternalJob(job, externalKey(UgcStage.CUTOUT, tag.name()));
+            job.updateEmotionAssets(json.writeExpressionAssets(emotions));
+            removeExternalJob(job, externalKey(UgcStage.CUTOUT, tag));
+            removeExternalJob(job, "K_CUT_LOST_REQUEST_" + tag);
 
-            boolean done = emotions.values().stream().allMatch(s -> s.is(EmotionAssetState.DONE));
+            boolean done = emotions.keySet().equals(ExpressionCatalog.expectedIds(job.getExpressionCatalogJson())) && emotions.values().stream().allMatch(s -> s.is(EmotionAssetState.DONE));
             if (done) {
                 job.toBinding();
             }
@@ -791,6 +1031,15 @@ public class UgcPipelineWorker {
         if (allDone) {
             bind(jobId);
         }
+    }
+
+    private boolean cutoutRequestMatches(CharacterCreationJob job, String id, String requestId) {
+        if (job == null) return false;
+        if (!job.usesDynamicExpressions()) return true;
+        var scratch = json.readScratch(job.getExternalJobsJson());
+        String expected = scratch.get(externalKey(UgcStage.CUTOUT, id));
+        if (expected == null) expected = scratch.get("K_CUT_LOST_REQUEST_" + id);
+        return expected != null && expected.equals(requestId);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -836,9 +1085,9 @@ public class UgcPipelineWorker {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /** 감정 15종이 전부 READY/FAILED로 정착했으면 REVIEW_WAIT 전이 (EMOTIONS_PROCESSING에서만). */
-    private void checkEmotionsSettled(CharacterCreationJob job, Map<EmotionTag, EmotionAssetState> emotions) {
+    private void checkEmotionsSettled(CharacterCreationJob job, Map<String, EmotionAssetState> emotions) {
         if (job.getStatus() != CreationJobStatus.EMOTIONS_PROCESSING) return;
-        if (emotions.size() < EmotionTag.values().length) return;
+        if (!emotions.keySet().equals(ExpressionCatalog.expectedIds(job.getExpressionCatalogJson()))) return;
         boolean settled = emotions.values().stream()
             .allMatch(s -> s.is(EmotionAssetState.READY) || s.is(EmotionAssetState.FAILED));
         if (settled) {
@@ -1033,6 +1282,9 @@ public class UgcPipelineWorker {
             String current = scratch.get(key);
             if (current == null || (observedRunpodId != null && !observedRunpodId.equals(current))) return false;
             scratch.remove(key);
+            if (j.usesDynamicExpressions() && parsed != null && parsed.stage() == UgcStage.CUTOUT) {
+                scratch.put("K_CUT_LOST_REQUEST_" + parsed.token(), current);
+            }
             j.updateExternalJobs(json.writeScratch(scratch));
             return true;
         }));
@@ -1045,7 +1297,7 @@ public class UgcPipelineWorker {
             return;
         }
         log.warn("[UGC-WORKER] 외부 잡 소실 주입: jobId={}, key={}, reason={}", jobId, key, reason);
-        onComfyEvent(jobId, parsed.stage(), parsed.token(), UgcComfyClient.JobStatus.lost(key, reason));
+        onComfyEvent(jobId, parsed.stage(), parsed.token(), UgcComfyClient.JobStatus.lost(observedRunpodId, reason));
     }
 
     /** [D-3.1d] BASE_PROCESSING — 외부 키 없는 미정착 후보(Qwen 2패스 유실·WF-2 제출 직전 유실) 재파생. */
@@ -1081,14 +1333,22 @@ public class UgcPipelineWorker {
 
     /** [D-3.1d] EMOTIONS_PROCESSING·REVIEW_WAIT(리롤) — 외부 키 없는 DERIVING/REFINING 감정 재파생. */
     private boolean resubmitLostEmotionDerivations(CharacterCreationJob job, Map<String, String> scratch) {
-        List<EmotionTag> lost = pendingEmotionTags(json.readEmotions(job.getEmotionAssetsJson()), scratch);
+        if (job.usesDynamicExpressions()) {
+            if (job.getExpressionCatalogJson() == null) { runDynamicExpressionStage(job.getId()); return true; }
+            boolean resumed = false;
+            for (var entry : json.readExpressionAssets(job.getEmotionAssetsJson()).entrySet()) {
+                if (entry.getValue().is(EmotionAssetState.DERIVING)) { submitGptExpression(job.getId(), entry.getKey()); resumed = true; }
+            }
+            return resumed;
+        }
+        List<String> lost = pendingEmotionTags(json.readExpressionAssets(job.getEmotionAssetsJson()), scratch);
         if (lost.isEmpty()) return false;
         if (job.getStatus() == CreationJobStatus.EMOTIONS_PROCESSING) {
             deriveEmotionPromptsSafely(job.getId());   // 연출 산출 전 유실이면 먼저 (멱등)
         }
         // 최초 파생은 베이스 seed 고정(캐릭터 일관성), 리롤(REVIEW_WAIT)은 원래 의도대로 새 seed
         Long seed = job.getStatus() == CreationJobStatus.REVIEW_WAIT ? null : job.getBaseEditSeed();
-        for (EmotionTag tag : lost) {
+        for (String tag : lost) {
             log.info("[UGC-WORKER] 스테일 감정 재파생: jobId={}, tag={}, status={}", job.getId(), tag, job.getStatus());
             try {
                 submitEmotionDerivation(job.getId(), tag, seed);
@@ -1106,18 +1366,26 @@ public class UgcPipelineWorker {
      * 덮고 전량 제출하므로 재사용 불가(이미 DONE인 컷의 cutoutKey를 날린다) — 부분 재개 전용.
      */
     private boolean resumeCutoutStage(CharacterCreationJob job, Map<String, String> scratch) {
-        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
-        List<EmotionTag> lost = pendingCutoutTags(emotions, scratch);
+        if (job.usesDynamicExpressions()) {
+            boolean recovered = false;
+            for (String id : ExpressionCatalog.expectedIds(job.getExpressionCatalogJson())) {
+                String lost = scratch.get("K_CUT_LOST_REQUEST_" + id);
+                if (lost != null) { onCutoutResult(job.getId(), id, UgcComfyClient.JobStatus.lost(lost, "복구 중 확인한 소실 요청")); recovered = true; }
+            }
+            if (recovered) return true;
+        }
+        Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
+        List<String> lost = pendingCutoutTags(emotions, scratch);
         if (lost.isEmpty()) return false;
         mutateJob(job.getId(), j -> {
-            Map<EmotionTag, EmotionAssetState> m = json.readEmotions(j.getEmotionAssetsJson());
-            for (EmotionTag tag : lost) {
+            Map<String, EmotionAssetState> m = json.readExpressionAssets(j.getEmotionAssetsJson());
+            for (String tag : lost) {
                 EmotionAssetState s = m.get(tag);
                 if (s != null && !s.is(EmotionAssetState.CUTTING)) m.put(tag, s.cutting());
             }
-            j.updateEmotionAssets(json.writeEmotions(m));
+            j.updateEmotionAssets(json.writeExpressionAssets(m));
         });
-        for (EmotionTag tag : lost) {
+        for (String tag : lost) {
             log.info("[UGC-WORKER] 스테일 누끼 재제출: jobId={}, tag={}", job.getId(), tag);
             try {
                 submitCutout(job.getId(), tag, emotions.get(tag).key());
@@ -1133,17 +1401,17 @@ public class UgcPipelineWorker {
     }
 
     /** 누끼 제출 자체가 실패했을 때의 예산 판정 — onCutoutResult 실패 분기와 같은 TX 규칙(withRetry → RETRY/EXHAUSTED). */
-    private void noteCutoutSubmitFailure(Long jobId, EmotionTag tag, String error) {
+    private void noteCutoutSubmitFailure(Long jobId, String tag, String error) {
         String verdict = txTemplate.execute(tx -> {
             CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (job == null || job.getStatus() != CreationJobStatus.POSTPROCESSING) return "IGNORE";
-            Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+            Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             EmotionAssetState state = emotions.get(tag);
-            if (state == null) return "IGNORE";
+            if (state == null || !state.is(EmotionAssetState.CUTTING)) return "IGNORE";
             int next = state.retryCount() + 1;
             if (next > props.job().emotionRetries()) return "EXHAUSTED";
             emotions.put(tag, state.withRetry(next));
-            job.updateEmotionAssets(json.writeEmotions(emotions));
+            job.updateEmotionAssets(json.writeExpressionAssets(emotions));
             return "RETRY";
         });
         if ("EXHAUSTED".equals(verdict)) {
@@ -1164,24 +1432,24 @@ public class UgcPipelineWorker {
     }
 
     /** DERIVING/REFINING이면서 EMOTION_REFINE 키가 없는 감정 — 순수 판정(테스트 대상). */
-    static List<EmotionTag> pendingEmotionTags(Map<EmotionTag, EmotionAssetState> emotions, Map<String, String> scratch) {
-        List<EmotionTag> out = new ArrayList<>();
-        for (Map.Entry<EmotionTag, EmotionAssetState> e : emotions.entrySet()) {
+    static <K> List<K> pendingEmotionTags(Map<K, EmotionAssetState> emotions, Map<String, String> scratch) {
+        List<K> out = new ArrayList<>();
+        for (Map.Entry<K, EmotionAssetState> e : emotions.entrySet()) {
             EmotionAssetState s = e.getValue();
             if (!(s.is(EmotionAssetState.DERIVING) || s.is(EmotionAssetState.REFINING))) continue;
-            if (scratch.containsKey(externalKey(UgcStage.EMOTION_REFINE, e.getKey().name()))) continue;
+            if (scratch.containsKey(externalKey(UgcStage.EMOTION_REFINE, e.getKey().toString()))) continue;
             out.add(e.getKey());
         }
         return out;
     }
 
     /** DONE이 아니면서 CUTOUT 키가 없는(미제출) 감정 — 순수 판정(테스트 대상). 원본 key가 없는 컷은 제출 불가라 제외. */
-    static List<EmotionTag> pendingCutoutTags(Map<EmotionTag, EmotionAssetState> emotions, Map<String, String> scratch) {
-        List<EmotionTag> out = new ArrayList<>();
-        for (Map.Entry<EmotionTag, EmotionAssetState> e : emotions.entrySet()) {
+    static <K> List<K> pendingCutoutTags(Map<K, EmotionAssetState> emotions, Map<String, String> scratch) {
+        List<K> out = new ArrayList<>();
+        for (Map.Entry<K, EmotionAssetState> e : emotions.entrySet()) {
             EmotionAssetState s = e.getValue();
             if (s.is(EmotionAssetState.DONE) || s.key() == null) continue;
-            if (scratch.containsKey(externalKey(UgcStage.CUTOUT, e.getKey().name()))) continue;
+            if (scratch.containsKey(externalKey(UgcStage.CUTOUT, e.getKey().toString()))) continue;
             out.add(e.getKey());
         }
         return out;
@@ -1214,10 +1482,16 @@ public class UgcPipelineWorker {
     }
 
     /** 유저 리롤(REVIEW_WAIT) 진입점 — 기존 버전을 보존한 채 DERIVING으로 되돌린다. 서비스 계층 전용. */
-    void resetEmotionForReroll(CharacterCreationJob job, EmotionTag tag) {
-        Map<EmotionTag, EmotionAssetState> emotions = json.readEmotions(job.getEmotionAssetsJson());
+    void resetEmotionForReroll(CharacterCreationJob job, String tag) {
+        Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
         EmotionAssetState state = emotions.getOrDefault(tag, EmotionAssetState.deriving(0));
         emotions.put(tag, state.derivingAgain(0));
-        job.updateEmotionAssets(json.writeEmotions(emotions));
+        if (job.usesDynamicExpressions()) {
+            Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+            scratch.remove("K_GPT_RECEIPT_" + tag);
+            scratch.put("K_GPT_QUALITY_" + tag, "high");
+            job.updateExternalJobs(json.writeScratch(scratch));
+        }
+        job.updateEmotionAssets(json.writeExpressionAssets(emotions));
     }
 }

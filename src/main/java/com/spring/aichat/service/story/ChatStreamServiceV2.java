@@ -613,6 +613,7 @@ public class ChatStreamServiceV2 {
             decision.provider(), decision.ttftDeadlineMs(), room.getId());
 
         Set<String> sanitizerSpeakers = collectSanitizerSpeakers(room);
+        java.util.List<com.spring.aichat.domain.character.Character> expressionCharacters = heroineRepository.findByChatRoom_Id(room.getId()).stream().map(ChatRoomHeroine::getCharacter).filter(java.util.Objects::nonNull).toList();
         Set<String> heroineNames = collectHeroineNames(room);  // [E-1 A-2] scenesJson isSystem 판정용
 
         // first_scene 콜백 — V1 패턴 (배열의 첫 객체)
@@ -625,7 +626,7 @@ public class ChatStreamServiceV2 {
                 SceneResponse firstScene = new SceneResponse(
                     scene.speaker(),
                     sanitizedNarration, sanitizedDialogue, emotion,
-                    null, null, null, null);
+                    null, null, null, null).withExpression(expressionCharacters.stream().filter(c -> com.spring.aichat.service.ugc.ExpressionResolver.matches(c, scene.speaker())).findFirst().orElse(null), scene.expressionId());
                 emitter.send(SseEmitter.event().name("first_scene")
                     .data(objectMapper.writeValueAsString(firstScene)));
             } catch (Exception e) {
@@ -705,7 +706,7 @@ public class ChatStreamServiceV2 {
                 DialogueSanitizer.stripSpeakerPrefix(s.narration(), sanitizerSpeakers),
                 DialogueSanitizer.stripSpeakerPrefix(s.dialogue(), sanitizerSpeakers),
                 LlmOutputParser.parseEmotion(s.emotion()),
-                null, null, null, null))
+                null, null, null, null).withExpression(expressionCharacters.stream().filter(c -> com.spring.aichat.service.ugc.ExpressionResolver.matches(c, s.speaker())).findFirst().orElse(null), s.expressionId()))
             .collect(Collectors.toList());
 
         // 마지막 씬 emotion (응답 DTO 대표 emotion)
@@ -1516,6 +1517,8 @@ public class ChatStreamServiceV2 {
                 m.put("isNpc", isNpc);
                 // [2026-08-07 리플레이] 씬 컨텍스트 보존(additive) — 과거 씬 재현 시 복장·장소·
                 // 시간 복원용. 레거시 로그(필드 없음)는 프론트가 현재값 폴백.
+                if (s.expressionId() != null) m.put("expressionId", s.expressionId());
+                if (s.expressionImageUrl() != null) m.put("expressionImageUrl", s.expressionImageUrl());
                 if (s.location() != null) m.put("location", s.location());
                 if (s.time() != null) m.put("time", s.time());
                 if (s.outfit() != null) m.put("outfit", s.outfit());

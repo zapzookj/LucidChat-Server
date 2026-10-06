@@ -28,6 +28,17 @@ public class UgcJobJson {
 
     // ── 감정 상태 맵 ──
 
+    public Map<String, EmotionAssetState> readExpressionAssets(String raw) {
+        if (raw == null || raw.isBlank()) return new LinkedHashMap<>();
+        try { return objectMapper.readValue(raw, new TypeReference<LinkedHashMap<String, EmotionAssetState>>() {}); }
+        catch (Exception e) { throw new IllegalStateException("expression assets parse failed", e); }
+    }
+
+    public String writeExpressionAssets(Map<String, EmotionAssetState> map) {
+        try { return objectMapper.writeValueAsString(map); }
+        catch (Exception e) { throw new IllegalStateException("expression assets serialization failed", e); }
+    }
+
     public Map<EmotionTag, EmotionAssetState> readEmotions(String json) {
         if (json == null || json.isBlank()) return new EnumMap<>(EmotionTag.class);
         try {

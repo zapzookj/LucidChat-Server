@@ -107,8 +107,13 @@ public record AiJsonOutput(
         String speaker,
         String narration, String dialogue, String emotion,
         String location, String time, String outfit,
-        @JsonProperty("bgmMode") String bgmMode
+        @JsonProperty("bgmMode") String bgmMode,
+        @JsonProperty("expression_id") String expressionId
     ) {
+        public Scene(String speaker, String narration, String dialogue, String emotion,
+                     String location, String time, String outfit, String bgmMode) {
+            this(speaker, narration, dialogue, emotion, location, time, outfit, bgmMode, null);
+        }
         public Scene(String narration, String dialogue, String emotion,
                      String location, String time, String outfit, String bgmMode) {
             this(null, narration, dialogue, emotion, location, time, outfit, bgmMode);

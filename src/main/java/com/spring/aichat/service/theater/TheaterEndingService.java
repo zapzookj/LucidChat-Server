@@ -324,7 +324,7 @@ public class TheaterEndingService {
         );
 
         String responseText = openRouterClient.completeJson(
-            openAiProperties.model(), systemPrompt,
+            openAiProperties.model(), systemPrompt + com.spring.aichat.service.ugc.ExpressionCatalog.prompt(heroine.getExpressionCatalogJson()),
             "Generate ending now.", 1800, 0.85
         );
 
@@ -340,7 +340,7 @@ public class TheaterEndingService {
                         parseEmotion(s.path("emotion").asText("NEUTRAL")),
                         s.path("location").asText(""),
                         null, null, null
-                    ));
+                    ).withExpression(heroine, s.path("expression_id").isTextual() ? s.path("expression_id").asText() : null));
                 }
             }
             String closingQuote = node.path("closing_quote").asText("");
@@ -378,7 +378,7 @@ public class TheaterEndingService {
 
         return List.of(new SceneResponse(
             narration, quote, com.spring.aichat.domain.enums.EmotionTag.RELAX, defaultLoc, null, null, null
-        ));
+        ).withExpression(heroine, null));
     }
 
     /** LLM의 emotion 문자열을 EmotionTag enum으로 안전 변환 */

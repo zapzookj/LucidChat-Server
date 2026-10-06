@@ -198,6 +198,7 @@ public class TheaterPromptAssembler {
         // ─── 4. 현재 배치의 화자 (단일 히로인) ───
         // [Polish-v2] Dialogue 모드 수준의 깊이로 확장 — 히로인 정체성을 프롬프트에 완전 주입
         Character heroine = ctx.speakerHeroine();
+        sb.append(com.spring.aichat.service.ugc.ExpressionCatalog.prompt(heroine.getExpressionCatalogJson()));
         ChatRoom room = ctx.room();
         boolean secret = ctx.effectiveSecretMode();
         RelationStatus status = room != null && room.getStatusLevel() != null
@@ -466,6 +467,7 @@ public class TheaterPromptAssembler {
                   "dialogue": "이 씬에서 발생하는 대사 (heroine_speaks/avatar_speaks/dialogue_exchange일 때).",
                   "speaker": "%s" | "AVATAR" | "",
                   "scene_type": "narration" | "heroine_speaks" | "avatar_speaks" | "dialogue_exchange",
+                  "expression_id": "ID from the current heroine's expression catalog; AVATAR, narration-only or no catalog: null",
                   "emotion": "NEUTRAL | JOY | SAD | ANGRY | SHY | SURPRISE | PANIC | RELAX | DISGUST | FRIGHTENED | FLIRTATIOUS | HEATED | DUMBFOUNDED | SULKING | PLEADING",
                   "location": "⚠️ MUST be one enum value listed in 'Allowed Location enum values' above. Do NOT invent location names or write in Korean.",
                   "time": "DAY | NIGHT | DAWN | SUNSET | MORNING | AFTERNOON | EVENING",

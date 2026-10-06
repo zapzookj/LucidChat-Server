@@ -44,7 +44,8 @@ public final class UgcReviewDtos {
         /** EmotionTag → CloudFront URL (확정 에셋 15종). */
         Map<String, String> emotionAssets,
         /** [세계관 빌더] 소속 UGC 월드 (null=미연결 — 캐릭터 공개 심사에 월드 검수 자동 포함). */
-        WorldSection world
+        WorldSection world,
+        List<com.spring.aichat.dto.ugc.CharacterExpression> expressionCatalog
     ) {}
 
     /** [세계관 빌더] 승인 큐 상세의 월드 섹션 — lore·장소·배경을 한 화면에서 검수. */
