@@ -1,0 +1,49 @@
+{
+  "observedAt": "2026-10-06T09:00:00.005452+00:00",
+  "backendSha": "50b2aaccb59b229bfe12c7334a2cbf7936674586",
+  "containerStatus": "running",
+  "containerHealth": null,
+  "manifestDigest": "sha256:7185a97d7dbeadda9fe010ad834317cd5aad6392700a37704cd272cc409bdfc4",
+  "runningImageMatchesCommitManifest": true,
+  "environmentMatches": {
+    "TTS_ENABLED": true,
+    "TTS_MODEL": true,
+    "TTS_ENERGY_COST": true,
+    "TTS_FORMATTER_MODEL": true,
+    "ELEVENLABS_API_KEY": true,
+    "TTS_AUDIO_BUCKET": true,
+    "TTS_S3_ACCESS_KEY": true,
+    "TTS_S3_SECRET_KEY": true,
+    "TTS_S3_ENDPOINT": true,
+    "TTS_SECRET_FILE": true,
+    "TTS_STORAGE_SECRET_FILE": true,
+    "TTS_VOICE_AIRI": true,
+    "TTS_VOICE_YEONHWA": true,
+    "TTS_VOICE_TAERI": true,
+    "TTS_VOICE_LUNA": true,
+    "TTS_VOICE_CLAIRE": true,
+    "TTS_VOICE_ROSETTA": true,
+    "TTS_VOICE_CHAERIN": true,
+    "TTS_VOICE_SIERRA": true,
+    "TTS_VOICE_EDEL": true,
+    "TTS_VOICE_SEOLAH": true
+  },
+  "database": {
+    "migration": 39,
+    "priorCharacters": 26,
+    "currentCharacters": 26,
+    "preservedOtherColumns": 26,
+    "preservedAppearanceTags": 26,
+    "priorRooms": 46,
+    "currentRooms": 46,
+    "priorRoomsOffAndUnapproved": 46,
+    "priorLegacyJobs": 22,
+    "legacyJobsPreserved": 22,
+    "ttsAudioCount": 0,
+    "ttsAudioStates": {}
+  },
+  "publicHealthStatus": 200,
+  "publicHealth": {
+    "text": "OK"
+  }
+}

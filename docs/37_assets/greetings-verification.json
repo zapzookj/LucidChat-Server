@@ -1,0 +1,113 @@
+{
+  "observedAt": "2026-10-06T08:59:44.570412+00:00",
+  "greetings": [
+    {
+      "slug": "airi",
+      "status": 200,
+      "bytes": 198993,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "chaerin",
+      "status": 200,
+      "bytes": 78795,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "claire",
+      "status": 200,
+      "bytes": 175890,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "edel",
+      "status": 200,
+      "bytes": 42015,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "luna",
+      "status": 200,
+      "bytes": 78795,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "rosetta",
+      "status": 200,
+      "bytes": 128661,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "seolah",
+      "status": 200,
+      "bytes": 100355,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "sierra",
+      "status": 200,
+      "bytes": 145494,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "taeri",
+      "status": 200,
+      "bytes": 45777,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    },
+    {
+      "slug": "yeonhwa",
+      "status": 200,
+      "bytes": 122391,
+      "contentType": "audio/mpeg",
+      "cacheControl": "no-store",
+      "nosniff": "nosniff",
+      "sha256MatchesSelected": true
+    }
+  ],
+  "accessBoundaries": [
+    {
+      "path": "/api/v1/tts/rooms/1",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/tts/rooms/1/responses/unknown",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/tts/rooms/1/responses/unknown/clips/0",
+      "status": 401
+    },
+    {
+      "path": "/api/v1/tts/greetings/not-a-character",
+      "status": 404
+    }
+  ]
+}

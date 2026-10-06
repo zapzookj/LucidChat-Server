@@ -67,6 +67,6 @@ V1/V2 final_result·현재 첫 씬·final-only 오프닝·큐·복원 이력·�
 
 ## 운영 상태·적용 순서
 
-제품 구현·검증과 private R2 첫인사 준비를 마쳤다. **TTS 푸시/배포·V39 운영 적용·TTS env 활성화는 아직 실행하지 않았다.** 완료된 스튜디오 릴리스와 구별한다.
+**2026-10-06 사용자 명시 승인으로 운영 배포 완료.** BE `50b2aac`·FE `98fa3a2` master 푸시, Actions/Vercel Production 성공, 실행 이미지/21개 TTS env 일치·V39를 확인했다. 기존46방 자동OFF/null·26캐릭터 전체 필드·22레거시 잡 보존, 운영 첫인사10종 SHA/헤더·익명 개인경로401, 별도 private canary PUT/GET/DELETE/HEAD404를 대조했다. [실제 릴리스·UGC 큐 복구 기록](37_TTS_Production_Rollout_RunPod_Queue_2026-10-06.md). 아래 설정은 운영에 적용됐으며, 유료 생성·정산·삭제의 로그인 계정 운영 E2E와 Turbo 비교는 남아 있다.
 
 운영 시 ElevenLabs 매핑·별도 R2 키를 서버 비밀 env로 설정하고 `TTS_ENABLED=true`, `TTS_MODEL=eleven_v4`, `TTS_ENERGY_COST=1`을 적용한다. V39/서버/FE 반영 후 인증·무료 인사·삭제·실제 생성 정산을 확인한다. `TTS_ENABLED=false`로 신규 생성/자동 차감을 중단할 수 있다. 모델 변경은 새 생성에만 적용하고 이미 준비한 음성은 재합성하지 않는다.

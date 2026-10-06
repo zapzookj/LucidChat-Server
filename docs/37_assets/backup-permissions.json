@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-10-06T09:13:38.438883+00:00",
+  "backupDirectory": "/opt/lucid/backups/tts-20261006T085247Z",
+  "dumpBytes": 1130837,
+  "envMode": "0o600",
+  "envTempExists": false,
+  "backupDirectoryMode": "0o700",
+  "backupFileModes": {
+    ".env": "0o600",
+    "docker-compose.prod.yml": "0o600",
+    "before-v39.sql": "0o600"
+  }
+}

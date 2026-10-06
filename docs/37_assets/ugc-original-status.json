@@ -1,0 +1,15 @@
+{
+  "observedAt": "2026-10-06T09:07:37.559872+00:00",
+  "originalRequests": [
+    {
+      "applicationJobId": 23,
+      "stage": "GOLDEN",
+      "http": 200,
+      "status": "COMPLETED",
+      "delayTimeMs": 5001859,
+      "executionTimeMs": 34074,
+      "errorPresent": false,
+      "outputPresent": true
+    }
+  ]
+}

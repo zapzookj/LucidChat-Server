@@ -1,0 +1,129 @@
+{
+  "before": {
+    "observedAt": "2026-10-06T08:55:04.169101+00:00",
+    "endpoints": [
+      {
+        "kind": "ugc",
+        "settings": {
+          "workersMin": 1,
+          "workersMax": 1,
+          "idleTimeout": 240,
+          "scalerType": "QUEUE_DELAY",
+          "scalerValue": 4
+        },
+        "jobs": {
+          "completed": 1241,
+          "failed": 9,
+          "inProgress": 0,
+          "inQueue": 2,
+          "retried": 1
+        },
+        "workers": {
+          "idle": 0,
+          "initializing": 1,
+          "ready": 0,
+          "running": 0,
+          "throttled": 0,
+          "unhealthy": 0
+        }
+      },
+      {
+        "kind": "scene",
+        "settings": {
+          "workersMin": 0,
+          "workersMax": 2,
+          "idleTimeout": 5,
+          "scalerType": "QUEUE_DELAY",
+          "scalerValue": 4
+        },
+        "jobs": {
+          "completed": 452,
+          "failed": 6,
+          "inProgress": 0,
+          "inQueue": 0,
+          "retried": 4
+        },
+        "workers": {
+          "idle": 1,
+          "initializing": 0,
+          "ready": 1,
+          "running": 0,
+          "throttled": 1,
+          "unhealthy": 0
+        }
+      }
+    ]
+  },
+  "after": {
+    "observedAt": "2026-10-06T09:05:37.568810+00:00",
+    "endpoints": [
+      {
+        "kind": "ugc",
+        "settings": {
+          "workersMin": 0,
+          "workersMax": 1,
+          "idleTimeout": 240,
+          "scalerType": "QUEUE_DELAY",
+          "scalerValue": 4
+        },
+        "jobs": {
+          "completed": 1243,
+          "failed": 9,
+          "inProgress": 0,
+          "inQueue": 0,
+          "retried": 1
+        },
+        "workers": {
+          "idle": 0,
+          "initializing": 0,
+          "ready": 0,
+          "running": 1,
+          "throttled": 0,
+          "unhealthy": 0
+        }
+      },
+      {
+        "kind": "scene",
+        "settings": {
+          "workersMin": 0,
+          "workersMax": 2,
+          "idleTimeout": 5,
+          "scalerType": "QUEUE_DELAY",
+          "scalerValue": 4
+        },
+        "jobs": {
+          "completed": 452,
+          "failed": 6,
+          "inProgress": 0,
+          "inQueue": 0,
+          "retried": 4
+        },
+        "workers": {
+          "idle": 2,
+          "initializing": 0,
+          "ready": 2,
+          "running": 0,
+          "throttled": 0,
+          "unhealthy": 0
+        }
+      }
+    ]
+  },
+  "temporaryMinWorkers": 1,
+  "restoredMinWorkers": 0,
+  "maxWorkersPreserved": true,
+  "manualResubmissions": 0,
+  "workerLogObservations": [
+    {
+      "source": "system",
+      "at": "2026-10-06T08:59:46Z",
+      "message": "error creating container ... context deadline exceeded"
+    },
+    {
+      "source": "container",
+      "at": "2026-10-06T09:04:57.984915159Z",
+      "message": "worker-comfyui - Job completed. Returning 2 image(s)."
+    }
+  ],
+  "fullPreAllocationRootCause": "unconfirmed"
+}

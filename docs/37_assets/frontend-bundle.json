@@ -1,0 +1,17 @@
+{
+  "rootStatus": 200,
+  "scripts": [
+    {
+      "path": "/assets/index-CnKXujoI.js",
+      "bytes": 1242575,
+      "ttsMarkers": {
+        "tts/greetings": true,
+        "tts/rooms": true,
+        "자동 보이스": true,
+        "tts_enabled": false,
+        "useTtsPlayback": false,
+        "보이스": true
+      }
+    }
+  ]
+}
