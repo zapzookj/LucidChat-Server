@@ -1,0 +1,80 @@
+{
+  "observedAt": "2026-10-07T14:12:14.957262+00:00",
+  "backendSha": "66d7ce00fc5c3890b3a3db81ed4287a8e6d4508c",
+  "container": "running",
+  "health": null,
+  "imageMatchesTargetCommit": true,
+  "imageDigest": "sha256:9f76598c2d14496e5a12ed5067700917f096b5ab7ac9ca12f7d3154b0c5b35be",
+  "environmentUnchanged": true,
+  "envFileMode": "600",
+  "migrationBefore": 39,
+  "migrationAfter": 39,
+  "charactersBefore": 26,
+  "charactersAfter": 26,
+  "priorCharacterRowsUnchanged": 26,
+  "runpodSettingsUnchanged": true,
+  "workers": {
+    "ugc": {
+      "workersMin": 0,
+      "workersMax": 1
+    },
+    "scene": {
+      "workersMin": 0,
+      "workersMax": 2
+    }
+  },
+  "stage0ModelOverrides": {
+    "UGC_STAGE0_MODEL": null,
+    "UGC_PIPELINE_STAGE0_MODEL": null
+  },
+  "publicHealthHttp": 200,
+  "publicHealth": "OK",
+  "runtime": {
+    "jarSha256": "b2617d5811010a5e9c01b36c6a58cde945edc859619ec78728f407e16cbc88bf",
+    "stage0ModelLines": {
+      "BOOT-INF/classes/application.yml": [
+        "stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)"
+      ]
+    },
+    "wf1TemplateNegativeEmpty": true,
+    "wf1MatchesSource": true,
+    "wf2Sha256": "f6cd328374f6e9119281febc339653f122a88003997e08e11db2e9fb9edcc90b",
+    "wf2MatchesSource": true,
+    "completePromptInstructionPresent": true,
+    "classes": {
+      "service/ugc/ConceptStructuringService": {
+        "sha256": "b033dee3c939ab2bc5f0c4ca05050c10c1228d8afafcd59fd2a6daeebae75959",
+        "matchesLocalCompiledClass": true
+      },
+      "service/ugc/UgcPromptAssembler": {
+        "sha256": "5b4233a7c5cef92c8fb3a4df5780840fcbe9fc1717276dd081faafd5e499e834",
+        "matchesLocalCompiledClass": false
+      },
+      "service/ugc/UgcWorkflowFactory": {
+        "sha256": "37d6fc4e3455d166bc47c25961291a46f50b0dd0f609e942bea82cdd42e52216",
+        "matchesLocalCompiledClass": true
+      },
+      "service/ugc/UgcPipelineWorker": {
+        "sha256": "8ce7173330a5e4c79ca5304e034cf8ce4854d14bc5e81b9ca99a4682d5a8cffe",
+        "matchesLocalCompiledClass": false
+      },
+      "dto/ugc/StructuredConcept": {
+        "sha256": "27701dc2bae8fcc04f76c137fd83c9dd553b2ac983c166077f0ad219549ede9f",
+        "matchesLocalCompiledClass": true
+      },
+      "dto/ugc/IllustrationPrompt": {
+        "sha256": "89281d6785015a59443d33936c0195de9580b4463cc707d8a46f53a86d2edae9",
+        "matchesLocalCompiledClass": true
+      },
+      "service/ugc/CharacterCreationService": {
+        "sha256": "bcfd9330a2e5eca42c8f0b9d94532e01a04c56f96444340f078a8a474b33bc43",
+        "matchesLocalCompiledClass": false
+      },
+      "service/admin/AdminUgcReviewService": {
+        "sha256": "914f0daa5c7d050c051886b41e461a141a7953ae762129b21c7095dbc33a254e",
+        "matchesLocalCompiledClass": false
+      }
+    }
+  },
+  "wf2MatchesSource": true
+}

@@ -27,3 +27,12 @@ WAI·LoRA·샘플러·해상도·FaceDetailer·기본 원화 배치2, neutral의
 ## 운영 관측
 
 배포 직전 직접 조회: 컨테이너 running, Flyway V39, 캐릭터26행, env 파일600, UGC min0/max1·씬 min0/max2. 앞선 docs/43의 UGC min1은 당시 관측이며 이번 배포가 RunPod 설정을 변경하지 않는다. 배포 후 실제 코드 SHA·Actions·이미지 digest·health 및 설정/데이터 보존 대조 결과를 아래에 추가한다.
+
+
+2026-10-07 23:12 KST 운영 배포 완료. 코드 `66d7ce00fc5c3890b3a3db81ed4287a8e6d4508c` master 푸시 후 [Actions 37634337038](https://github.com/zapzookj/LucidChat-Server/actions/runs/37634337038) 테스트·빌드·GHCR 업로드·SSH 배포 전체 success. 실행 컨테이너 이미지 digest와 이 코드 SHA의 GHCR manifest가 일치한다. 이후 문서 커밋이 생겨도 실제 배포 코드는 이 SHA다.
+
+공개 health HTTP200/`OK`, 컨테이너 running을 확인했다. env 전체·env파일600·Flyway V39·기존26캐릭터 모든행hash·RunPod 비교설정 보존. UGC min0/max1·씬 min0/max2 유지. Stage0 설정 `openai/gpt-5.6-sol`·환경 override 없음. 운영 JAR에 신규 완성형 이미지 지시가 존재하고 WF1 template/WF2 전체 JSON이 소스와 일치한다. 신규 negative는 template가 아니라 요청 빌더에서 node13에 주입된다.
+
+ConceptStructuringService·UgcWorkflowFactory·StructuredConcept·IllustrationPrompt는 로컬 compiled class와 전체 hash가 일치한다. UgcPromptAssembler·UgcPipelineWorker·CharacterCreationService·AdminUgcReviewService는 전체 hash가 달라 변경 메서드를 disassembly로 대조했다. constant-pool 참조번호/주석 정렬 공백을 정규화한 원화 조립·Stage0/리롤·예약/제출·후보 선택·어드민 표시와 관련 lambda는 일치한다. 프로필 편집 lambda는 수정하지 않은 상태 오류 메시지의 컴파일러 String.valueOf 삽입으로 주소가 달라, 상태 가드 뒤 JSON 읽기부터 저장까지 전체 명령과 분기 대상(명령 순번으로 치환)을 대조해 일치를 확인했다. 전체 클래스나 lambda가 원문 그대로 같다고 표현하지 않는다. 라이브 이미지 생성/미관·실청구는 이 운영 확인에 포함하지 않는다.
+
+검증 [validation-summary](45_assets/validation-summary.json), CI [actions-release-proof](45_assets/actions-release-proof.json), 운영 [production-release-proof](45_assets/production-release-proof.json), 메서드 [runtime-method-proof](45_assets/runtime-method-proof.json). 비밀 env·전체 DB 관측·운영 JAR는 Git 제외 로컬에만 보존한다.

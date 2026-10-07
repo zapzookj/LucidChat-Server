@@ -1,0 +1,63 @@
+{
+  "UgcPromptAssembler": {
+    "constantPoolReferenceNormalizedDisassemblyMatches": false,
+    "diffLines": 153,
+    "differingMethods": [
+      "public java.lang.String qwenEmotionPrompt(com.spring.aichat.domain.enums.EmotionTag, java.lang.String, com.spring.aichat.dto.ugc.StructuredConcept$EmotionPromptOverride);"
+    ],
+    "selectedMethods": {
+      "public java.lang.String goldenShotPositive(java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>, boolean);": true,
+      "public java.lang.String goldenShotPositive(com.spring.aichat.dto.ugc.StructuredConcept, boolean);": true,
+      "public java.lang.String goldenShotNegative(com.spring.aichat.dto.ugc.StructuredConcept, boolean);": true,
+      "private static boolean lambda$goldenShotPositive$1(java.lang.String);": true
+    }
+  },
+  "UgcPipelineWorker": {
+    "constantPoolReferenceNormalizedDisassemblyMatches": false,
+    "diffLines": 637,
+    "differingMethods": [
+      "private void submitDynamicCutout(java.lang.Long, java.lang.String, java.lang.String);",
+      "private void submitGptExpression(java.lang.Long, java.lang.String);"
+    ],
+    "selectedMethods": {
+      "public void runStage0(java.lang.Long);": true,
+      "private boolean isConceptProcessing(java.lang.Long);": true,
+      "private com.spring.aichat.domain.ugc.CharacterCreationJob beginGoldenRun(java.lang.Long);": true,
+      "static java.lang.String withGenderDirective(java.lang.String, com.spring.aichat.domain.enums.CharacterGender);": true,
+      "private void submitGoldenShots(java.lang.Long, com.spring.aichat.dto.ugc.StructuredConcept);": true,
+      "public void runGoldenReroll(java.lang.Long);": true,
+      "private void lambda$runGoldenReroll$16(java.lang.Long, java.util.concurrent.atomic.AtomicReference, java.util.concurrent.atomic.AtomicReference, java.lang.String);": true,
+      "private void lambda$runGoldenReroll$15(com.spring.aichat.dto.ugc.StructuredConcept, com.spring.aichat.domain.ugc.CharacterCreationJob);": true,
+      "private void lambda$submitGoldenShots$14(java.lang.String, com.spring.aichat.dto.ugc.StructuredConcept, com.spring.aichat.external.UgcComfyClient$SubmitResult, com.spring.aichat.domain.ugc.CharacterCreationJob);": true,
+      "private java.lang.Boolean lambda$submitGoldenShots$13(java.lang.Long, java.lang.String, org.springframework.transaction.TransactionStatus);": true,
+      "private static java.lang.Boolean lambda$isConceptProcessing$11(com.spring.aichat.domain.ugc.CharacterCreationJob);": true,
+      "private void lambda$runStage0$10(java.lang.Long, java.util.concurrent.atomic.AtomicReference, com.spring.aichat.domain.ugc.CharacterCreationJob, java.util.concurrent.atomic.AtomicReference);": true,
+      "private void lambda$runStage0$9(com.spring.aichat.dto.ugc.StructuredConcept, com.spring.aichat.domain.ugc.CharacterCreationJob);": true
+    }
+  },
+  "CharacterCreationService": {
+    "constantPoolReferenceNormalizedDisassemblyMatches": false,
+    "diffLines": 354,
+    "differingMethods": [
+      "private static void requireStatus(com.spring.aichat.domain.ugc.CharacterCreationJob, com.spring.aichat.domain.ugc.CreationJobStatus);",
+      "private void lambda$updateProfileDraft$5(java.lang.String, java.lang.Long, com.spring.aichat.dto.ugc.UgcDtos$UpdateProfileRequest, org.springframework.transaction.TransactionStatus);"
+    ],
+    "selectedMethods": {
+      "public void selectGoldenShot(java.lang.String, java.lang.Long, int);": true,
+      "public void updateProfileDraft(java.lang.String, java.lang.Long, com.spring.aichat.dto.ugc.UgcDtos$UpdateProfileRequest);": true,
+      "private void lambda$updateProfileDraft$5(java.lang.String, java.lang.Long, com.spring.aichat.dto.ugc.UgcDtos$UpdateProfileRequest, org.springframework.transaction.TransactionStatus);": false,
+      "private java.lang.Boolean lambda$selectGoldenShot$2(java.lang.String, java.lang.Long, int, org.springframework.transaction.TransactionStatus);": true
+    },
+    "profileCopyBodyBranchMappedMatches": true
+  },
+  "AdminUgcReviewService": {
+    "constantPoolReferenceNormalizedDisassemblyMatches": false,
+    "diffLines": 285,
+    "differingMethods": [
+      "public void review(java.lang.String, java.lang.Long, com.spring.aichat.dto.admin.UgcReviewDtos$ReviewRequest);"
+    ],
+    "selectedMethods": {
+      "public com.spring.aichat.dto.admin.UgcReviewDtos$PromptInspection prompts(java.lang.Long);": true
+    }
+  }
+}
