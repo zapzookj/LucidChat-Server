@@ -1,0 +1,40 @@
+[
+  {
+    "kind": "ugc",
+    "template": {
+      "imageName": "zapzook/lucid-comfy-worker:0.3.0",
+      "containerDiskInGb": 40,
+      "volumeInGb": null,
+      "volumeMountPath": "/workspace",
+      "dockerStartCmd": null,
+      "dockerEntrypoint": null,
+      "isServerless": true
+    },
+    "envNames": [
+      "BUCKET_ACCESS_KEY_ID",
+      "BUCKET_ENDPOINT_URL",
+      "BUCKET_SECRET_ACCESS_KEY"
+    ],
+    "initTimeout": null,
+    "registryAuthConfigured": false
+  },
+  {
+    "kind": "scene",
+    "template": {
+      "imageName": "zapzook/lucid-diorama-worker:0.2.0",
+      "containerDiskInGb": 40,
+      "volumeInGb": null,
+      "volumeMountPath": "/workspace",
+      "dockerStartCmd": null,
+      "dockerEntrypoint": null,
+      "isServerless": true
+    },
+    "envNames": [
+      "BUCKET_ACCESS_KEY_ID",
+      "BUCKET_ENDPOINT_URL",
+      "BUCKET_SECRET_ACCESS_KEY"
+    ],
+    "initTimeout": null,
+    "registryAuthConfigured": false
+  }
+]

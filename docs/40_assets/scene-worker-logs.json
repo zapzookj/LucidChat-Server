@@ -1,0 +1,396 @@
+{
+  "observedAt": "2026-10-07T11:06:14.120520+00:00",
+  "workers": [
+    {
+      "worker": "c70a5e55",
+      "status": "RUNNING",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "uptimeSeconds",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-07T11:05:34.256Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090"
+      },
+      "http": 200,
+      "logLines": 603,
+      "categories": {
+        "start": 1,
+        "handler": 2,
+        "comfy": 194,
+        "gpu": 244,
+        "failure": 1
+      },
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.392903962Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.392905945Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.392907367Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.392908759Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.498249661Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.498255340Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.498259366Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.498263392Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.603160156Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.603162279Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.603164362Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.603165634Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.708700147Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.708704945Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.708708560Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.708711895Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.833924500Z",
+          "line": "\u001b[32m[INFO]\u001b[0m Model AutoencoderKL prepared for dynamic VRAM loading. 159MB Staged. 0 patches attached. Force pre-loaded 112 weights: 91 KB."
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.833950799Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.833955045Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.833959001Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.833962677Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986716501Z",
+          "line": "aimdo: /project/src/control.c:174:DEBUG:--- VRAM Stats ---"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986752806Z",
+          "line": "aimdo: /project/src/control.c:178:DEBUG:  Cuda:    13306 MB /   24080 MB Free"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986756521Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e19ef3ec9d0: Actual Resident VRAM = 1568 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986764323Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1a04e3e890: Actual Resident VRAM = 4928 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986766046Z",
+          "line": "aimdo: /project/src/model-vbar.c:86:DEBUG:VBAR 0x7e1ac12cf900: Actual Resident VRAM = 160 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:58.986767698Z",
+          "line": "aimdo: /project/src/model-vbar.c:90:DEBUG:Total VRAM for VBARs: 6656 MB"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:59.135737781Z",
+          "line": "aimdo: /project/src/control.c:174:DEBUG:--- VRAM Stats ---"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:05:59.135755838Z",
+          "line": "aimdo: /project/src/control.c:178:DEBUG:  Cuda:    15610 MB /   24080 MB Free"
+        },
+        {
+          "source": "container",
+          "ts": "2026-10-07T11:06:01.618618384Z",
+          "line": "worker-comfyui - Job completed. Returning 1 image(s)."
+        }
+      ]
+    },
+    {
+      "worker": "42e53ecb",
+      "status": "THROTTLED",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-07T10:46:37.237Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA RTX A4500"
+      },
+      "http": 200,
+      "logLines": 9,
+      "categories": {
+        "download": 1,
+        "start": 1,
+        "handler": 1
+      },
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-07T01:12:44Z",
+          "line": "worker is ready"
+        },
+        {
+          "source": "system",
+          "ts": "2026-10-07T10:46:52Z",
+          "line": "worker is ready"
+        }
+      ]
+    },
+    {
+      "worker": "6b5d18a3",
+      "status": "THROTTLED",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-09-28T07:37:33.197Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA RTX A4500"
+      },
+      "http": 200,
+      "logLines": 1,
+      "categories": {},
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-07T00:52:41Z",
+          "line": "worker is ready"
+        }
+      ]
+    },
+    {
+      "worker": "4c8e31e5",
+      "status": "UNHEALTHY",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-07T10:57:27.555Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA RTX A4500"
+      },
+      "http": 200,
+      "logLines": 13,
+      "categories": {
+        "download": 1,
+        "start": 6,
+        "handler": 6
+      },
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-07T00:45:09Z",
+          "line": "worker is ready"
+        },
+        {
+          "source": "system",
+          "ts": "2026-10-07T10:57:33Z",
+          "line": "worker is ready"
+        }
+      ]
+    },
+    {
+      "worker": "081890f4",
+      "status": "THROTTLED",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-06T15:40:31.413Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA RTX A4500"
+      },
+      "http": 200,
+      "logLines": 1,
+      "categories": {},
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-06T15:40:32Z",
+          "line": "worker is ready"
+        }
+      ]
+    },
+    {
+      "worker": "e7ff89ef",
+      "status": "THROTTLED",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-07T10:57:27.784Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090"
+      },
+      "http": 200,
+      "logLines": 6,
+      "categories": {
+        "download": 1
+      },
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-07T11:00:39Z",
+          "line": "worker is ready"
+        }
+      ]
+    },
+    {
+      "worker": "25217889",
+      "status": "THROTTLED",
+      "fieldNames": [
+        "dataCenterId",
+        "gpuCount",
+        "gpuTypeId",
+        "id",
+        "image",
+        "isStale",
+        "startedAt",
+        "status",
+        "version"
+      ],
+      "metadata": {
+        "startedAt": "2026-10-07T10:57:48.411Z",
+        "version": 7,
+        "gpuTypeId": "NVIDIA L4"
+      },
+      "http": 200,
+      "logLines": 6,
+      "categories": {
+        "download": 1
+      },
+      "exceptionTypes": [],
+      "safeStartupLines": [
+        {
+          "source": "system",
+          "ts": "2026-10-07T11:01:43Z",
+          "line": "worker is ready"
+        }
+      ]
+    }
+  ]
+}

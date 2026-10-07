@@ -1,0 +1,41 @@
+{
+  "observedAt": "2026-10-07T10:58:24.249887+00:00",
+  "images": [
+    {
+      "kind": "ugc",
+      "image": "zapzook/lucid-comfy-worker:0.3.0",
+      "platformDigest": "sha256:67647e8f235900c7b8b0bab9617aef3882103f392a3ec06731732b4325af3dab",
+      "compressedLayerBytes": 24315036625,
+      "compressedLayerGiB": 22.645,
+      "layerCount": 36,
+      "largestLayersGiB": [
+        5.804,
+        5.599,
+        3.08,
+        2.939,
+        1.557
+      ],
+      "created": "2026-08-03T23:12:42.717075952Z",
+      "architecture": "amd64",
+      "historyStepCount": 85
+    },
+    {
+      "kind": "scene",
+      "image": "zapzook/lucid-diorama-worker:0.2.0",
+      "platformDigest": "sha256:66dccb55fd427098f1faa1a874e00ac0e0f992bde595510e07ac51886ece94d5",
+      "compressedLayerBytes": 24516493796,
+      "compressedLayerGiB": 22.833,
+      "layerCount": 38,
+      "largestLayersGiB": [
+        5.804,
+        5.599,
+        3.08,
+        2.938,
+        1.558
+      ],
+      "created": "2026-07-29T00:30:56.528320218Z",
+      "architecture": "amd64",
+      "historyStepCount": 89
+    }
+  ]
+}

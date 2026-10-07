@@ -1,0 +1,218 @@
+{
+  "observedAt": "2026-10-07T10:51:32.725153+00:00",
+  "endpoints": [
+    {
+      "kind": "ugc",
+      "settings": {
+        "workersMin": 0,
+        "workersMax": 1,
+        "idleTimeout": 240,
+        "scalerType": "QUEUE_DELAY",
+        "scalerValue": 4,
+        "gpuTypeIds": [
+          "NVIDIA RTX A4000",
+          "NVIDIA RTX A4500",
+          "NVIDIA RTX 4000 Ada Generation",
+          "NVIDIA RTX 2000 Ada Generation",
+          "NVIDIA RTX A5000",
+          "NVIDIA L4",
+          "NVIDIA GeForce RTX 3090",
+          "NVIDIA GeForce RTX 4090"
+        ],
+        "gpuCount": 1,
+        "flashboot": true,
+        "networkVolumeId": "",
+        "templateId": "ny7o4sl5mi",
+        "locations": null,
+        "cudaVersions": null,
+        "executionTimeoutMs": 300000,
+        "version": 8
+      },
+      "jobs": {
+        "completed": 1243,
+        "failed": 9,
+        "inProgress": 0,
+        "inQueue": 1,
+        "retried": 2
+      },
+      "workersHealth": {
+        "idle": 0,
+        "initializing": 0,
+        "ready": 0,
+        "running": 0,
+        "throttled": 0,
+        "unhealthy": 0
+      },
+      "workerSummary": {
+        "idle": 0,
+        "initializing": 0,
+        "running": 0,
+        "throttled": 0,
+        "total": 0,
+        "unhealthy": 0
+      },
+      "workers": []
+    },
+    {
+      "kind": "scene",
+      "settings": {
+        "workersMin": 0,
+        "workersMax": 2,
+        "idleTimeout": 5,
+        "scalerType": "QUEUE_DELAY",
+        "scalerValue": 4,
+        "gpuTypeIds": [
+          "NVIDIA GeForce RTX 4090",
+          "NVIDIA RTX A5000",
+          "NVIDIA L4",
+          "NVIDIA GeForce RTX 3090",
+          "NVIDIA RTX A4000",
+          "NVIDIA RTX A4500",
+          "NVIDIA RTX 4000 Ada Generation",
+          "NVIDIA RTX 2000 Ada Generation"
+        ],
+        "gpuCount": 1,
+        "flashboot": true,
+        "networkVolumeId": "wwozr9jl4k",
+        "templateId": "5dr07cv1k9",
+        "locations": null,
+        "cudaVersions": null,
+        "executionTimeoutMs": 600000,
+        "version": 7
+      },
+      "jobs": {
+        "completed": 453,
+        "failed": 6,
+        "inProgress": 0,
+        "inQueue": 0,
+        "retried": 4
+      },
+      "workersHealth": {
+        "idle": 1,
+        "initializing": 1,
+        "ready": 1,
+        "running": 0,
+        "throttled": 0,
+        "unhealthy": 0
+      },
+      "workerSummary": {
+        "idle": 4,
+        "initializing": 1,
+        "running": 0,
+        "throttled": 1,
+        "total": 6,
+        "unhealthy": 0
+      },
+      "workers": [
+        {
+          "tag": "42e53ecb",
+          "status": "IDLE",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-10-07T10:46:37.237Z"
+          }
+        },
+        {
+          "tag": "6b5d18a3",
+          "status": "IDLE",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-09-28T07:37:33.197Z"
+          }
+        },
+        {
+          "tag": "4c8e31e5",
+          "status": "IDLE",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-09-28T08:14:00.434Z"
+          }
+        },
+        {
+          "tag": "c70a5e55",
+          "status": "THROTTLED",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-10-06T06:53:49.715Z"
+          }
+        },
+        {
+          "tag": "081890f4",
+          "status": "IDLE",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-10-06T15:40:31.413Z"
+          }
+        },
+        {
+          "tag": "d7227c68",
+          "status": "INITIALIZING",
+          "fields": [
+            "dataCenterId",
+            "gpuCount",
+            "gpuTypeId",
+            "id",
+            "image",
+            "isStale",
+            "startedAt",
+            "status",
+            "version"
+          ],
+          "timestamps": {
+            "startedAt": "2026-10-07T10:46:58.046Z"
+          }
+        }
+      ]
+    }
+  ]
+}

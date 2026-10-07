@@ -1,0 +1,132 @@
+[
+  {
+    "kind": "ugc",
+    "fields": [
+      "createdAt",
+      "executionTimeoutMs",
+      "flashboot",
+      "gpuCount",
+      "gpuTypeIds",
+      "id",
+      "idleTimeout",
+      "minCudaVersion",
+      "name",
+      "networkVolumeId",
+      "scalerType",
+      "scalerValue",
+      "templateId",
+      "userId",
+      "version",
+      "workersMax",
+      "workersMin",
+      "workersStandby"
+    ],
+    "constraints": {
+      "minCudaVersion": "12.6",
+      "workersStandby": 0,
+      "dataCenterIds": null,
+      "allowedCudaVersions": null,
+      "computeType": null,
+      "gpuCount": 1,
+      "gpuTypeIds": [
+        "NVIDIA RTX A4000",
+        "NVIDIA RTX A4500",
+        "NVIDIA RTX 4000 Ada Generation",
+        "NVIDIA RTX 2000 Ada Generation",
+        "NVIDIA RTX A5000",
+        "NVIDIA L4",
+        "NVIDIA GeForce RTX 3090",
+        "NVIDIA GeForce RTX 4090"
+      ],
+      "executionTimeoutMs": 300000
+    },
+    "workerHardware": []
+  },
+  {
+    "kind": "scene",
+    "fields": [
+      "createdAt",
+      "executionTimeoutMs",
+      "flashboot",
+      "gpuCount",
+      "gpuTypeIds",
+      "id",
+      "idleTimeout",
+      "minCudaVersion",
+      "name",
+      "networkVolumeId",
+      "networkVolumeIds",
+      "scalerType",
+      "scalerValue",
+      "templateId",
+      "userId",
+      "version",
+      "workersMax",
+      "workersMin",
+      "workersStandby"
+    ],
+    "constraints": {
+      "minCudaVersion": "12.6",
+      "workersStandby": 2,
+      "dataCenterIds": null,
+      "allowedCudaVersions": null,
+      "computeType": null,
+      "gpuCount": 1,
+      "gpuTypeIds": [
+        "NVIDIA GeForce RTX 4090",
+        "NVIDIA RTX A5000",
+        "NVIDIA L4",
+        "NVIDIA GeForce RTX 3090",
+        "NVIDIA RTX A4000",
+        "NVIDIA RTX A4500",
+        "NVIDIA RTX 4000 Ada Generation",
+        "NVIDIA RTX 2000 Ada Generation"
+      ],
+      "executionTimeoutMs": 600000
+    },
+    "workerHardware": [
+      {
+        "status": "IDLE",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA RTX A4500",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      },
+      {
+        "status": "IDLE",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA RTX A4500",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      },
+      {
+        "status": "IDLE",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA RTX A4500",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      },
+      {
+        "status": "THROTTLED",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      },
+      {
+        "status": "IDLE",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA RTX A4500",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      },
+      {
+        "status": "INITIALIZING",
+        "isStale": false,
+        "gpuTypeId": "NVIDIA GeForce RTX 4090",
+        "dataCenterId": "EU-RO-1",
+        "version": 7
+      }
+    ]
+  }
+]
