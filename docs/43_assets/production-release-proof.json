@@ -1,0 +1,68 @@
+{
+  "observedAt": "2026-10-07T13:09:51.982282+00:00",
+  "backendSha": "d3d299338db1248f6ebb58a74b0cf531871fc5d8",
+  "container": "running",
+  "health": null,
+  "imageMatchesTargetCommit": true,
+  "imageDigest": "sha256:072ff8caf5df6d76ba68755a4715e2165cfa92642bf9534424f8bc743ab04cd8",
+  "environmentUnchanged": true,
+  "envFileMode": "600",
+  "migrationBefore": 39,
+  "migrationAfter": 39,
+  "charactersBefore": 26,
+  "charactersAfter": 26,
+  "priorCharacterRowsUnchanged": 26,
+  "runpodSettingsUnchanged": true,
+  "workers": {
+    "ugc": {
+      "workersMin": 1,
+      "workersMax": 1
+    },
+    "scene": {
+      "workersMin": 0,
+      "workersMax": 2
+    }
+  },
+  "stage0ModelOverrides": {
+    "UGC_STAGE0_MODEL": null,
+    "UGC_PIPELINE_STAGE0_MODEL": null
+  },
+  "publicHealthHttp": 200,
+  "publicHealth": "OK",
+  "runtime": {
+    "jarSha256": "7a15d636078c320255ab603abd20b1d55187c1794ada22bf35c6e53f064af274",
+    "stage0ModelLines": {
+      "BOOT-INF/classes/application.yml": [
+        "stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)"
+      ]
+    },
+    "wf1NegativeEmpty": true,
+    "wf1MatchesSource": true,
+    "wf2Sha256": "f6cd328374f6e9119281febc339653f122a88003997e08e11db2e9fb9edcc90b",
+    "wf2MatchesSource": true,
+    "approvedInstructionPresent": true,
+    "classes": {
+      "service/ugc/ConceptStructuringService": {
+        "sha256": "c9aa8f0eb1ba690466eaf62b38a35dacfee2fa8dce8663cdb74e8f22357d7e82",
+        "matchesLocalCompiledClass": true
+      },
+      "service/ugc/UgcPromptAssembler": {
+        "sha256": "bd902d05b8729b00b9cfeb80afd9e7c806ed584876f8b362c496d7f8e5d3682d",
+        "matchesLocalCompiledClass": false
+      },
+      "service/ugc/UgcWorkflowFactory": {
+        "sha256": "0a8052a1d426dba8ddf866aaf4761c22095cccd7f83d808363e860833c240cb2",
+        "matchesLocalCompiledClass": true
+      },
+      "service/ugc/UgcPipelineWorker": {
+        "sha256": "8ded0909057095dfc690d547b5e889790874b3ba3d33925623e45baf49f6213d",
+        "matchesLocalCompiledClass": false
+      },
+      "dto/ugc/StructuredConcept": {
+        "sha256": "5f4455d58b88df79b8aa082268e58f901c97d4e75928501db7ddedd4d11d0ca6",
+        "matchesLocalCompiledClass": true
+      }
+    }
+  },
+  "wf2MatchesSource": true
+}

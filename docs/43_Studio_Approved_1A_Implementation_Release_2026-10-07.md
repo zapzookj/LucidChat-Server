@@ -31,4 +31,12 @@
 
 ## 배포 관측
 
-배포 전 직접 관측: 컨테이너 running, Flyway V39, 캐릭터26행, env 파일600, UGC min1/max1·씬 min0/max2. 환경 변수나 RunPod 설정을 바꾸지 않는다. 코드 커밋/CI 결과/운영 JAR·image digest·공개 health/배포 전후 대조는 배포 완료 후 기록한다.
+배포 전 직접 관측: 컨테이너 running, Flyway V39, 캐릭터26행, env 파일600, UGC min1/max1·씬 min0/max2.
+
+2026-10-07 22:09 KST 운영 배포 완료를 확인했다. 코드 커밋 `d3d299338db1248f6ebb58a74b0cf531871fc5d8` master 푸시 후 [Actions37625979012](https://github.com/zapzookj/LucidChat-Server/actions/runs/37625979012)가 unit test/build/image push/SSH 배포 전체 success다. 운영 실행 image digest는 해당 커밋 GHCR manifest와 일치한다. 문서 후속 커밋이 추가돼도 이 SHA가 실제 배포 코드다.
+
+공개 health HTTP200/`OK`, 실행 컨테이너 running, env 전체·env 파일600·Flyway V39·기존26캐릭터 모든 행 hash·RunPod 설정 전체 비교 항목을 보존했다. UGC min1/max1·씬 min0/max2 유지. Stage0 설정 `openai/gpt-5.6-sol`, 환경 override 없음. 운영 JAR의 승인 A 지시와 WF1 전체 JSON/빈 negative, WF2 전체 JSON을 소스와 대조했다.
+
+ConceptStructuringService/UgcWorkflowFactory/StructuredConcept는 로컬 compiled class와 전체 hash도 일치한다. UgcPromptAssembler/UgcPipelineWorker 전체 hash는 다르지만 변경된 원화 조립·Stage0/리롤·상태/예약/제출·관련 lambda 메서드15개가 constant-pool 참조번호와 javap 주석 정렬 공백을 정규화한 disassembly와 일치한다. 나머지 차이는 수정하지 않은 qwenEmotionPrompt/submitGptExpression/submitDynamicCutout의 Object 문자열 합성 코드에서 String.valueOf 추가와 명령주소 이동이다. 전체 클래스 hash가 같다고 기록하지 않는다.
+
+검증 요약 [validation-summary](43_assets/validation-summary.json), CI [actions-release-proof](43_assets/actions-release-proof.json), 운영 [production-release-proof](43_assets/production-release-proof.json), 메서드 [runtime-method-proof](43_assets/runtime-method-proof.json). 비밀 env/원본 DB·전체 JAR는 Git 제외 로컬에만 보존한다. 운영 새 캐릭터 빌드/원화 리롤 품질은 사용자 후속 테스트 대상으로 남긴다.

@@ -1,0 +1,17 @@
+{
+  "observedDate": "2026-10-07",
+  "command": "gradlew.bat test --tests '*Test' bootJar --no-daemon",
+  "result": "BUILD SUCCESSFUL",
+  "localXmlTotals": {
+    "tests": 348,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "uncommittedDioramaTestsExcludedFromRelease": 10,
+  "releaseScopeLocalTests": 338,
+  "originalIllustrationRelatedTests": 46,
+  "independentReview": "studio_preflight: no further blocking issue in current single-app/JVM context",
+  "additionalPaidImageOrLlmRequests": 0,
+  "productionPaidEndToEnd": "user will test after deployment"
+}
