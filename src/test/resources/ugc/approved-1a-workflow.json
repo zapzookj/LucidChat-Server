@@ -56,7 +56,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "ComfyUI",
+      "filename_prefix": "approved_1a_test",
       "images": [
         "17",
         0
@@ -69,7 +69,7 @@
   },
   "11": {
     "inputs": {
-      "seed": 115778582371004,
+      "seed": 2026100701,
       "steps": 30,
       "cfg": 4,
       "sampler_name": "euler",
@@ -99,7 +99,7 @@
   },
   "12": {
     "inputs": {
-      "text": "PLACEHOLDER_POSITIVE",
+      "text": "1girl, adult woman, gyaru, beautiful face, curvy, large breasts, narrow waist, wide hips, long hair, brown hair, ponytail, hair ornament, earrings, makeup, crop top, track jacket, open jacket, high-waist leggings, sneakers, idol trainee, smug, teasing smile, half-closed eyes, looking at viewer, looking down, confident, hand on hip, head tilt, solo, full body, dance studio, mirror, wooden floor, low angle, foreshortening, standing, studio lighting, rim lighting, depth of field",
       "clip": [
         "2",
         1
@@ -128,7 +128,7 @@
       "guide_size": 512,
       "guide_size_for": true,
       "max_size": 1024,
-      "seed": 234962801777585,
+      "seed": 2026110701,
       "steps": 20,
       "cfg": 4,
       "sampler_name": "euler",

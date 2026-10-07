@@ -28,12 +28,6 @@ public class UgcPromptAssembler {
 
     /** 검증 Export 값 (wf1/wf2 node 12 프리픽스). */
     static final String QUALITY_PREFIX = "masterpiece, best quality, newest, absurdres";
-    // [2026-10-06] WF-1 only: quality tags alone did not hold the requested 2D anime style.
-    static final String GOLDEN_ART_STYLE = "anime illustration, 2d, cel shading";
-    private static final java.util.Set<String> GOLDEN_STYLE_CONFLICTS = java.util.Set.of(
-        "photo", "photograph", "photography", "fashion photography", "photorealistic", "photorealism",
-        "3d", "3d render", "3d rendering", "cgi", "octane render", "unreal engine", "ray tracing",
-        "subsurface scattering", "disney", "disney style", "pixar", "pixar style");
 
     static final String WF2_POSE_TAGS = "standing, cowboy shot, looking at viewer";
 
@@ -168,22 +162,19 @@ public class UgcPromptAssembler {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * WF-1 = 프리픽스 + 성별 앵커 + 외형 태그 + 성격·무드 태그 + 씬 연출 태그.
-     * (중복 태그는 1회만 — LLM이 1girl/solo를 포함해도 안전. 검증 원본 프롬프트도 성격 태그를 포함했다.)
-     * <p>[2026-08-04 남캐] male이면 1boy + male focus(여캐 편향 억제 실측 태그).
+     * [2026-10-07 user-selected 1-A] WF-1 uses only the illustration LLM's three arrays.
+     * Preserve tag order and duplicates; no server quality/style/gender anchors or style exclusions.
+     * The selected gender is supplied as concept data, and still controls the male LoRA separately.
      * <p>[E-6.1.a · §2-6] 무성별 3인자 오버로드는 제거했다 — 어드민 인스펙션이 그 오버로드를 타
      * 남캐를 1girl 앵커로 재구성해 보여주고 있었다. 오버로드를 남기면 다음 호출부가 조용히
      * male=false로 컴파일된다.
      */
     public String goldenShotPositive(List<String> appearanceTags, List<String> personaTags,
                                      List<String> sceneTags, boolean male) {
-        StringBuilder sb = new StringBuilder(QUALITY_PREFIX).append(", ").append(GOLDEN_ART_STYLE)
-            .append(", ").append(anchor(male));
-        java.util.Set<String> seen = seedSeen(male);
-        appendGoldenTags(sb, appearanceTags, seen);
-        appendGoldenTags(sb, personaTags, seen);
-        appendGoldenTags(sb, sceneTags, seen);
-        return sb.toString();
+        return java.util.stream.Stream.of(appearanceTags, personaTags, sceneTags)
+            .filter(java.util.Objects::nonNull).flatMap(List::stream)
+            .filter(tag -> tag != null && !tag.isBlank()).map(String::trim)
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**
@@ -380,16 +371,6 @@ public class UgcPromptAssembler {
             Stay true to the persona defined in your identity section at all times — \
             your personality, values, flaws, and speech habits are who you are.
             You speak natural Korean that matches your defined tone.""".formatted(profile.name(), role);
-    }
-
-    private static void appendGoldenTags(StringBuilder sb, List<String> tags, java.util.Set<String> seen) {
-        if (tags == null) return;
-        appendTags(sb, tags.stream().filter(tag -> {
-            if (tag == null) return false;
-            String canonical = tag.trim().toLowerCase(java.util.Locale.ROOT).replace('_', ' ')
-                .replaceAll("^\\((.+):\\s*[0-9.]+\\)$", "$1").replaceAll("\\s+", " ");
-            return !GOLDEN_STYLE_CONFLICTS.contains(canonical);
-        }).toList(), seen);
     }
 
     private static void appendTags(StringBuilder sb, List<String> tags, java.util.Set<String> seen) {

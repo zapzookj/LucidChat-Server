@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -81,6 +82,8 @@ public class UgcPipelineWorker {
     private final TransactionTemplate txTemplate;
 
     private final java.util.Set<String> gptPolls = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Long> goldenRuns = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    static final String GOLDEN_SUBMITTING_KEY = "K_GOLDEN_SUBMITTING";
 
     private void runDynamicExpressionStage(Long jobId) {
         try {
@@ -239,27 +242,69 @@ public class UgcPipelineWorker {
 
     @Async
     public void runStage0(Long jobId) {
-        CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
-        if (job == null || job.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
+        CharacterCreationJob job = beginGoldenRun(jobId);
+        if (job == null) return;
 
         try {
+            var tags = new AtomicReference<ConceptStructuringService.IllustrationTags>();
+            var ready = new AtomicReference<StructuredConcept>();
             runWithRetries(jobId, "STAGE0", () -> {
-                // [2026-08-04 남캐] 성별 가이드 블록 병합 — 태그·자세·감정 연출의 산출 방향을
-                // Stage0에 강제(외형 힌트 [외형 지정] 블록과 동일 패턴, 스키마 무변경)
-                StructuredConcept concept = conceptStructuringService.structure(
-                    withGenderDirective(job.getConceptInputRaw(), job.getGenderOrDefault()),
-                    job.getRequestedName());
-                moderationService.assertStructuredConceptAllowed(concept, job.getConceptInputRaw(), job.getUserId());
-
-                String conceptJson = json.writeConcept(concept);
-                mutateJob(jobId, j -> j.applyStage0(conceptJson, concept.bgColor()));
-                submitGoldenShots(jobId, concept);
+                if (!isConceptProcessing(jobId)) return;
+                // Successful artwork tags/profile survive metadata or persistence retries in this attempt.
+                if (ready.get() == null) {
+                    String input = withGenderDirective(job.getConceptInputRaw(), job.getGenderOrDefault());
+                    if (tags.get() == null) tags.set(conceptStructuringService.generateIllustrationTags(input));
+                    if (!isConceptProcessing(jobId)) return;
+                    StructuredConcept concept = conceptStructuringService.structure(input, job.getRequestedName(), tags.get());
+                    if (!isConceptProcessing(jobId)) return;
+                    moderationService.assertStructuredConceptAllowed(concept, job.getConceptInputRaw(), job.getUserId());
+                    ready.set(concept);
+                }
+                StructuredConcept concept = ready.get();
+                mutateJob(jobId, j -> {
+                    if (j.getStatus() == CreationJobStatus.CONCEPT_PROCESSING)
+                        j.applyStage0(json.writeConcept(concept), concept.bgColor());
+                });
             });
+            // An ambiguous paid GPU POST must not cause a new tag/profile call or another POST.
+            submitGoldenShots(jobId, ready.get());
         } catch (ContentModerationException e) {
             // LLM 판정 차단 — 이미 과금된 상태이므로 전액 환불 (게이트 원칙: 유저 에너지 손실 없음)
             failAndRefund(jobId, UgcModerationService.BLOCK_MESSAGE);
         } catch (Exception e) {
             failAndRefund(jobId, "컨셉 처리 실패: " + e.getMessage());
+        } finally {
+            goldenRuns.remove(jobId);
+        }
+    }
+
+    private boolean isConceptProcessing(Long jobId) {
+        return jobRepository.findById(jobId).map(j -> j.getStatus() == CreationJobStatus.CONCEPT_PROCESSING).orElse(false);
+    }
+
+    /** Accepted jobs belong to the poller; an unacknowledged POST is never automatically repeated. */
+    private CharacterCreationJob beginGoldenRun(Long jobId) {
+        if (!goldenRuns.add(jobId)) return null;
+        try {
+            CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
+            if (job == null || job.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) {
+                goldenRuns.remove(jobId);
+                return null;
+            }
+            Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+            if (scratch.containsKey(UgcStage.GOLDEN.name())) {
+                goldenRuns.remove(jobId);
+                return null;
+            }
+            if (scratch.containsKey(GOLDEN_SUBMITTING_KEY)) {
+                failAndRefund(jobId, "원화 요청 접수를 확인하지 못했어요. 사용한 에너지를 환불했어요.");
+                goldenRuns.remove(jobId);
+                return null;
+            }
+            return job;
+        } catch (RuntimeException e) {
+            goldenRuns.remove(jobId);
+            throw e;
         }
     }
 
@@ -273,46 +318,44 @@ public class UgcPipelineWorker {
             .orElse(false);
     }
 
-    /**
-     * [남캐] Stage0 아트 디렉션 브리프 — 남성만 부착(여성은 기존 경로 무변).
-     *
-     * <p>[2026-08-04 방향 전환 — 종원 비판 수용] 규칙 누적(필수/금지 태그 목록)은 취향을 가르치지
-     * 못하고 분포만 잘라 표현력 단일화로 수렴한다(1차: 남성 어휘 규정 → bara 클러스터, 2차: 미형
-     * 명문화+금지 목록 → 표현 한정). 근본 원인은 Stage0의 태스크 정의('충실한 구조화 엔진')에
-     * <b>미학 목표가 부재</b>한 것 — 그래서 규칙 대신 <b>디자인 목표 한 줄</b>을 부여한다
-     * ('여성향 장르에서 인기 있을 모습으로 디자인'). 태그 선택은 모델의 장르 지식에 맡기고,
-     * 컨셉의 명시 지시는 언제나 우선(아저씨 컨셉도 온전히 가능 — 표현력 보존).
-     */
-    private static String withGenderDirective(String concept, com.spring.aichat.domain.enums.CharacterGender gender) {
-        if (!gender.isMale()) return concept;
-        return concept + """
-
-
-            [아트 디렉션 — 남성 캐릭터]
-            이 캐릭터는 남성이다 (appearance_tags는 1boy, male focus 기준 — 1girl 계열 금지).
-            일러스트 태그 산출의 목표는 설정의 축어적 번역이 아니라 **디자인**이다: 이 컨셉이 여성향 서브컬처 장르에서 인기 있는 남성 캐릭터로 그려진다면 어떤 모습일지 상상하고, 그 완성형을 태그로 옮겨라. 설정의 정체성(강함·지위·분위기)은 그대로 살리되, 그것을 *어떤 외형 어휘로 표현할지*는 장르 독자에게 매력적인 쪽을 골라라. base_pose와 감정 연출(emotion_prompts)도 같은 관점으로.
-            태그 접지(전 필드 공통): 모든 태그는 danbooru에 실존하는 정식 태그로만 산출하라. 그럴듯한 조어는 렌더에 전달되지 않는 유령 태그다(실측 사례: soft hair, layered hair, sharp eyes, bright eyes, detailed eyes, eye highlights, warm lighting, rim lighting — 전부 비실존). 특히: ① 헤어는 색·기장 + 검증 핸들 1계열로 간결하게 구성하라 — 컨셉에 맞는 핸들을 골라라: 시스루 댄디·프레시=choppy bangs(+messy hair), 가르마·도시적=parted bangs/parted hair(+swept bangs), 자연 볼륨=messy hair/wavy hair. 형태 태그를 그 이상 겹겹이 쌓으면 구식 실루엣으로 고정된다(Phase 4·5 매트릭스 실측). 회피 실측 3건: medium hair(남성에서 어깨선 장발화), curtained hair·short hair with long locks(90년대 일본식 실루엣 — 촌스러움 원인 확정). bangs 단독은 deprecated. 눈썹은 태그를 생략하는 것이 기본이다 — thick eyebrows는 짙은 블록 눈썹으로 과장 렌더된다(A/B 실측 확정, 컨셉이 굵은 눈썹을 명시 요구할 때만 사용) ② 조명은 형용사 대신 물리 광원을 놓아라(lamp, backlighting, sidelighting, sunset 등 — 단 backlighting/sidelighting 혼용 금지) ③ 어두운 씬에서 pale skin은 회보라 송장톤으로 렌더된다(PoC 실측) — 창백함이 컨셉의 명시 요구가 아니면 쓰지 말고, 혈색은 light blush로. ④ 성별 앵커 유지(잡 14 실측): appearance_tags 체형 블록에 남성 신체 명시 태그(adult는 항상 필수)를 포함하되, 체형 어휘는 컨셉의 스펙트럼을 따르라 — 강골·기사=tall male, muscular, broad shoulders / 표준=tall male, toned / 가녀린 미소년=slender, narrow shoulders(이 경우에도 adult 유지). 모든 남캐에 같은 체형 스택을 쓰면 얼굴·체형이 동질화된다(Phase 7 실측 — 카일과 아셀이 같은 떡대로 렌더). 여성 분포가 지배적인 눈가 태그(tareme, long eyelashes 등)와 여성 편중 씬이 겹겹이 쌓이면 1boy 앵커와 Male LoRA를 압도해 얼굴·체형이 여성으로 드리프트된다. 여성 편중 씬의 대표 사례 = 아이돌 콘서트 무대 클러스터(spotlight, audience, glowstick, confetti — 잡 14·16 실측). 채택하려면 스파클 계열 태그를 빼고 남성 명시 태그를 반드시 강화하라. 그 외에도 여성 분포 태그는 꼭 필요한 것만 선별하고, 쌓일수록 남성 명시 태그로 균형을 잡아라.
-            대표 컷 연출(scene_tags): 황금샷은 이 캐릭터의 **대표 화보 컷**이다 — looking at viewer(눈맞춤)를 반드시 포함하고, 표정은 컨셉의 시그니처를 따르라: 밝음·다정=light smile, smirk / 냉철·과묵=expressionless, serious(눈맞춤·gradient eyes와 결합하면 생기가 유지된다 — Phase 7 실측, 컨셉 불문 미소 강제 금지) / 오만·나른=smug, half-closed eyes. 눈 발색은 gradient eyes로 살려라. sparkling eyes는 조용한 씬에서만 선택적으로 쓰고, 무대 조명·이펙트 씬(spotlight, lens flare, confetti 등)에서는 반짝임이 중첩 과장되니 넣지 마라(잡 16 실측). 조명은 무드가 어두운 컨셉이어도 인물이 살아 보이는 포인트 광원을 넣어라. 유일한 금지 조합: 내리깐 시선+반개안+무표정+창백을 동시에 쌓아 생기를 전부 죽이는 구성(Phase 2 실측).
-            단, 유저 컨셉이 특정 인상(중년의 관록, 거친 야성 등)을 명시적으로 요구하면 언제나 그 지시가 우선한다.""";
+    /** Selected gender is concept data, without the previous long image-tag brief. */
+    static String withGenderDirective(String concept, com.spring.aichat.domain.enums.CharacterGender gender) {
+        return concept + "\n\n[캐릭터 성별]: " + (gender.isMale() ? "남성" : "여성");
     }
 
     private void submitGoldenShots(Long jobId, StructuredConcept concept) {
+        CharacterCreationJob current = jobRepository.findById(jobId).orElse(null);
+        if (current == null || current.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
         boolean male = isMaleJob(jobId);
         String positive = promptAssembler.goldenShotPositive(
             concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male);
         var workflow = workflowFactory.buildGoldenShot(positive, "job_" + jobId + "_golden", male);
+        String reservation = java.util.UUID.randomUUID().toString();
+        boolean claimed = Boolean.TRUE.equals(txTemplate.execute(tx -> {
+            CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
+            if (locked == null || locked.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return false;
+            Map<String, String> scratch = json.readScratch(locked.getExternalJobsJson());
+            if (scratch.containsKey(UgcStage.GOLDEN.name()) || scratch.containsKey(GOLDEN_SUBMITTING_KEY)) return false;
+            scratch.put(GOLDEN_SUBMITTING_KEY, reservation);
+            locked.updateExternalJobs(json.writeScratch(scratch));
+            return true;
+        }));
+        if (!claimed) return;
         var submit = comfyClient.submit(workflow, null, webhookUrl(jobId, UgcStage.GOLDEN, null));
-        recordExternalJob(jobId, UgcStage.GOLDEN.name(), submit.jobId());
         // [2026-08-05 디자인 리롤] 이 배치의 외형 스냅샷 기록 — startIndex = 현재 누적 키 수
         // (배치 이미지는 웹훅 완료 시점에 append되므로 제출 시점 카운트가 곧 이 배치의 시작 인덱스).
-        // 재시도 재제출 시 동일 startIndex 중복 기록은 resolveSnapshot이 마지막 것을 취해 무해.
+        // This call is outside automatic retries; an ambiguous POST is not submitted again.
         mutateJob(jobId, j -> {
+            if (j.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
             Map<String, String> scratch = json.readScratch(j.getExternalJobsJson());
+            if (!reservation.equals(scratch.get(GOLDEN_SUBMITTING_KEY))) return;
             List<UgcJobJson.GoldenSnapshot> snaps =
                 new ArrayList<>(json.readGoldenSnapshots(scratch.get(GOLDEN_SNAPSHOTS_KEY)));
             int startIndex = json.readKeys(j.getGoldenShotKeysJson()).size();
             snaps.add(new UgcJobJson.GoldenSnapshot(startIndex, json.writeConcept(concept)));
             scratch.put(GOLDEN_SNAPSHOTS_KEY, json.writeGoldenSnapshots(snaps));
+            scratch.remove(GOLDEN_SUBMITTING_KEY);
+            scratch.put(UgcStage.GOLDEN.name(), submit.jobId());
             j.updateExternalJobs(json.writeScratch(scratch));
         });
         log.info("[UGC-WORKER] WF-1 submitted: jobId={}, runpod={}", jobId, submit.jobId());
@@ -321,41 +364,53 @@ public class UgcPipelineWorker {
     /** 황금샷 배치 리롤 (과금은 서비스 계층에서 완료된 상태). */
     @Async
     public void runGoldenReroll(Long jobId) {
-        CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
-        if (job == null || job.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
+        CharacterCreationJob job = beginGoldenRun(jobId);
+        if (job == null) return;
         try {
             // [2026-07-21 리롤 외형 수정] 외형 지정이 동봉된 리롤 — 외형 전용 경량 재구조화 후 제출.
-            // 페르소나·서사·유저 편집분은 보존되고 외형 태그·씬·배경색·외형 서술만 바뀐다.
+            // 프로필 성격·서사·유저 편집분은 보존되고 이미지 태그 3종·외형 메타데이터만 바뀐다.
             String hintsBlock = json.readScratch(job.getExternalJobsJson()).get(APPEARANCE_EDIT_KEY);
             if (hintsBlock != null && !hintsBlock.isBlank()) {
+                var tags = new AtomicReference<ConceptStructuringService.IllustrationTags>();
+                var ready = new AtomicReference<StructuredConcept>();
                 runWithRetries(jobId, "APPEARANCE_EDIT", () -> {
                     CharacterCreationJob fresh = jobRepository.findById(jobId).orElseThrow();
+                    if (fresh.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
                     StructuredConcept current = json.readConcept(fresh.getStructuredConceptJson());
-                    // [2026-08-04 디자인 리롤] 남캐 브리프를 재구조화에도 관통 — 이전엔 raw 컨셉만
-                    // 넘겨 외형 수정 리롤에서 접지·성별 앵커가 소실되는 잠복 버그였다
-                    StructuredConcept updated = conceptStructuringService.restructureAppearance(
-                        withGenderDirective(fresh.getConceptInputRaw(), fresh.getGenderOrDefault()),
-                        current, hintsBlock);
-                    moderationService.assertStructuredConceptAllowed(updated, fresh.getConceptInputRaw(), fresh.getUserId());
+                    if (ready.get() == null) {
+                        String input = withGenderDirective(fresh.getConceptInputRaw(), fresh.getGenderOrDefault());
+                        if (tags.get() == null)
+                            tags.set(conceptStructuringService.generateAppearanceTags(input, current, hintsBlock));
+                        if (!isConceptProcessing(jobId)) return;
+                        StructuredConcept updated = conceptStructuringService.restructureAppearance(input,
+                            current, hintsBlock, tags.get());
+                        if (!isConceptProcessing(jobId)) return;
+                        moderationService.assertStructuredConceptAllowed(updated,
+                            fresh.getConceptInputRaw() + "\n\n[이번 디자인 변경 요청]:\n" + hintsBlock, fresh.getUserId());
+                        ready.set(updated);
+                    }
+                    StructuredConcept updated = ready.get();
                     // [리뷰 픽스] LLM 콜(수 초~수십 초) 동안 커밋된 프로필 편집(레이턴시 하이딩)이
                     // 스냅샷 기반 전체 덮어쓰기로 유실되지 않도록, 락 안에서 최신본을 재조회해
                     // 외형 산출 필드만 병합한다 (deriveEmotionPromptsSafely 동일 패턴).
                     mutateJob(jobId, j -> {
+                        if (j.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
                         StructuredConcept latest = json.readConcept(j.getStructuredConceptJson());
                         j.applyStage0(json.writeConcept(latest.withAppearanceFrom(updated)), updated.bgColor());
                         removeExternalJob(j, APPEARANCE_EDIT_KEY);
                     });
-                    submitGoldenShots(jobId, updated);
                 });
+                submitGoldenShots(jobId, ready.get());
                 return;
             }
-            runWithRetries(jobId, "GOLDEN_REROLL",
-                () -> submitGoldenShots(jobId, json.readConcept(job.getStructuredConceptJson())));
+            submitGoldenShots(jobId, json.readConcept(job.getStructuredConceptJson()));
         } catch (ContentModerationException e) {
             // LLM 판정 차단 — 누적 과금 전액 환불이므로 유저 금전 손실 없음 (Stage0 차단과 동일 정책)
             failAndRefund(jobId, UgcModerationService.BLOCK_MESSAGE);
         } catch (Exception e) {
             failAndRefund(jobId, "황금샷 리롤 실패: " + e.getMessage());
+        } finally {
+            goldenRuns.remove(jobId);
         }
     }
 

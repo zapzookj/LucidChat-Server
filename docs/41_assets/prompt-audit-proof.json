@@ -1,0 +1,214 @@
+{
+  "observedAt": "2026-10-07T11:43:40.019289+00:00",
+  "requestedStage0Model": "openai/gpt-5.6-sol",
+  "temperature": 0.7,
+  "maxTokens": 8192,
+  "profileStage0ModelLines": {
+    "BOOT-INF/classes/application-characters.yml": [],
+    "BOOT-INF/classes/application-charactersm.yml": [],
+    "BOOT-INF/classes/application-local.yml": [],
+    "BOOT-INF/classes/application-prod.yml": [],
+    "BOOT-INF/classes/application-v2.yml": [],
+    "BOOT-INF/classes/application-worlds.yml": [],
+    "BOOT-INF/classes/application.yml": [
+      "stage0-model: openai/gpt-5.6-sol  # [튜닝] Stage0/W0 구조화 전용 LLM (미지정 시 openai.model — 외형 태그 품질이 황금샷을 좌우)"
+    ]
+  },
+  "runtimeModelOverrides": {
+    "SPRING_PROFILES_ACTIVE": "prod,characters,worlds,v2",
+    "springJsonStage0": null,
+    "externalSpringConfigConfigured": false,
+    "commandStage0Overrides": []
+  },
+  "jarSha256": "6ea787c479c18d49d51f2060f63283c7fe31cacfb5de23da110b89cef6a51c95",
+  "localClassComparison": {
+    "ConceptStructuringService": {
+      "localClassSha256": "f0d4b32c48174bfc3e461574378dea807fa2ee68b00404b1e315425add430699",
+      "runningClassSha256": "f0d4b32c48174bfc3e461574378dea807fa2ee68b00404b1e315425add430699",
+      "matches": true
+    },
+    "UgcPromptAssembler": {
+      "localClassSha256": "ec97d4bbf70a06fa6f53df0466d20fd0e1e8bbf9362c39a5976d20eda6a57c73",
+      "runningClassSha256": "bffea01bea255dfb006d002cce5eead3831384ee6e1007b1acaa87d0cb21eae4",
+      "matches": false
+    },
+    "UgcWorkflowFactory": {
+      "localClassSha256": "e311fd85eb149ba16c54f7738307449058282edf24ccd7747bbec127f5dcf251",
+      "runningClassSha256": "e311fd85eb149ba16c54f7738307449058282edf24ccd7747bbec127f5dcf251",
+      "matches": true
+    }
+  },
+  "assemblerRelevantMethodsMatchAfterConstantPoolIndexNormalization": {
+    "public java.lang.String goldenShotPositive(java.util.List<java.lang.String>, java.util.List<java.lang.String>, java.util.List<java.lang.String>, boolean);": true,
+    "private static java.lang.String anchor(boolean);": true,
+    "private static java.util.Set<java.lang.String> seedSeen(boolean);": true,
+    "private static void appendGoldenTags(java.lang.StringBuilder, java.util.List<java.lang.String>, java.util.Set<java.lang.String>);": true,
+    "private static void appendTags(java.lang.StringBuilder, java.util.List<java.lang.String>, java.util.Set<java.lang.String>);": true,
+    "private static boolean lambda$appendGoldenTags$1(java.lang.String);": true
+  },
+  "wf1MatchesLocalJson": true,
+  "imageStats": [
+    {
+      "job": 26,
+      "index": 0,
+      "sha256": "330979b18d5605b4300ab92020a0ac146cca6689b0fec384e30688c8c265dddc",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.7985
+    },
+    {
+      "job": 26,
+      "index": 1,
+      "sha256": "202685d14bf5c47d4c88b91dffca32c6b431d8148b7efa569c028f78e7e575b6",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.8468
+    },
+    {
+      "job": 26,
+      "index": 2,
+      "sha256": "eaa8432a0cd2aaf069b0e8f1e6195fdcf865a6d7e89afbd87889ffe3170693d2",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.7751
+    },
+    {
+      "job": 26,
+      "index": 3,
+      "sha256": "0684e40871e9b3e2f3e05f88b571aac2447c7432ff0f6e27cf4619bb1d8fea76",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.5144
+    },
+    {
+      "job": 26,
+      "index": 4,
+      "sha256": "206193f5b1fccce1493a898e738b0f1f1e1c7d3c2f8f9cb92549ba9feddf5646",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.6313
+    },
+    {
+      "job": 26,
+      "index": 5,
+      "sha256": "b1e692030296d9ed662d4cc3b0fa55249cde0e0b29ad008a5f55c58e77935c33",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.5946
+    },
+    {
+      "job": 25,
+      "index": 0,
+      "sha256": "1f5790e102c112e827a26e8eb833dc03e42c90af0c3f00ff99daeda702772b05",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.8784
+    },
+    {
+      "job": 25,
+      "index": 1,
+      "sha256": "36c9760f2492d7b4d3f355383b5c538ddd868a62f9d7c9670f61e3d8df70a169",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.9158
+    },
+    {
+      "job": 23,
+      "index": 0,
+      "sha256": "bfe3f9c6221a22d0619922ae3f6986d45d18a35fb3a291a97d70bd2412c783de",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.5098
+    },
+    {
+      "job": 23,
+      "index": 1,
+      "sha256": "af5cc5656caec919ef1b887fad7ace649d06af7970f64a8665713088df8e0863",
+      "width": 1024,
+      "height": 1024,
+      "metadataKeys": [],
+      "meanSaturation": 0.5251
+    }
+  ],
+  "batchPartition": [
+    {
+      "job": 26,
+      "startIndex": 0,
+      "indices": [
+        0,
+        1
+      ],
+      "tagCounts": {
+        "appearance_tags": 54,
+        "persona_tags": 7,
+        "scene_tags": 18
+      },
+      "removedConflictTagCount": 0
+    },
+    {
+      "job": 26,
+      "startIndex": 2,
+      "indices": [
+        2,
+        3
+      ],
+      "tagCounts": {
+        "appearance_tags": 57,
+        "persona_tags": 7,
+        "scene_tags": 17
+      },
+      "removedConflictTagCount": 0
+    },
+    {
+      "job": 26,
+      "startIndex": 4,
+      "indices": [
+        4,
+        5
+      ],
+      "tagCounts": {
+        "appearance_tags": 54,
+        "persona_tags": 7,
+        "scene_tags": 18
+      },
+      "removedConflictTagCount": 0
+    },
+    {
+      "job": 25,
+      "startIndex": 0,
+      "indices": [
+        0,
+        1
+      ],
+      "tagCounts": {
+        "appearance_tags": 52,
+        "persona_tags": 8,
+        "scene_tags": 18
+      },
+      "removedConflictTagCount": 0
+    },
+    {
+      "job": 23,
+      "startIndex": 0,
+      "indices": [
+        0,
+        1
+      ],
+      "tagCounts": {
+        "appearance_tags": 50,
+        "persona_tags": 7,
+        "scene_tags": 16
+      },
+      "removedConflictTagCount": 0
+    }
+  ]
+}

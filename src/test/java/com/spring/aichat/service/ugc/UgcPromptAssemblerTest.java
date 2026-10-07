@@ -16,22 +16,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class UgcPromptAssemblerTest {
     @Test
-    void goldenStyleKeepsAnimeAndRemovesObservedPhotoDirection() {
+    void goldenShotUsesOnlyGeneratedTagsInOrderWithoutFilteringOrDeduplication() {
         String prompt = assembler.goldenShotPositive(
             List.of("platinum blonde hair", "full lips", "glossy lips", "purple dress"),
             List.of("teasing", "(Pixar_style:1.2)"),
             List.of("vanity mirror", "stage lights", "fashion photography", "3d_render", "(photo: 1.2)"), false);
-        assertThat(prompt).contains("anime illustration, 2d, cel shading", "1girl, solo",
-                "platinum blonde hair", "full lips", "glossy lips", "purple dress", "vanity mirror", "stage lights")
-            .doesNotContain("photography", "Pixar", "3d_render", "(photo: 1.2)");
+        assertThat(prompt).isEqualTo("platinum blonde hair, full lips, glossy lips, purple dress, teasing, (Pixar_style:1.2), vanity mirror, stage lights, fashion photography, 3d_render, (photo: 1.2)");
         assertThat(assembler.goldenShotPositive(List.of("red hair", "armor"), List.of(), List.of("sunset"), true))
-            .contains("anime illustration, 2d, cel shading", "1boy, male focus", "armor", "sunset");
+            .isEqualTo("red hair, armor, sunset");
+        assertThat(assembler.goldenShotPositive(List.of("solo", "solo"), null, List.of("solo"), false))
+            .isEqualTo("solo, solo, solo");
     }
 
     @Test
     void styleCorrectionDoesNotAlterApprovedNeutralRefinement() {
         assertThat(assembler.refinePositive(List.of("silver hair"), List.of("serious"), EmotionTag.NEUTRAL, "light gray", false))
-            .doesNotContain(UgcPromptAssembler.GOLDEN_ART_STYLE).contains("silver hair", "neutral expression", "flat lighting");
+            .doesNotContain("anime illustration, 2d, cel shading").contains("silver hair", "neutral expression", "flat lighting");
     }
 
     private final UgcPromptAssembler assembler = new UgcPromptAssembler(

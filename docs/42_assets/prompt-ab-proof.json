@@ -1,0 +1,509 @@
+{
+  "observedAt": "2026-10-07T12:23:04.142858+00:00",
+  "sourceConceptSha256": "343a5cc38a713ef7459c6b333bf32fb4555cf84190bdaa5f8d09e02b5348af70",
+  "sourceJarSha256": "6ea787c479c18d49d51f2060f63283c7fe31cacfb5de23da110b89cef6a51c95",
+  "requestedModel": "openai/gpt-5.6-sol",
+  "llmArms": {
+    "A": {
+      "state": "DONE",
+      "completedAt": "2026-10-07T12:16:45.175003+00:00",
+      "elapsedSeconds": 7.328,
+      "requestedModel": "openai/gpt-5.6-sol",
+      "responseModel": "openai/gpt-5.6-sol",
+      "provider": "OpenAI",
+      "usage": {
+        "prompt_tokens": 414,
+        "completion_tokens": 295,
+        "total_tokens": 709,
+        "cost": 0.003778,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.003778,
+          "upstream_inference_prompt_cost": 0.000828,
+          "upstream_inference_completions_cost": 0.00295
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 145,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "conceptSha256": "d5e7ae850cc7167a95a099462a24e4e8698a75c3435243b73b5715b88354b726",
+      "requestSha256": "835594ca4c0d24e14da3cef7e96fe98b13d33526bd5d6e06798d8f365c4a1802",
+      "tagCounts": {
+        "appearance_tags": 20,
+        "persona_tags": 8,
+        "scene_tags": 11
+      }
+    },
+    "B": {
+      "state": "DONE",
+      "completedAt": "2026-10-07T12:17:13.858992+00:00",
+      "elapsedSeconds": 36.015,
+      "requestedModel": "openai/gpt-5.6-sol",
+      "responseModel": "openai/gpt-5.6-sol",
+      "provider": "OpenAI",
+      "usage": {
+        "prompt_tokens": 1544,
+        "completion_tokens": 1766,
+        "total_tokens": 3310,
+        "cost": 0.0215185,
+        "is_byok": false,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 1541,
+          "audio_tokens": 0,
+          "video_tokens": 0
+        },
+        "cost_details": {
+          "upstream_inference_cost": 0.0215185,
+          "upstream_inference_prompt_cost": 0.0038585,
+          "upstream_inference_completions_cost": 0.01766
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 113,
+          "image_tokens": 0,
+          "audio_tokens": 0
+        }
+      },
+      "conceptSha256": "b103a584b758f4a5f6c0bb70864a5d81395e1f13eec4b3d2a2844b7c146137b0",
+      "requestSha256": "8c0cc8ca223fb00674cfd680deedcb5ac4ed4ca4992367fcb8424e2ee4e31aa7",
+      "tagCounts": {
+        "appearance_tags": 19,
+        "persona_tags": 8,
+        "scene_tags": 8
+      }
+    }
+  },
+  "manifestSha256": "ec535de5317e4f342859e53218647f6a6e240b64d97d86014c5f55fce3297fce",
+  "requestsSha256": "a2140d774d0cc94efdbbef0ab586e08014c382ff96ac7ee5fe52851c1ad61f18",
+  "runnerSha256": "44aaa951dce84a7de5c75466a74bb9e5603d46f45e4b9b75d6f20318c5b2b9cd",
+  "seedPairs": [
+    [
+      2026100701,
+      2026110701
+    ],
+    [
+      2026100702,
+      2026110702
+    ]
+  ],
+  "totals": {
+    "llmCalls": 2,
+    "runpodJobs": 8,
+    "finalIllustrations": 8,
+    "preDetailerImages": 8,
+    "missing": 0,
+    "duplicateProviderIds": 0,
+    "identicalByteOutputs": 0
+  },
+  "gpuExecutionSeconds": 150.688,
+  "llmReportedCostUsd": 0.0252965,
+  "rows": [
+    {
+      "id": "A_raw_tags_s1",
+      "arm": "A",
+      "assembly": "raw_tags",
+      "samplerSeed": 2026100701,
+      "detailerSeed": 2026110701,
+      "requestSha256": "3cdd49143d89299f6cf927cc48c4f268f6b8fa30b7c0b996b5b3babd9b4eb881",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 19319,
+      "delayTimeMs": 91,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1171584,
+          "sha256": "c0c8e937b141dbe2570a50165b0875b238d1665143819cc9b9c6e8a82a856fa5",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1171137,
+          "sha256": "8588aa0de510221ee965d637e675b4878d95020764c2a0f330af377b98cef118",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_raw_tags_s1",
+      "arm": "B",
+      "assembly": "raw_tags",
+      "samplerSeed": 2026100701,
+      "detailerSeed": 2026110701,
+      "requestSha256": "6127668934e5ee53273b86fc6e4ed94fc5c3146089274f00ad298bfebdf04c1f",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 18579,
+      "delayTimeMs": 20498,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1254694,
+          "sha256": "c82415ef2b2fbc8e2a44ee1e369c50d983d40132888109599bc79cd58205278c",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1254606,
+          "sha256": "563ee86765e4e0c25373aac6fe18b19b0b4b6d000c43ca53b522d03f8d520983",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A_current_assembly_s1",
+      "arm": "A",
+      "assembly": "current_assembly",
+      "samplerSeed": 2026100701,
+      "detailerSeed": 2026110701,
+      "requestSha256": "3f6afe201e8f7ebf5bb828658ac5ab4cc911a37612cdf5c6ce06cc3a1aadacc3",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 18462,
+      "delayTimeMs": 16498,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1095536,
+          "sha256": "077101454e4188eb59375ee61d56c46e3a724968d0e478958da8dd1b711317ae",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1097761,
+          "sha256": "87997084d8dcb4abd54033d9858e2da48e51d9552a650a6e75f9517f7886e00f",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_current_assembly_s1",
+      "arm": "B",
+      "assembly": "current_assembly",
+      "samplerSeed": 2026100701,
+      "detailerSeed": 2026110701,
+      "requestSha256": "35885a558c800ba2a74649e719be344a7f8d8fb032e529d86883143e0a6cf5be",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 18435,
+      "delayTimeMs": 18002,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 781021,
+          "sha256": "6e8e01bee78463216023f46b0b0c82e732522b38a31e367d111e7a6554fb6bfb",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 787803,
+          "sha256": "458e6a89478badd7289e4e1b8b3dc9480eb2373cab90d39df0db80c37b9f24cb",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A_raw_tags_s2",
+      "arm": "A",
+      "assembly": "raw_tags",
+      "samplerSeed": 2026100702,
+      "detailerSeed": 2026110702,
+      "requestSha256": "ffc87d4763041e2a2208f0230b136e5575ac16b2b9861fa588c79d2ce884fc39",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 18685,
+      "delayTimeMs": 18971,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1189254,
+          "sha256": "82adc6a0dac5a6f01c73b5388ed5b33969b2ac10aadf95add0b2302e415e37e8",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1187997,
+          "sha256": "959a5d9e4b095a201f0382f7c698b4f424bdfe576b02c1ba41a683f898f78585",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_raw_tags_s2",
+      "arm": "B",
+      "assembly": "raw_tags",
+      "samplerSeed": 2026100702,
+      "detailerSeed": 2026110702,
+      "requestSha256": "508196c906b56cde7f439d3c40bc4bae81185147034551e14fa7ffbb8675730a",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 19189,
+      "delayTimeMs": 16637,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1238300,
+          "sha256": "45b00f9f80b6037a43f083380dfff0a93911a772ce1da62042efe917d67c1f09",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1237573,
+          "sha256": "d656ae1fbae078ccef7407e5a2781cc3f3991b6f914a8dac6d5811012f8194b6",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A_current_assembly_s2",
+      "arm": "A",
+      "assembly": "current_assembly",
+      "samplerSeed": 2026100702,
+      "detailerSeed": 2026110702,
+      "requestSha256": "24c1bb39508d9fe64707deba879d09c562405454c27103b96387392c907be385",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 18897,
+      "delayTimeMs": 17982,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 1140615,
+          "sha256": "1b37ba045b279b3b9ebba49841d1da8d17ff8138bde6ce4978829e8af2f174cb",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 1142840,
+          "sha256": "cde628e32e2be0d9c35b910be9332f806812a62106736c3d03e74460c6cb58dc",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_current_assembly_s2",
+      "arm": "B",
+      "assembly": "current_assembly",
+      "samplerSeed": 2026100702,
+      "detailerSeed": 2026110702,
+      "requestSha256": "2515a1a133f5c91db837178a228ab94f2bb9d4a9a7156bdd47bf97bdbadf40b1",
+      "removedByCurrentFilter": [],
+      "executionTimeMs": 19122,
+      "delayTimeMs": 14418,
+      "workerTag": "43d480ef",
+      "files": [
+        {
+          "name": "raw.png",
+          "kind": "raw",
+          "bytes": 877916,
+          "sha256": "1deb4f6106bce04e8268662b16f13b5afea3b7e629365e432e801bd639a5ac29",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "detail.png",
+          "kind": "detail",
+          "bytes": 883547,
+          "sha256": "b217fabbac138054e4c4232312fb83218aff1deae492ceed8e1512c542af919f",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ]
+    }
+  ],
+  "imageMetrics": [
+    {
+      "id": "A_raw_tags_s1",
+      "preDetailerSaturationMean": 0.21069,
+      "preDetailerPixelsSaturationOver085Fraction": 0.01186,
+      "postDetailerRGBMeanAbsoluteChange": 0.21752,
+      "changedPixelFraction": 0.01498
+    },
+    {
+      "id": "B_raw_tags_s1",
+      "preDetailerSaturationMean": 0.14271,
+      "preDetailerPixelsSaturationOver085Fraction": 0.06339,
+      "postDetailerRGBMeanAbsoluteChange": 0.35657,
+      "changedPixelFraction": 0.03238
+    },
+    {
+      "id": "A_current_assembly_s1",
+      "preDetailerSaturationMean": 0.57215,
+      "preDetailerPixelsSaturationOver085Fraction": 0.26673,
+      "postDetailerRGBMeanAbsoluteChange": 0.33431,
+      "changedPixelFraction": 0.0154
+    },
+    {
+      "id": "B_current_assembly_s1",
+      "preDetailerSaturationMean": 0.41803,
+      "preDetailerPixelsSaturationOver085Fraction": 0.19497,
+      "postDetailerRGBMeanAbsoluteChange": 0.65075,
+      "changedPixelFraction": 0.02938
+    },
+    {
+      "id": "A_raw_tags_s2",
+      "preDetailerSaturationMean": 0.30235,
+      "preDetailerPixelsSaturationOver085Fraction": 0.01655,
+      "postDetailerRGBMeanAbsoluteChange": 0.26375,
+      "changedPixelFraction": 0.01714
+    },
+    {
+      "id": "B_raw_tags_s2",
+      "preDetailerSaturationMean": 0.06666,
+      "preDetailerPixelsSaturationOver085Fraction": 5e-05,
+      "postDetailerRGBMeanAbsoluteChange": 0.52002,
+      "changedPixelFraction": 0.04519
+    },
+    {
+      "id": "A_current_assembly_s2",
+      "preDetailerSaturationMean": 0.68921,
+      "preDetailerPixelsSaturationOver085Fraction": 0.43365,
+      "postDetailerRGBMeanAbsoluteChange": 0.2936,
+      "changedPixelFraction": 0.01509
+    },
+    {
+      "id": "B_current_assembly_s2",
+      "preDetailerSaturationMean": 0.43358,
+      "preDetailerPixelsSaturationOver085Fraction": 0.15048,
+      "postDetailerRGBMeanAbsoluteChange": 0.74948,
+      "changedPixelFraction": 0.03877
+    }
+  ],
+  "healthBefore": {
+    "at": "2026-10-07T12:19:50.232560+00:00",
+    "health": {
+      "jobs": {
+        "completed": 1247,
+        "failed": 9,
+        "inProgress": 0,
+        "inQueue": 0,
+        "retried": 2
+      },
+      "workers": {
+        "idle": 0,
+        "initializing": 0,
+        "ready": 0,
+        "running": 1,
+        "throttled": 0,
+        "unhealthy": 0
+      }
+    }
+  },
+  "healthAfter": {
+    "at": "2026-10-07T12:22:31.897007+00:00",
+    "health": {
+      "jobs": {
+        "completed": 1255,
+        "failed": 9,
+        "inProgress": 0,
+        "inQueue": 0,
+        "retried": 2
+      },
+      "workers": {
+        "idle": 0,
+        "initializing": 0,
+        "ready": 0,
+        "running": 1,
+        "throttled": 0,
+        "unhealthy": 0
+      }
+    }
+  },
+  "validation": {
+    "normalFrozenRequests": 8,
+    "invalidRequestCasesRejected": [
+      "slot_id",
+      "seed",
+      "node80",
+      "negative",
+      "positive"
+    ],
+    "browserLoadedVariants": 16,
+    "separateContextReview": "studio_preflight code guards and eight final images reviewed",
+    "independentInvalidCasesRejected": [
+      "seedIndex",
+      "node80Connection",
+      "existingGpuRequestSha",
+      "llmRequest"
+    ],
+    "independentFinalOutputsVerified": 16
+  },
+  "limits": [
+    "One concept and one LLM draw per arm; no broad quality ranking",
+    "Prefix and negative changed together; no single-token causal isolation",
+    "Worker weight hashes and actual GPU bill not verified"
+  ],
+  "reviewScreenshot": {
+    "file": "review-screenshot.jpg",
+    "bytes": 299866,
+    "sha256": "b9299dd6dfce51512c9338d14dc794411be488c74c99adce2854a7d6544124c7"
+  }
+}

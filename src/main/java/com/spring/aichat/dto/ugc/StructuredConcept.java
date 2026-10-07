@@ -19,9 +19,9 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record StructuredConcept(
-    /** Danbooru 관례 외형 태그 40~60개 (영문 소문자, 씬·조명·구도 금지). */
+    /** 이미지 전용 LLM의 외형·복장 태그. 개수·스타일 강제 없이 산출 순서 보존. */
     List<String> appearanceTags,
-    /** [2026-07-20] 성격·무드 태그 5~8개 (영문 — kuudere, cold beauty 등). 감정 파생 연출 개성화 + 이미지 positive 무드. */
+    /** 이미지 전용 표정·무드 태그. 프로필 인격/한국어 moodTags와 분리. */
     List<String> personaTags,
     /**
      * [2026-07-30 폴리싱] 프로필 카드 노출용 무드 태그 3~5개 (한국어 — "새침한", "다정다감" 등).
@@ -29,7 +29,7 @@ public record StructuredConcept(
      * 구버전 잡 JSON은 null → 바인딩에서 persona_tags 조인 폴백.
      */
     List<String> moodTags,
-    /** 황금샷 연출 태그 10~20개 (배경, 소품, 조명, 구도 — WF-1 전용). */
+    /** 원화 배경·소품·조명·구도 태그 (WF-1 전용, 개수 강제 없음). */
     List<String> sceneTags,
     /** 누끼 대비 배경색 — §4 팔레트 중 1개. */
     String bgColor,
@@ -142,7 +142,8 @@ public record StructuredConcept(
             p.backstory(), p.coreValues(), p.flaws(), p.speechQuirks(),
             p.firstGreeting(), p.introNarration(),
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
-        return new StructuredConcept(source.appearanceTags(), personaTags, moodTags, source.sceneTags(),
+        return new StructuredConcept(source.appearanceTags(),
+            source.personaTags() == null ? personaTags : source.personaTags(), moodTags, source.sceneTags(),
             source.bgColor(), merged, source.moderation(), basePose, emotionPrompts);
     }
 }
