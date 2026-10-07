@@ -12,14 +12,14 @@ import java.util.Map;
  * [UGC v1] Stage 0 산출 — LLM 컨셉 구조화 결과.
  *
  * <p>불변 원칙: 유저 자유 텍스트는 절대 이미지 프롬프트에 직결되지 않는다.
- * 이미지 프롬프트는 이 구조화 산출의 태그만으로 서버가 조립한다.
+ * 신규 원화는 별도 완성형 프롬프트를 저장하고, 스탠딩은 추출 태그로 서버가 조립한다.
  *
  * <p>JSON 키는 snake_case (appearance_tags, core_values, ...).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record StructuredConcept(
-    /** 이미지 전용 LLM의 외형·복장 태그. 개수·스타일 강제 없이 산출 순서 보존. */
+    /** 확정된 원화 프롬프트에서 추출한 외형·복장 태그. */
     List<String> appearanceTags,
     /** 이미지 전용 표정·무드 태그. 프로필 인격/한국어 moodTags와 분리. */
     List<String> personaTags,
@@ -45,8 +45,23 @@ public record StructuredConcept(
      * [2026-07-21 컨셉 반영 감정] EmotionTag명 → 캐릭터별 동적 표정·자세 (감정 스테이지 진입 시
      * 별도 LLM 콜 산출 — Stage0 산출엔 없음). null/누락 감정은 서버 상수 폴백. 리롤 재현성 위해 잡에 저장.
      */
-    Map<String, EmotionPromptOverride> emotionPrompts
+    Map<String, EmotionPromptOverride> emotionPrompts,
+    /** 완성형 원화 positive/negative. 이전 작업 JSON은 null → 현행 레거시 태그 조립으로 폴백. */
+    IllustrationPrompt illustrationPrompt
 ) {
+
+    /** Source compatibility for existing legacy concept construction. */
+    public StructuredConcept(List<String> appearanceTags, List<String> personaTags, List<String> moodTags,
+                             List<String> sceneTags, String bgColor, CharacterProfile character,
+                             Moderation moderation, String basePose, Map<String, EmotionPromptOverride> emotionPrompts) {
+        this(appearanceTags, personaTags, moodTags, sceneTags, bgColor, character, moderation,
+            basePose, emotionPrompts, null);
+    }
+
+    public StructuredConcept withIllustrationPrompt(IllustrationPrompt prompt) {
+        return new StructuredConcept(appearanceTags, personaTags, moodTags, sceneTags, bgColor,
+            character, moderation, basePose, emotionPrompts, prompt);
+    }
 
     /**
      * 장문 필드에는 {@link FlexibleStringDeserializer} 적용 — LLM이 bullet 요구 필드를
@@ -124,7 +139,7 @@ public record StructuredConcept(
     /** 감정 스테이지 산출 병합 — 잡 스크래치 재기록용 카피. */
     public StructuredConcept withEmotionPrompts(Map<String, EmotionPromptOverride> prompts) {
         return new StructuredConcept(appearanceTags, personaTags, moodTags, sceneTags, bgColor,
-            character, moderation, basePose, prompts);
+            character, moderation, basePose, prompts, illustrationPrompt);
     }
 
     /**
@@ -144,6 +159,6 @@ public record StructuredConcept(
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
         return new StructuredConcept(source.appearanceTags(),
             source.personaTags() == null ? personaTags : source.personaTags(), moodTags, source.sceneTags(),
-            source.bgColor(), merged, source.moderation(), basePose, emotionPrompts);
+            source.bgColor(), merged, source.moderation(), basePose, emotionPrompts, source.illustrationPrompt());
     }
 }

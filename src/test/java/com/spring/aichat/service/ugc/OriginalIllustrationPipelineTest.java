@@ -38,7 +38,7 @@ class OriginalIllustrationPipelineTest {
     @InjectMocks UgcPipelineWorker worker;
     CharacterCreationJob job;
     StructuredConcept concept;
-    ConceptStructuringService.IllustrationTags tags;
+    com.spring.aichat.dto.ugc.IllustrationPrompt prompt;
 
     @BeforeEach void setup() throws Exception {
         when(tx.execute(any())).thenAnswer(i -> ((TransactionCallback<?>)i.getArgument(0))
@@ -51,22 +51,24 @@ class OriginalIllustrationPipelineTest {
         when(jobs.findById(7L)).thenReturn(Optional.of(job));
         when(jobs.findByIdForUpdate(7L)).thenReturn(Optional.of(job));
         concept = new ObjectMapper().readValue(ConceptIllustrationSplitTest.PROFILE,StructuredConcept.class);
-        tags = new ConceptStructuringService.IllustrationTags(concept.appearanceTags(),concept.personaTags(),concept.sceneTags());
-        when(concepts.generateIllustrationTags(anyString())).thenReturn(tags);
-        when(concepts.structure(anyString(),any(),eq(tags))).thenReturn(concept);
-        when(workflow.buildGoldenShot(anyString(),anyString(),anyBoolean()))
+        prompt = new com.spring.aichat.dto.ugc.IllustrationPrompt("masterpiece, anime style, silver hair", "bad quality, rim lighting");
+        concept = concept.withIllustrationPrompt(prompt);
+        when(concepts.generateIllustrationPrompt(anyString())).thenReturn(prompt);
+        when(concepts.structure(anyString(),any(),eq(prompt))).thenReturn(concept);
+        when(workflow.buildGoldenShot(anyString(),anyString(),anyString(),anyBoolean()))
             .thenReturn(new ObjectMapper().createObjectNode());
         when(comfy.submit(any(),isNull(),isNull())).thenReturn(new UgcComfyClient.SubmitResult("accepted","IN_QUEUE"));
     }
-    @Test void successfulTagsAreReusedAfterProfileRetryAndModerationPrecedesGpu() {
-        when(concepts.structure(anyString(),any(),eq(tags)))
+    @Test void successfulPromptsAreReusedAfterProfileRetryAndModerationPrecedesGpu() {
+        when(concepts.structure(anyString(),any(),eq(prompt)))
             .thenThrow(new ExternalApiException("temporary")).thenReturn(concept);
         worker.runStage0(7L);
-        verify(concepts,times(1)).generateIllustrationTags("원래 컨셉\n\n[캐릭터 성별]: 여성");
-        verify(concepts,times(2)).structure(anyString(),eq("지정 이름"),eq(tags));
+        verify(concepts,times(1)).generateIllustrationPrompt("원래 컨셉\n\n[캐릭터 성별]: 여성");
+        verify(concepts,times(2)).structure(anyString(),eq("지정 이름"),eq(prompt));
         var order = inOrder(moderation,comfy);
         order.verify(moderation).assertStructuredConceptAllowed(concept,"원래 컨셉",1L);
         order.verify(comfy).submit(any(),isNull(),isNull());
+        verify(workflow).buildGoldenShot(prompt.positivePrompt(),prompt.negativePrompt(),"job_7_golden",false);
         assertThat(json.readScratch(job.getExternalJobsJson())).containsEntry("GOLDEN","accepted");
         assertThat(json.readGoldenSnapshots(json.readScratch(job.getExternalJobsJson())
             .get(UgcPipelineWorker.GOLDEN_SNAPSHOTS_KEY))).hasSize(1);
@@ -77,8 +79,8 @@ class OriginalIllustrationPipelineTest {
         when(comfy.submit(any(),isNull(),isNull())).thenThrow(new ExternalApiException("ambiguous response"));
         worker.runStage0(7L);
         worker.failAndRefund(7L,"duplicate failure callback");
-        verify(concepts,times(1)).generateIllustrationTags(anyString());
-        verify(concepts,times(1)).structure(anyString(),any(),eq(tags));
+        verify(concepts,times(1)).generateIllustrationPrompt(anyString());
+        verify(concepts,times(1)).structure(anyString(),any(),eq(prompt));
         verify(comfy,times(1)).submit(any(),isNull(),isNull());
         verify(user,times(1)).refundEnergy(EnergySplit.of(6,2));
         assertThat(job.getStatus()).isEqualTo(CreationJobStatus.FAILED);
@@ -91,25 +93,25 @@ class OriginalIllustrationPipelineTest {
         assertThat(job.getStatus()).isEqualTo(CreationJobStatus.FAILED);
     }
     @Test void terminalJobDuringProfileGenerationCannotSubmitGpu() {
-        when(concepts.structure(anyString(),any(),eq(tags))).thenAnswer(i -> { job.fail("cancelled"); return concept; });
+        when(concepts.structure(anyString(),any(),eq(prompt))).thenAnswer(i -> { job.fail("cancelled"); return concept; });
         worker.runStage0(7L);
         verifyNoInteractions(comfy,moderation);
     }
     @Test void ordinaryDesignRerollUsesCachedImageTagsAndPreservesConcurrentProfile() throws Exception {
         job.applyStage0(json.writeConcept(concept),concept.bgColor());
         job.updateExternalJobs(json.writeScratch(Map.of(UgcPipelineWorker.APPEARANCE_EDIT_KEY,"새 디자인")));
-        var revised = new ConceptStructuringService.IllustrationTags(List.of("blue hair"),List.of("wink"),List.of("garden"));
-        var updated = new StructuredConcept(revised.appearanceTags(),revised.personaTags(),concept.moodTags(),
-            revised.sceneTags(),"muted teal",concept.character(),concept.moderation(),null,null);
+        var revised = new com.spring.aichat.dto.ugc.IllustrationPrompt("anime style, blue hair, wink, garden", "");
+        var updated = new StructuredConcept(List.of("blue hair"),List.of("wink"),concept.moodTags(),
+            List.of("garden"),"muted teal",concept.character(),concept.moderation(),null,null).withIllustrationPrompt(revised);
         var edited = new ObjectMapper().readValue(ConceptIllustrationSplitTest.PROFILE
             .replace("사용자 성격 편집","생성 중에 편집한 성격"),StructuredConcept.class);
-        when(concepts.generateAppearanceTags(anyString(),any(),eq("새 디자인"))).thenReturn(revised);
+        when(concepts.generateAppearancePrompt(anyString(),any(),eq("새 디자인"))).thenReturn(revised);
         when(concepts.restructureAppearance(anyString(),any(),eq("새 디자인"),eq(revised)))
             .thenThrow(new ExternalApiException("temporary")).thenAnswer(i -> {
                 job.applyStage0(json.writeConcept(edited),edited.bgColor()); return updated;
             });
         worker.runGoldenReroll(7L);
-        verify(concepts,times(1)).generateAppearanceTags(anyString(),any(),eq("새 디자인"));
+        verify(concepts,times(1)).generateAppearancePrompt(anyString(),any(),eq("새 디자인"));
         verify(concepts,times(2)).restructureAppearance(anyString(),any(),eq("새 디자인"),eq(revised));
         verify(comfy,times(1)).submit(any(),isNull(),isNull());
         StructuredConcept persisted = json.readConcept(job.getStructuredConceptJson());
@@ -121,29 +123,31 @@ class OriginalIllustrationPipelineTest {
         var snapshot = json.readGoldenSnapshots(json.readScratch(job.getExternalJobsJson())
             .get(UgcPipelineWorker.GOLDEN_SNAPSHOTS_KEY)).get(0);
         assertThat(json.readConcept(snapshot.conceptJson()).personaTags()).containsExactly("wink");
+        assertThat(persisted.illustrationPrompt()).isEqualTo(revised);
+        assertThat(json.readConcept(snapshot.conceptJson()).illustrationPrompt()).isEqualTo(revised);
         verify(moderation).assertStructuredConceptAllowed(eq(updated),contains("새 디자인"),eq(1L));
     }
 
     @Test void cancellationAfterImageTagsStopsBeforeProfile() {
-        when(concepts.generateIllustrationTags(anyString())).thenAnswer(i -> { job.fail("cancelled"); return tags; });
+        when(concepts.generateIllustrationPrompt(anyString())).thenAnswer(i -> { job.fail("cancelled"); return prompt; });
         worker.runStage0(7L);
         verify(concepts,never()).structure(anyString(),any(),any());
         verifyNoInteractions(comfy);
     }
     @Test void cancellationDuringFailedProfileStopsBeforeRetry() {
-        when(concepts.structure(anyString(),any(),eq(tags))).thenAnswer(i -> {
+        when(concepts.structure(anyString(),any(),eq(prompt))).thenAnswer(i -> {
             job.fail("cancelled"); throw new ExternalApiException("cancelled response");
         });
         worker.runStage0(7L);
-        verify(concepts,times(1)).structure(anyString(),any(),eq(tags));
+        verify(concepts,times(1)).structure(anyString(),any(),eq(prompt));
         verifyNoInteractions(comfy);
     }
     @Test void acceptedJobReentryUsesExistingReceiptWithoutMorePaidRequests() {
         worker.runStage0(7L);
         worker.runStage0(7L);
         worker.runGoldenReroll(7L);
-        verify(concepts,times(1)).generateIllustrationTags(anyString());
-        verify(concepts,times(1)).structure(anyString(),any(),eq(tags));
+        verify(concepts,times(1)).generateIllustrationPrompt(anyString());
+        verify(concepts,times(1)).structure(anyString(),any(),eq(prompt));
         verify(comfy,times(1)).submit(any(),isNull(),isNull());
         assertThat(json.readScratch(job.getExternalJobsJson())).containsEntry("GOLDEN","accepted")
             .doesNotContainKey(UgcPipelineWorker.GOLDEN_SUBMITTING_KEY);
@@ -155,7 +159,7 @@ class OriginalIllustrationPipelineTest {
         });
         worker.runStage0(7L);
         verify(comfy,times(1)).submit(any(),isNull(),isNull());
-        verify(concepts,times(1)).generateIllustrationTags(anyString());
+        verify(concepts,times(1)).generateIllustrationPrompt(anyString());
         assertThat(json.readGoldenSnapshots(json.readScratch(job.getExternalJobsJson())
             .get(UgcPipelineWorker.GOLDEN_SNAPSHOTS_KEY))).hasSize(1);
     }
@@ -171,8 +175,8 @@ class OriginalIllustrationPipelineTest {
     @Test void cancelledRerollAfterTagsStopsBeforeMetadata() {
         job.applyStage0(json.writeConcept(concept),concept.bgColor());
         job.updateExternalJobs(json.writeScratch(Map.of(UgcPipelineWorker.APPEARANCE_EDIT_KEY,"부분 변경")));
-        when(concepts.generateAppearanceTags(anyString(),any(),anyString()))
-            .thenAnswer(i -> { job.fail("cancelled"); return tags; });
+        when(concepts.generateAppearancePrompt(anyString(),any(),anyString()))
+            .thenAnswer(i -> { job.fail("cancelled"); return prompt; });
         worker.runGoldenReroll(7L);
         verify(concepts,never()).restructureAppearance(anyString(),any(),anyString(),any());
         verifyNoInteractions(comfy);
@@ -180,19 +184,19 @@ class OriginalIllustrationPipelineTest {
     @Test void cancelledRerollDuringFailedMetadataStopsBeforeRetry() {
         job.applyStage0(json.writeConcept(concept),concept.bgColor());
         job.updateExternalJobs(json.writeScratch(Map.of(UgcPipelineWorker.APPEARANCE_EDIT_KEY,"부분 변경")));
-        when(concepts.generateAppearanceTags(anyString(),any(),anyString())).thenReturn(tags);
-        when(concepts.restructureAppearance(anyString(),any(),anyString(),eq(tags))).thenAnswer(i -> {
+        when(concepts.generateAppearancePrompt(anyString(),any(),anyString())).thenReturn(prompt);
+        when(concepts.restructureAppearance(anyString(),any(),anyString(),eq(prompt))).thenAnswer(i -> {
             job.fail("cancelled"); throw new ExternalApiException("cancelled response");
         });
         worker.runGoldenReroll(7L);
-        verify(concepts,times(1)).restructureAppearance(anyString(),any(),anyString(),eq(tags));
+        verify(concepts,times(1)).restructureAppearance(anyString(),any(),anyString(),eq(prompt));
         verifyNoInteractions(comfy);
     }
     @Test void cancelledRerollDuringSuccessfulMetadataStopsBeforeModerationConfirmation() {
         job.applyStage0(json.writeConcept(concept),concept.bgColor());
         job.updateExternalJobs(json.writeScratch(Map.of(UgcPipelineWorker.APPEARANCE_EDIT_KEY,"부분 변경")));
-        when(concepts.generateAppearanceTags(anyString(),any(),anyString())).thenReturn(tags);
-        when(concepts.restructureAppearance(anyString(),any(),anyString(),eq(tags))).thenAnswer(i -> {
+        when(concepts.generateAppearancePrompt(anyString(),any(),anyString())).thenReturn(prompt);
+        when(concepts.restructureAppearance(anyString(),any(),anyString(),eq(prompt))).thenAnswer(i -> {
             job.fail("cancelled"); return concept;
         });
         worker.runGoldenReroll(7L);

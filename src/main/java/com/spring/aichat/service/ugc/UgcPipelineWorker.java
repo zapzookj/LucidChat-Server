@@ -246,16 +246,16 @@ public class UgcPipelineWorker {
         if (job == null) return;
 
         try {
-            var tags = new AtomicReference<ConceptStructuringService.IllustrationTags>();
+            var prompt = new AtomicReference<com.spring.aichat.dto.ugc.IllustrationPrompt>();
             var ready = new AtomicReference<StructuredConcept>();
             runWithRetries(jobId, "STAGE0", () -> {
                 if (!isConceptProcessing(jobId)) return;
                 // Successful artwork tags/profile survive metadata or persistence retries in this attempt.
                 if (ready.get() == null) {
                     String input = withGenderDirective(job.getConceptInputRaw(), job.getGenderOrDefault());
-                    if (tags.get() == null) tags.set(conceptStructuringService.generateIllustrationTags(input));
+                    if (prompt.get() == null) prompt.set(conceptStructuringService.generateIllustrationPrompt(input));
                     if (!isConceptProcessing(jobId)) return;
-                    StructuredConcept concept = conceptStructuringService.structure(input, job.getRequestedName(), tags.get());
+                    StructuredConcept concept = conceptStructuringService.structure(input, job.getRequestedName(), prompt.get());
                     if (!isConceptProcessing(jobId)) return;
                     moderationService.assertStructuredConceptAllowed(concept, job.getConceptInputRaw(), job.getUserId());
                     ready.set(concept);
@@ -327,9 +327,9 @@ public class UgcPipelineWorker {
         CharacterCreationJob current = jobRepository.findById(jobId).orElse(null);
         if (current == null || current.getStatus() != CreationJobStatus.CONCEPT_PROCESSING) return;
         boolean male = isMaleJob(jobId);
-        String positive = promptAssembler.goldenShotPositive(
-            concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male);
-        var workflow = workflowFactory.buildGoldenShot(positive, "job_" + jobId + "_golden", male);
+        String positive = promptAssembler.goldenShotPositive(concept, male);
+        String negative = promptAssembler.goldenShotNegative(concept, male);
+        var workflow = workflowFactory.buildGoldenShot(positive, negative, "job_" + jobId + "_golden", male);
         String reservation = java.util.UUID.randomUUID().toString();
         boolean claimed = Boolean.TRUE.equals(txTemplate.execute(tx -> {
             CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
@@ -371,7 +371,7 @@ public class UgcPipelineWorker {
             // 프로필 성격·서사·유저 편집분은 보존되고 이미지 태그 3종·외형 메타데이터만 바뀐다.
             String hintsBlock = json.readScratch(job.getExternalJobsJson()).get(APPEARANCE_EDIT_KEY);
             if (hintsBlock != null && !hintsBlock.isBlank()) {
-                var tags = new AtomicReference<ConceptStructuringService.IllustrationTags>();
+                var prompt = new AtomicReference<com.spring.aichat.dto.ugc.IllustrationPrompt>();
                 var ready = new AtomicReference<StructuredConcept>();
                 runWithRetries(jobId, "APPEARANCE_EDIT", () -> {
                     CharacterCreationJob fresh = jobRepository.findById(jobId).orElseThrow();
@@ -379,11 +379,11 @@ public class UgcPipelineWorker {
                     StructuredConcept current = json.readConcept(fresh.getStructuredConceptJson());
                     if (ready.get() == null) {
                         String input = withGenderDirective(fresh.getConceptInputRaw(), fresh.getGenderOrDefault());
-                        if (tags.get() == null)
-                            tags.set(conceptStructuringService.generateAppearanceTags(input, current, hintsBlock));
+                        if (prompt.get() == null)
+                            prompt.set(conceptStructuringService.generateAppearancePrompt(input, current, hintsBlock));
                         if (!isConceptProcessing(jobId)) return;
                         StructuredConcept updated = conceptStructuringService.restructureAppearance(input,
-                            current, hintsBlock, tags.get());
+                            current, hintsBlock, prompt.get());
                         if (!isConceptProcessing(jobId)) return;
                         moderationService.assertStructuredConceptAllowed(updated,
                             fresh.getConceptInputRaw() + "\n\n[이번 디자인 변경 요청]:\n" + hintsBlock, fresh.getUserId());

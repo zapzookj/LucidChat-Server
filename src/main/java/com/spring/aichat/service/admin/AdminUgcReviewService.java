@@ -242,8 +242,8 @@ public class AdminUgcReviewService {
 
     /**
      * [프롬프트 인스펙션 2026-07-20] 캐릭터 일러 생성에 들어간 실제 프롬프트 재구성 — 튜닝 참조용.
-     * 최종 프롬프트 = 잡의 구조화 태그(Stage0 이후 불변) + 서버 상수의 결정적 함수이므로
-     * 저장본 없이 제출 시점 값이 정확히 재현된다.
+     * 신규 원화는 선택된 배치의 저장 positive/negative 쌍을 읽는다.
+     * 이전 작업은 현재 태그 조립 코드로 재구성하므로 과거 제출 HTTP 원본이라고 단정하지 않는다.
      */
     @Transactional(readOnly = true)
     public UgcReviewDtos.PromptInspection prompts(Long characterId) {
@@ -270,14 +270,14 @@ public class AdminUgcReviewService {
             job.getGenderOrDefault().name(),
             male,
             workflowFactory.maleLoraStrengthOrNull(male),
-            promptAssembler.goldenShotPositive(concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male),
+            promptAssembler.goldenShotPositive(concept, male),
             promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.NEUTRAL, job.getBgColor(), male),
             promptAssembler.refinePositive(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY, job.getBgColor(), male),
             // [2026-07-21 재구성] 감정 표정 포함 구성 — JOY 예시로 실구성 확인
             // (faceDetailWildcard는 파이프라인도 무성별 오버로드를 쓴다 — UgcPipelineWorker:366. 일치.)
             promptAssembler.faceDetailWildcard(concept.appearanceTags(), concept.personaTags(), EmotionTag.JOY),
             workflowFactory.templateNegative(male),
-            workflowFactory.goldenShotNegative(male),
+            promptAssembler.goldenShotNegative(concept, male),
             promptAssembler.qwenPosePrompt(concept.basePose()),
             promptAssembler.qwenBackgroundPrompt(job.getBgColor()),
             promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint,

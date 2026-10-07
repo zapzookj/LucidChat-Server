@@ -318,7 +318,7 @@ public class CharacterCreationService {
             StructuredConcept merged = new StructuredConcept(
                 concept.appearanceTags(), concept.personaTags(), concept.moodTags(), concept.sceneTags(),
                 concept.bgColor(), updated, concept.moderation(),
-                concept.basePose(), concept.emotionPrompts());
+                concept.basePose(), concept.emotionPrompts(), concept.illustrationPrompt());
             job.applyStage0(json.writeConcept(merged), concept.bgColor());
         });
         log.info("[UGC] 프로필 초안 수정: username={}, jobId={}", username, jobId);

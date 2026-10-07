@@ -3,6 +3,7 @@ package com.spring.aichat.service.ugc;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spring.aichat.config.OpenAiProperties;
 import com.spring.aichat.dto.ugc.StructuredConcept;
+import com.spring.aichat.dto.ugc.IllustrationPrompt;
 import com.spring.aichat.exception.ExternalApiException;
 import com.spring.aichat.external.OpenRouterClient;
 import com.spring.aichat.service.util.LlmOutputParser;
@@ -19,7 +20,7 @@ import java.util.Set;
  * [UGC v1] Stage 0 — 유저 자유 서술을 이미지·페르소나 구조화 데이터로 변환.
  *
  * <p>불변 원칙: 유저 텍스트는 여기서 끝난다 — 이후 모든 이미지 프롬프트는
- * 원화는 이미지 전용 산출의 태그만 사용하고, 스탠딩은 별도 템플릿과 조립한다.
+ * 원화는 이미지 전용 positive/negative를 사용하고, 스탠딩은 추출 태그와 별도 템플릿으로 조립한다.
  *
  * <p>비스트리밍 단건 completion — {@link OpenRouterClient#completeJson} 재사용
  * (response_format=json_object 강제).
@@ -34,27 +35,25 @@ public class ConceptStructuringService {
         "light gray", "pale blue gray", "muted teal", "soft beige", "dusty lavender");
     static final String BG_COLOR_FALLBACK = "light gray";
 
-    // User-selected 1-A instruction, isolated from profile/schema/mood/pose generation.
-    static final String IMAGE_TAG_SYSTEM_PROMPT = """
-        너는 WAI Illustrious를 위한 캐릭터 일러스트 아트디렉터다.
+    static final String IMAGE_PROMPT_SYSTEM = """
+        WAI Illustrious로 아래 캐릭터 컨셉의 매력적인 일본 서브컬처풍
+        2D 캐릭터 일러스트를 만들려고 한다.
 
-        사용자의 컨셉을 바탕으로, 일본 서브컬처풍의 예쁘고 매력적인
-        2D 캐릭터 일러스트를 만들기 위한 영문 Danbooru 태그를 작성한다.
-        컨셉의 특징과 개성을 살리고, 완성된 일러스트의 매력을 우선한다.
-        태그는 필요한 만큼만 선택한다.
-
-        외형·복장은 appearance_tags,
-        표정·분위기는 persona_tags,
-        배경·구도·조명은 scene_tags에 작성한다.
+        실제 이미지 생성에 사용할 완성된 positive와 negative 프롬프트를
+        영문 태그로 작성해줘.
+        외형과 복장뿐 아니라 그림체, 품질, 인물의 매력, 분위기, 구도와
+        조명까지 컨셉에 맞게 자유롭게 구성해줘.
 
         지정된 JSON 스키마로만 응답한다.
-        {"appearance_tags":[...],"persona_tags":[...],"scene_tags":[...]}
+        {"positive_prompt":"...","negative_prompt":"..."}
         출력은 JSON 외 어떤 텍스트도 금지.
         """;
 
     private static final String PROFILE_SYSTEM_PROMPT = """
-        너는 캐릭터 프로필 구조화 엔진이다. 유저의 컨셉과 확정된 원화 태그를 받아 아래 JSON 스키마로만 응답한다.
-        원화 태그의 외형·복장에 맞춰 프로필을 작성한다. 이미지 태그를 다시 생성하거나 다른 외형을 추가하지 않는다.
+        너는 캐릭터 프로필 구조화 엔진이다. 유저의 컨셉과 확정된 원화 프롬프트를 받아 아래 JSON 스키마로만 응답한다.
+        positive_prompt에 맞춰 프로필을 작성한다. 원화 프롬프트를 다시 작성하거나 다른 외형을 추가하지 않는다.
+        스탠딩용 appearance_tags(외형·복장), persona_tags(표정·분위기), scene_tags(배경·구도·조명)는
+        positive_prompt에 있는 특징을 영문 태그로 추출한다. negative_prompt의 배제 대상은 추출하지 않는다.
         규칙:
         - mood_tags: 프로필 카드에 노출되는 무드 태그 3~5개 (**반드시 한국어**, 각 2~6자 —
           예: "새침한", "다정다감", "장난기", "미스터리"). persona_tags의 직역이 아니어도 되며,
@@ -93,7 +92,8 @@ public class ConceptStructuringService {
           backstory에 어린 시절·성장기 서술이 있는 것은 해당하지 않는다(현재 캐릭터가 성인이면 false).
           판단 기준은 '이 캐릭터가 미성년인가'이지 '미성년 시절 언급이 있는가'가 아니다. 모호하면 false.
         출력 스키마:
-        {"mood_tags":["새침한","다정다감"], "bg_color":"...",
+        {"appearance_tags":["..."],"persona_tags":["..."],"scene_tags":["..."],
+         "mood_tags":["새침한","다정다감"], "bg_color":"...",
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",
           "tone":"...","appearance":"...","clothing":"...","backstory":"...",
           "core_values":"...","flaws":"...","speech_quirks":"...","first_greeting":"...",
@@ -121,12 +121,12 @@ public class ConceptStructuringService {
      * @param requestedName 유저 지정 이름 (null이면 LLM 작명)
      */
     public StructuredConcept structure(String rawInput, String requestedName) {
-        return structure(rawInput, requestedName, generateIllustrationTags(rawInput));
+        return structure(rawInput, requestedName, generateIllustrationPrompt(rawInput));
     }
 
-    /** Reuse successful tags across profile retries; metadata cannot overwrite the artwork. */
-    public StructuredConcept structure(String rawInput, String requestedName, IllustrationTags tags) {
-        String userMessage = buildUserMessage(rawInput, requestedName) + tagReference(tags);
+    /** Reuse successful prompts across profile retries; metadata cannot overwrite the artwork. */
+    public StructuredConcept structure(String rawInput, String requestedName, IllustrationPrompt prompt) {
+        String userMessage = buildUserMessage(rawInput, requestedName) + promptReference(prompt);
 
         String raw;
         try {
@@ -143,46 +143,40 @@ public class ConceptStructuringService {
             || concept.character().clothing() == null || concept.character().clothing().isBlank()) {
             throw new ExternalApiException("컨셉 구조화 실패 — 잠시 후 다시 시도해 주세요.");
         }
-        return sanitize(new StructuredConcept(tags.appearanceTags(), tags.personaTags(), concept.moodTags(),
-            tags.sceneTags(), concept.bgColor(), concept.character(), concept.moderation(),
-            concept.basePose(), concept.emotionPrompts()), requestedName);
+        return sanitize(concept.withIllustrationPrompt(prompt), requestedName);
     }
 
-    public IllustrationTags generateIllustrationTags(String rawInput) {
+    public IllustrationPrompt generateIllustrationPrompt(String rawInput) {
         try {
-            String raw = openRouterClient.completeJson(effectiveModel(), IMAGE_TAG_SYSTEM_PROMPT,
+            String raw = openRouterClient.completeJson(effectiveModel(), IMAGE_PROMPT_SYSTEM,
                 "[컨셉 서술]:\n" + rawInput, 8192, 0.7);
             var tree = objectMapper.readTree(LlmOutputParser.extractJson(raw));
-            for (String field : List.of("appearance_tags", "persona_tags", "scene_tags")) {
-                var array = tree.path(field);
-                if (!array.isArray() || (field.equals("appearance_tags") && array.isEmpty())) {
-                    throw new IllegalArgumentException("Missing illustration tag array");
-                }
-                for (var tag : array) {
-                    if (!tag.isTextual() || tag.asText().isBlank()) {
-                        throw new IllegalArgumentException("Invalid illustration tag item");
-                    }
-                }
-            }
-            return objectMapper.treeToValue(tree, IllustrationTags.class);
+            if (!tree.path("positive_prompt").isTextual() || !tree.path("negative_prompt").isTextual())
+                throw new IllegalArgumentException("Invalid illustration prompt fields");
+            return objectMapper.treeToValue(tree, IllustrationPrompt.class);
         } catch (Exception e) {
-            log.error("[UGC-IMAGE-TAGS] 산출 실패: {}", e.getClass().getSimpleName());
+            log.error("[UGC-IMAGE-PROMPT] 산출 실패: {}", e.getClass().getSimpleName());
             throw new ExternalApiException("일러스트 컨셉 생성 실패 — 잠시 후 다시 시도해 주세요.");
         }
     }
 
-    private String tagReference(IllustrationTags tags) {
+    private String promptReference(IllustrationPrompt prompt) {
         try {
-            return "\n\n[확정된 원화 태그 — 외형·복장 참고]:\n" + objectMapper.writeValueAsString(tags);
+            return "\n\n[확정된 원화 프롬프트 — 변경 없이 참고]:\n" + objectMapper.writeValueAsString(prompt);
         } catch (Exception e) {
             throw new ExternalApiException("일러스트 컨셉 처리 실패 — 잠시 후 다시 시도해 주세요.");
         }
     }
 
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    @com.fasterxml.jackson.databind.annotation.JsonNaming(
-        com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
-    public record IllustrationTags(List<String> appearanceTags, List<String> personaTags, List<String> sceneTags) {}
+    private void validateMetadataTags(com.fasterxml.jackson.databind.JsonNode tree) {
+        for (String field : List.of("appearance_tags", "persona_tags", "scene_tags")) {
+            var array = tree.path(field);
+            if (!array.isArray() || (field.equals("appearance_tags") && array.isEmpty()))
+                throw new IllegalArgumentException("Missing extracted tag array");
+            for (var tag : array)
+                if (!tag.isTextual() || tag.asText().isBlank()) throw new IllegalArgumentException("Invalid extracted tag");
+        }
+    }
 
     private String buildUserMessage(String rawInput, String requestedName) {
         if (requestedName != null && !requestedName.isBlank()) {
@@ -193,8 +187,10 @@ public class ConceptStructuringService {
 
     private StructuredConcept parse(String raw) {
         try {
-            String json = LlmOutputParser.extractJson(raw);
-            return objectMapper.readValue(json, StructuredConcept.class);
+            var tree = objectMapper.readTree(LlmOutputParser.extractJson(raw));
+            validateMetadataTags(tree);
+            ((com.fasterxml.jackson.databind.node.ObjectNode) tree).remove("illustration_prompt");
+            return objectMapper.treeToValue(tree, StructuredConcept.class);
         } catch (Exception e) {
             log.error("[UGC-STAGE0] 산출 파싱 실패: {}", e.getClass().getSimpleName());
             throw new ExternalApiException("컨셉 구조화 실패 — 잠시 후 다시 시도해 주세요.");
@@ -249,7 +245,7 @@ public class ConceptStructuringService {
         List<String> personaTags = c.personaTags() == null ? List.of() : c.personaTags();
         List<String> sceneTags = c.sceneTags() == null ? List.of() : c.sceneTags();
         return new StructuredConcept(c.appearanceTags(), personaTags, sanitizeMoodTags(c.moodTags()),
-            sceneTags, effectiveBg, fixed, c.moderation(), c.basePose(), c.emotionPrompts());
+            sceneTags, effectiveBg, fixed, c.moderation(), c.basePose(), c.emotionPrompts(), c.illustrationPrompt());
     }
 
     /**
@@ -386,41 +382,47 @@ public class ConceptStructuringService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private static final String APPEARANCE_SYSTEM_PROMPT = """
-        확정된 원화 태그에 맞는 외형·복장 한국어 서술과 스탠딩 배경색을 JSON으로 작성한다.
-        이미지 태그나 다른 외형을 새로 만들지 않는다. 캐릭터의 성격·서사는 건드리지 않는다.
+        확정된 원화 positive_prompt에서 스탠딩용 외형·복장 태그(appearance_tags),
+        표정·분위기 태그(persona_tags), 배경·구도·조명 태그(scene_tags)를 추출하고
+        외형·복장 한국어 서술과 스탠딩 배경색을 JSON으로 작성한다.
+        원화 프롬프트나 다른 외형을 새로 만들지 않는다. negative_prompt의 배제 대상은 추출하지 않는다.
+        캐릭터의 성격·서사는 건드리지 않는다.
         규칙:
         - bg_color: 새 머리색(우선)·의상색과 명도 대비가 큰 저채도 1개 —
           ["light gray","pale blue gray","muted teal","soft beige","dusty lavender"] 중 선택.
         - appearance: 새 외형 한국어 서술 / clothing: 새 복장 한국어 서술.
         - moderation: 명백한 미성년 신체 시그널이 있을 때만 minor_signal=true.
         출력 스키마:
-        {"bg_color":"...",
+        {"appearance_tags":["..."],"persona_tags":["..."],"scene_tags":["..."],"bg_color":"...",
          "appearance":"...", "clothing":"...", "moderation":{"minor_signal":false,"reason":""}}
         출력은 JSON 외 어떤 텍스트도 금지.
         """;
 
     /**
-     * 황금샷 리롤 — 이미지 태그 3종과 외형 메타데이터만 재산출한다.
+     * 황금샷 리롤 — 완성형 원화 프롬프트와 외형 메타데이터를 재산출한다.
      * 프로필 성격·서사·유저 편집분은 그대로 보존한다.
      */
     public StructuredConcept restructureAppearance(String rawConcept, StructuredConcept current,
                                                    String appearanceHintsBlock) {
         return restructureAppearance(rawConcept, current, appearanceHintsBlock,
-            generateAppearanceTags(rawConcept, current, appearanceHintsBlock));
+            generateAppearancePrompt(rawConcept, current, appearanceHintsBlock));
     }
 
-    public IllustrationTags generateAppearanceTags(String rawConcept, StructuredConcept current,
+    public IllustrationPrompt generateAppearancePrompt(String rawConcept, StructuredConcept current,
                                                   String appearanceHintsBlock) {
-        return generateIllustrationTags(rawConcept
-            + tagReference(new IllustrationTags(current.appearanceTags(), current.personaTags(), current.sceneTags()))
+        String previous = current.illustrationPrompt() != null ? promptReference(current.illustrationPrompt())
+            : "\n\n[기존 디자인]:\n외형·복장: " + String.join(", ", current.appearanceTags())
+                + "\n표정·분위기: " + String.join(", ", current.personaTags() == null ? List.of() : current.personaTags())
+                + "\n배경·구도·조명: " + String.join(", ", current.sceneTags() == null ? List.of() : current.sceneTags());
+        return generateIllustrationPrompt(rawConcept + previous
             + "\n\n[이번 디자인 변경 요청]:\n" + appearanceHintsBlock
             + "\n변경 요청을 우선하고, 지정하지 않은 부분은 기존 디자인을 유지한다. 전체 디자인 리롤이면 요청 범위에 맞춰 다시 설계한다.");
     }
 
     public StructuredConcept restructureAppearance(String rawConcept, StructuredConcept current,
-                                                   String appearanceHintsBlock, IllustrationTags tags) {
+                                                   String appearanceHintsBlock, IllustrationPrompt prompt) {
         String userMessage = "[원래 컨셉 서술]:\n" + rawConcept
-            + "\n\n[외형 지정 — 변경 요청]:\n" + appearanceHintsBlock + tagReference(tags);
+            + "\n\n[외형 지정 — 변경 요청]:\n" + appearanceHintsBlock + promptReference(prompt);
 
         String raw;
         try {
@@ -433,7 +435,9 @@ public class ConceptStructuringService {
 
         AppearanceRestructure parsed;
         try {
-            parsed = objectMapper.readValue(LlmOutputParser.extractJson(raw), AppearanceRestructure.class);
+            var tree = objectMapper.readTree(LlmOutputParser.extractJson(raw));
+            validateMetadataTags(tree);
+            parsed = objectMapper.treeToValue(tree, AppearanceRestructure.class);
         } catch (Exception e) {
             log.error("[UGC-APPEARANCE] 산출 파싱 실패: {}", e.getClass().getSimpleName());
             throw new ExternalApiException("외형 재구조화 실패 — 잠시 후 다시 시도해 주세요.");
@@ -455,8 +459,8 @@ public class ConceptStructuringService {
             p.firstGreeting(), p.introNarration(),
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
-        return new StructuredConcept(tags.appearanceTags(), tags.personaTags(), current.moodTags(),
-            tags.sceneTags(), effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts());
+        return new StructuredConcept(parsed.appearanceTags(), parsed.personaTags(), current.moodTags(),
+            parsed.sceneTags(), effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts(), prompt);
     }
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
@@ -464,6 +468,7 @@ public class ConceptStructuringService {
         com.fasterxml.jackson.databind.PropertyNamingStrategies.SnakeCaseStrategy.class)
     record AppearanceRestructure(
         List<String> appearanceTags,
+        List<String> personaTags,
         List<String> sceneTags,
         String bgColor,
         @com.fasterxml.jackson.databind.annotation.JsonDeserialize(

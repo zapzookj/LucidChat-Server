@@ -1,0 +1,27 @@
+{
+  "total": {
+    "tests": 361,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "classes": 50,
+  "dioramaTests": 10,
+  "originalPromptTests": {
+    "com.spring.aichat.service.ugc.ApprovedIllustrationRecipeTest": 1,
+    "com.spring.aichat.service.ugc.ConceptIllustrationSplitTest": 16,
+    "com.spring.aichat.service.ugc.IllustrationPromptPersistenceTest": 10,
+    "com.spring.aichat.service.ugc.OriginalIllustrationPipelineTest": 14,
+    "com.spring.aichat.service.ugc.UgcPromptAssemblerTest": 7,
+    "com.spring.aichat.service.ugc.UgcWorkflowFactoryTest": 11
+  },
+  "finalFocused": {
+    "tests": 59,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "deployableTestCount": 351,
+  "independentReview": "studio_preflight: no blocking findings; isolated required-field fixtures and comments corrected",
+  "paidGenerations": 0
+}

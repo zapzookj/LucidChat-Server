@@ -177,6 +177,15 @@ public class UgcPromptAssembler {
             .collect(java.util.stream.Collectors.joining(", "));
     }
 
+    public String goldenShotPositive(StructuredConcept concept, boolean male) {
+        return concept.illustrationPrompt() != null ? concept.illustrationPrompt().positivePrompt()
+            : goldenShotPositive(concept.appearanceTags(), concept.personaTags(), concept.sceneTags(), male);
+    }
+
+    public String goldenShotNegative(StructuredConcept concept, boolean male) {
+        return concept.illustrationPrompt() != null ? concept.illustrationPrompt().negativePrompt() : "";
+    }
+
     /**
      * WF-2 = 프리픽스 + 성별 앵커 + 외형 태그 + 성격·무드 태그 + 자세 고정 태그 + 감정 태그 + 배경 지시.
      * 씬·소품 태그 절대 포함 금지.

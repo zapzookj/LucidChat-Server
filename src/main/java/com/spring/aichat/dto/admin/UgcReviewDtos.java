@@ -88,7 +88,7 @@ public final class UgcReviewDtos {
 
     /**
      * [프롬프트 인스펙션 2026-07-20] 캐릭터 일러 생성에 실제 들어간 프롬프트 재구성.
-     * 최종 프롬프트는 잡의 구조화 태그 + 서버 상수의 결정적 함수라 저장 없이 정확 재현된다.
+     * 신규 원화는 잡에 저장된 완성 프롬프트를 반환한다. 구버전 원화와 스탠딩은 현행 조립식으로 계산한다.
      * (외형 태그는 Stage0 이후 불변이므로 제출 시점 값과 동일)
      */
     public record PromptInspection(
@@ -116,7 +116,7 @@ public final class UgcReviewDtos {
         String faceDetailWildcard,
         /** WF-2 네거티브 (기존 필드명 호환 유지) */
         String negative,
-        /** WF-1 네거티브 — 원화 스타일 보강분 포함, 현재 코드로 재구성한 템플릿 */
+        /** WF-1 네거티브 — 선택한 배치의 저장값, 이전 작업은 현행 조립 폴백 */
         String goldenShotNegative,
         /** Qwen 패스1 — 자세 표준화 */
         String qwenPosePrompt,

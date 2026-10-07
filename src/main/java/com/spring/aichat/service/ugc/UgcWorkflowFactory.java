@@ -105,16 +105,26 @@ public class UgcWorkflowFactory {
      * 지우면서 같은 함정을 이 클래스에는 남겨 뒀다. 테스트는 명시 인자를 넘긴다.
      */
     public ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix, boolean male) {
-        return buildGoldenShot(positivePrompt, filenamePrefix, newSeed(), newSeed(), male);
+        return buildGoldenShot(positivePrompt, "", filenamePrefix, male);
+    }
+
+    public ObjectNode buildGoldenShot(String positivePrompt, String negativePrompt, String filenamePrefix, boolean male) {
+        return buildGoldenShot(positivePrompt, negativePrompt, filenamePrefix, newSeed(), newSeed(), male);
     }
 
     ObjectNode buildGoldenShot(String positivePrompt, String filenamePrefix,
+                               long samplerSeed, long detailerSeed, boolean male) {
+        return buildGoldenShot(positivePrompt, "", filenamePrefix, samplerSeed, detailerSeed, male);
+    }
+
+    ObjectNode buildGoldenShot(String positivePrompt, String negativePrompt, String filenamePrefix,
                                long samplerSeed, long detailerSeed, boolean male) {
         ObjectNode wf = wf1Template.deepCopy();
         if (male) {
             injectMaleLora(wf);
         }
         inputs(wf, "12").put("text", positivePrompt);
+        inputs(wf, "13").put("text", java.util.Objects.requireNonNull(negativePrompt));
         inputs(wf, "11").put("seed", samplerSeed);
         inputs(wf, "17").put("seed", detailerSeed);
         inputs(wf, "6").put("batch_size", props.generation().batchSize());
