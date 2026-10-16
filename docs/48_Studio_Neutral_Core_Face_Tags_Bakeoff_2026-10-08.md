@@ -1,5 +1,8 @@
 # Neutral FaceDetailer 핵심 태그 비교 — 2026-10-08
 
+> 후속 확정: 2026-10-16 사용자 승인으로 Neutral Face 세 태그0.4 + Hand0.3을 운영 배포했다. 아래는 당시 실험 기록이며 현재 구현/실행 검증은 [docs52](52_Studio_Neutral_Face_Hand_Release_2026-10-16.md)를 따른다.
+
+
 ## 사용자 가설과 범위
 
 사용자는 수작업 경험상 FaceDetailer wildcard가 다양하고 상세해지면 품질이 불안정해진다고 설명했다. 기본 복원 태그 하나만 남기는 것은 외형 보존 정보가 없어 지나치며, 핵심 외형·표정 2–4개를 남기는 쪽을 제안했다. 이번 강세라 예시는 `detailed beautiful eyes, sharp amber eyes, subtle smoky eye makeup, smug grin`이다. 태그 수에 따른 가중치 분산이 원인인지는 미확정이다. 태그 개수뿐 아니라 의미·중복·현재 얼굴과 지시의 충돌도 함께 변하므로 그 메커니즘을 단정하지 않는다.

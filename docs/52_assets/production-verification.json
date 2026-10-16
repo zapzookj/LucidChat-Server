@@ -1,0 +1,89 @@
+{
+  "observedAt": "2026-10-16T06:22:30.952248+00:00",
+  "backendSha": "5dfce4dc3dd05a75c678685fe82c7a550eee28b7",
+  "githubRuns": [
+    {
+      "id": 38860126987,
+      "name": "Deploy backend to Vultr",
+      "head_sha": "5dfce4dc3dd05a75c678685fe82c7a550eee28b7",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/zapzookj/LucidChat-Server/actions/runs/38860126987",
+      "jobs": [
+        {
+          "name": "deploy",
+          "status": "completed",
+          "conclusion": "success",
+          "activeSteps": []
+        }
+      ]
+    }
+  ],
+  "imageDigest": "sha256:8a4ef607b0e1f1f8e13fe31f84d7ebbc6307cdef79c5b2b2fdf7ffa5c0f7542d",
+  "imageMatchesCommit": true,
+  "containerRunning": true,
+  "publicHealth": {
+    "http": 200,
+    "body": "OK"
+  },
+  "runtimeWorkflowHashes": {
+    "wf1_goldenshot.json": "8cdc506e1a139ce33a703ed2e68b6bd3649fac7b263da8ab591847f61d2cdd92",
+    "wf2_refine.json": "f6cd328374f6e9119281febc339653f122a88003997e08e11db2e9fb9edcc90b",
+    "wf2_neutral_refine.json": "e128aa143ccd09e4ba4f8419f3fc3d7feefb34d4316af7f6a6ef1d77b06e61b8",
+    "wf3_rembg.json": "20658421500755312b84a12c09f6ebe1b5ba5fc3bf03d7f62ae8e40800a84b19"
+  },
+  "runtimeClassHashes": {
+    "dto/ugc/FaceDetailTags": "03f321198bb9812d89933ca5410a5a17f87c5ddde05346a2b05835732088ec9b",
+    "dto/ugc/FaceDetailTags$Deserializer": "8b92d416d7692bdc0b39cadd47eb7c7bf787aea6e0dc2b0924a40c876c9803a2",
+    "dto/ugc/StructuredConcept": "c66863ae65539075dbdce1d16e41ed8389097aa9393403f4a0789cb191d75ca6",
+    "service/ugc/NeutralFacePrompt": "cacce1c089d06eb13a943db73720e2d97e2300d729565144cc8d86c6e0e36737",
+    "service/ugc/ConceptStructuringService": "777a8c3c596e6397c68c0b72f19462cb2e09fcbeacc02138b0e14c23fd3d5b63",
+    "service/ugc/ConceptStructuringService$AppearanceRestructure": "ced9f4883c6e4c9df86a4478d8bc1256f10d57584f4b4f8362d73bc62a087a40",
+    "service/ugc/CharacterCreationService": "3fb48dae87200cea2d1dd2b2ecb6c467703871442625534c97e576771a273801",
+    "service/ugc/UgcPipelineWorker": "95b34481c1e01d0c4db79ee50e6a0e02a4970c45be4feb7c76e7f71742a6e2d0",
+    "service/ugc/UgcWorkflowFactory": "aef864e05631deecc339aa0c397bc73d3dfcc31642fa0892263f85edf7750e82",
+    "service/admin/AdminUgcReviewService": "fd3cbe46ccc3ba169fee9864f55c003408e5cf212e0abb5f2d18abd6d36f4cb4",
+    "dto/admin/UgcReviewDtos$PromptInspection": "c4fcd729d2652d172cb06ecc3e12f802f6189e2460f5af34d9f83a966fe15242"
+  },
+  "runtimeClassValidation": {
+    "dto/ugc/FaceDetailTags": "byte identical",
+    "dto/ugc/FaceDetailTags$Deserializer": "byte identical",
+    "dto/ugc/StructuredConcept": "byte identical",
+    "service/ugc/NeutralFacePrompt": "byte identical",
+    "service/ugc/ConceptStructuringService": "byte identical",
+    "service/ugc/ConceptStructuringService$AppearanceRestructure": "byte identical",
+    "service/ugc/CharacterCreationService": "javap comparison supports intended code; raw bytes differ in reference string-concat compiler representation",
+    "service/ugc/UgcPipelineWorker": "javap comparison supports intended code; raw bytes differ in reference string-concat compiler representation",
+    "service/ugc/UgcWorkflowFactory": "byte identical",
+    "service/admin/AdminUgcReviewService": "javap comparison supports intended code; raw bytes differ in reference string-concat compiler representation",
+    "dto/admin/UgcReviewDtos$PromptInspection": "byte identical"
+  },
+  "environmentUnchanged": true,
+  "envFileUnchanged": true,
+  "envFileMode": "600",
+  "charactersPreserved": 31,
+  "characterRowsUnchanged": true,
+  "migration": 39,
+  "sceneEndpointAndTemplateUnchanged": true,
+  "ugcSettingsExceptTemplateAndVersionUnchanged": true,
+  "ugcMinimum": 0,
+  "ugcMaximum": 1,
+  "workerEnvAndDiskPreserved": true,
+  "workerImage": "zapzook/lucid-comfy-worker@sha256:6a9d54d6bdceb16cfc9d6b4c303867661c7efccc5fa6819acf17e10eb2d8e5f2",
+  "probe": {
+    "newPosts": 1,
+    "state": "DONE",
+    "sourceSha256": "3d034fc36e05cc6286dace3e2f7ce5ab2e2d2f2da21544b0f3cff73220993424",
+    "outputSha256": "109ce540b901940da6e6d6aeba3fb6ed15e263c4d87c12c3312db17ac2d99d34",
+    "executionTimeMs": 39207,
+    "delayTimeMs": 1467
+  },
+  "paidAppE2ePerformed": false,
+  "actualProviderBillingVerified": false,
+  "runtimeClassComparisonLimit": "8 classes byte-identical. 3 differ in compiler representation of reference string concatenation; normalized javap comparison is supporting evidence, not a general proof of semantic equivalence. Commit provenance is established by successful CI image manifest matching the running digest.",
+  "workerSourceMasterSha": "bb1215833e0a59a771fb9f235dc89c3fd47e0be3",
+  "independentReviews": {
+    "code": "studio_preflight: final359 tests and graph/JSON/copy/legacy preservation reviewed",
+    "operations": "incident_review: actual candidate execution worker, output download, postdeploy env/31 character hashes/V39/scene/full endpoint config preservation reviewed"
+  }
+}
