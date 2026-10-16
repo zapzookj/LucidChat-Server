@@ -282,7 +282,9 @@ public class AdminUgcReviewService {
             promptAssembler.qwenBackgroundPrompt(job.getBgColor()),
             promptAssembler.qwenEmotionPrompt(EmotionTag.JOY, personaHint,
                 concept.emotionPromptFor(EmotionTag.JOY.name())),
-            promptAssembler.qwenNegative()
+            promptAssembler.qwenNegative(),
+            com.spring.aichat.service.ugc.NeutralFacePrompt.assemble(concept),
+            workflowFactory.neutralHandPositive()
         );
     }
 

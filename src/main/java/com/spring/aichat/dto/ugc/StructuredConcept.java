@@ -47,8 +47,18 @@ public record StructuredConcept(
      */
     Map<String, EmotionPromptOverride> emotionPrompts,
     /** 완성형 원화 positive/negative. 이전 작업 JSON은 null → 현행 레거시 태그 조립으로 폴백. */
-    IllustrationPrompt illustrationPrompt
+    IllustrationPrompt illustrationPrompt,
+    /** Neutral restoration only; absent in legacy jobs. */
+    FaceDetailTags faceDetailTags
 ) {
+
+    public StructuredConcept(List<String> appearanceTags, List<String> personaTags, List<String> moodTags,
+                             List<String> sceneTags, String bgColor, CharacterProfile character,
+                             Moderation moderation, String basePose, Map<String, EmotionPromptOverride> emotionPrompts,
+                             IllustrationPrompt illustrationPrompt) {
+        this(appearanceTags, personaTags, moodTags, sceneTags, bgColor, character, moderation,
+            basePose, emotionPrompts, illustrationPrompt, null);
+    }
 
     /** Source compatibility for existing legacy concept construction. */
     public StructuredConcept(List<String> appearanceTags, List<String> personaTags, List<String> moodTags,
@@ -60,7 +70,7 @@ public record StructuredConcept(
 
     public StructuredConcept withIllustrationPrompt(IllustrationPrompt prompt) {
         return new StructuredConcept(appearanceTags, personaTags, moodTags, sceneTags, bgColor,
-            character, moderation, basePose, emotionPrompts, prompt);
+            character, moderation, basePose, emotionPrompts, prompt, faceDetailTags);
     }
 
     /**
@@ -139,7 +149,7 @@ public record StructuredConcept(
     /** 감정 스테이지 산출 병합 — 잡 스크래치 재기록용 카피. */
     public StructuredConcept withEmotionPrompts(Map<String, EmotionPromptOverride> prompts) {
         return new StructuredConcept(appearanceTags, personaTags, moodTags, sceneTags, bgColor,
-            character, moderation, basePose, prompts, illustrationPrompt);
+            character, moderation, basePose, prompts, illustrationPrompt, faceDetailTags);
     }
 
     /**
@@ -159,6 +169,6 @@ public record StructuredConcept(
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
         return new StructuredConcept(source.appearanceTags(),
             source.personaTags() == null ? personaTags : source.personaTags(), moodTags, source.sceneTags(),
-            source.bgColor(), merged, source.moderation(), basePose, emotionPrompts, source.illustrationPrompt());
+            source.bgColor(), merged, source.moderation(), basePose, emotionPrompts, source.illustrationPrompt(), source.faceDetailTags());
     }
 }

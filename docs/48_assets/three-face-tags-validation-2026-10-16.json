@@ -1,0 +1,64 @@
+{
+  "observedDateKST": "2026-10-16",
+  "acceptedJobs": 1,
+  "completedJobs": 1,
+  "postAttempts": 1,
+  "outputs": 1,
+  "sourceSha256": "db3044e840ce5da860d4dc12a182345ffc5e24ded63de89b8d43537e5cc31aa2",
+  "file": {
+    "name": "three.png",
+    "sha256": "c7cd43550237c952b18c8f9a1b20d76b73823176bb672441dbac38351ef3dcc3",
+    "rgbSha256": "18c72b360a0e55d70a08d9a9db8d0d6615c4045c69a27aeb984197fd649deeaa"
+  },
+  "condition": {
+    "label": "three",
+    "wildcard": "detailed beautiful eyes, sharp amber eyes, smug",
+    "tagCount": 3,
+    "denoise": 0.4,
+    "seed": 260100802
+  },
+  "imageSize": [
+    1024,
+    1024
+  ],
+  "changedBounds": [
+    460,
+    107,
+    590,
+    216
+  ],
+  "bodyBelowY250Unchanged": true,
+  "executionTimeMs": 17140,
+  "delayTimeMs": 323710,
+  "totalSeconds": 347.787,
+  "guard": {
+    "normalAccepted": 1,
+    "tamperedRejected": 5,
+    "providerPosts": 0
+  },
+  "cleanup": {
+    "temporaryEndpoint404": true,
+    "temporaryTemplate404": true,
+    "absentFromLists": true,
+    "workersBeforeDelete": 0,
+    "productionStaticSettingsUnchanged": true,
+    "productionImageUnchanged": true,
+    "observedAt": "2026-10-16T05:51:58.375654+00:00"
+  },
+  "endpointDelete": {
+    "httpStatus": 204
+  },
+  "templateDelete": {
+    "httpStatus": 204
+  },
+  "actualBillingVerified": false,
+  "productSourceChanged": false,
+  "productionDeployment": false,
+  "independentReview": {
+    "reviewer": "studio_preflight",
+    "postAndFileHashesVerified": true,
+    "contractAndBodyPixelsVerified": true,
+    "cleanupVerified": true,
+    "visualApprovalPending": true
+  }
+}

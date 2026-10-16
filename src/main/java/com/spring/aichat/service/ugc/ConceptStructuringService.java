@@ -55,6 +55,10 @@ public class ConceptStructuringService {
         스탠딩용 appearance_tags(외형·복장), persona_tags(표정·분위기), scene_tags(배경·구도·조명)는
         positive_prompt에 있는 특징을 영문 태그로 추출한다. negative_prompt의 배제 대상은 추출하지 않는다.
         규칙:
+        - face_detail_tags: 얼굴 복원에만 쓸 두 가지 힌트. eye_color는 원화 눈 색을 나타내는 짧은 영문 태그 하나
+          (예: sharp amber eyes), expression은 캐릭터다운 대표 표정 태그 하나(예: smug, gentle smile).
+          원화 positive에 근거해 각각 하나만 추출한다. 화장·속눈썹·외형·무드·자세 태그 나열 금지.
+          근거가 없으면 해당 값은 null. 원화 프롬프트에는 이 제한을 적용하지 않는다.
         - mood_tags: 프로필 카드에 노출되는 무드 태그 3~5개 (**반드시 한국어**, 각 2~6자 —
           예: "새침한", "다정다감", "장난기", "미스터리"). persona_tags의 직역이 아니어도 되며,
           유저가 프로필에서 처음 받는 캐릭터의 인상을 압축한다. 영문·로마자 금지.
@@ -93,6 +97,7 @@ public class ConceptStructuringService {
           판단 기준은 '이 캐릭터가 미성년인가'이지 '미성년 시절 언급이 있는가'가 아니다. 모호하면 false.
         출력 스키마:
         {"appearance_tags":["..."],"persona_tags":["..."],"scene_tags":["..."],
+         "face_detail_tags":{"eye_color":"...","expression":"..."},
          "mood_tags":["새침한","다정다감"], "bg_color":"...",
          "character":{"name":"...","tagline":"...","age":23,"role":"...","personality":"...",
           "tone":"...","appearance":"...","clothing":"...","backstory":"...",
@@ -245,7 +250,7 @@ public class ConceptStructuringService {
         List<String> personaTags = c.personaTags() == null ? List.of() : c.personaTags();
         List<String> sceneTags = c.sceneTags() == null ? List.of() : c.sceneTags();
         return new StructuredConcept(c.appearanceTags(), personaTags, sanitizeMoodTags(c.moodTags()),
-            sceneTags, effectiveBg, fixed, c.moderation(), c.basePose(), c.emotionPrompts(), c.illustrationPrompt());
+            sceneTags, effectiveBg, fixed, c.moderation(), c.basePose(), c.emotionPrompts(), c.illustrationPrompt(), c.faceDetailTags());
     }
 
     /**
@@ -390,10 +395,15 @@ public class ConceptStructuringService {
         규칙:
         - bg_color: 새 머리색(우선)·의상색과 명도 대비가 큰 저채도 1개 —
           ["light gray","pale blue gray","muted teal","soft beige","dusty lavender"] 중 선택.
+        - face_detail_tags: 얼굴 복원에만 쓸 두 가지 힌트. eye_color는 원화 눈 색을 나타내는 짧은 영문 태그 하나
+          (예: sharp amber eyes), expression은 캐릭터다운 대표 표정 태그 하나(예: smug, gentle smile).
+          원화 positive에 근거해 각각 하나만 추출한다. 화장·속눈썹·외형·무드·자세 태그 나열 금지.
+          근거가 없으면 해당 값은 null. 원화 프롬프트에는 이 제한을 적용하지 않는다.
         - appearance: 새 외형 한국어 서술 / clothing: 새 복장 한국어 서술.
         - moderation: 명백한 미성년 신체 시그널이 있을 때만 minor_signal=true.
         출력 스키마:
         {"appearance_tags":["..."],"persona_tags":["..."],"scene_tags":["..."],"bg_color":"...",
+         "face_detail_tags":{"eye_color":"...","expression":"..."},
          "appearance":"...", "clothing":"...", "moderation":{"minor_signal":false,"reason":""}}
         출력은 JSON 외 어떤 텍스트도 금지.
         """;
@@ -460,7 +470,7 @@ public class ConceptStructuringService {
             p.height(), p.likes(), p.dislikes(), p.hobby(), p.profileQuote());
 
         return new StructuredConcept(parsed.appearanceTags(), parsed.personaTags(), current.moodTags(),
-            parsed.sceneTags(), effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts(), prompt);
+            parsed.sceneTags(), effectiveBg, merged, parsed.moderation(), current.basePose(), current.emotionPrompts(), prompt, parsed.faceDetailTags());
     }
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
@@ -477,7 +487,8 @@ public class ConceptStructuringService {
         @com.fasterxml.jackson.databind.annotation.JsonDeserialize(
             using = com.spring.aichat.dto.ugc.FlexibleStringDeserializer.class)
         String clothing,
-        StructuredConcept.Moderation moderation
+        StructuredConcept.Moderation moderation,
+        com.spring.aichat.dto.ugc.FaceDetailTags faceDetailTags
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

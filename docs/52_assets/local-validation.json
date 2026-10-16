@@ -1,0 +1,26 @@
+{
+  "observedDate": "2026-10-16",
+  "tests": {
+    "tests": 359,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "bootJarSucceeded": true,
+  "approvedFaceTags": [
+    "detailed beautiful eyes",
+    "character eye color",
+    "character representative expression"
+  ],
+  "faceDenoise": 0.4,
+  "handDenoise": 0.3,
+  "handPositive": "detailed hands",
+  "newLlmCalls": 0,
+  "dbMigrationAdded": false,
+  "legacyWorkflowSha256": {
+    "wf1_goldenshot.json": "05c6d21ae8a256b47ed185509140d1ec01c820029a4a429143953cb95f3802a4",
+    "wf2_refine.json": "53ccb2e6bd9fa1bc3a43b02460cff168aa3278f27c7eab65e008df41aba1987f",
+    "wf3_rembg.json": "3ef4d5a5c6b14369ecdc88aeb31be5f8bb895cc1a028df6d58ad20d06e87261b"
+  },
+  "workerImage": "zapzook/lucid-comfy-worker@sha256:6a9d54d6bdceb16cfc9d6b4c303867661c7efccc5fa6819acf17e10eb2d8e5f2"
+}

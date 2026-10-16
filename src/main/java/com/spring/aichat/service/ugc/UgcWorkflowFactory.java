@@ -48,6 +48,7 @@ public class UgcWorkflowFactory {
 
     private static final String WF1_PATH = "workflows_json/wf1_goldenshot.json";
     private static final String WF2_PATH = "workflows_json/wf2_refine.json";
+    private static final String NEUTRAL_PATH = "workflows_json/wf2_neutral_refine.json";
     private static final String WF3_PATH = "workflows_json/wf3_rembg.json";
 
     private final ObjectMapper objectMapper;
@@ -57,12 +58,18 @@ public class UgcWorkflowFactory {
     private JsonNode wf1Template;
     private JsonNode wf2Template;
     private JsonNode wf3Template;
+    private JsonNode neutralTemplate;
 
     @PostConstruct
     void loadTemplates() {
         wf1Template = load(WF1_PATH);
         wf2Template = load(WF2_PATH);
         wf3Template = load(WF3_PATH);
+        neutralTemplate = load(NEUTRAL_PATH);
+        for (String node : java.util.List.of("11", "17", "24")) requireInput(neutralTemplate, NEUTRAL_PATH, node, "seed");
+        requireInput(neutralTemplate, NEUTRAL_PATH, "21", "text");
+        requireInput(neutralTemplate, NEUTRAL_PATH, "22", "model_name");
+        requireInput(neutralTemplate, NEUTRAL_PATH, "23", "text");
 
         // fail-fast: 치환 계약 경로가 템플릿에 실존하는지 기동 시점에 검증 (템플릿 드리프트 방지)
         requireInput(wf1Template, WF1_PATH, "12", "text");
@@ -170,6 +177,32 @@ public class UgcWorkflowFactory {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  WF-3 · 누끼 (Stage 4 — 15종 전부)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** Neutral-only WF2 -> compact face -> hand; legacy emotion workflow is unchanged. */
+    public ObjectNode buildNeutralRefine(String inputName, String positive, String facePrompt,
+                                          String prefix, boolean male) {
+        return buildNeutralRefine(inputName, positive, facePrompt, prefix, newSeed(), newSeed(), newSeed(), male);
+    }
+
+    ObjectNode buildNeutralRefine(String inputName, String positive, String facePrompt, String prefix,
+                                  long samplerSeed, long faceSeed, long handSeed, boolean male) {
+        ObjectNode wf = neutralTemplate.deepCopy();
+        if (male) { injectMaleLora(wf); appendMaleNegative(wf); }
+        inputs(wf, "19").put("image", inputName);
+        inputs(wf, "12").put("text", positive);
+        inputs(wf, "21").put("text", java.util.Objects.requireNonNull(facePrompt));
+        inputs(wf, "11").put("seed", samplerSeed);
+        inputs(wf, "17").put("seed", faceSeed);
+        inputs(wf, "24").put("seed", handSeed);
+        Double denoise = props.generation().refineDenoiseOverride();
+        if (denoise != null) inputs(wf, "11").put("denoise", denoise);
+        inputs(wf, "9").put("filename_prefix", prefix);
+        return wf;
+    }
+
+    public String neutralHandPositive() {
+        return neutralTemplate.path("23").path("inputs").path("text").asText();
+    }
 
     public ObjectNode buildCutout(String inputImageName, String filenamePrefix) {
         ObjectNode wf = wf3Template.deepCopy();

@@ -36,6 +36,27 @@ class ConceptIllustrationSplitTest {
             new OpenAiProperties(null,null,"fallback",null,null,null,null),
             new UgcPipelineProperties(null,null,null,null,null,null,"approved-model",null),mapper);
     }
+    @Test void faceHintsFollowProfileAndAppearanceMetadataWithoutAnotherLlmCall() throws Exception {
+        var profile=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(PROFILE);
+        profile.putObject("face_detail_tags").put("eye_color","blue eyes").put("expression","gentle smile");
+        when(llm.completeJson(anyString(),anyString(),anyString(),anyInt(),anyDouble())).thenReturn(profile.toString());
+        var prompt=mapper.readValue(PROMPT,com.spring.aichat.dto.ugc.IllustrationPrompt.class);
+        var original=service.structure("컨셉",null,prompt);
+        assertThat(original.faceDetailTags()).isEqualTo(new com.spring.aichat.dto.ugc.FaceDetailTags("blue eyes","gentle smile"));
+        assertThat(original.illustrationPrompt()).isEqualTo(prompt);
+        verify(llm,times(1)).completeJson(anyString(),anyString(),anyString(),anyInt(),anyDouble());
+        reset(llm);
+        when(llm.completeJson(anyString(),anyString(),anyString(),anyInt(),anyDouble())).thenReturn("""
+            {"appearance_tags":["amber eyes"],"persona_tags":["smug"],"scene_tags":[],"bg_color":"light gray",
+             "appearance":"호박색 눈","clothing":"검은 드레스","moderation":{"minor_signal":false},
+             "face_detail_tags":{"eye_color":"amber eyes","expression":"smug"}}
+            """);
+        var rerolled=service.restructureAppearance("컨셉",original,"눈색 변경",prompt);
+        assertThat(rerolled.faceDetailTags()).isEqualTo(new com.spring.aichat.dto.ugc.FaceDetailTags("amber eyes","smug"));
+        assertThat(rerolled.character().personality()).isEqualTo(original.character().personality());
+        assertThat(rerolled.illustrationPrompt()).isEqualTo(prompt);
+        verify(llm,times(1)).completeJson(anyString(),anyString(),anyString(),anyInt(),anyDouble());
+    }
     @Test void requestsWholePromptThenExtractsMetadataWithoutOverwritingArtwork() throws Exception {
         when(llm.completeJson(anyString(),anyString(),anyString(),anyInt(),anyDouble())).thenReturn(PROMPT,PROFILE);
         StructuredConcept result = service.structure("은발 성인 마법사","지정 이름");

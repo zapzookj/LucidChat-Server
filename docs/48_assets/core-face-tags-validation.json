@@ -1,0 +1,162 @@
+{
+  "review": {
+    "acceptedJobs": 1,
+    "completedJobs": 1,
+    "postAttempts": 1,
+    "outputs": 5,
+    "sameInputAndWorker": true,
+    "sourceSha256": "db3044e840ce5da860d4dc12a182345ffc5e24ded63de89b8d43537e5cc31aa2",
+    "inputSize": [
+      1024,
+      1024
+    ],
+    "conditions": [
+      {
+        "label": "long",
+        "wildcard": "detailed beautiful eyes, sharp amber eyes, subtle smoky eye makeup, long eyelashes, smug grin, raised eyebrow, condescending gaze, looking down at viewer, arrogant, dominant attitude, unapologetic, self-assured, casually intimidating, alluring atmosphere, playful intimidation, tense reunion mood, neutral expression",
+        "tagCount": 17,
+        "denoise": 0.4,
+        "seed": 260100802
+      },
+      {
+        "label": "generic",
+        "wildcard": "detailed beautiful eyes",
+        "tagCount": 1,
+        "denoise": 0.4,
+        "seed": 260100802
+      },
+      {
+        "label": "core",
+        "wildcard": "detailed beautiful eyes, sharp amber eyes, subtle smoky eye makeup, smug grin",
+        "tagCount": 4,
+        "denoise": 0.4,
+        "seed": 260100802
+      },
+      {
+        "label": "corelow",
+        "wildcard": "detailed beautiful eyes, sharp amber eyes, subtle smoky eye makeup, smug grin",
+        "tagCount": 4,
+        "denoise": 0.2,
+        "seed": 260100802
+      }
+    ],
+    "fileHashes": {
+      "corelow.png": "eebe88cf581c9b8439a29516cfe3312f02dc6b8fd870407dbdb6d3fb0073a2b6",
+      "core.png": "a19fe382141c16534e29ec76484c809ca3da664d9f682942d194055cb2ba7701",
+      "long.png": "7a811ac5cafb45f7656905ecae448b36f4cb6c32ffe198361f4bf35c97743994",
+      "mask.png": "03dcf30998a971d7810a28fa35ce2cedefa0b9f9b536e2e006c19157d694e32c",
+      "generic.png": "5ce7b94e91645402da872a333ad68cc5455618cf30c1f9590e3ae978b5b780d6",
+      "input.png": "db3044e840ce5da860d4dc12a182345ffc5e24ded63de89b8d43537e5cc31aa2",
+      "original.png": "c317f1fd5082e3b4e63898961bcfd9b910eef8e64538e4229cf15fc86937f91d",
+      "qwen.png": "3d034fc36e05cc6286dace3e2f7ce5ab2e2d2f2da21544b0f3cff73220993424"
+    },
+    "changes": {
+      "long": {
+        "changedPixels": 13602,
+        "bounds": [
+          460,
+          107,
+          590,
+          216
+        ],
+        "rgbAbsoluteChangeSum": 534728,
+        "changesOutsideCoreMaskExpanded6px": 0,
+        "bodyBelowY250Unchanged": true
+      },
+      "generic": {
+        "changedPixels": 13582,
+        "bounds": [
+          460,
+          107,
+          590,
+          216
+        ],
+        "rgbAbsoluteChangeSum": 474213,
+        "changesOutsideCoreMaskExpanded6px": 0,
+        "bodyBelowY250Unchanged": true
+      },
+      "core": {
+        "changedPixels": 13623,
+        "bounds": [
+          460,
+          107,
+          590,
+          216
+        ],
+        "rgbAbsoluteChangeSum": 474943,
+        "changesOutsideCoreMaskExpanded6px": 0,
+        "bodyBelowY250Unchanged": true
+      },
+      "corelow": {
+        "changedPixels": 13508,
+        "bounds": [
+          460,
+          107,
+          590,
+          216
+        ],
+        "rgbAbsoluteChangeSum": 333501,
+        "changesOutsideCoreMaskExpanded6px": 0,
+        "bodyBelowY250Unchanged": true
+      }
+    },
+    "timing": {
+      "executionTimeMs": 37689,
+      "delayTimeMs": 833059,
+      "totalAcceptedToCompletedSeconds": 875.447
+    },
+    "productionDeployment": false
+  },
+  "guard": {
+    "normalAccepted": 1,
+    "tamperedRejected": 5,
+    "providerPosts": 0
+  },
+  "resourceRecovery": {
+    "templateFound": 1,
+    "endpointFound": 1,
+    "observedAt": "2026-10-07T17:06:13.058850+00:00",
+    "automaticResubmission": false
+  },
+  "temporaryFlashBootChange": {
+    "observedAt": "2026-10-07T17:15:40.508344+00:00",
+    "flashboot": false,
+    "workersMin": 1,
+    "workersMax": 1,
+    "requestResubmitted": false
+  },
+  "temporaryCudaCorrection": {
+    "observedAt": "2026-10-07T17:19:06.992671+00:00",
+    "before": "12.0",
+    "after": "12.6",
+    "imageCudaVersion": "12.6.3",
+    "requestResubmitted": false,
+    "productionChanged": false
+  },
+  "candidateCuda": {
+    "imageDigest": "sha256:6a9d54d6bdceb16cfc9d6b4c303867661c7efccc5fa6819acf17e10eb2d8e5f2",
+    "env": {
+      "NVIDIA_REQUIRE_CUDA": "cuda>=12.6 brand=unknown,driver>=470,driver<471 brand=grid,driver>=470,driver<471 brand=tesla,driver>=470,driver<471 brand=nvidia,driver>=470,driver<471 brand=quadro,driver>=470,driver<471 brand=quadrortx,driver>=470,driver<471 brand=nvidiartx,driver>=470,driver<471 brand=vapps,driver>=470,driver<471 brand=vpc,driver>=470,driver<471 brand=vcs,driver>=470,driver<471 brand=vws,driver>=470,driver<471 brand=cloudgaming,driver>=470,driver<471 brand=unknown,driver>=535,driver<536 brand=grid,driver>=535,driver<536 brand=tesla,driver>=535,driver<536 brand=nvidia,driver>=535,driver<536 brand=quadro,driver>=535,driver<536 brand=quadrortx,driver>=535,driver<536 brand=nvidiartx,driver>=535,driver<536 brand=vapps,driver>=535,driver<536 brand=vpc,driver>=535,driver<536 brand=vcs,driver>=535,driver<536 brand=vws,driver>=535,driver<536 brand=cloudgaming,driver>=535,driver<536 brand=unknown,driver>=550,driver<551 brand=grid,driver>=550,driver<551 brand=tesla,driver>=550,driver<551 brand=nvidia,driver>=550,driver<551 brand=quadro,driver>=550,driver<551 brand=quadrortx,driver>=550,driver<551 brand=nvidiartx,driver>=550,driver<551 brand=vapps,driver>=550,driver<551 brand=vpc,driver>=550,driver<551 brand=vcs,driver>=550,driver<551 brand=vws,driver>=550,driver<551 brand=cloudgaming,driver>=550,driver<551",
+      "CUDA_VERSION": "12.6.3",
+      "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+    }
+  },
+  "cleanup": {
+    "temporaryEndpoint404": true,
+    "temporaryTemplate404": true,
+    "absentFromLists": true,
+    "workersBeforeDelete": 0,
+    "productionStaticSettingsUnchanged": true,
+    "productionImageUnchanged": true,
+    "observedAt": "2026-10-07T17:21:56.622075+00:00"
+  },
+  "endpointDelete": {
+    "httpStatus": 204
+  },
+  "templateDelete": {
+    "httpStatus": 204
+  },
+  "actualBillingVerified": false,
+  "productSourceChangedThisRound": false,
+  "productionDeployment": false
+}

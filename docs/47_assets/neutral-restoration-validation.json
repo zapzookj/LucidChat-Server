@@ -1,0 +1,179 @@
+{
+  "review": {
+    "job": 30,
+    "candidateIndex": 1,
+    "sourceSha256": "3d034fc36e05cc6286dace3e2f7ce5ab2e2d2f2da21544b0f3cff73220993424",
+    "runpodPostAttempts": 4,
+    "acceptedJobs": 3,
+    "http409Rejections": 1,
+    "newLlmOrQwenPosts": 0,
+    "outputs": 10,
+    "sameGlobalSamplerForBothFaces": true,
+    "sameFaceSeed": true,
+    "faceStage": {
+      "pixelCount": 13430,
+      "bounds": [
+        460,
+        107,
+        590,
+        216
+      ]
+    },
+    "handStage": {
+      "pixelCount": 12929,
+      "bounds": [
+        338,
+        190,
+        640,
+        428
+      ],
+      "changesOutsideRawDetectorMask": 2440,
+      "changesOutsideMaskExpanded6px": 0,
+      "faceRoiUnchanged": true
+    },
+    "genericVsLegacyFace": {
+      "pixelCount": 12373,
+      "bounds": [
+        460,
+        107,
+        590,
+        216
+      ]
+    },
+    "noHandInputRgbUnchanged": true,
+    "noHandMaskPixelCount": 0,
+    "fileHashes": {
+      "beforeface.png": "db3044e840ce5da860d4dc12a182345ffc5e24ded63de89b8d43537e5cc31aa2",
+      "genericface.png": "7e7500687aff482677e7d39f3ad97f9e13167be8f549fb1eff81671cb32a3467",
+      "facemask.png": "03dcf30998a971d7810a28fa35ce2cedefa0b9f9b536e2e006c19157d694e32c",
+      "legacyface.png": "064abf1231e34e5afe77b6eff5799d69e714dbbfcc7f4e628643c34bc46b6156",
+      "afterhand.png": "04b144cea984b017a33103e2f4794bed73d2fee7b36317ae38e365b2b5272ded",
+      "handmask.png": "5f34b649a3f50a1e1419784f5c28a1b508d0f0aaaab2096d9ad0014fdc52627e",
+      "blankhand.png": "2f869067b8643b74a140baa6c12c9d3c1bbe4a95dc8d5fcf54228a654ade85ed",
+      "blankmask.png": "f12ffbf012eada9b09032c1d2f80ab90590fdce68d4aa7869ecf777ef0395412",
+      "lowface.png": "875a15f156999ad18a9708cbd01ebed9b5999f97a55ee05d915a664cb936e0b5",
+      "lowhand.png": "b3f9c808b30303eec9d5e60cf6db395297dbf9d72becb7df672e4ba2546a7e09",
+      "original.png": "c317f1fd5082e3b4e63898961bcfd9b910eef8e64538e4229cf15fc86937f91d",
+      "qwen.png": "3d034fc36e05cc6286dace3e2f7ce5ab2e2d2f2da21544b0f3cff73220993424"
+    },
+    "timings": {
+      "main": {
+        "executionTimeMs": 53360,
+        "delayTimeMs": 230530,
+        "elapsedSeconds": 290.047,
+        "totalAcceptedToCompletedSeconds": 290.042
+      },
+      "blank": {
+        "executionTimeMs": 242,
+        "delayTimeMs": 26979,
+        "elapsedSeconds": 31.344,
+        "totalAcceptedToCompletedSeconds": 31.35
+      },
+      "low2": {
+        "executionTimeMs": 27206,
+        "delayTimeMs": 1106193,
+        "elapsedSeconds": 492.078,
+        "totalAcceptedToCompletedSeconds": 1139.66
+      }
+    },
+    "lowFaceStage": {
+      "pixelCount": 13492,
+      "bounds": [
+        460,
+        107,
+        590,
+        216
+      ]
+    },
+    "lowHandStage": {
+      "pixelCount": 13212,
+      "bounds": [
+        338,
+        190,
+        640,
+        428
+      ],
+      "faceRoiUnchanged": true,
+      "changesOutsideMainHandMaskExpanded6px": 0
+    },
+    "workerComparison": {
+      "sameWorker": false,
+      "lowGpuType": "NVIDIA RTX A4500",
+      "samePinnedImage": true,
+      "gpuAllocationNotControlled": true
+    }
+  },
+  "finalTemplateChangesSinceFirstRuntime": [
+    {
+      "path": "17.inputs.denoise",
+      "before": 0.4,
+      "after": 0.2
+    },
+    {
+      "path": "24.inputs.denoise",
+      "before": 0.4,
+      "after": 0.3
+    }
+  ],
+  "localFinalFactoryTests": 14,
+  "localFinalFailures": 0,
+  "packaged": {
+    "jar": "aichat-0.0.1-SNAPSHOT.jar",
+    "resources": {
+      "wf1_goldenshot.json": {
+        "sha256": "006de7143c85525cd96a016cf5f9af71649475ea298193d7d647feff813416c7",
+        "packagedBytesMatch": true,
+        "existingGraphUnchangedFromHead": true
+      },
+      "wf2_refine.json": {
+        "sha256": "53ccb2e6bd9fa1bc3a43b02460cff168aa3278f27c7eab65e008df41aba1987f",
+        "packagedBytesMatch": true,
+        "existingGraphUnchangedFromHead": true
+      },
+      "wf2_neutral_refine.json": {
+        "sha256": "166001f8b5a908b3c5a76aeb7b037b84904d939ac446c9ce803ca72a29fd82bb",
+        "packagedBytesMatch": true,
+        "existingGraphUnchangedFromHead": null
+      },
+      "wf3_rembg.json": {
+        "sha256": "3ef4d5a5c6b14369ecdc88aeb31be5f8bb895cc1a028df6d58ad20d06e87261b",
+        "packagedBytesMatch": true,
+        "existingGraphUnchangedFromHead": true
+      }
+    },
+    "productionDeployment": false
+  },
+  "cleanup": {
+    "temporaryEndpoint404": true,
+    "temporaryTemplate404": true,
+    "temporaryAbsentFromLists": true,
+    "workersBeforeDelete": 0,
+    "productionStaticSettingsUnchanged": true,
+    "productionSettings": {
+      "workersMin": 0,
+      "workersMax": 1,
+      "gpuTypeIds": [
+        "NVIDIA RTX A4000",
+        "NVIDIA RTX A4500",
+        "NVIDIA RTX 4000 Ada Generation",
+        "NVIDIA RTX 2000 Ada Generation",
+        "NVIDIA RTX A5000",
+        "NVIDIA L4",
+        "NVIDIA GeForce RTX 3090",
+        "NVIDIA GeForce RTX 4090"
+      ],
+      "gpuCount": 1,
+      "idleTimeout": 240,
+      "executionTimeoutMs": 300000,
+      "flashboot": true,
+      "scalerType": "QUEUE_DELAY",
+      "scalerValue": 4,
+      "locations": null,
+      "cudaVersions": null
+    },
+    "productionImageUnchanged": true,
+    "productionImage": "zapzook/lucid-comfy-worker:0.3.0"
+  },
+  "actualBillingVerified": false,
+  "productionDeployment": false
+}

@@ -574,8 +574,11 @@ public class UgcPipelineWorker {
         // [2026-07-21 재구성] 감정 표정 포함 — 디테일 패스가 Qwen 표정을 중화하지 않도록
         String faceWildcard = promptAssembler.faceDetailWildcard(
             concept.appearanceTags(), concept.personaTags(), emotion);
-        var workflow = workflowFactory.buildRefine(inputName, positive, faceWildcard,
-            "job_" + jobId + "_" + suffix, male);
+        var workflow = stage == UgcStage.BASE_REFINE
+            ? workflowFactory.buildNeutralRefine(inputName, positive, NeutralFacePrompt.assemble(concept),
+                "job_" + jobId + "_" + suffix, male)
+            : workflowFactory.buildRefine(inputName, positive, faceWildcard,
+                "job_" + jobId + "_" + suffix, male);
         var submit = comfyClient.submit(workflow,
             List.of(new UgcComfyClient.InputImage(inputName, Base64.getEncoder().encodeToString(bytes))),
             webhookUrl(jobId, stage, webhookToken));

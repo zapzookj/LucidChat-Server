@@ -125,6 +125,8 @@ public final class UgcReviewDtos {
         /** Qwen 감정 파생 — JOY 예시 (persona 힌트 포함본) */
         String qwenEmotionJoy,
         /** Qwen 공통 네거티브 */
-        String qwenNegative
+        String qwenNegative,
+        String neutralFacePositive,
+        String neutralHandPositive
     ) {}
 }
