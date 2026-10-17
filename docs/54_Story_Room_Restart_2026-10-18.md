@@ -24,14 +24,16 @@
 프론트의 409→confirm→overwrite 처리도 `StoryCreateFlow`에 그대로 살아 있었다.
 사라진 것은 **그 플로우로 가는 문**이다.
 
-- 구 로비 `StoryV2LobbyView`의 월드 카드에는 '새로 시작' 버튼이 있었으나,
-  Aurora 로비 재설계 이후 `view === "worlds"`를 세팅하는 곳이 **한 군데도 없어** 해당 컴포넌트가
-  사실상 죽은 코드가 됐다(master에는 파일 자체가 없다).
+- 구 로비 `StoryV2LobbyView`의 월드 카드에는 '새로 시작' 버튼이 있었다. 이 화면은
+  `106b7a8`(2026-08-06, "데드 UI 복구")까지 `setView("worlds")`로 열렸으나,
+  **`0d9f87b`(2026-08-13, 플랫폼형 로비 전환 블록 A)에서 그 setter가 사라져** 렌더 분기만 남은
+  죽은 코드가 됐고, Aurora 재설계에서 파일째 삭제됐다(master에 없음).
+  → overwrite 경로는 **2026-08-13 이후 프로드 UI에서 도달 불가**였다(그 이전에는 동작했다).
 - 현행 `src/pages/lobby/StoryTab.jsx`의 `WorldCard`는 `hasExistingRoom`이면
   1차 버튼을 '이야기 이어하기'로 **치환**만 하고, 생성 플로우로 가는 2차 입구를 두지 않았다.
 - `FirstMeetPage`는 샌드박스(`/chat/{roomId}`)로만 간다.
 
-→ 결과적으로 **overwrite 경로는 프로드 UI에서 도달 불가**였다.
+→ 결과적으로 2026-08-13 이후 **overwrite 경로는 프로드 UI에서 도달 불가**였다.
 
 ## 3. 조치 — 프론트 전용 (백엔드 무변경)
 
@@ -59,12 +61,16 @@
 - `eslint` — 변경 4파일 모두 **신규 위반 0**(StoryV2ResetModal의 `motion` 오탐은 기존 baseline)
 - 실화면: dev 서버 + `/__design/secondary`에 진행 중 카드·모달을 임시 주입해 데스크톱/375/320px 확인
   (임시 주입분은 커밋 전 되돌림)
+- 배포: Vercel Production 반영 확인 — 라이브 번들에 신규 문자열 7종 전부 존재
+  (`처음부터 새로 시작`·`캐릭터부터 다시 고르기`·`restartWorldId`·`restartFromRoomId` 등),
+  구 문구 `페르소나 처리를 선택하세요` 0건. `/story` 게스트 렌더 정상·콘솔 에러 0
 
 ### [확인필요] — 첫 실사용 때 볼 것
 
-overwrite 경로는 **프로드 UI에서 한 번도 호출된 적이 없다**(§2). 코드는 라이브 중인 reset 경로와
-거의 같은 구조고 `reconfigureHeroinesAndPresences`/`initializePresences`는 이전 캐스트를 전제하지
-않지만, 로컬에 Redis가 없어 종단 실행은 못 했다. 첫 테스트에서 볼 것:
+overwrite 경로는 **2026-08-13 이후 프로드 UI에서 호출된 적이 없다**(§2). 그 이전엔 동작했고
+코드는 라이브 중인 reset 경로와 거의 같은 구조이며 `reconfigureHeroinesAndPresences`/
+`initializePresences`는 이전 캐스트를 전제하지 않는다. 다만 그 사이 페르소나 스냅샷(블록 B)·
+TTS·배경 시딩이 들어왔고 로컬에 Redis가 없어 종단 실행은 못 했다. 첫 테스트에서 볼 것:
 
 1. 새 히로인으로 방이 다시 구성되는가 (`ChatRoomHeroine` / `CharacterPresence` 교체)
 2. 오프닝 씬이 다시 생성되는가 (로그 삭제 → `generateOpeningStream` 멱등 가드 해제)
