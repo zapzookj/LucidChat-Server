@@ -121,4 +121,20 @@ public class HeroineMemorySummary {
         m.sourceMode = "THEATER";
         return m;
     }
+
+    /**
+     * [docs/55 Carry-Over] 자유 모드 요약을 히로인 시점으로 재서술해 이식한 행. turnNumber=0(스토리 시작 이전의 기억).
+     * {@code source_mode="SANDBOX_IMPORT"}로 출처를 남긴다(컬럼 길이 20 이내).
+     */
+    public static HeroineMemorySummary forSandboxImport(Long roomId, Long characterId, Long userId,
+                                                        String summary) {
+        HeroineMemorySummary m = new HeroineMemorySummary();
+        m.roomId = roomId;
+        m.characterId = characterId;
+        m.userId = userId;
+        m.summary = summary;
+        m.turnNumber = 0;
+        m.sourceMode = "SANDBOX_IMPORT";
+        return m;
+    }
 }

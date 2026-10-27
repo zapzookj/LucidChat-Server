@@ -44,8 +44,19 @@ public record ChatLogResponse(
     boolean thoughtUnlocked,    // [Phase 5.5-IT] 해금 완료 여부
     String scenesJson,          // [Phase 5.5-Fix] 구조화된 씬 배열 JSON (ASSISTANT만, 나머지 null)
     String dialogueOptionsJson, // [Bug-Restore] 디렉터 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용
-    long ordinal                // [2026-08-04] 방 내 절대 서수(1-based) — 0이면 미산출(레거시 경로)
+    long ordinal,               // [2026-08-04] 방 내 절대 서수(1-based) — 0이면 미산출(레거시 경로)
+    boolean imported            // [docs/55 Carry-Over] 자유 모드 방에서 이식된 로그(구분선·오프닝 판정용)
 ) {
+    /** 하위 호환: imported 없는 생성자 */
+    public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
+                           EmotionTag emotionTag, LocalDateTime createdAt,
+                           String rating, String dislikeReason,
+                           boolean hasInnerThought, String innerThought, boolean thoughtUnlocked,
+                           String scenesJson, String dialogueOptionsJson, long ordinal) {
+        this(logId, role, rawContent, cleanContent, emotionTag, createdAt,
+            rating, dislikeReason, hasInnerThought, innerThought, thoughtUnlocked,
+            scenesJson, dialogueOptionsJson, ordinal, false);
+    }
     /** 하위 호환: ordinal 없는 생성자 (스트림 등 서수 무관 경로) */
     public ChatLogResponse(String logId, ChatRole role, String rawContent, String cleanContent,
                            EmotionTag emotionTag, LocalDateTime createdAt,

@@ -208,7 +208,7 @@ public class ChatController {
             doc.getId(), doc.getRole(), doc.getRawContent(), doc.getCleanContent(),
             doc.getEmotionTag(), doc.getCreatedAt(), doc.getRating(), doc.getDislikeReason(),
             doc.hasInnerThought(), visibleInnerThought, doc.isThoughtUnlocked(),
-            doc.getScenesJson(), doc.getDialogueOptionsJson(), ordinal);
+            doc.getScenesJson(), doc.getDialogueOptionsJson(), ordinal, doc.isImported());
     }
 
     // [2026-09-11] RoomPersonaRequest 제거 — 짝이 되는 PATCH /rooms/{id}/persona가

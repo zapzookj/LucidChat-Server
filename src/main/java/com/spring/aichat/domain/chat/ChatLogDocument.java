@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.bson.types.ObjectId;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -134,6 +135,14 @@ public class ChatLogDocument {
 
     /** [Bug-Restore] 디렉터 자율 선택지 JSON (V2 ASSISTANT만) — 새로고침 복원용. List<String> 직렬화. */
     private String dialogueOptionsJson;
+
+    /**
+     * [docs/55 Carry-Over] 자유 모드(SANDBOX) 방에서 <b>복사해 온</b> 로그면 원본 roomId, 이 방에서 생성된 로그면 null.
+     * 쓰임: ① 오프닝 멱등 가드(이식 로그는 제외) ② 엔딩 유예의 유저 턴 카운트(이식 로그 제외)
+     * ③ 프론트 구분선("자유 모드에서 이어진 기록"). 구 문서는 필드가 없어 {@code IsNull} 질의에 자연 포함된다.
+     */
+    @Field("importedFromRoomId")
+    private Long importedFromRoomId;
 
     @CreatedDate
     @Field("createdAt")
@@ -293,5 +302,58 @@ public class ChatLogDocument {
                                                        EmotionTag emotion, String audioUrl,
                                                        String innerThought) {
         return assistantWithThought(roomId, raw, clean, emotion, audioUrl, innerThought, null);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [docs/55 Carry-Over] 자유 모드 로그 이식
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** 자유 모드 방에서 복사된(또는 이식 배치의 브리지) 로그인지. */
+    public boolean isImported() {
+        return this.importedFromRoomId != null;
+    }
+
+    /**
+     * 자유 모드 로그 1건을 스토리 방으로 복사한다.
+     *
+     * <p><b>id를 선지정</b>한다 — Spring Data 감사({@code @EnableMongoAuditing})는 새 엔티티(id==null)의
+     * {@code @CreatedDate}를 <i>무조건</i> now로 덮어쓰므로, 원본 createdAt(=정렬·히스토리 창의 좌표)을
+     * 지키려면 저장 전에 id를 넣어 isNew=false로 만들어야 한다. 평가·사유·TTS 오디오는 원본 방 귀속이라 비운다.
+     */
+    public static ChatLogDocument copyForCarryOver(ChatLogDocument src, Long targetRoomId) {
+        return ChatLogDocument.builder()
+            .id(new ObjectId().toHexString())
+            .roomId(targetRoomId)
+            .role(src.getRole())
+            .rawContent(src.getRawContent())
+            .cleanContent(src.getCleanContent())
+            .emotionTag(src.getEmotionTag())
+            .innerThought(src.getInnerThought())
+            .thoughtUnlocked(src.isThoughtUnlocked())
+            .scenesJson(src.getScenesJson())
+            .dialogueOptionsJson(src.getDialogueOptionsJson())
+            .hidden(false)
+            .importedFromRoomId(src.getRoomId())
+            .createdAt(src.getCreatedAt())
+            .build();
+    }
+
+    /**
+     * 이식 경계 나레이션(가시 SYSTEM 로그). UI 구분선 + LLM 히스토리에 "여기부터 이 세계"라는 경계 신호.
+     * 이식 배치의 일부이므로 {@code importedFromRoomId}를 찍어 오프닝 가드·유저 턴 카운트에서 함께 제외된다.
+     * createdAt을 명시(마지막 이식 로그 직후)해 정렬이 결정적이 되도록 id를 선지정한다.
+     */
+    public static ChatLogDocument carryOverBridge(Long roomId, String narration, Long sourceRoomId,
+                                                  LocalDateTime createdAt) {
+        return ChatLogDocument.builder()
+            .id(new ObjectId().toHexString())
+            .roomId(roomId)
+            .role(ChatRole.SYSTEM)
+            .rawContent(narration)
+            .cleanContent(narration)
+            .emotionTag(EmotionTag.NEUTRAL)
+            .importedFromRoomId(sourceRoomId)
+            .createdAt(createdAt)
+            .build();
     }
 }

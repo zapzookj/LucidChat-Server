@@ -114,6 +114,13 @@ public class ChatRoomHeroine {
     @Column(name = "last_illustration_hint", columnDefinition = "TEXT")
     private String lastIllustrationHint;
 
+    /**
+     * [docs/55 Carry-Over] 이 관계를 이식해 온 자유 모드(SANDBOX) 방 id. null이면 스토리에서 새로 시작한 관계.
+     * 오프닝 [OPENING-REUNION] 지시(첫 만남이 아니라 재회로 열기) 판정에 쓴다.
+     */
+    @Column(name = "carried_from_room_id")
+    private Long carriedFromRoomId;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  메타
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -236,6 +243,50 @@ public class ChatRoomHeroine {
         this.lastEmotion = null;
         this.lastIllustrationHint = null;
         this.lastSpokenAt = null;
+        this.carriedFromRoomId = null;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [docs/55 Carry-Over] 자유 모드 관계 스냅샷 이식
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 자유 모드(SANDBOX) 방의 관계 상태를 이 히로인 행에 <b>절대값으로</b> 복사한다(결정 ③: 100% 승계).
+     * 8축 스탯·관계 단계·동적 관계 태그·속마음·마지막 감정을 가져오고, 세션 메타(마지막 발화 시각·일러 hint)는 비운다.
+     * 호출 전제: 이 행이 방금 {@link #create}로 만들어진 직후(기존 진행 위에 덮지 않는다).
+     *
+     * @param sandbox chatMode=SANDBOX이고 {@code character}가 이 행의 캐릭터와 같은 방 — 검증은 서비스가 선행
+     */
+    public void seedFromSandbox(ChatRoom sandbox) {
+        if (sandbox == null || !sandbox.isSandboxMode()) {
+            throw new IllegalArgumentException("seedFromSandbox: SANDBOX 방만 이식할 수 있다");
+        }
+        this.statIntimacy    = clamp(nz(sandbox.getStatIntimacy()));
+        this.statAffection   = clamp(nz(sandbox.getStatAffection()));
+        this.statDependency  = clamp(nz(sandbox.getStatDependency()));
+        this.statPlayfulness = clamp(nz(sandbox.getStatPlayfulness()));
+        this.statTrust       = clamp(nz(sandbox.getStatTrust()));
+        this.statLust        = clamp(nz(sandbox.getStatLust()));
+        this.statCorruption  = clamp(nz(sandbox.getStatCorruption()));
+        this.statObsession   = clamp(nz(sandbox.getStatObsession()));
+        this.statusLevel = sandbox.getStatusLevel() != null ? sandbox.getStatusLevel() : RelationStatus.STRANGER;
+        String tag = sandbox.getDynamicRelationTag();
+        this.dynamicRelationTag = (tag != null && !tag.isBlank()) ? tag : "낯선 사람";
+        this.characterThought = sandbox.getCharacterThought();
+        this.thoughtUpdatedAtTurn = 0;
+        this.lastEmotion = sandbox.getLastEmotion();
+        this.lastIllustrationHint = null;
+        this.lastSpokenAt = null;
+        this.carriedFromRoomId = sandbox.getId();
+    }
+
+    /** 자유 모드에서 이식된 관계인지. */
+    public boolean isCarriedOver() {
+        return this.carriedFromRoomId != null;
+    }
+
+    private static int nz(Integer v) {
+        return v == null ? 0 : v;
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

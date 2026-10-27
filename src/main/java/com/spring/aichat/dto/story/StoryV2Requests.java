@@ -1,5 +1,6 @@
 package com.spring.aichat.dto.story;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,9 +27,9 @@ public final class StoryV2Requests {
         @NotBlank
         String worldId,
 
-        /** 등장 히로인 ID 목록 (1~3명) */
+        /** 등장 히로인 ID 목록 (1~5명 — [docs/55 결정 ⑥] 상한 3→5. 극장은 별도 3 유지) */
         @NotNull
-        @Size(min = 1, max = 3, message = "히로인은 1~3명 선택해야 합니다.")
+        @Size(min = 1, max = 5, message = "히로인은 1~5명 선택해야 합니다.")
         List<Long> heroineIds,
 
         /** 시작 장소 키 (WorldLocation.locationKey 참조). null이면 World 기본값 */
@@ -53,7 +54,23 @@ public final class StoryV2Requests {
         Boolean overwriteExisting,
 
         /** [블록 B에서 사장] 구 카드 피커 — 서버는 무시하고 현재 프로필을 자동 적용한다(구 번들 호환용 잔존). */
-        Long userPersonaId
+        Long userPersonaId,
+
+        /**
+         * [docs/55 Carry-Over] 히로인별 자유 모드 관계 이식 요청. null/빈 리스트면 이식 없음.
+         * 각 항목의 characterId는 {@code heroineIds}에 포함돼야 하고, sandboxRoomId는 요청 유저의 SANDBOX 방이며
+         * 그 방의 캐릭터가 characterId와 같아야 한다(검증은 {@code StoryCarryOverService.validate}).
+         */
+        @Valid
+        List<CarryOverRequest> carryOvers
+    ) {}
+
+    /** [docs/55 Carry-Over] 히로인 1명분 이식 지시. */
+    public record CarryOverRequest(
+        @NotNull Long characterId,
+        @NotNull Long sandboxRoomId,
+        /** false면 스탯·기억 요약만 이식하고 대화 원문은 복사하지 않는다. null/true = 원문도 복사(기본). */
+        Boolean includeLogs
     ) {}
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

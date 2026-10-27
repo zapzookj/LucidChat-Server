@@ -40,7 +40,20 @@ public final class StoryV2Responses {
         int age,
         String tagline,              // 짧은 한 줄 소개 — 저작 전시 필드(Character.tagline)만. 프롬프트 필드 사용 금지
         /** [2026-07-31 난이도] 공략 난이도 — CreateFlow 히로인 선택 카드 표기. */
-        String difficulty
+        String difficulty,
+        /** [docs/55 Carry-Over] 이 유저가 이 캐릭터와 가진 자유 모드 방 요약. 없으면 null — 카드의 '관계 이어가기' 토글 근거. */
+        SandboxRelationResponse sandboxRelation
+    ) {}
+
+    /** [docs/55 Carry-Over] 자유 모드 관계 요약 — CreateFlow 히로인 카드 뱃지/토글용. */
+    public record SandboxRelationResponse(
+        Long roomId,
+        RelationStatus statusLevel,
+        String dynamicRelationTag,
+        int affectionScore,
+        long logCount,               // hidden 제외 가시 로그 수 — 0이면 아직 대화한 적 없는 방
+        LocalDateTime lastActiveAt,
+        boolean secretModeActive
     ) {}
 
     public record PersonaPresetResponse(

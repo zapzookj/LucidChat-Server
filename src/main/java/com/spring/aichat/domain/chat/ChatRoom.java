@@ -353,6 +353,14 @@ public class ChatRoom {
     @Column(name = "ending_eligible_since")
     private LocalDateTime endingEligibleSince;
 
+    /**
+     * [docs/55 Carry-Over] 자유 모드(SANDBOX) 관계를 이 스토리 방으로 이식한 시점. null이면 이식 없음.
+     * 엔딩 자격 유예(이식 후 유저 10턴 전까지 활성 금지 — {@code EndingEligibilityService}) 판정 기준.
+     * 리셋/덮어쓰기 시 {@link #resetStoryFields()}가 비운다(서비스가 새 이식분을 다시 찍는다).
+     */
+    @Column(name = "carry_over_at")
+    private LocalDateTime carryOverAt;
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  생성자 — 모드별 분리
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -984,6 +992,12 @@ public class ChatRoom {
         this.endingEligibleSince = LocalDateTime.now();
     }
 
+    /** [docs/55 Carry-Over] 자유 모드 관계 이식 완료 표시 — {@code StoryCarryOverService.apply} 끝에서 1회. */
+    public void markCarriedOver() {
+        requireStory();
+        this.carryOverAt = LocalDateTime.now();
+    }
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [스토리 초기화] 페르소나 옵션 reset
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1062,6 +1076,7 @@ public class ChatRoom {
         this.currentDayPart = DayPart.defaultStart();
         this.endingEligible = false;
         this.endingEligibleSince = null;
+        this.carryOverAt = null;   // [docs/55] 이식 흔적도 리셋 — 덮어쓰기 경로는 서비스가 새 이식분을 다시 찍는다
         if (world != null) {
             this.currentBgmMode = parseBgmModeOrDefault(world.getDefaultBgm());
         }

@@ -120,6 +120,26 @@ public interface ChatLogMongoRepository extends MongoRepository<ChatLogDocument,
     long countByRoomIdAndHiddenNot(Long roomId, boolean hidden);
 
     /**
+     * [docs/55 Carry-Over] 이식 로그({@code importedFromRoomId != null})를 <b>제외한</b> 로그 수 — 오프닝 멱등 가드.
+     * 자유 모드 기록을 들고 들어온 방은 로그가 있어도 오프닝(재회)을 한 번 생성해야 하므로 {@code countByRoomId}를 쓰면 안 된다.
+     * 필드가 없는 구 문서도 {@code IsNull}({$eq: null})에 포함된다. Covered by: idx_room_created
+     */
+    long countByRoomIdAndImportedFromRoomIdIsNull(Long roomId);
+
+    /**
+     * [docs/55 Carry-Over] 이식 로그를 제외한 역할별 로그 수 — 엔딩 자격 유예(이식 후 유저 10턴) 판정.
+     * Covered by: idx_room_role_created
+     */
+    long countByRoomIdAndRoleAndImportedFromRoomIdIsNull(Long roomId, ChatRole role);
+
+    /**
+     * [docs/55 Carry-Over] 가시 로그만 최신 200건 — 자유 모드 로그 복사 원본. hidden을 포함해 200을 세면
+     * 디렉터 주입이 많은 방일수록 실제 복사되는 가시 로그가 줄어든다. {@code HiddenNot(true)} = {$ne: true}.
+     * Covered by: idx_room_created
+     */
+    List<ChatLogDocument> findTop200ByRoomIdAndHiddenNotOrderByCreatedAtDesc(Long roomId, boolean hidden);
+
+    /**
      * [안건 16 (b) · E-4.7] 방의 최신 <b>가시</b> 로그 — '씬당 1회' 게이트의 시각 기준점.
      * hidden 로그를 기준으로 삼으면 유저가 못 본 SYSTEM_DIRECTOR 주입만으로 게이트가 풀린다.
      * Covered by: idx_room_created

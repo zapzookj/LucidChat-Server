@@ -404,9 +404,11 @@ public class ChatStreamServiceV2 {
             if (blockIfUgcStoryInaccessible(room, emitter)) return;
 
             // 멱등 가드 — 이미 로그가 있으면 오프닝/대화가 존재 → 재생성 금지, 빈 완료
-            long existingLogs = chatLogRepository.countByRoomId(roomId);
+            // [docs/55 Carry-Over] 자유 모드에서 이식된 로그(importedFromRoomId != null)는 제외한다 —
+            //   기록을 들고 들어온 방도 오프닝(재회)을 정확히 한 번 생성해야 한다. 프론트의 needsOpening 판정도 같은 축.
+            long existingLogs = chatLogRepository.countByRoomIdAndImportedFromRoomIdIsNull(roomId);
             if (existingLogs > 0) {
-                log.info("↩️ [V2-OPENING] skip — room already has {} logs", existingLogs);
+                log.info("↩️ [V2-OPENING] skip — room already has {} own logs", existingLogs);
                 try { emitter.complete(); } catch (Exception ignore) {}
                 return;
             }

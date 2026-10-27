@@ -130,7 +130,7 @@ public class StoryDirectorPromptAssemblerV2 {
 
         // [E-3 C-1] 오프닝 턴 — dynamic part 최후미(recency attention 최대)에 도입 지시를 둔다.
         //   유저 행동 전에 디렉터가 첫 장면을 직접 연다(기획 3.7: "유저가 먼저 행동하는 구조 ❌").
-        if (openingMode) dynamicSections.add(buildOpeningDirective());
+        if (openingMode) dynamicSections.add(buildOpeningDirective(heroines));
 
         if (room.isTtsEnabled()) dynamicSections.add(com.spring.aichat.service.tts.TtsText.prompt());
         return new SystemPromptPayload(staticPart, String.join("\n\n", dynamicSections));
@@ -146,8 +146,8 @@ public class StoryDirectorPromptAssemblerV2 {
      * 별도 주입 없이 일관된다. Story v2의 정체성(자유·유저반응형)에 맞춰, 오프닝은 유저를 *초대*할 뿐
      * 유저의 행동을 *대신 쓰지 않는다*. 상태(스탯/시간/엔딩/승급)는 일절 변경하지 않는다.
      */
-    private String buildOpeningDirective() {
-        return """
+    private String buildOpeningDirective(List<ChatRoomHeroine> heroines) {
+        String base = """
             # [OPENING] 이 턴은 *오프닝*이다 — 유저는 아직 아무 행동도 하지 않았다
 
             당신은 지금 이야기의 첫 장면을 연다. 위 [3] PRESENT SCENE의 장소·시간·분위기를 살려,
@@ -165,6 +165,31 @@ public class StoryDirectorPromptAssemblerV2 {
             - system_updates의 stat_changes / time_advance / ending / promotion 은 *모두 비워라*.
               오프닝은 어떤 상태도 바꾸지 않는다.
             - 출력은 반드시 [10] OUTPUT 스키마를 그대로 따른다.""";
+
+        // [docs/55 Carry-Over] 자유 모드에서 이식된 관계가 있으면 '첫 만남'이 아니라 '재회'로 열게 한다.
+        //   관계 단계·태그는 [4-marker]/[5]에도 있지만, 오프닝 지시 안에 다시 못 박아야 "처음 뵙겠습니다"류 도입을 막는다.
+        List<ChatRoomHeroine> carried = heroines == null ? List.of()
+            : heroines.stream().filter(ChatRoomHeroine::isCarriedOver).toList();
+        if (carried.isEmpty()) return base;
+
+        String list = carried.stream()
+            .map(h -> "- %s (Character ID: %d): 현재 관계 단계 %s (%s), 동적 관계 태그 \"%s\"".formatted(
+                h.getCharacter().getName(), h.getCharacter().getId(),
+                h.getStatusLevel().name(), toKoreanRelation(h.getStatusLevel()),
+                safe(h.getDynamicRelationTag())))
+            .collect(Collectors.joining("\n"));
+
+        return base + "\n\n" + """
+            ### [OPENING-REUNION] 이어진 관계 — 첫 만남이 아니다
+            아래 인물(들)은 유저와 *이미* 관계가 있다. 자유 모드에서 쌓아 온 관계와 기억을 그대로 들고 이 세계로 넘어왔다:
+            %s
+
+            - 이들이 등장하는 장면은 *재회*로 열어라. 처음 보는 사이처럼 인사·자기소개·탐색하는 묘사를 쓰지 마라.
+            - 위 [8] CUMULATIVE MEMORY의 누적 기억과 직전 대화 기록(히스토리)에서 1~2개만 *자연스럽게* 환기하라.
+              나열하거나 요약해 읽어 주지 마라.
+            - 이전 기록의 장소·시대 디테일이 이 세계와 달라 보여도 설명하거나 해명하지 마라.
+              이 세계에서 이미 있었던 일처럼 다루어라.
+            - 관계 단계에 걸맞은 거리감·말투로 시작하라. 위 '오프닝 제약'(상태 변경 금지, 유저 행동 대필 금지)은 동일하다.""".formatted(list);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

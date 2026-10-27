@@ -154,6 +154,28 @@ public class HeroineMemoryService {
     //  [DELETE] 스토리 초기화 시
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [docs/55 Carry-Over] 자유 모드 기억 이식 — 동기 저장 (방 생성 TX 안, LLM 호출 없음)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * 재서술이 끝난 기억 문장들을 {@code SANDBOX_IMPORT} 행으로 저장하고 캐릭터 캐시를 즉시 비운다.
+     * {@link #summarizeAndSave}와 달리 @Async가 아니다 — 오프닝이 [8] CUMULATIVE MEMORY에서 바로 읽어야 하므로
+     * 방 생성 응답 전에 영속돼야 한다. 빈 문장은 걸러서 저장한다.
+     */
+    @Transactional
+    public void importSummaries(Long roomId, Long characterId, Long userId, List<String> summaries) {
+        if (summaries == null || summaries.isEmpty()) return;
+        List<HeroineMemorySummary> rows = summaries.stream()
+            .filter(s -> s != null && !s.isBlank())
+            .map(s -> HeroineMemorySummary.forSandboxImport(roomId, characterId, userId, s.trim()))
+            .toList();
+        if (rows.isEmpty()) return;
+        memoryRepository.saveAll(rows);
+        evictCache(roomId, characterId);
+        log.info("📥 [H-MEMORY-IMPORT] room={}, char={}, rows={}", roomId, characterId, rows.size());
+    }
+
     /*
      * [적대적 검토 반영 · §2-6] 1인자 오버로드 `clearMemoriesForRoom(Long)`를 **제거했다**.
      * 호출부가 0인 채 남겨 두면, 다음 사람이 그쪽을 호출해 캐시 evict 없이 지우는

@@ -1,6 +1,8 @@
 package com.spring.aichat.service.story;
 
+import com.spring.aichat.domain.chat.ChatLogMongoRepository;
 import com.spring.aichat.domain.chat.ChatRoom;
+import com.spring.aichat.domain.enums.ChatRole;
 import com.spring.aichat.domain.enums.EndingType;
 import com.spring.aichat.domain.heroine.ChatRoomHeroine;
 import com.spring.aichat.domain.heroine.ChatRoomHeroineRepository;
@@ -43,9 +45,18 @@ public class EndingEligibilityService {
 
     private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final ChatRoomHeroineRepository heroineRepository;
+    private final ChatLogMongoRepository chatLogRepository;
 
     private static final int ENDING_HAPPY_THRESHOLD = 100;
     private static final int ENDING_BAD_THRESHOLD = -100;
+    /**
+     * [docs/55 결정 ③] 자유 모드 관계 이식 직후 유예 — 이식된 호감이 임계(±100)를 이미 넘어도
+     * 이 방에서 10턴을 보내기 전엔 엔딩 자격을 활성하지 않는다(1턴 만에 엔딩 신호가 뜨는 몰입 붕괴 방지).
+     * 턴 수는 이식 로그(importedFromRoomId != null)를 제외한 이 방의 <b>ASSISTANT</b> 로그 수(오프닝 포함, 턴당 정확히 1건).
+     * USER 로그로 세면 장소 이동·시간 넘기기·다음 씬 같은 액션 턴(hidden SYSTEM [ACTION:…] 저장, USER 로그 없음)이
+     * 빠져 액션만으로 10턴을 보낸 유저는 영영 자격이 안 열린다(독립 검토 #3).
+     */
+    static final int CARRY_OVER_GRACE_TURNS = 10;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [1단계] 자격 활성 — 매 스탯 갱신 후 호출
@@ -63,6 +74,17 @@ public class EndingEligibilityService {
         if (!room.isStoryMode()) return false;
         if (room.isEndingEligible()) return false;  // 이미 활성
         if (room.isEndingReached()) return false;   // 이미 엔딩
+
+        // [docs/55 결정 ③] 이식 유예 — 이식 후 10턴(이 방의 ASSISTANT 응답 수) 전엔 활성 금지
+        if (room.getCarryOverAt() != null) {
+            long ownTurns = chatLogRepository
+                .countByRoomIdAndRoleAndImportedFromRoomIdIsNull(room.getId(), ChatRole.ASSISTANT);
+            if (ownTurns < CARRY_OVER_GRACE_TURNS) {
+                log.debug("🎬 [ENDING-ELIGIBILITY] carry-over grace: roomId={}, ownTurns={} < {}",
+                    room.getId(), ownTurns, CARRY_OVER_GRACE_TURNS);
+                return false;
+            }
+        }
 
         List<ChatRoomHeroine> heroines = heroineRepository.findByChatRoom_Id(room.getId());
         if (heroines.isEmpty()) return false;

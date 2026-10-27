@@ -9,6 +9,7 @@ import com.spring.aichat.domain.chat.StoryV2State;
 import com.spring.aichat.domain.chat.StoryV2StateRepository;
 import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.enums.DayPart;
+import com.spring.aichat.domain.enums.RelationStatus;
 import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.heroine.CharacterPresence;
 import com.spring.aichat.domain.heroine.CharacterPresenceRepository;
@@ -92,6 +93,8 @@ public class StoryV2Service {
     private final com.spring.aichat.config.UgcModeProperties ugcModeProperties;
     // [2026-08-04 페르소나] 카드 선택 → 방 스냅샷
     private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
+    // [docs/55 Carry-Over] 자유 모드 관계 이식 — 검증은 방 생성 전, 적용은 히로인 생성 직후(같은 TX)
+    private final StoryCarryOverService carryOverService;
 
     /**
      * [블록 B 페르소나] 현재 활성 프로필 스냅샷 — 본문·렌즈·성별을 방에 복사(수정 소급 불변)
@@ -285,7 +288,8 @@ public class StoryV2Service {
                 c.getAge() != null ? c.getAge() : 0,
                 // 프롬프트 필드(storyBehaviorGuide·personality)는 UI 노출 금지 — 저작 전시 필드만
                 truncate(c.getTagline(), 80),
-                c.getDifficultyOrDefault().name()
+                c.getDifficultyOrDefault().name(),
+                sandboxRelationFor(user, c)   // [docs/55] '관계 이어가기' 토글 근거
             ))
             .toList();
 
@@ -357,7 +361,8 @@ public class StoryV2Service {
                 c.getAge() != null ? c.getAge() : 0,
                 // 프롬프트 필드(storyBehaviorGuide·personality)는 UI 노출 금지 — 저작 전시 필드만
                 truncate(c.getTagline(), 80),
-                c.getDifficultyOrDefault().name()))
+                c.getDifficultyOrDefault().name(),
+                sandboxRelationFor(user, c)))   // [docs/55]
             .toList();
 
         List<WorldLocationResponse> startLocations = view.locations().stream()
@@ -498,6 +503,10 @@ public class StoryV2Service {
         // 시작 장소 검증 + 기본값
         String startLocationKey = resolveStartLocation(worldId, request.startLocationKey());
 
+        // [docs/55 Carry-Over] 이식 요청 검증 — 방을 만들기 전에 (내 SANDBOX 방·캐릭터 일치·캐스트 포함)
+        List<StoryCarryOverService.Plan> carryOverPlans =
+            carryOverService.validate(user, request.heroineIds(), request.carryOvers());
+
         // 기존 방 체크
         Optional<ChatRoom> existing = chatRoomRepository
             .findByUser_IdAndWorld_IdAndChatMode(user.getId(), worldId, ChatMode.STORY);
@@ -517,6 +526,7 @@ public class StoryV2Service {
 
             // 히로인/위치 재구성
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+            carryOverService.apply(room, carryOverPlans);   // [docs/55] 새 캐스트 위에 자유 모드 관계 이식
 
             // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩 (overwrite에도 동일)
             seedOfficialWorldBackground(room, worldId, startLocationKey, world);
@@ -533,6 +543,7 @@ public class StoryV2Service {
         storyV2StateRepository.save(StoryV2State.create(room.getId()));
 
         reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+        carryOverService.apply(room, carryOverPlans);   // [docs/55] 자유 모드 관계 이식 (요청 없으면 no-op)
 
         // [2026-07-30 P2 정적-우선 배선] 방 진입 배경 시딩 — 시작 장소의 정적-우선 배경
         // (seedUgcWorldBackground의 공식판 — 캐시 히트면 즉시, 미스면 1회 생성 후 영구 캐시)
@@ -577,6 +588,10 @@ public class StoryV2Service {
         // 시작 장소 — 요청 키 검증 or 첫 활성 장소
         String startLocationKey = resolveUgcStartLocation(view, request.startLocationKey());
 
+        // [docs/55 Carry-Over] 이식 요청 검증 — 공식 경로와 동일 규칙(UGC 캐릭터의 자유 방도 같은 ChatRoom 테이블)
+        List<StoryCarryOverService.Plan> carryOverPlans =
+            carryOverService.validate(user, request.heroineIds(), request.carryOvers());
+
         // 기존 방 체크 — 'UGC 월드당 1방'
         Optional<ChatRoom> existing = chatRoomRepository
             .findByUser_IdAndUgcWorldIdAndChatMode(user.getId(), ref.ugcWorldId(), ChatMode.STORY);
@@ -592,6 +607,7 @@ public class StoryV2Service {
             room.restoreStartLocation(startLocationKey);
             applyProfileSnapshot(room, user);   // [블록 B] 현재 프로필 자동 적용
             reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+            carryOverService.apply(room, carryOverPlans);   // [docs/55]
             seedUgcStoryBackground(room, view, startLocationKey);
             return new CreateStoryV2Response(room.getId(), ref.key(), false, true);
         }
@@ -609,6 +625,7 @@ public class StoryV2Service {
         }
         storyV2StateRepository.save(StoryV2State.create(room.getId()));
         reconfigureHeroinesAndPresences(room, heroines, DayPart.defaultStart(), startLocationKey);
+        carryOverService.apply(room, carryOverPlans);   // [docs/55]
         seedUgcStoryBackground(room, view, startLocationKey);
 
         log.info("✨ [STORY-V2-UGC] Created new room: roomId={}, world={}, heroineCount={}, startLocation={}",
@@ -948,6 +965,24 @@ public class StoryV2Service {
      * [블록 B BM 확정 — docs/14 #4] 자유 입력·스탯은 전면 무료(과금은 슬롯 수만).
      * 이 플래그는 CreateContextResponse 하위호환용으로만 true 고정 유지 — 게이트로 쓰지 말 것.
      */
+    /**
+     * [docs/55 Carry-Over] 이 유저가 해당 캐릭터와 가진 자유 모드(SANDBOX) 방 요약 — CreateFlow 히로인 카드의
+     * '관계 이어가기' 뱃지/토글 근거. 방이 없으면 null. {@code logCount}는 hidden 제외 가시 로그 수(0이면 대화한 적 없음).
+     */
+    private SandboxRelationResponse sandboxRelationFor(User user, Character c) {
+        return chatRoomRepository
+            .findByUser_IdAndCharacter_IdAndChatMode(user.getId(), c.getId(), ChatMode.SANDBOX)
+            .map(r -> new SandboxRelationResponse(
+                r.getId(),
+                r.getStatusLevel() != null ? r.getStatusLevel() : RelationStatus.STRANGER,
+                r.getDynamicRelationTag(),
+                r.getAffectionScore() != null ? r.getAffectionScore() : 0,
+                chatLogMongoRepository.countByRoomIdAndHiddenNot(r.getId(), true),
+                r.getLastActiveAt(),
+                r.isSecretModeActive()))
+            .orElse(null);
+    }
+
     private boolean hasFreePersonaUnlock(Long userId) {
         return true;
     }
