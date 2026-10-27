@@ -8,6 +8,8 @@ import com.spring.aichat.domain.enums.ChatMode;
 import com.spring.aichat.domain.ugc.UgcWorldLocation;
 import com.spring.aichat.domain.ugc.UgcWorldLocationRepository;
 import com.spring.aichat.domain.ugc.UgcWorldRepository;
+import com.spring.aichat.domain.ugc.WorldReviewStatus;
+import com.spring.aichat.domain.world.WorldRef;
 import com.spring.aichat.domain.user.User;
 import com.spring.aichat.domain.user.UserRepository;
 import com.spring.aichat.dto.lobby.CharacterProfileResponse;
@@ -43,6 +45,7 @@ public class LobbyService {
     private final RedisCacheService cacheService;
     private final UgcWorldLocationRepository ugcWorldLocationRepository; // [세계관 빌더] 방 생성 배경 시딩
     private final UgcWorldRepository ugcWorldRepository; // [프로필 뷰] 소속 월드 이름 해석
+    private final com.spring.aichat.config.UgcModeProperties ugcModeProperties; // [docs/55] UGC 스토리 게이트 — 이어가기 자격 계산
     // [2026-08-04 페르소나] 카드 선택 → 신규 방 스냅샷
     private final com.spring.aichat.service.persona.UserPersonaService userPersonaService;
 
@@ -421,8 +424,36 @@ public class LobbyService {
             room.getEndingTitle(),
             room.getDominantStatName(),
             room.getMaxNormalStatValue(),
-            room.getDynamicRelationTag()
+            room.getDynamicRelationTag(),
+            resolveCarryOverWorldKey(room, c)   // [docs/55] 보관함 '스토리로 이어가기' 자격
         );
+    }
+
+    /**
+     * [docs/55 Carry-Over] 자유 방의 캐릭터가 속한 스토리 세계관 키 — 이어가기 입구의 자격 판정을 서버가 맡는다.
+     * <ul>
+     *   <li>공식 캐릭터: {@code worldId} enum name (storyAvailable·비숨김일 때)</li>
+     *   <li>UGC 캐릭터: {@code UGCW_{ugcWorldId}} — UGC 스토리 게이트가 켜져 있고, 그 월드가 내 것이거나 APPROVED일 때
+     *       (CreateFlow의 {@code assertUgcPlayable}과 같은 기준 — 막다른 버튼을 내지 않기 위해 미리 거른다)</li>
+     *   <li>그 외(월드 없음·스토리 불가·숨김·게이트 off·접근 불가) null</li>
+     * </ul>
+     */
+    private String resolveCarryOverWorldKey(ChatRoom room, Character c) {
+        try {
+            if (c == null || !c.isStoryAvailable() || c.isHidden()) return null;
+            if (c.getWorldId() != null) return c.getWorldId().name();
+            if (c.getUgcWorldId() == null) return null;
+            if (ugcModeProperties == null || !ugcModeProperties.storyOn()) return null;
+            var ugcWorld = ugcWorldRepository.findById(c.getUgcWorldId()).orElse(null);
+            if (ugcWorld == null) return null;
+            Long userId = room.getUser() != null ? room.getUser().getId() : null;
+            boolean playable = ugcWorld.isOwnedBy(userId) || ugcWorld.getReviewStatus() == WorldReviewStatus.APPROVED;
+            return playable ? WorldRef.ofUgc(c.getUgcWorldId()).key() : null;
+        } catch (Exception e) {
+            // 자격 계산 실패는 목록 자체를 깨지 않는다 — 입구만 숨긴다
+            log.warn("[CARRY-OVER] carryOverWorldKey resolve failed: roomId={} | {}", room.getId(), e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -460,7 +491,8 @@ public class LobbyService {
             room.getEndingTitle(),
             null,                 // dominantStatName — V2 무관
             0,                    // dominantStatValue
-            "이야기 진행 중"        // dynamicRelationTag — V2 방 식별용 텍스트
+            "이야기 진행 중",       // dynamicRelationTag — V2 방 식별용 텍스트
+            null                  // carryOverWorldKey — 스토리 방은 이어가기 원본이 아님
         );
     }
 }

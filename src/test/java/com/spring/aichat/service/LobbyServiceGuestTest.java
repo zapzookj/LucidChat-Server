@@ -31,7 +31,9 @@ class LobbyServiceGuestTest {
 
     private final LobbyService lobbyService = new LobbyService(
         characterRepository, null, userRepository, null, null,
-        mock(com.spring.aichat.domain.ugc.UgcWorldRepository.class), null);
+        mock(com.spring.aichat.domain.ugc.UgcWorldRepository.class),
+        new com.spring.aichat.config.UgcModeProperties(false, false, false),   // [docs/55] 이어가기 자격 계산용 게이트
+        null);
 
     private static Character ugc(long id, String name, boolean publish, boolean hidden, Long ownerId) {
         Character c = Character.createUgc(new Character.UgcCharacterSpec(

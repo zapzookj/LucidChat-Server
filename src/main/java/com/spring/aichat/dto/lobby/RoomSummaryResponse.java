@@ -42,7 +42,14 @@ public record RoomSummaryResponse(
     // [Phase 5.5-Fix] 지배 스탯 정보
     String dominantStatName,   // intimacy, affection, dependency, playfulness, trust
     int dominantStatValue,
-    String dynamicRelationTag // 동적 관계 태그
+    String dynamicRelationTag, // 동적 관계 태그
+    /**
+     * [docs/55 Carry-Over] 이 자유(SANDBOX) 방의 관계를 이어갈 수 있는 스토리 세계관 키 —
+     * 공식 enum name(예: {@code MEDIEVAL_FANTASY}) 또는 UGC {@code UGCW_{id}}. 서버가 자격을 계산한다
+     * (캐릭터 storyAvailable·비숨김, UGC면 스토리 게이트 on + 내 월드이거나 APPROVED). 불가/스토리 방이면 null.
+     * 프론트 보관함은 이 값이 있을 때만 "이 관계를 스토리로 이어가기"를 낸다.
+     */
+    String carryOverWorldKey
     // [Phase 7-V2 / Chunk D] V2 STORY 식별·표시 필드 (additive)
 //    WorldId worldId,              // V2 World FK (V1은 null)
 //    int currentDay,            // V2 진행 일차 (V1 Sandbox는 0)

@@ -62,6 +62,7 @@ class StoryCarryOverServiceTest {
     @Mock private HeroineMemoryService heroineMemoryService;
     @Mock private OpenRouterClient openRouterClient;
     @Mock private OpenAiProperties props;
+    @Mock private WorldViewService worldViewService;   // null 뷰 → "이 세계" 폴백 경로
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks private StoryCarryOverService service;

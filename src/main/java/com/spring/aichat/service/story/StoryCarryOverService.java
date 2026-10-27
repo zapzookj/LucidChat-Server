@@ -75,6 +75,8 @@ public class StoryCarryOverService {
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
+    /** 공식/UGC 공용 월드 뷰 — 재서술 프롬프트의 세계관 이름(UGC 방은 {@code room.getWorld()}가 null). */
+    private final WorldViewService worldViewService;
 
     /** 검증을 통과한 이식 1건 — 방 생성 이후 {@link #apply}에 그대로 넘긴다. */
     public record Plan(ChatRoom sandboxRoom, Character character, boolean includeLogs) {}
@@ -140,7 +142,7 @@ public class StoryCarryOverService {
         }
         User user = storyRoom.getUser();
         String nickname = storyRoom.getEffectiveNickname(user);
-        String worldName = storyRoom.getWorld() != null ? storyRoom.getWorld().getDisplayName() : "이 세계";
+        String worldName = resolveWorldName(storyRoom);
 
         List<Prepared> prepared = new ArrayList<>(plans.size());
         LocalDateTime anchor = null;   // 모든 이식 로그 중 가장 늦은 시각 — 브리지 앵커
@@ -193,6 +195,21 @@ public class StoryCarryOverService {
 
         // ⑥ Mongo 쓰기 — 커밋 후
         scheduleMongoWrites(storyRoom.getId(), copies, bridges);
+    }
+
+    /** 세계관 표시명 — 공식은 World, UGC는 WorldView(UgcWorld.name)로. 둘 다 없으면 "이 세계". */
+    private String resolveWorldName(ChatRoom storyRoom) {
+        try {
+            if (worldViewService != null) {
+                WorldView view = worldViewService.resolveForRoom(storyRoom);
+                if (view != null && view.displayName() != null && !view.displayName().isBlank()) {
+                    return view.displayName();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[CARRY-OVER] world name resolve failed (fallback): {}", e.getMessage());
+        }
+        return storyRoom.getWorld() != null ? storyRoom.getWorld().getDisplayName() : "이 세계";
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
