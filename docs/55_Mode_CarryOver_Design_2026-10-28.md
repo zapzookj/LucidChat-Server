@@ -249,4 +249,24 @@ V2 `resolveSecretMode` = `room.secretModeActive && world.secretAllowed && 유저
 
 수용 리스크(검토 기록): 생성 TX 안에서 히로인 수만큼 동기 LLM 호출(커넥션 점유·`uk_user_world_mode` 삽입 창), 공식 경로엔 UGC 경로의 `DataIntegrityViolation→409` 매핑이 없어 LLM 창 동안 더블 서밋이 500 — 기존 구조의 문제라 이번 범위 밖.
 
+---
+
+## §10. 커밋·프로드 배포 기록 (2026-10-28, 종원 지시)
+
+| 단계 | 결과 |
+|---|---|
+| 커밋 | BE `8f676c6` `feat(story): carry free-mode relationships into story rooms, raise heroine cap to 5` · FE `5efe243` `feat(story): carry-over toggle, archive entry, reunion-safe opening, heroine cap 5` (각 `feature/story-carryover`, master에 fast-forward) |
+| 배포 전 게이트 | BE 전체 `gradlew test bootJar`: 376 테스트 중 실패 2 = `AichatApplicationTests`(컨텍스트 로드 — JWT 시크릿 env 미설정 `Illegal base64 character`, CI도 `*Tests` 제외) + 계약 테스트 CRLF 1건. 둘 다 본 변경과 무관. 신규 15 + 인접 6 통과. FE build·check 4종 통과 |
+| BE 배포 | `origin/master` 318b02c→8f676c6 푸시 → GitHub Actions **"Deploy backend to Vultr" #26 성공(3m 16s)** — Linux 러너에서 `*Test` 전부(신규 테스트 포함) 통과 → GHCR push → SSH `deploy.sh`(pull→up→헬스 90초 게이트) 통과. 배포 후 공개 `https://api.lucid-chat.com/health` → 200 `OK` |
+| FE 배포 | `origin/master` 33c6163→5efe243 푸시 → Vercel Production 자동 빌드. 운영 번들 `index-BbaZiOWz.js` → **`index-B4GY8IOk.js`** 교체 확인, 새 번들 안에 "관계 이어가기"(2)·"이 관계를 스토리로 이어가기"(1)·"여기부터 이 세계"(1)·`carryOvers`(1)·상한 카피(1) 포함 확인 |
+| 순서 | BE 먼저 → health 확인 → FE. 구 백엔드에 새 프론트가 먼저 붙으면 `carryOvers`는 무시되지만 히로인 4~5명 선택이 400이 되기 때문 |
+
+**미검증(이번 세션 권한 범위 밖):** 운영 서버 SSH 읽기(실행 이미지 digest·Flyway `V40` 적용 로그)는 세션 권한 분류기가 차단해 수행하지 못했다. 헬스 게이트 통과가 "새 컨테이너 부팅 성공"을 뜻하고 부팅 시 Flyway가 돌며 Hibernate `validate`가 새 컬럼을 검사하므로 V40은 적용됐다고 보는 것이 합리적이나 **로그로 직접 확인하지는 않았다.** 확인 명령(종원):
+```bash
+ssh -i ~/.ssh/lucid_deploy root@141.164.37.146 'docker logs --since 1h $(docker ps -qf name=app) 2>&1 | grep -iE "V40|Successfully applied|Started AichatApplication" | tail -5'
+```
+실제 이어가기 E2E(자유 방 → 보관함 "이 관계를 스토리로 이어가기" → 생성 → 재회 오프닝 1회 → 구분선)는 로그인 계정이 필요해 미실행 — **첫 실사용 때 확인할 것**: ① 오프닝이 정확히 1회 생성되는가(이식 로그가 있어도) ② 브리지 나레이션이 이식 로그 맨 뒤에 오는가 ③ 덮어쓰기+이식 조합에서 8축이 자유 방 값으로 시작하는가.
+
+**롤백:** BE는 docs/20 §6대로 서버에서 이미지 태그를 직전 sha(`5dfce4d` 런 #25 이미지)로 고정 후 `docker compose up -d` — V40 컬럼은 nullable 추가라 구 코드와 공존 가능. FE는 Vercel 대시보드에서 직전 배포로 롤백.
+
 출처: 본문 링크의 소스 파일 직접 정독(2026-10-28), `docs/06_Deploy_Runbook.md`(운영 프로필). 대시보드가 링크하는 `docs/54_Story_Room_Restart_2026-10-18.md`는 `docs/`에 **부재**(링크 깨짐) — 10/18 결정은 대시보드 요약으로만 참조했다.
