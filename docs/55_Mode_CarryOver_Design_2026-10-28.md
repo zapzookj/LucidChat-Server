@@ -269,4 +269,37 @@ ssh -i ~/.ssh/lucid_deploy root@141.164.37.146 'docker logs --since 1h $(docker 
 
 **롤백:** BE는 docs/20 §6대로 서버에서 이미지 태그를 직전 sha(`5dfce4d` 런 #25 이미지)로 고정 후 `docker compose up -d` — V40 컬럼은 nullable 추가라 구 코드와 공존 가능. FE는 Vercel 대시보드에서 직전 배포로 롤백.
 
+---
+
+## §11. UGC 캐릭터 확장 (2026-10-28, 종원 지시 "UGC에서도 가능하도록")
+
+### 11-A. 무엇이 막혀 있었나
+서버의 UGC 월드 스토리 생성 경로(`createOrReuseUgcRoom`)와 UGC create-context(`sandboxRelation`)에는 §9에서 이미 이식 로직이 들어가 있었다. 막힌 곳은 **보관함 진입점 하나**였다 — 프론트가 `/lobby/characters`의 공식 `worldId`로만 자격을 판정해 UGC 캐릭터(`ugcWorldId`)의 자유 방엔 버튼이 뜨지 않았다. 스토리 탭의 CREATOR WORLD 카드로 들어가는 경로(§11-D ②)는 그 전에도 동작했다.
+
+### 11-B. 변경
+| 레이어 | 변경 |
+|---|---|
+| BE `dto/lobby/RoomSummaryResponse` | `carryOverWorldKey` 추가 — 공식 enum name 또는 `UGCW_{ugcWorldId}`, 불가면 null |
+| BE `service/LobbyService.resolveCarryOverWorldKey` | 자격을 **서버가** 계산: `storyAvailable`·비숨김 → 공식이면 worldId → UGC면 **스토리 게이트 on**(`UgcModeProperties.storyOn`, `UGC_STORY_ENABLED`) + 월드가 **내 것이거나 APPROVED**(CreateFlow의 `assertUgcPlayable`과 같은 기준) → `WorldRef.ofUgc(id).key()`. 계산 실패는 입구만 숨기고 목록은 깨지 않는다 |
+| BE `service/story/StoryCarryOverService` | 재서술 프롬프트의 세계관 이름을 `WorldViewService.resolveForRoom`으로(UGC 방은 `room.getWorld()`가 null이라 "이 세계"로 나가던 것) |
+| FE `pages/lobby/ArchiveTab.jsx` | 자격 판정을 `entry.carryOverWorldKey`로 교체, `/lobby/characters` 추가 조회 제거 |
+| 테스트 | `LobbyServiceCarryOverKeyTest`(3): 공식/내 UGC/타인 미승인/타인 APPROVED, 게이트 off, 월드 없는 UGC·숨김. `LobbyServiceGuestTest` 생성자 인자 갱신 |
+
+전제(코드 사실): UGC 캐릭터는 **UGC 월드에 속해야** 스토리 가능하다(`Character.createUgc`: `storyAvailable = ugcWorldId != null`). 월드 없는 UGC 캐릭터의 자유 방은 이어갈 스토리가 없으므로 입구가 뜨지 않는다. 운영의 `UGC_STORY_ENABLED` 값은 이 세션에서 확인하지 못했다 — off면 UGC 입구는 전부 숨겨진다(공식은 영향 없음).
+
+### 11-C. 검증·배포
+- BE: `LobbyServiceCarryOverKeyTest` 3/3 · `LobbyServiceGuestTest` 6/6 · `StoryCarryOverServiceTest` 12/12 · `EndingEligibilityServiceCarryOverTest` 3/3 · `ChatStreamServiceV2CompensationTest` 6/6 · 계약 테스트 7/8(CRLF, 동일). FE: build·check 4종 통과, `ArchiveTab` 린트 0.
+- **BE 배포 완료**: `12cde94` → Actions "Deploy backend to Vultr" **#27 성공(2m 17s)**, 공개 `/health` OK.
+- **FE 커밋 `feff70b` — 푸시 미수행**: `git push origin HEAD:master`를 세션의 권한 분류기가 "Production Deploy"로 차단했다(직전 두 번은 허용됐던 동일 명령). 종원이 직접 푸시해야 Vercel이 빌드한다:
+  ```bash
+  git -C "C:\Users\zapza\Desktop\LucidChat-Front\LucidChat-Front-carryover" push origin HEAD:master
+  ```
+  푸시 전까지의 공존은 안전하다 — 구 프론트는 새 필드를 무시하고 종전처럼 공식 캐릭터 입구만 낸다.
+- 배포 확인: 운영 번들이 바뀌고(현재 `index-B4GY8IOk.js`), 보관함에서 UGC 캐릭터 자유 방 아래 "이 관계를 스토리로 이어가기"가 뜨면 완료.
+
+### 11-D. UGC 테스트 플로우
+① 보관함 `/archive?tab=talk` → UGC 캐릭터와의 자유 방 행 아래 "이 관계를 스토리로 이어가기" → 스토리 탭이 `UGCW_{id}` 월드의 생성 화면을 2단계부터 연다(캐릭터 선택·토글 ON) → 3단계 요약 → 시작.
+② 스토리 탭 `/story` → CREATOR WORLD 카드 "이야기 시작하기" → 2단계에서 자유 모드 대화가 있는 UGC 캐릭터 카드 아래 요약·토글.
+공통 전제: 그 UGC 캐릭터가 UGC 월드에 소속, 월드가 내 것이거나 APPROVED, `UGC_STORY_ENABLED=true`.
+
 출처: 본문 링크의 소스 파일 직접 정독(2026-10-28), `docs/06_Deploy_Runbook.md`(운영 프로필). 대시보드가 링크하는 `docs/54_Story_Room_Restart_2026-10-18.md`는 `docs/`에 **부재**(링크 깨짐) — 10/18 결정은 대시보드 요약으로만 참조했다.
