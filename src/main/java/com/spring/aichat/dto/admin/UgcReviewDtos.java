@@ -118,9 +118,9 @@ public final class UgcReviewDtos {
         String negative,
         /** WF-1 네거티브 — 선택한 배치의 저장값, 이전 작업은 현행 조립 폴백 */
         String goldenShotNegative,
-        /** Qwen 패스1 — 자세 표준화 */
+        /** 스탠딩 패스1 — 자세 표준화 (필드명은 레거시, 2026-11-06부터 기본 편집 모델은 GPT Image 2.5 — ugc.standing.editor) */
         String qwenPosePrompt,
-        /** Qwen 패스2 — 배경 클린업 (BG_COLOR 주입본) */
+        /** 스탠딩 패스2 — 배경 클린업 (BG_COLOR 주입본, 편집 모델은 패스1과 동일) */
         String qwenBackgroundPrompt,
         /** Qwen 감정 파생 — JOY 예시 (persona 힌트 포함본) */
         String qwenEmotionJoy,

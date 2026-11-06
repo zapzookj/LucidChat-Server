@@ -47,7 +47,7 @@
     "inputs": {
       "filename_prefix": "ComfyUI",
       "images": [
-        "24",
+        "64",
         0
       ]
     },
@@ -307,6 +307,76 @@
     "class_type": "FaceDetailer",
     "_meta": {
       "title": "Hand detailer (masked hand detection)"
+    }
+  },
+  "60": {
+    "inputs": {
+      "threshold": 0.5,
+      "dilation": 10,
+      "crop_factor": 1.0,
+      "drop_size": 10,
+      "labels": "all",
+      "bbox_detector": [
+        "18",
+        0
+      ],
+      "image": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "BboxDetectorSEGS",
+    "_meta": {
+      "title": "Face SEGS (input)"
+    }
+  },
+  "61": {
+    "inputs": {
+      "segs": [
+        "60",
+        0
+      ]
+    },
+    "class_type": "SegsToCombinedMask",
+    "_meta": {
+      "title": "Face Mask"
+    }
+  },
+  "63": {
+    "inputs": {
+      "kernel_size": 31,
+      "sigma": 10.0,
+      "mask": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "ImpactGaussianBlurMask",
+    "_meta": {
+      "title": "Face Mask Feather"
+    }
+  },
+  "64": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "24",
+        0
+      ],
+      "source": [
+        "19",
+        0
+      ],
+      "mask": [
+        "63",
+        0
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Paste Original Face"
     }
   }
 }

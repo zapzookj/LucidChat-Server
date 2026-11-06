@@ -85,6 +85,17 @@ public class UgcPipelineWorker {
     private final java.util.Set<Long> goldenRuns = java.util.concurrent.ConcurrentHashMap.newKeySet();
     static final String GOLDEN_SUBMITTING_KEY = "K_GOLDEN_SUBMITTING";
 
+    /**
+     * [2026-11-06] 스탠딩 GPT 편집 제출(블로킹 POST, 최대 45초) 전용 풀 — 후보 2 × 동시 잡 수 정도면 충분해 4로 고정.
+     * commonPool에 두면 GPT 감정 폴링·orTimeout 지연 스레드와 경합한다(독립 검토 지적). 데몬 스레드라 종료를 막지 않는다.
+     */
+    private static final java.util.concurrent.ExecutorService STANDING_SUBMIT_EXECUTOR =
+        java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "ugc-standing-submit");
+            t.setDaemon(true);
+            return t;
+        });
+
     private void runDynamicExpressionStage(Long jobId) {
         try {
             CharacterCreationJob job = jobRepository.findById(jobId).orElseThrow();
@@ -415,9 +426,10 @@ public class UgcPipelineWorker {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    //  Stage 2 (스탠딩 후보 — Qwen 2패스 ×N 병렬 → WF-2)
+    //  Stage 2 (스탠딩 후보 — 편집 2패스 ×N 병렬 → WF-2)
     //  [2026-07-20 개편] PoC 확정 설계(Qwen 패스)는 유지하되, 서로 다른 seed의 후보 N장을
     //  만들어 BASE_WAIT에서 유저가 선택·리롤할 수 있게 한다 (기존: 단일 파생·선택 불가).
+    //  [2026-11-06] 편집 모델 기본값 Qwen → GPT Image 2.5 (ugc.standing.editor, docs/56 §6).
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
@@ -447,8 +459,8 @@ public class UgcPipelineWorker {
     }
 
     /**
-     * 스탠딩 후보 1건 파생: Qwen 패스1(자세·구도) → 패스2(배경·조명 — BG_COLOR는 WF-2와 동일 값)
-     * → WF-2 리파인 제출. 후보마다 seed가 랜덤이라 자세·결이 다른 후보가 나온다.
+     * 스탠딩 후보 1건 파생: 편집 패스1(자세·구도) → 패스2(배경·조명 — BG_COLOR는 WF-2와 동일 값)
+     * → WF-2 리파인 제출. 편집 모델은 {@link #standingEdit}가 고른다(기본 GPT Image 2.5).
      */
     private void submitBaseCandidate(Long jobId, int index) {
         CharacterCreationJob job = jobRepository.findById(jobId).orElse(null);
@@ -459,19 +471,19 @@ public class UgcPipelineWorker {
         String bgColor = job.getBgColor();
         String goldenUrl = assetService.presignGet(job.getSelectedGoldenShotKey(), PRESIGN_TTL);
 
-        poseEditClient.edit(new PoseEditClient.EditRequest(
-                promptAssembler.qwenPosePrompt(concept.basePose()), promptAssembler.qwenNegative(), goldenUrl, null))
-            .thenCompose(pass1 -> poseEditClient.edit(new PoseEditClient.EditRequest(
-                promptAssembler.qwenBackgroundPrompt(bgColor), promptAssembler.qwenNegative(),
-                pass1.imageUrl(), null)))
+        standingEdit(promptAssembler.qwenPosePrompt(concept.basePose()), goldenUrl)
+            .thenCompose(pass1 -> standingEdit(promptAssembler.qwenBackgroundPrompt(bgColor), pass1.imageUrl()))
             // [적대적 리뷰 P3] 스윕 창(staleMinutes)을 넘겨 살아남는 future가 없게 — '키 없는 DERIVING = 죽은 체인'을 불변식으로.
             //   타임아웃은 err 분기로 들어가 후보 실패 경로(예산 소진 시 정상 실패)를 탄다.
             .orTimeout(qwenTimeoutMinutes(), java.util.concurrent.TimeUnit.MINUTES)
             .whenComplete((pass2, err) -> {
                 if (err != null) {
-                    log.warn("[UGC-WORKER] 스탠딩 후보 Qwen 파생 실패: jobId={}, idx={}, {}",
-                        jobId, index, err.getMessage());
-                    handleBaseCandidateFailure(jobId, index);
+                    Throwable cause = err;
+                    while (cause.getCause() != null) cause = cause.getCause();
+                    boolean rejected = cause instanceof com.spring.aichat.external.FalGptEmotionEditClient.RequestRejected;
+                    log.warn("[UGC-WORKER] 스탠딩 후보 편집 파생 실패: jobId={}, idx={}, rejected={}, {}",
+                        jobId, index, rejected, cause.getMessage());
+                    handleBaseCandidateFailure(jobId, index, !rejected);
                     return;
                 }
                 try {
@@ -501,8 +513,41 @@ public class UgcPipelineWorker {
             });
     }
 
+    /**
+     * [2026-11-06 스탠딩 변환 교체] 스탠딩 2패스 1회 편집 — {@code ugc.standing.editor}가 gpt(기본)면
+     * fal GPT Image 2.5, qwen이면 기존 Qwen. 프롬프트는 공급자와 무관하게 동일하다(GPT는 네거티브 미지원).
+     * GPT는 seed가 없어 후보 seed가 null로 남는다 — seed 고정은 레거시 Qwen 감정 경로만 쓴다.
+     * 실패·타임아웃은 기존 Qwen 체인과 같은 후보 실패 경로(handleBaseCandidateFailure)를 탄다 — 단, 제출 422 거절
+     * ({@link com.spring.aichat.external.FalGptEmotionEditClient.RequestRejected})은 재시도 없이 그 후보를 실패시킨다.
+     * 제출(POST)은 블로킹 HTTP라 전용 소형 풀에서 돈다(commonPool·CompletableFuture 지연 스레드 점유 방지).
+     */
+    private java.util.concurrent.CompletableFuture<PoseEditClient.EditResult> standingEdit(String prompt, String imageUrl) {
+        if (!props.standing().usesGpt()) {
+            return poseEditClient.edit(new PoseEditClient.EditRequest(prompt, promptAssembler.qwenNegative(), imageUrl, null));
+        }
+        String quality = props.standing().gptQualityOrDefault();
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    var receipt = gptEmotionClient.submit(prompt, imageUrl, quality);
+                    log.info("[UGC-STANDING] GPT 편집 접수: requestId={}, quality={}", receipt.requestId(), quality);
+                    return receipt;
+                } catch (RuntimeException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new java.util.concurrent.CompletionException(e);
+                }
+            }, STANDING_SUBMIT_EXECUTOR)
+            .thenCompose(gptEmotionClient::await)
+            .thenApply(result -> new PoseEditClient.EditResult(null, result.imageUrl(), null));
+    }
+
     /** 스탠딩 후보 실패 — 후보 단위 재시도(무과금), 소진 시 해당 후보만 FAILED. 전 후보 실패 시 잡 실패·전액 환불. */
     private void handleBaseCandidateFailure(Long jobId, int index) {
+        handleBaseCandidateFailure(jobId, index, true);
+    }
+
+    /** @param retryable false면 재시도 예산과 무관하게 즉시 FAILED (제출 거절처럼 같은 입력 재시도가 무의미한 경우). */
+    private void handleBaseCandidateFailure(Long jobId, int index, boolean retryable) {
         String verdict = txTemplate.execute(tx -> {
             CharacterCreationJob job = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (job == null || job.getStatus() != CreationJobStatus.BASE_PROCESSING) return "IGNORE";
@@ -511,7 +556,7 @@ public class UgcPipelineWorker {
 
             BaseCandidate cand = candidates.get(index);
             int next = cand.retryCount() + 1;
-            if (next <= props.job().emotionRetries()) {
+            if (retryable && next <= props.job().emotionRetries()) {
                 candidates.set(index, BaseCandidate.deriving(next));
                 job.updateBaseCandidates(json.writeBaseCandidates(candidates));
                 return "RETRY";

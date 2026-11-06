@@ -86,6 +86,9 @@ public class FalGptEmotionEditClient {
         HttpResponse<String> response = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             if ("GET".equals(method) && response.statusCode() == 422) throw new ProviderFailure("fal rejected generation");
+            // [2026-11-06] 제출 422 = 요청 자체 거절(content_policy_violation 실측 — docs/56 §3). 재시도해도 같은 입력은
+            //   다시 거절되므로 일시 오류와 구분한다. 본문엔 프롬프트 echo가 있어 사유 type만 남긴다.
+            if ("POST".equals(method) && response.statusCode() == 422) throw new RequestRejected(rejectionType(response.body()));
             throw new IllegalStateException("fal HTTP " + response.statusCode());
         }
         return mapper.readTree(response.body());
@@ -97,7 +100,19 @@ public class FalGptEmotionEditClient {
             throw new IllegalArgumentException("Invalid fal queue URL");
         return uri;
     }
+    private String rejectionType(String body) {
+        try {
+            String type = mapper.readTree(body).path("detail").path(0).path("type").asText("");
+            return type.isBlank() ? "unknown" : type;
+        } catch (Exception e) { return "unknown"; }
+    }
     public static final class ProviderFailure extends RuntimeException {
         public ProviderFailure(String message) { super(message); }
+    }
+    /** 제출(POST) 단계 422 거절 — 같은 입력의 재시도는 무의미하다. {@link #reason()} 예: content_policy_violation. */
+    public static final class RequestRejected extends RuntimeException {
+        private final String reason;
+        public RequestRejected(String reason) { super("fal rejected request: " + reason); this.reason = reason; }
+        public String reason() { return reason; }
     }
 }

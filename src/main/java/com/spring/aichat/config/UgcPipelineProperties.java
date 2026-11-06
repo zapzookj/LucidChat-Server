@@ -51,8 +51,11 @@ public record UgcPipelineProperties(
      * 전역 채팅 모델과 독립적으로 GPT 계열 등 지정 가능(수작업 시절 GPT 사용 실측).
      */
     String stage0Model,
-    VlmPrefilter vlmPrefilter
+    VlmPrefilter vlmPrefilter,
+    Standing standing
 ) {
+    // 생성자가 2개(정식+하위 호환)라 바인딩 대상을 명시 (SceneIllustrationProperties 선례 — 미지정 시 기동 실패)
+    @org.springframework.boot.context.properties.bind.ConstructorBinding
     public UgcPipelineProperties {
         if (energy == null) energy = new Energy(null, null, null, null, null, null, null, null);
         if (job == null) job = new Job(null, null, null, null, null, null);
@@ -61,6 +64,42 @@ public record UgcPipelineProperties(
         if (generation == null) generation = new Generation(null, null, null, null, null);
         if (world == null) world = new World(null, null, null, null, null);
         if (vlmPrefilter == null) vlmPrefilter = new VlmPrefilter(null, null, null);
+        if (standing == null) standing = new Standing(null, null);
+    }
+
+    /** 하위 호환 — standing 추가 이전 8인자 호출(테스트·PoC). */
+    public UgcPipelineProperties(Energy energy, Job job, Runpod runpod, Qwen qwen, Generation generation,
+                                 World world, String stage0Model, VlmPrefilter vlmPrefilter) {
+        this(energy, job, runpod, qwen, generation, world, stage0Model, vlmPrefilter, null);
+    }
+
+    /**
+     * [2026-11-06 스탠딩 변환 교체] 원화 → 베이스 스탠딩 2패스(자세·구도 → 단색 배경)의 편집 모델.
+     * 종원 확정: GPT Image 2.5(docs/56 §6 — 안대 유지 4/4 vs Qwen 1/4, 카우보이샷 준수 4/4 vs 1/4,
+     * 지어낸 신발 0/4 vs 3/4). 프롬프트는 Qwen 패스 프롬프트 그대로다. {@code editor=qwen}이면 기존
+     * Qwen 경로로 즉시 롤백된다. 레거시(비동적) 감정 파생의 Qwen 경로는 이 설정과 무관하다.
+     */
+    public record Standing(String editor, String gptQuality) {
+        /**
+         * 기동 시점 검증 — 오타(예: qwne)가 조용히 gpt로 해석돼 롤백이 무시되거나, 허용 밖 품질값(예: medium)이
+         * 런타임에 모든 스탠딩 후보를 실패시키는 일을 막는다. 허용: editor ∈ {gpt, qwen}, gpt-quality ∈ {low, high}.
+         */
+        public Standing {
+            editor = normalize(editor, "gpt", java.util.Set.of("gpt", "qwen"), "ugc.standing.editor");
+            gptQuality = normalize(gptQuality, "high", java.util.Set.of("low", "high"), "ugc.standing.gpt-quality");
+        }
+
+        private static String normalize(String value, String fallback, java.util.Set<String> allowed, String key) {
+            String v = (value == null || value.isBlank()) ? fallback : value.strip().toLowerCase(java.util.Locale.ROOT);
+            if (!allowed.contains(v)) {
+                throw new IllegalArgumentException(key + "=" + value + " — 허용값 " + allowed);
+            }
+            return v;
+        }
+
+        public boolean usesGpt() { return "gpt".equals(editor); }
+        /** fal GPT 편집 품질 — PoC 실측값 high. FalGptEmotionEditClient.input이 low/high만 허용한다. */
+        public String gptQualityOrDefault() { return gptQuality; }
     }
 
     /**

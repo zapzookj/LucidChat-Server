@@ -70,6 +70,17 @@ public class UgcWorkflowFactory {
         requireInput(neutralTemplate, NEUTRAL_PATH, "21", "text");
         requireInput(neutralTemplate, NEUTRAL_PATH, "22", "model_name");
         requireInput(neutralTemplate, NEUTRAL_PATH, "23", "text");
+        // [2026-11-06 원 얼굴 되붙이기 — docs/56 §7] 입력(19) 얼굴을 손 보정(24) 결과 위에 합성(64)해 저장(9)한다.
+        //   치환 대상은 아니지만 배선이 끊기면 얼굴 재작화가 조용히 복귀하므로 기동 시점에 고정 검증한다.
+        //   mask는 ImageCompositeMasked의 선택 입력이라 끊기면 입력 전체가 덮여 리파인이 조용히 무효화된다 — 전 구간 검증.
+        requireLink(neutralTemplate, NEUTRAL_PATH, "60", "bbox_detector", "18");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "60", "image", "19");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "61", "segs", "60");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "63", "mask", "61");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "64", "destination", "24");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "64", "source", "19");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "64", "mask", "63");
+        requireLink(neutralTemplate, NEUTRAL_PATH, "9", "images", "64");
 
         // fail-fast: 치환 계약 경로가 템플릿에 실존하는지 기동 시점에 검증 (템플릿 드리프트 방지)
         requireInput(wf1Template, WF1_PATH, "12", "text");
@@ -329,6 +340,14 @@ public class UgcWorkflowFactory {
         if (template.path(nodeId).path("inputs").path(key).isMissingNode()) {
             throw new IllegalStateException(
                 "[UGC] 치환 계약 경로 누락 — 템플릿 드리프트 의심: %s → \"%s\".inputs.%s".formatted(path, nodeId, key));
+        }
+    }
+
+    private static void requireLink(JsonNode template, String path, String nodeId, String key, String fromNode) {
+        requireInput(template, path, nodeId, key);
+        if (!fromNode.equals(template.path(nodeId).path("inputs").path(key).path(0).asText())) {
+            throw new IllegalStateException(
+                "[UGC] 배선 계약 위반 — 템플릿 드리프트 의심: %s → \"%s\".inputs.%s ≠ [\"%s\", …]".formatted(path, nodeId, key, fromNode));
         }
     }
 }

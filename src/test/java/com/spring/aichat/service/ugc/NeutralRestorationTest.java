@@ -73,7 +73,16 @@ class NeutralRestorationTest {
         assertThat(w.path("24").path("inputs").path("positive").get(0).asText()).isEqualTo("23");
         assertThat(w.path("23").path("inputs").path("text").asText()).isEqualTo("detailed hands");
         assertThat(w.path("22").path("inputs").path("model_name").asText()).isEqualTo("bbox/hand_yolov8n.pt");
-        assertThat(w.path("9").path("inputs").path("images").get(0).asText()).isEqualTo("24");
+        // [2026-11-06] 원 얼굴 되붙이기: 입력(19) 얼굴 bbox → 페더 마스크 → 손 보정(24) 위 합성(64) → 저장
+        assertThat(w.path("60").path("class_type").asText()).isEqualTo("BboxDetectorSEGS");
+        assertThat(w.path("60").path("inputs").path("bbox_detector").get(0).asText()).isEqualTo("18");
+        assertThat(w.path("60").path("inputs").path("image").get(0).asText()).isEqualTo("19");
+        assertThat(w.path("63").path("inputs").path("mask").get(0).asText()).isEqualTo("61");
+        assertThat(w.path("64").path("class_type").asText()).isEqualTo("ImageCompositeMasked");
+        assertThat(w.path("64").path("inputs").path("destination").get(0).asText()).isEqualTo("24");
+        assertThat(w.path("64").path("inputs").path("source").get(0).asText()).isEqualTo("19");
+        assertThat(w.path("64").path("inputs").path("mask").get(0).asText()).isEqualTo("63");
+        assertThat(w.path("9").path("inputs").path("images").get(0).asText()).isEqualTo("64");
         assertThat(w.properties().stream().filter(e->e.getValue().path("class_type").asText().equals("SaveImage")).count()).isEqualTo(1);
         assertThat(w.path("11").path("inputs").path("seed").asLong()).isEqualTo(11);
         assertThat(w.path("17").path("inputs").path("seed").asLong()).isEqualTo(22);
