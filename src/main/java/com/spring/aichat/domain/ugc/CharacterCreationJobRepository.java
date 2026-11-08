@@ -1,25 +1,15 @@
 package com.spring.aichat.domain.ugc;
 
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public interface CharacterCreationJobRepository extends JpaRepository<CharacterCreationJob, Long> {
+public interface CharacterCreationJobRepository extends JpaRepository<CharacterCreationJob, Long>, CharacterCreationJobLockRepository {
 
-    /**
-     * 잡 단위 직렬화용 비관적 락 — 감정 14종 webhook/폴링 경합의 lost update 방지.
-     * (결제 verifyAndDeliver의 merchantUid 락과 동일 패턴)
-     */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select j from CharacterCreationJob j where j.id = :id")
-    Optional<CharacterCreationJob> findByIdForUpdate(@Param("id") Long id);
+    // findByIdForUpdate — CharacterCreationJobLockRepository(항상 DB 최신 상태로 재적재하는 락 조회, 2026-11-09 핫픽스)
 
     Optional<CharacterCreationJob> findByIdAndUserId(Long id, Long userId);
 

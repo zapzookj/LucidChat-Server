@@ -763,11 +763,20 @@ public class UgcPipelineWorker {
             Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             mutateJob(jobId, j -> {
                 Map<String, EmotionAssetState> m = json.readExpressionAssets(j.getEmotionAssetsJson());
-                m.replaceAll((t, s) -> s.cutting());
+                // [2026-11-09 핫픽스] 누끼 재시도 예산은 여기서 새로 시작한다 — retryCount는 감정 생성 재시도와 같은
+                //   카운터라, 생성에서 예산을 다 쓴 컷이 누끼 첫 실패에 곧바로 잡 전체 실패로 끝났다(독립 검토 #1).
+                m.replaceAll((t, s) -> s.cutting().withRetry(0));
                 j.updateEmotionAssets(json.writeExpressionAssets(m));
             });
             for (Map.Entry<String, EmotionAssetState> entry : emotions.entrySet()) {
-                submitCutout(jobId, entry.getKey(), entry.getValue().key());
+                // [2026-11-09 핫픽스] 한 컷의 제출 예외(S3 다운로드·RunPod 타임아웃)가 12컷 잡 전체를 죽이지 않게 컷 단위로
+                //   예산에 흘린다. 이어지는 스윕이 미제출·예약만 남은 컷을 다시 제출한다(독립 검토 #3).
+                try {
+                    submitCutout(jobId, entry.getKey(), entry.getValue().key());
+                } catch (RuntimeException e) {
+                    log.warn("[UGC-WORKER] 누끼 제출 실패(컷 단위 재시도로 이관): jobId={}, tag={}, {}", jobId, entry.getKey(), e.getMessage());
+                    noteCutoutSubmitFailure(jobId, entry.getKey(), e.getMessage());
+                }
             }
         } catch (Exception e) {
             failAndRefund(jobId, "누끼 처리 실패: " + e.getMessage());
@@ -787,35 +796,43 @@ public class UgcPipelineWorker {
         recordExternalJob(jobId, externalKey(UgcStage.CUTOUT, tag), submit.jobId());
     }
 
+    /** 기록 없이 이만큼 지난 "제출 중" 예약은 접수 여부를 모르는 요청으로 보고 그 컷만 다시 제출한다. */
+    static final long CUT_RESERVATION_STALE_MS = 120_000;
+    private static final String CUT_RESERVATION_EXHAUSTED = "EXHAUSTED";
+
     private void submitDynamicCutout(Long jobId, String id, String sourceKey) {
         String reservationKey = "K_CUT_SUBMITTING_" + id;
         String reservation = System.currentTimeMillis() + ":" + java.util.UUID.randomUUID();
         String claim = txTemplate.execute(tx -> {
             CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
             if (locked == null || locked.getStatus() != CreationJobStatus.POSTPROCESSING) return null;
-            var state = json.readExpressionAssets(locked.getEmotionAssetsJson()).get(id);
+            var assets = json.readExpressionAssets(locked.getEmotionAssetsJson());
+            var state = assets.get(id);
             if (state == null || !state.is(EmotionAssetState.CUTTING)) return null;
             var scratch = json.readScratch(locked.getExternalJobsJson());
             if (scratch.containsKey(externalKey(UgcStage.CUTOUT, id)) || scratch.containsKey("K_CUT_LOST_REQUEST_" + id)) return null;
             String previous = scratch.get(reservationKey);
-            if (previous != null) return previous;
+            if (previous != null) {
+                if (!reservationStale(previous, System.currentTimeMillis())) return previous;   // 다른 제출이 진행 중
+                // [2026-11-09 핫픽스] 예약만 남고 요청 번호가 없는 컷 — 종전엔 잡 전체를 실패·환불했다. 그런데 실제로는
+                //   제출이 접수됐는데 기록만 lost update로 지워진 경우였다(잡 51). 예약을 넘겨받아 이 컷만 다시 제출한다.
+                //   이전 요청이 뒤늦게 기록되려 해도 예약이 바뀌어 기록되지 않고, 그 웹훅은 요청 번호 불일치로 버려진다.
+                //   누끼 1회는 수 초 GPU라 중복 비용은 무시할 수준이다. 컷 재시도 예산을 써서 무한 재제출은 막는다.
+                int next = state.retryCount() + 1;
+                if (next > props.job().emotionRetries()) return CUT_RESERVATION_EXHAUSTED;
+                assets.put(id, state.withRetry(next));
+                locked.updateEmotionAssets(json.writeExpressionAssets(assets));
+                log.warn("[UGC-WORKER] 기록 없는 누끼 예약 회수 → 재제출: jobId={}, id={}, retry={}", jobId, id, next);
+            }
             scratch.put(reservationKey, reservation);
             locked.updateExternalJobs(json.writeScratch(scratch));
             return reservation;
         });
-        if (claim == null) return;
-        if (!claim.equals(reservation)) {
-            if (System.currentTimeMillis() - Long.parseLong(claim.substring(0, claim.indexOf(':'))) >= 120_000) {
-                txTemplate.executeWithoutResult(tx -> {
-                    CharacterCreationJob locked = jobRepository.findByIdForUpdate(jobId).orElse(null);
-                    if (locked == null || locked.getStatus() != CreationJobStatus.POSTPROCESSING) return;
-                    var scratch = json.readScratch(locked.getExternalJobsJson());
-                    if (claim.equals(scratch.get(reservationKey)) && !scratch.containsKey(externalKey(UgcStage.CUTOUT, id)))
-                        failAndRefund(jobId, "누끼 요청 접수를 확인하지 못했어요. 사용한 에너지를 환불했어요.");
-                });
-            }
+        if (CUT_RESERVATION_EXHAUSTED.equals(claim)) {
+            failAndRefund(jobId, "누끼 요청 접수를 확인하지 못했어요. 사용한 에너지를 환불했어요.");
             return;
         }
+        if (claim == null || !claim.equals(reservation)) return;
         boolean sent = false;
         try {
             byte[] bytes = assetService.download(sourceKey);
@@ -837,6 +854,16 @@ public class UgcPipelineWorker {
         } catch (RuntimeException e) {
             if (!sent) mutateJob(jobId, j -> removeExternalJob(j, reservationKey));
             throw e;
+        }
+    }
+
+    /** 예약 값 "epochMillis:uuid"가 {@link #CUT_RESERVATION_STALE_MS} 이상 지났는가 — 형식이 깨졌으면 낡은 것으로 본다. */
+    static boolean reservationStale(String reservation, long nowMillis) {
+        try {
+            long at = Long.parseLong(reservation.substring(0, reservation.indexOf(':')));
+            return nowMillis - at >= CUT_RESERVATION_STALE_MS;
+        } catch (RuntimeException e) {
+            return true;
         }
     }
 
@@ -1520,6 +1547,9 @@ public class UgcPipelineWorker {
             Map<String, EmotionAssetState> emotions = json.readExpressionAssets(job.getEmotionAssetsJson());
             EmotionAssetState state = emotions.get(tag);
             if (state == null || !state.is(EmotionAssetState.CUTTING)) return "IGNORE";
+            // [2026-11-09 핫픽스] 전송 후 예외(접수 여부 모름)면 예약이 남아 있다 — 그 예약을 회수할 때 예산을 쓰므로
+            //   여기서 또 깎지 않는다(같은 실패를 두 번 세면 예산 3이 실제 2회분이 됐다, 독립 검토 #2).
+            if (json.readScratch(job.getExternalJobsJson()).containsKey("K_CUT_SUBMITTING_" + tag)) return "IGNORE";
             int next = state.retryCount() + 1;
             if (next > props.job().emotionRetries()) return "EXHAUSTED";
             emotions.put(tag, state.withRetry(next));

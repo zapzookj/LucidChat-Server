@@ -1,25 +1,15 @@
 package com.spring.aichat.domain.ugc;
 
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-public interface UgcWorldCreationJobRepository extends JpaRepository<UgcWorldCreationJob, Long> {
+public interface UgcWorldCreationJobRepository extends JpaRepository<UgcWorldCreationJob, Long>, UgcWorldCreationJobLockRepository {
 
-    /**
-     * 잡 단위 직렬화용 비관적 락 — 장소 배경 병렬 완료(fal 콜백) 경합의 lost update 방지.
-     * ({@link CharacterCreationJobRepository#findByIdForUpdate}와 동일 패턴)
-     */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select j from UgcWorldCreationJob j where j.id = :id")
-    Optional<UgcWorldCreationJob> findByIdForUpdate(@Param("id") Long id);
+    // findByIdForUpdate — UgcWorldCreationJobLockRepository(항상 DB 최신 상태로 재적재하는 락 조회, 2026-11-09 핫픽스)
 
     Optional<UgcWorldCreationJob> findByIdAndUserId(Long id, Long userId);
 

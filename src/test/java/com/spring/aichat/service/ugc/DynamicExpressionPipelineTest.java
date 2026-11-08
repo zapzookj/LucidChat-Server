@@ -243,23 +243,87 @@ class DynamicExpressionPipelineTest {
         assertThat(state().isFreeReroll()).isTrue();
     }
 
-    @Test void ambiguousCutoutRecoveryRefundsWithoutAnotherPost() {
+    /**
+     * [2026-11-09 핫픽스 · 잡 51] 요청 번호 기록이 lost update로 지워져 예약만 남은 컷 — 종전엔 잡 전체를 실패·환불했다.
+     * 이제 예약을 넘겨받아 그 컷만 다시 제출하고(재시도 예산 1 사용), 잡은 계속 진행한다.
+     */
+    @Test void staleReservationWithoutRequestIdResubmitsOnlyThatCut() {
         cutting();job.updateExternalJobs(json.writeScratch(Map.of("K_CUT_SUBMITTING_EX_01","1:unknown")));
+        when(assets.download("k-EX_01")).thenReturn(new byte[]{1,2});
+        when(workflow.buildCutout(anyString(),anyString())).thenReturn(new ObjectMapper().createObjectNode());
+        when(comfy.submit(any(),anyList(),any())).thenReturn(new UgcComfyClient.SubmitResult("retry-cut","IN_QUEUE"));
+        ReflectionTestUtils.invokeMethod(worker,"submitCutout",7L,"EX_01","k-EX_01");
+        assertThat(job.getStatus()).isEqualTo(CreationJobStatus.POSTPROCESSING);
+        assertThat(state().retryCount()).isEqualTo(1);
+        assertThat(json.readScratch(job.getExternalJobsJson())).containsEntry("CUTOUT:EX_01","retry-cut").doesNotContainKey("K_CUT_SUBMITTING_EX_01");
+        verify(comfy,times(1)).submit(any(),anyList(),any());
+    }
+
+    @Test void staleReservationAfterTheRetryBudgetFailsWithoutAnotherPost() {
+        cutting();
+        var map = json.readExpressionAssets(job.getEmotionAssetsJson());
+        map.put("EX_01", map.get("EX_01").withRetry(props.job().emotionRetries()));
+        job.updateEmotionAssets(json.writeExpressionAssets(map));
+        job.updateExternalJobs(json.writeScratch(Map.of("K_CUT_SUBMITTING_EX_01","1:unknown")));
         ReflectionTestUtils.invokeMethod(worker,"submitCutout",7L,"EX_01","k-EX_01");
         assertThat(job.getStatus()).isEqualTo(CreationJobStatus.FAILED);
         verifyNoInteractions(comfy,gpt,qwen,assets);
     }
 
-    @Test void lateAcceptedCutoutCannotBeRefundedByAnOldReservationObservation() {
+    @Test void freshReservationIsLeftToTheSubmissionInFlight() {
+        cutting();job.updateExternalJobs(json.writeScratch(Map.of("K_CUT_SUBMITTING_EX_01",System.currentTimeMillis()+":in-flight")));
+        ReflectionTestUtils.invokeMethod(worker,"submitCutout",7L,"EX_01","k-EX_01");
+        assertThat(job.getStatus()).isEqualTo(CreationJobStatus.POSTPROCESSING);
+        assertThat(state().retryCount()).isZero();
+        verifyNoInteractions(comfy,gpt,qwen,assets);
+    }
+
+    @Test void lateAcceptedCutoutIsNotResubmitted() {
+        // 예약을 관측한 뒤 락을 잡기 직전에 원래 제출의 요청 번호가 기록된 경우 — 락 안에서 다시 보고 아무것도 하지 않는다
         cutting();job.updateExternalJobs(json.writeScratch(Map.of("K_CUT_SUBMITTING_EX_01","1:old")));
         doAnswer(i -> {
             job.updateExternalJobs(json.writeScratch(Map.of("CUTOUT:EX_01","just-accepted")));
-            ((java.util.function.Consumer<org.springframework.transaction.TransactionStatus>)i.getArgument(0)).accept(new SimpleTransactionStatus());
-            return null;
-        }).when(tx).executeWithoutResult(any());
+            return ((TransactionCallback<?>) i.getArgument(0)).doInTransaction(new SimpleTransactionStatus());
+        }).when(tx).execute(any());
         ReflectionTestUtils.invokeMethod(worker,"submitCutout",7L,"EX_01","k-EX_01");
         assertThat(job.getStatus()).isEqualTo(CreationJobStatus.POSTPROCESSING);
         assertThat(json.readScratch(job.getExternalJobsJson())).containsEntry("CUTOUT:EX_01","just-accepted");
         verifyNoInteractions(comfy,gpt,qwen,assets);
+    }
+
+    @Test void cutoutStageStartsAFreshRetryBudgetAndSurvivesOneCutsSubmitFailure() {
+        // 감정 생성에서 예산을 다 쓴 컷도 누끼 단계는 0부터 — 한 컷의 제출 예외가 잡 전체를 실패시키지 않는다
+        job.toReviewWait(72); job.toPostprocessing();
+        var map = json.readExpressionAssets(job.getEmotionAssetsJson());
+        map.replaceAll((id, s) -> EmotionAssetState.ready("k-" + id).withRetry(props.job().emotionRetries()));
+        job.updateEmotionAssets(json.writeExpressionAssets(map));
+        when(workflow.buildCutout(anyString(),anyString())).thenReturn(new ObjectMapper().createObjectNode());
+        when(assets.download(anyString())).thenReturn(new byte[]{1,2});
+        when(assets.download("k-EX_01")).thenThrow(new IllegalStateException("S3 timeout"));
+        when(comfy.submit(any(),anyList(),any())).thenReturn(new UgcComfyClient.SubmitResult("cut","IN_QUEUE"));
+        worker.runCutoutStage(7L);
+        assertThat(job.getStatus()).isEqualTo(CreationJobStatus.POSTPROCESSING);
+        assertThat(state().status()).isEqualTo(EmotionAssetState.CUTTING);
+        assertThat(state().retryCount()).isEqualTo(1);   // 실패한 컷만 예산 1 사용
+        assertThat(json.readScratch(job.getExternalJobsJson())).doesNotContainKey("CUTOUT:EX_01").doesNotContainKey("K_CUT_SUBMITTING_EX_01");
+        verify(comfy, times(map.size() - 1)).submit(any(),anyList(),any());
+    }
+
+    @Test void ambiguousSubmitFailureIsCountedOnceByTheReservationTakeover() {
+        cutting();
+        when(assets.download("k-EX_01")).thenReturn(new byte[]{1,2});
+        when(workflow.buildCutout(anyString(),anyString())).thenReturn(new ObjectMapper().createObjectNode());
+        when(comfy.submit(any(),anyList(),any())).thenThrow(new IllegalStateException("read timed out"));
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(worker,"submitCutout",7L,"EX_01","k-EX_01"));
+        ReflectionTestUtils.invokeMethod(worker,"noteCutoutSubmitFailure",7L,"EX_01","read timed out");
+        assertThat(state().retryCount()).isZero();   // 예약이 남아 있으니 여기선 세지 않는다
+        assertThat(json.readScratch(job.getExternalJobsJson())).containsKey("K_CUT_SUBMITTING_EX_01");
+    }
+
+    @Test void reservationAgeParsing() {
+        long now = 1_000_000;
+        assertThat(UgcPipelineWorker.reservationStale((now - UgcPipelineWorker.CUT_RESERVATION_STALE_MS) + ":x", now)).isTrue();
+        assertThat(UgcPipelineWorker.reservationStale((now - 1) + ":x", now)).isFalse();
+        assertThat(UgcPipelineWorker.reservationStale("garbage", now)).isTrue();
     }
 }
