@@ -243,3 +243,39 @@
   - 렌더 중 `stableRef` 갱신(동작은 정상).
   - 업로드 후 6일 넘게 머물면 시작할 때 400이 난다.
   - 모달 안 실패 사유 표시는 부모 `runAction` 경로라 프리뷰로 재현하지 못했다(코드 확인만 했다).
+
+## 12. 워커 이미지 운영 반영 (2026-11-09) — BE·FE 배포 전 선반영
+
+종원 지시("BE/FE 배포 전에 워커 이미지 빌드와 RunPod 엔드포인트 갱신")에 따라 워커를 먼저 운영에 반영했다. 새 이미지는 기존 이미지에 태거 노드·모델과 응답 필드 `output.texts`만 더한 것이다. 그래서 현재 운영 BE(master)의 텍스트 방식 파이프라인과 호환된다.
+
+### 커밋
+
+- BE `f57b3b2`(브랜치 `feature/standing-gpt-paste`, `e0e7000` 위)
+- FE `d2b4636`(`feature/reference-builder`)
+- 워커 `9995274` + `4c3bfe0`(`feature/wd14-tagger`, 원격 푸시). BE·FE는 미푸시다.
+
+### 빌드
+
+- 전체 빌드(run #8)는 2분 55초 만에 실패했다. 원인은 "The security token included in the request is invalid"다. `build.yml`이 대형 모델을 AWS S3 `assets-build/`에서 받는데, 탈AWS 이후 저장소의 AWS 시크릿이 무효다. **전체 재빌드 경로는 현재 막혀 있다**(모델을 R2로 옮기고 시크릿을 갱신해야 한다).
+- 그래서 증분 빌드 경로를 추가했다(`4c3bfe0`). `Dockerfile.layer`는 운영 검증 이미지 `@sha256:6a9d54d6…` 위에 태거 노드·모델·핸들러 패치만 얹는다. `build.yml`에는 선택 입력 `dockerfile`·`base_image`를 추가했고, 레이어 빌드일 때는 AWS/S3 단계를 건너뛴다. 기본 동작은 바뀌지 않는다.
+- run #9는 성공했다(약 15분). 태그는 `reference-tagger-20261109-4c3bfe0`, 다이제스트는 `sha256:902c4bd2…`(amd64 `406e9e3f…`, 26.7GB)다. 빌드 안에서 부팅 검증(IMPORT FAILED 0건·WD14 노드 로드·onnxruntime import)과 핸들러 앵커 검사를 통과했다.
+
+### RunPod 전환 (UGC만)
+
+- 기준선: 엔드포인트 `lucid-ugc`(min 0 / max 1, CUDA 12.6, version 9), 템플릿 `zouv4t0soq`, 이미지 `@sha256:6a9d54d6…`.
+- 템플릿 `cj4es4ls3f`(`lucid-ugc-reference-tagger-20261109`)를 새 이미지 다이제스트로 만들었다. 디스크 40GB·포트·SSH·Jupyter 설정은 그대로이고, env 3개는 해시 대조로 동일함을 확인했다.
+- 엔드포인트 templateId만 PATCH했다(version 10). 그 외 설정은 불변이다. 씬 엔드포인트는 건드리지 않았다.
+- **롤백**: 엔드포인트 templateId를 `zouv4t0soq`로 되돌린다(기존 템플릿 보존).
+
+### 실호출 스모크 (커밋 제외 하네스 `StandingPipelineLivePoc.liveWorkerSmokeRefineAndTagger`, GPT 미호출)
+
+- 실행 워커가 새 다이제스트 `902c4bd2…`임을 확인했다.
+- 원 얼굴 되붙이기 WF-2(기존 노드 전부 + 새 노드 4개): 이미지 1장, 실행 38초, 대기 145초(새 이미지 콜드스타트). 육안으로 안대·복장·트윈테일이 정상이다.
+- WD14 태거: `output.texts` 1건, 실행 4.4초. `IdentityTagFilter` 통과 후 35개 태그(`medical eyepatch`·`twintails` 등)가 나왔고, `UgcComfyClient.getTextStatus` 파싱 계약과 일치한다.
+- 엔드포인트 min은 바꾸지 않아 복원할 항목이 없다. 큐는 0이다.
+
+### 남은 것
+
+- BE·FE 운영 배포(종원 승인 후 일괄). 워커 브랜치를 master에 병합할지도 정해야 한다.
+- 운영 실 E2E(업로드→원화→태거→스탠딩→감정)는 BE·FE 배포 뒤에 한다.
+- 모델 원천을 S3에서 R2로 이전하고 GHA 시크릿을 갱신한다(전체 빌드 복구).
