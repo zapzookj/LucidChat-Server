@@ -216,7 +216,7 @@ class DynamicExpressionPipelineTest {
         when(user.getId()).thenReturn(1L);when(user.consumeEnergy(2)).thenReturn(EnergySplit.of(2,1));
         UgcPipelineWorker spy=spy(worker);
         doNothing().when(spy).runEmotionReroll(anyLong(),anyString());
-        var service=new CharacterCreationService(jobs,users,null,props,null,spy,json,cache,tx,null);
+        var service=new CharacterCreationService(jobs,users,null,props,null,spy,null,null,null,json,cache,tx,null);
         service.rerollEmotion("owner",7L,"EX_01");
         assertThatThrownBy(() -> service.rerollEmotion("owner",7L,"EX_01")).isInstanceOf(com.spring.aichat.exception.BadRequestException.class);
         verify(user,times(1)).consumeEnergy(2);

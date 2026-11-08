@@ -61,6 +61,8 @@ public class AdminUgcReviewService {
     private final UgcJobJson json;
     private final UgcPromptAssembler promptAssembler;
     private final UgcWorkflowFactory workflowFactory;
+    private final com.spring.aichat.domain.ugc.UgcReferenceImageRepository referenceRepository;  // [docs/56 §10]
+    private final com.spring.aichat.config.UgcPipelineProperties pipelineProps;
 
     @Transactional(readOnly = true)
     public UgcReviewDtos.QueueResponse queue() {
@@ -284,7 +286,12 @@ public class AdminUgcReviewService {
                 concept.emotionPromptFor(EmotionTag.JOY.name())),
             promptAssembler.qwenNegative(),
             com.spring.aichat.service.ugc.NeutralFacePrompt.assemble(concept),
-            workflowFactory.neutralHandPositive()
+            workflowFactory.neutralHandPositive(),
+            c.isReferenceBuilt()
+                ? referenceRepository.findById(c.getReferenceImageId()).filter(r -> r.getDeletedAt() == null)
+                    .map(r -> assetService.presignGet(r.getStorageKey(), java.time.Duration.ofMinutes(30))).orElse(null)
+                : null,
+            pipelineProps.standing().usesGpt() ? "gpt" : "qwen"
         );
     }
 

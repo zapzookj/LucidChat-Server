@@ -97,6 +97,11 @@ public class SceneRenderService {
      */
     public SceneView resolveForTurn(Long roomId, List<Character> roomCharacters,
                                     AiJsonOutput out, int turnIndex, boolean sfw, Boolean userMale) {
+        // [docs/56 §10] 그림 방식 캐릭터는 씬 일러 잠금 — 수동 경로(SceneRequestService)와 같은 규칙.
+        //   자동 경로는 현재 trigger=manual로 휴면이지만, 되살릴 때 잠금이 우회되지 않게 여기서도 막는다.
+        if (roomCharacters != null && roomCharacters.stream().anyMatch(c -> c != null && c.isReferenceBuilt())) {
+            return null;
+        }
         SceneRenderPlan plan = planRender(roomCharacters, out, sfw, userMale);
 
         // [리뷰픽스] 인플라이트 디덥 — 동일 scene_hash 렌더가 아직 PENDING/GENERATING이면

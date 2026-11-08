@@ -933,6 +933,8 @@ public class UgcPipelineWorker {
                 // [2026-08-04 남캐] 위저드 선택 성별 영속 — 씬 렌더 캐스트·일러 앵커의 단일 기준
                 character.updateGender(job.getGenderOrDefault());
                 character.assignExpressionCatalog(job.getExpressionCatalogJson());
+                // [docs/56 §10] 그림 방식 캐릭터 표식 — 실시간 장면 일러 잠금·공개 심사 원본 열람·보관 정책의 기준
+                if (job.usesReference()) character.markReferenceBuilt(job.getReferenceImageId());
                 // [2026-08-05 난이도] 위저드 지정 난이도 주입 — 미지정(null)은 미설정 유지
                 // (소비처 getDifficultyOrDefault의 null→NORMAL 폴백 계약 보존)
                 if (job.getRequestedDifficultyOrNull() != null) {
@@ -1327,6 +1329,13 @@ public class UgcPipelineWorker {
         boolean touched;
         switch (job.getStatus()) {
             case CONCEPT_PROCESSING -> {
+                if (job.usesReference()) {
+                    // [docs/56 §10 그림 방식] 원화 체인(GPT 편집·태거 폴링)은 메모리 future라 재부착 수단이 없다.
+                    //   아래 재제출 분기는 글 방식 WF-1(텍스트→이미지)을 다시 태워 엉뚱한 원화를 만든다 — 실패·전액 환불.
+                    log.warn("[UGC-WORKER] 스테일 CONCEPT_PROCESSING 회수 (그림 방식 원화 체인 유실): jobId={}", jobId);
+                    failAndRefund(jobId, "원화를 그리는 시간이 초과됐어요. 사용한 에너지는 환불되었어요.");
+                    return;
+                }
                 if (pendingKeys.isEmpty()) {
                     if (job.getStructuredConceptJson() != null) {
                         // [적대적 리뷰 P3] Stage0 산출은 커밋됐고 황금샷 제출(또는 리롤 제출)만 유실된 창 — 저장된 컨셉에서

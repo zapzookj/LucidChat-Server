@@ -53,6 +53,9 @@ public class CharacterCreationService {
     private final UgcPipelineProperties props;
     private final UgcModerationService moderationService;
     private final UgcPipelineWorker worker;
+    private final ReferenceImageService referenceImageService;   // [docs/56 §10 그림 방식]
+    private final ReferenceGoldenService referenceGoldenService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final UgcJobJson json;
     private final RedisCacheService cacheService;
     private final TransactionTemplate txTemplate;
@@ -84,6 +87,20 @@ public class CharacterCreationService {
                               UgcDtos.AppearanceHints appearanceHints,
                               String officialWorldIdRaw, Long requestedUgcWorldId,
                               String genderRaw, String difficultyRaw) {
+        return startCreation(username, requestedName, conceptRaw, appearanceHints,
+            officialWorldIdRaw, requestedUgcWorldId, genderRaw, difficultyRaw, null, null);
+    }
+
+    /**
+     * @param referenceId [docs/56 §10 그림 방식] 업로드·검사를 통과한 그림 — 지정 시 appearanceHints는 무시하고
+     *                    원화를 그림에서 다시 그린다(이미지 프롬프트 LLM 생략). null=글 방식.
+     * @param adjustments 그림 방식 복장·체형 조정(선택)
+     */
+    public Long startCreation(String username, String requestedName, String conceptRaw,
+                              UgcDtos.AppearanceHints appearanceHints,
+                              String officialWorldIdRaw, Long requestedUgcWorldId,
+                              String genderRaw, String difficultyRaw,
+                              Long referenceId, UgcDtos.ReferenceAdjustments adjustments) {
         // [2026-08-04 남캐] 위저드 명시 선택 — 무효 문자열은 400(오타가 조용히 여캐로 흐르는 것 방지)
         com.spring.aichat.domain.enums.CharacterGender gender =
             com.spring.aichat.domain.enums.CharacterGender.FEMALE;
@@ -127,10 +144,15 @@ public class CharacterCreationService {
         }
 
         // [2026-07-20 개편] 외형 구조화 힌트를 컨셉 원문에 병합 — Stage 0가 태그에 강제 반영
-        String concept = withAppearanceHints(userConcept, appearanceHints);
+        //   [그림 방식] 외형은 그림이 정하므로 힌트를 병합하지 않는다(조정값은 별도 보관·프롬프트 컴파일).
+        String concept = referenceId != null ? userConcept : withAppearanceHints(userConcept, appearanceHints);
+        UgcDtos.ReferenceAdjustments adj = referenceId != null ? ReferencePrompts.sanitize(adjustments) : null;
 
         // 하드 키워드 게이트 — 에너지 차감 전 (유저 손실 없음)
         moderationService.assertRawConceptAllowed(concept);
+        if (adj != null && !ReferencePrompts.userText(adj).isBlank()) {
+            moderationService.assertRawConceptAllowed(ReferencePrompts.userText(adj));
+        }
         if (name != null) {
             moderationService.assertRawConceptAllowed(name);
         }
@@ -148,6 +170,8 @@ public class CharacterCreationService {
                 ugcWorldRepository.findByIdAndOwnerUserId(requestedUgcWorldId, user.getId())
                     .orElseThrow(() -> new NotFoundException("세계관을 찾을 수 없습니다. worldId=" + requestedUgcWorldId));
             }
+            // [그림 방식] 본인 소유·판정 OK 그림만 — 차감 전 검증(타인 그림은 404 은닉)
+            if (referenceId != null) referenceImageService.requireUsable(user.getId(), referenceId);
             // [2026-08-04 단계 과금] 선차감 20 → 시작 단계 6만 차감 (이후 단계 진입 시 각각 차감)
             int cost = props.energy().stageStart();
             EnergySplit charge = user.consumeEnergy(cost); // 부족 시 InsufficientEnergyException — 차감 전 예외
@@ -159,13 +183,15 @@ public class CharacterCreationService {
             job.assignRequestedWorld(finalOfficialWorldId, requestedUgcWorldId);
             job.assignGender(finalGender);   // [남캐] 전 스테이지의 단일 성별 기준
             job.assignRequestedDifficulty(finalDifficulty);  // [난이도] null=미지정(바인딩 미설정 유지)
+            if (referenceId != null) job.assignReference(referenceId, writeAdjustments(adj));
             job = jobRepository.save(job);
             return job.getId();
         });
 
         cacheService.evictUserProfile(username);
-        worker.runStage0(jobId);
-        log.info("[UGC] 생성 시작: username={}, jobId={}", username, jobId);
+        if (referenceId != null) referenceGoldenService.runStage0(jobId);
+        else worker.runStage0(jobId);
+        log.info("[UGC] 생성 시작: username={}, jobId={}, reference={}", username, jobId, referenceId != null);
         return jobId;
     }
 
@@ -190,7 +216,8 @@ public class CharacterCreationService {
             UgcJobJson.GoldenSnapshot snap = UgcJobJson.resolveSnapshot(snaps, selectedIndex);
             boolean isLatestBatch = snap == null || snaps.isEmpty()
                 || snap.startIndex() == snaps.get(snaps.size() - 1).startIndex();
-            if (snap != null && !isLatestBatch) {
+            // [그림 방식] 스냅샷이 배치가 아니라 후보 단위(후보마다 태거 태그가 다르다) — 항상 그 후보 것으로 맞춘다
+            if (snap != null && (!isLatestBatch || job.usesReference())) {
                 StructuredConcept latest = json.readConcept(job.getStructuredConceptJson());
                 StructuredConcept merged = latest.withAppearanceFrom(json.readConcept(snap.conceptJson()));
                 job.applyStage0(json.writeConcept(merged), merged.bgColor());
@@ -386,6 +413,16 @@ public class CharacterCreationService {
      * 구디자인 원화를 남겨두고 최종 비교·선택하는 UX가 안전해졌다.
      */
     public void rerollGoldenShots(String username, Long jobId, UgcDtos.AppearanceHints appearanceEdit) {
+        rerollGoldenShots(username, jobId, appearanceEdit, null);
+    }
+
+    /** @param adjustments [그림 방식] 올린 그림에서 다시 뽑기 — 조정값 갱신(null=기존 유지). 글 방식 잡에서는 무시. */
+    public void rerollGoldenShots(String username, Long jobId, UgcDtos.AppearanceHints appearanceEdit,
+                                  UgcDtos.ReferenceAdjustments adjustments) {
+        if (getOwnedJob(username, jobId).usesReference()) {
+            rerollReferenceGolden(username, jobId, adjustments);
+            return;
+        }
         String hintsBlock = appearanceHintsBlock(appearanceEdit);
         if (hintsBlock != null) {
             // 하드 키워드 게이트 — 에너지 차감 전 (유저 손실 없음). 내부 디자인 지시문은 게이트 불요.
@@ -408,6 +445,65 @@ public class CharacterCreationService {
         });
         cacheService.evictUserProfile(username);
         worker.runGoldenReroll(jobId);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [docs/56 §10] 그림 방식 — 올린 그림에서 다시 뽑기 / 이 그림 고치기 (GACHA_WAIT, 각 +2E)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private void rerollReferenceGolden(String username, Long jobId, UgcDtos.ReferenceAdjustments adjustments) {
+        UgcDtos.ReferenceAdjustments adj = adjustments == null ? null : ReferencePrompts.sanitize(adjustments);
+        if (adj != null && !ReferencePrompts.userText(adj).isBlank()) {
+            moderationService.assertRawConceptAllowed(ReferencePrompts.userText(adj));
+        }
+        txTemplate.executeWithoutResult(tx -> {
+            CharacterCreationJob job = lockOwnedJob(username, jobId);
+            requireStatus(job, CreationJobStatus.GACHA_WAIT);
+            User user = findUser(username);
+            job.chargeEnergy(user.consumeEnergy(props.energy().goldenReroll()));
+            userRepository.save(user);
+            // 다시 뽑기의 조정은 이후 다시 뽑기에도 이어진다(목업 확정 동작). 미지정이면 기존 조정 유지.
+            if (adjustments != null) job.updateAdjustments(writeAdjustments(adj));
+            job.restartGoldenGeneration();
+        });
+        cacheService.evictUserProfile(username);
+        referenceGoldenService.runReroll(jobId);
+    }
+
+    /**
+     * "이 그림 고치기" — 고른 원화의 구도를 유지한 채 조정만 다시 그려 후보 1장을 추가한다.
+     * 고치기 조정은 1회용이다(잡 조정값을 바꾸지 않는다 — 목업 확정: 고치기 초안은 별도).
+     */
+    public void fixGoldenShot(String username, Long jobId, int baseIndex, UgcDtos.ReferenceAdjustments adjustments) {
+        UgcDtos.ReferenceAdjustments adj = ReferencePrompts.sanitize(adjustments);
+        if (adj == null) throw new BadRequestException("바꿀 내용을 하나 이상 골라주세요.");
+        if (!ReferencePrompts.userText(adj).isBlank()) moderationService.assertRawConceptAllowed(ReferencePrompts.userText(adj));
+        txTemplate.executeWithoutResult(tx -> {
+            CharacterCreationJob job = lockOwnedJob(username, jobId);
+            requireStatus(job, CreationJobStatus.GACHA_WAIT);
+            if (!job.usesReference()) throw new BadRequestException("그림으로 만든 캐릭터만 원화를 고칠 수 있어요.");
+            if (baseIndex < 0 || baseIndex >= json.readKeys(job.getGoldenShotKeysJson()).size()) {
+                throw new BadRequestException("잘못된 원화 선택입니다.");
+            }
+            User user = findUser(username);
+            job.chargeEnergy(user.consumeEnergy(props.energy().goldenReroll()));
+            userRepository.save(user);
+            Map<String, String> scratch = json.readScratch(job.getExternalJobsJson());
+            scratch.put(ReferenceGoldenService.FIX_ADJUSTMENTS_KEY, writeAdjustments(adj));
+            job.updateExternalJobs(json.writeScratch(scratch));
+            job.restartGoldenGeneration();
+        });
+        cacheService.evictUserProfile(username);
+        referenceGoldenService.runFix(jobId, baseIndex);
+    }
+
+    private String writeAdjustments(UgcDtos.ReferenceAdjustments adj) {
+        if (adj == null) return null;
+        try {
+            return objectMapper.writeValueAsString(adj);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

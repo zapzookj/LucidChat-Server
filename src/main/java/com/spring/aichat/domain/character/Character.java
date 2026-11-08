@@ -366,6 +366,17 @@ public class Character {
     @Column(name = "appearance_tags", columnDefinition = "TEXT")
     private String appearanceTags;
 
+    /**
+     * [V41 · docs/56 §10] 그림(레퍼런스) 방식으로 만든 UGC 캐릭터면 그 그림 id. null=글 방식·공식.
+     * 그림 방식 캐릭터는 태그 역추출 재현율 한계(docs/56 §3)로 실시간 장면 일러를 잠근다.
+     */
+    @Column(name = "reference_image_id")
+    private Long referenceImageId;
+
+    public boolean isReferenceBuilt() { return referenceImageId != null; }
+
+    public void markReferenceBuilt(Long referenceImageId) { this.referenceImageId = referenceImageId; }
+
     /** 성격·무드 태그 CSV (영문) — 이미지 positive 무드 보조. 프로필 노출용 moodTags(한글)와 별개. */
     @Column(name = "persona_tags", columnDefinition = "TEXT")
     private String personaTags;

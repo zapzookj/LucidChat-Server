@@ -50,6 +50,8 @@ public class UgcWorkflowFactory {
     private static final String WF2_PATH = "workflows_json/wf2_refine.json";
     private static final String NEUTRAL_PATH = "workflows_json/wf2_neutral_refine.json";
     private static final String WF3_PATH = "workflows_json/wf3_rembg.json";
+    /** [docs/56 §10] 그림 방식 원화의 정체성 태그 역추출 — 워커 WD14 태거 노드(텍스트 출력 패치 필요). */
+    private static final String TAGGER_PATH = "workflows_json/wf_tagger.json";
 
     private final ObjectMapper objectMapper;
     private final UgcPipelineProperties props;
@@ -58,6 +60,7 @@ public class UgcWorkflowFactory {
     private JsonNode wf1Template;
     private JsonNode wf2Template;
     private JsonNode wf3Template;
+    private JsonNode taggerTemplate;
     private JsonNode neutralTemplate;
 
     @PostConstruct
@@ -65,6 +68,7 @@ public class UgcWorkflowFactory {
         wf1Template = load(WF1_PATH);
         wf2Template = load(WF2_PATH);
         wf3Template = load(WF3_PATH);
+        taggerTemplate = load(TAGGER_PATH);
         neutralTemplate = load(NEUTRAL_PATH);
         for (String node : java.util.List.of("11", "17", "24")) requireInput(neutralTemplate, NEUTRAL_PATH, node, "seed");
         requireInput(neutralTemplate, NEUTRAL_PATH, "21", "text");
@@ -99,6 +103,8 @@ public class UgcWorkflowFactory {
 
         requireInput(wf3Template, WF3_PATH, "1", "image");
         requireInput(wf3Template, WF3_PATH, "23", "filename_prefix");
+        requireInput(taggerTemplate, TAGGER_PATH, "1", "image");
+        requireLink(taggerTemplate, TAGGER_PATH, "2", "image", "1");
 
         // [2026-08-04 남캐] Male LoRA 체인 앵커(detail LoRA 노드 2) 실존 검증 — 템플릿 드리프트 시 기동 실패
         requireInput(wf1Template, WF1_PATH, DETAIL_LORA_NODE_ID, "lora_name");
@@ -213,6 +219,13 @@ public class UgcWorkflowFactory {
 
     public String neutralHandPositive() {
         return neutralTemplate.path("23").path("inputs").path("text").asText();
+    }
+
+    /** [docs/56 §10] 태거 — 입력 이미지 1장 → output.texts[0].tags[0] (쉼표 구분 danbooru 태그, 괄호 이스케이프). */
+    public ObjectNode buildTagger(String inputImageName) {
+        ObjectNode wf = taggerTemplate.deepCopy();
+        inputs(wf, "1").put("image", inputImageName);
+        return wf;
     }
 
     public ObjectNode buildCutout(String inputImageName, String filenamePrefix) {

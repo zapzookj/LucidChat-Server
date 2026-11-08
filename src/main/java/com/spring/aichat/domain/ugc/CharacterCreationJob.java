@@ -206,6 +206,26 @@ public class CharacterCreationJob {
         this.requestedDifficulty = difficulty;
     }
 
+    /**
+     * [V41 · docs/56 §10] 그림(레퍼런스) 방식 잡 — 올린 그림 id. null=글 방식.
+     * 원화는 이 그림을 GPT Image 2.5로 다시 그려 만들고, 외형 태그는 후보마다 태거로 역추출한다.
+     */
+    @Column(name = "reference_image_id")
+    private Long referenceImageId;
+
+    /** 그림 방식 조정값(JSON — {@code UgcDtos.ReferenceAdjustments}). 다시 뽑기 때 갱신된다. */
+    @Column(name = "adjustments_json", columnDefinition = "TEXT")
+    private String adjustmentsJson;
+
+    public boolean usesReference() { return referenceImageId != null; }
+
+    public void assignReference(Long referenceImageId, String adjustmentsJson) {
+        this.referenceImageId = referenceImageId;
+        this.adjustmentsJson = adjustmentsJson;
+    }
+
+    public void updateAdjustments(String adjustmentsJson) { this.adjustmentsJson = adjustmentsJson; }
+
     /** @param charge 시작 단계 차감의 free/paid 분할 — {@code User.consumeEnergy}의 반환값 */
     public static CharacterCreationJob start(Long userId, String requestedName,
                                              String conceptInputRaw, EnergySplit charge) {

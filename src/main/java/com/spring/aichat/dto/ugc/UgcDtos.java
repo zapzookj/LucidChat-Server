@@ -26,7 +26,21 @@ public final class UgcDtos {
                                        /** [남캐] FEMALE(기본)/MALE — MALE은 ugc.modes.male-builder-enabled 게이트 */
                                        String gender,
                                        /** [2026-08-05 난이도] EASY/NORMAL/HARD/EXTREME — null=미지정(NORMAL 폴백 계약) */
-                                       String difficulty) {}
+                                       String difficulty,
+                                       /** [docs/56 §10 그림 방식] 업로드·검사를 통과한 그림 id — null=글 방식. 지정 시 appearance는 무시된다. */
+                                       Long referenceId,
+                                       /** [그림 방식] 복장·체형 조정 (선택) */
+                                       ReferenceAdjustments adjustments) {}
+
+    /**
+     * [docs/56 §10 그림 방식] 올린 그림 위에 얹는 조정값 — 전부 선택. null·"keep"=그대로.
+     * outfit: keep|maid|uniform|suit|casual|custom(outfitText 필수) · body: keep|slim|curvy · bust: keep|small|large.
+     * extra: 자유 요청(60자) — 잘못 읽힌 특징 바로잡기 포함. 키(height)는 원화·스탠딩 구도상 보이지 않아 받지 않는다.
+     */
+    public record ReferenceAdjustments(String outfit, String outfitText, String body, String bust, String extra) {}
+
+    /** [그림 방식] "이 그림 고치기" — 고른 원화의 구도를 유지한 채 조정만 다시 그린다(+2E). */
+    public record FixGoldenRequest(ReferenceAdjustments adjustments) {}
 
     /** [세계관 빌더] 완성 캐릭터 세계관 연결/변경 (무료) — 둘 다 null이면 연결 해제. */
     public record WorldLinkRequest(String officialWorldId, Long ugcWorldId) {}
@@ -40,7 +54,9 @@ public final class UgcDtos {
      * [2026-07-21] {@code appearance}: 황금샷 리롤에 한해 외형 지정 동봉 가능(선택 — 외형 전용
      * 재구조화 후 새 프롬프트로 제출). 스탠딩 리롤에서는 무시된다(베이스 원화 고정).
      */
-    public record GoldenShotAction(Integer selectedIndex, Boolean reroll, AppearanceHints appearance) {}
+    public record GoldenShotAction(Integer selectedIndex, Boolean reroll, AppearanceHints appearance,
+                                   /** [그림 방식] 올린 그림에서 다시 뽑기 — 조정값 갱신(선택). 글 방식 잡에서는 무시. */
+                                   ReferenceAdjustments adjustments) {}
 
     /**
      * 프로필 초안 수정 (Stage0 이후 ~ REVIEW_WAIT — 레이턴시 하이딩 편집. null 필드 유지).
@@ -65,7 +81,18 @@ public final class UgcDtos {
 
     public record StartCreationResponse(Long jobId) {}
 
-    public record GoldenShotView(int index, String url) {}
+    /**
+     * @param origin    [그림 방식] TEXT(글 방식 WF-1) | REFERENCE(올린 그림에서 그림) | FIX(고친 그림)
+     * @param fixedFrom origin=FIX일 때 바탕이 된 후보 index, 그 외 null
+     */
+    public record GoldenShotView(int index, String url, String origin, Integer fixedFrom) {}
+
+    /**
+     * [그림 방식] 업로드·검사 결과. verdict: OK | UNCLEAR | MULTIPLE | POLICY.
+     * OK일 때만 features(한국어 특징)·genderGuess(FEMALE|MALE|null)가 채워진다. previewUrl은 소유자용 단기 presigned.
+     */
+    public record ReferenceView(Long referenceId, String verdict, String message,
+                                List<String> features, String genderGuess, String previewUrl) {}
 
     /**
      * 감정 컷 뷰 — status: DERIVING/REFINING/READY/CUTTING/DONE/FAILED.
@@ -132,7 +159,13 @@ public final class UgcDtos {
         Long characterId,
         LocalDateTime expiresAt,
         List<CharacterExpression> expressionCatalog,
-        Integer expressionPipelineVersion
+        Integer expressionPipelineVersion,
+        /** [그림 방식] 그림으로 만드는 잡인가 — URL 유무와 무관한 고정 판정(원본 정리 후에도 true). */
+        boolean referenceMode,
+        /** [그림 방식] 올린 그림 — 소유자용 단기 presigned. 글 방식 잡은 null. */
+        String referenceImageUrl,
+        /** [그림 방식] 현재 조정값(다시 뽑기 때 갱신). 글 방식 잡은 null. */
+        ReferenceAdjustments adjustments
     ) {}
 
     /** 내 UGC 캐릭터 카드 (상태 뱃지: visibility × secretReviewStatus). */

@@ -49,7 +49,7 @@ class IllustrationPromptPersistenceTest {
         job=CharacterCreationJob.start(1L,"이름","컨셉",EnergySplit.of(0,0));ReflectionTestUtils.setField(job,"id",7L);
         job.applyStage0(json.writeConcept(latest),"light gray");
         when(jobs.findByIdForUpdate(7L)).thenReturn(Optional.of(job));
-        service=new CharacterCreationService(jobs,users,null,props,mock(UgcModerationService.class),worker,json,
+        service=new CharacterCreationService(jobs,users,null,props,mock(UgcModerationService.class),worker,null,null,null,json,
             mock(RedisCacheService.class),tx,null);
     }
     @Test void roundTripAndEmotionCopyPreserveCompletePairWhileLegacyStaysAbsent() {
@@ -107,7 +107,7 @@ class IllustrationPromptPersistenceTest {
         when(character.isUgc()).thenReturn(true);when(character.getId()).thenReturn(77L);
         var characters=mock(CharacterRepository.class);when(characters.findById(77L)).thenReturn(Optional.of(character));
         when(jobs.findByCharacterId(77L)).thenReturn(Optional.of(job));
-        var admin=new AdminUgcReviewService(characters,null,null,null,null,null,null,jobs,json,assembler,factory);
+        var admin=new AdminUgcReviewService(characters,null,null,null,null,null,null,jobs,json,assembler,factory,null,new com.spring.aichat.config.UgcPipelineProperties(null,null,null,null,null,null,null,null));
         var inspection=admin.prompts(77L);
         assertThat(inspection.goldenShotPositive()).isEqualTo(latestPrompt.positivePrompt());
         assertThat(inspection.goldenShotNegative()).isEqualTo(latestPrompt.negativePrompt());

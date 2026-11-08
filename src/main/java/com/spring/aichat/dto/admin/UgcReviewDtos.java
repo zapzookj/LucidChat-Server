@@ -127,6 +127,10 @@ public final class UgcReviewDtos {
         /** Qwen 공통 네거티브 */
         String qwenNegative,
         String neutralFacePositive,
-        String neutralHandPositive
+        String neutralHandPositive,
+        /** [docs/56 §10] 그림 방식 캐릭터의 올린 원본 그림(심사자 IP 확인용, 30분 presigned). 글 방식·정리됨은 null. */
+        String referenceImageUrl,
+        /** [2026-11-06] 스탠딩 편집 모델 — gpt | qwen (ugc.standing.editor 실값). 위 패스1·2 프롬프트의 실행 모델. */
+        String standingEditor
     ) {}
 }

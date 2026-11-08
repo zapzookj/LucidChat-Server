@@ -94,6 +94,7 @@ public class UgcJobScheduler {
     private final UgcWorldPipelineWorker worldWorker;
     private final UgcJobJson json;
     private final UgcPipelineProperties props;
+    private final com.spring.aichat.service.ugc.ReferenceImageService referenceImageService;
 
     /** webhook 유실 대비 폴링 폴백 — 미결 RunPod 잡만 재확인. */
     @Scheduled(fixedRate = 60 * 1000)
@@ -133,6 +134,13 @@ public class UgcJobScheduler {
     }
 
     /** *_WAIT 방치 만료 — 무환불 종결. */
+    /** [docs/56 §10] 그림 방식 — 캐릭터로 이어지지 않은 업로드 그림 7일 보관 후 정리 (1시간 주기). */
+    @Scheduled(fixedRate = 60 * 60 * 1000, initialDelay = 10 * 60 * 1000)
+    public void cleanupOrphanReferences() {
+        int cleaned = referenceImageService.cleanupOrphans();
+        if (cleaned > 0) log.info("[UGC-REF] 미사용 그림 정리: {}건", cleaned);
+    }
+
     @Scheduled(fixedRate = 10 * 60 * 1000)
     public void expireAbandonedWaits() {
         List<CharacterCreationJob> expired =

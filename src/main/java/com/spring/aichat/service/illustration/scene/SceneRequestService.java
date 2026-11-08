@@ -73,9 +73,29 @@ public class SceneRequestService {
         boolean ready = renderService.ready();
         Boolean alreadyDrawn = null;
         if (ready && roomId != null) {
+            // [docs/56 §10] 그림 방식 캐릭터가 있는 방은 장면 일러 잠금 — FAB 미노출(enabled=false)
+            if (castHasReferenceCharacter(roomId)) {
+                return new SceneAvailability(false, props.energyCostOrDefault(), null);
+            }
             alreadyDrawn = manualAlreadyDrawn(roomId);
         }
         return new SceneAvailability(ready, props.energyCostOrDefault(), alreadyDrawn);
+    }
+
+    /**
+     * [docs/56 §10] 그림(레퍼런스) 방식 캐릭터 포함 여부 — 태그 역추출 재현율 한계(docs/56 §3)로 장면 일러를 잠근다.
+     * 스토리 방은 현재 위치 프레즌스 기준(캐스트 해석과 같은 축), 그 외는 방 캐릭터.
+     */
+    private boolean castHasReferenceCharacter(Long roomId) {
+        return chatRoomRepository.findWithMemberAndCharacterById(roomId).map(room -> {
+            if (room.getChatMode() == ChatMode.STORY && (room.getWorld() != null || room.getUgcWorldId() != null)) {
+                List<Long> presentIds = presenceRepository
+                    .findByChatRoom_IdAndCurrentLocationKey(room.getId(), room.getCurrentUserLocationKey())
+                    .stream().map(CharacterPresence::getCharacterId).toList();
+                return characterRepository.findAllById(presentIds).stream().anyMatch(Character::isReferenceBuilt);
+            }
+            return room.getCharacter() != null && room.getCharacter().isReferenceBuilt();
+        }).orElse(false);
     }
 
     /**
@@ -123,6 +143,9 @@ public class SceneRequestService {
         assertUgcWorldPlayable(room, user.getId());
 
         List<Character> cast = resolveCast(room, user.getId());
+        if (cast.stream().anyMatch(Character::isReferenceBuilt)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "그림으로 만든 캐릭터는 장면 일러스트를 지원하지 않아요.");
+        }
 
         // ── 2. 방 단위 락 + 인플라이트 가드 — 방당 동시 1렌더 (과금 전 차단) ──
         // [리뷰픽스 TOCTOU] 행 조회 가드만으로는 '가드 통과 → 디렉터 LLM(수 초) → 행 생성' 창에서

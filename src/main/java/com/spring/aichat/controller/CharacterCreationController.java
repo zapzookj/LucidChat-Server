@@ -35,6 +35,8 @@ import java.util.Map;
  * GET    /api/v1/ugc/characters/explore?cursor=&limit=   공개 UGC 탐색 피드
  * GET    /api/v1/ugc/characters/{jobId}                  잡 상태 (프런트 2~3초 폴링)
  * POST   /api/v1/ugc/characters/{jobId}/golden-shot      {selectedIndex} 선택(스탠딩 진입 4 차감) | {reroll:true} 리롤(2)
+ * POST   /api/v1/ugc/characters/{jobId}/golden-shot/{index}/fix   [그림 방식] 이 그림 고치기 {adjustments} (2)
+ * POST   /api/v1/ugc/references                          [그림 방식] 그림 업로드·검사 (multipart file, 무과금)
  * POST   /api/v1/ugc/characters/{jobId}/emotions/{tag}/reroll   개별 리롤(2 · FAILED 컷은 무료)
  * POST   /api/v1/ugc/characters/{jobId}/confirm          검수 확정(마무리 2 차감) → 누끼·바인딩
  * DELETE /api/v1/ugc/characters/{jobId}                  중도 포기 (무환불)
@@ -56,6 +58,8 @@ public class CharacterCreationController {
     private final UgcAssetService assetService;
     private final UgcPipelineProperties props;
     private final ApiRateLimiter rateLimiter;
+    private final com.spring.aichat.service.ugc.ReferenceGoldenService referenceGoldenService;  // [docs/56 §10]
+    private final com.spring.aichat.domain.ugc.UgcReferenceImageRepository referenceRepository;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  위저드
@@ -69,7 +73,8 @@ public class CharacterCreationController {
         guardRate(authentication);
         Long jobId = creationService.startCreation(
             authentication.getName(), request.name(), request.concept(), request.appearance(),
-            request.officialWorldId(), request.ugcWorldId(), request.gender(), request.difficulty());
+            request.officialWorldId(), request.ugcWorldId(), request.gender(), request.difficulty(),
+            request.referenceId(), request.adjustments());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
             .body(new UgcDtos.StartCreationResponse(jobId));
     }
@@ -91,12 +96,25 @@ public class CharacterCreationController {
     ) {
         guardRate(authentication);
         if (Boolean.TRUE.equals(action.reroll())) {
-            creationService.rerollGoldenShots(authentication.getName(), jobId, action.appearance());
+            creationService.rerollGoldenShots(authentication.getName(), jobId, action.appearance(), action.adjustments());
         } else if (action.selectedIndex() != null) {
             creationService.selectGoldenShot(authentication.getName(), jobId, action.selectedIndex());
         } else {
             throw new BadRequestException("selectedIndex 또는 reroll 중 하나가 필요합니다.");
         }
+        return ResponseEntity.ok().build();
+    }
+
+    /** [docs/56 §10 그림 방식] 이 그림 고치기 — 고른 원화의 구도를 유지한 채 조정만 다시 그린 후보 1장 추가. */
+    @PostMapping("/{jobId:\\d+}/golden-shot/{index:\\d+}/fix")
+    public ResponseEntity<Void> fixGoldenShot(
+        @PathVariable Long jobId,
+        @PathVariable int index,
+        @RequestBody UgcDtos.FixGoldenRequest request,
+        Authentication authentication
+    ) {
+        guardRate(authentication);
+        creationService.fixGoldenShot(authentication.getName(), jobId, index, request == null ? null : request.adjustments());
         return ResponseEntity.ok().build();
     }
 
@@ -266,8 +284,12 @@ public class CharacterCreationController {
     private UgcDtos.CreationJobView toView(CharacterCreationJob job) {
         List<String> goldenKeys = json.readKeys(job.getGoldenShotKeysJson());
         List<UgcDtos.GoldenShotView> goldenShots = new java.util.ArrayList<>();
+        List<com.spring.aichat.service.ugc.ReferenceGoldenService.Origin> origins =
+            job.usesReference() ? referenceGoldenService.origins(job) : List.of();
         for (int i = 0; i < goldenKeys.size(); i++) {
-            goldenShots.add(new UgcDtos.GoldenShotView(i, assetService.publicUrl(goldenKeys.get(i))));
+            var o = i < origins.size() ? origins.get(i) : null;
+            goldenShots.add(new UgcDtos.GoldenShotView(i, assetService.publicUrl(goldenKeys.get(i)),
+                o == null ? "TEXT" : o.origin(), o == null ? null : o.fixedFrom()));
         }
 
         List<com.spring.aichat.dto.ugc.BaseCandidate> candidates = json.readBaseCandidates(job.getBaseCandidatesJson());
@@ -325,8 +347,20 @@ public class CharacterCreationController {
             job.getCharacterId(),
             job.getExpiresAt(),
             ExpressionCatalog.read(job.getExpressionCatalogJson()),
-            job.getExpressionPipelineVersion()
+            job.getExpressionPipelineVersion(),
+            // [docs/56 §10 그림 방식] 올린 그림(소유자 전용 단기 presigned — 공개 URL 비노출 원칙)·조정값
+            job.usesReference(),
+            referenceUrl(job),
+            job.usesReference() ? referenceGoldenService.adjustments(job) : null
         );
+    }
+
+    private String referenceUrl(CharacterCreationJob job) {
+        if (!job.usesReference()) return null;
+        return referenceRepository.findById(job.getReferenceImageId())
+            .filter(r -> r.getDeletedAt() == null)
+            .map(r -> assetService.presignGet(r.getStorageKey(), java.time.Duration.ofMinutes(30)))
+            .orElse(null);
     }
 
     private String stepHint(CharacterCreationJob job) {

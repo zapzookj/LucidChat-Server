@@ -1,0 +1,29 @@
+{
+  "1": {
+    "inputs": {
+      "image": "PLACEHOLDER_INPUT.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Golden shot (input)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "model": "wd-eva02-large-tagger-v3",
+      "threshold": 0.35,
+      "character_threshold": 1.0,
+      "replace_underscore": true,
+      "trailing_comma": false,
+      "exclude_tags": "",
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "WD14Tagger|pysssss",
+    "_meta": {
+      "title": "WD14 Tagger (identity tags)"
+    }
+  }
+}

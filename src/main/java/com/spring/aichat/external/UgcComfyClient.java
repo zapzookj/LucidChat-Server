@@ -147,6 +147,37 @@ public class UgcComfyClient {
         }
     }
 
+    /**
+     * [docs/56 §10] 태거 잡 상태 — 워커 핸들러 패치(lucid-comfy-worker patches/handler_text_outputs.py)가
+     * WD14Tagger ui.tags를 {@code output.texts[] = {node_id, tags:[...]}}로 돌려준다. 이미지 잡과 달리 웹훅 없이 폴링한다.
+     *
+     * @return status는 {@link JobStatus}와 같은 어휘. COMPLETED일 때 tags = 노드 출력 문자열들(이미지 1장당 1개).
+     */
+    public TextStatus getTextStatus(String jobId) {
+        requireConfigured();
+        try {
+            JsonNode resp = objectMapper.readTree(restClient.get()
+                .uri(props.runpod().statusUrl(jobId)).retrieve().body(String.class));
+            String status = resp.path("status").asText("UNKNOWN");
+            List<String> tags = new ArrayList<>();
+            resp.path("output").path("texts").forEach(t -> t.path("tags").forEach(s -> tags.add(s.asText())));
+            String error = resp.path("output").path("error").asText(resp.path("error").asText(null));
+            return new TextStatus(status, tags, error);
+        } catch (HttpClientErrorException.NotFound e) {
+            return new TextStatus(JobStatus.NOT_FOUND, List.of(), "외부 잡 결과 소실(404)");
+        } catch (Exception e) {
+            return new TextStatus(JobStatus.TRANSIENT_ERROR, List.of(), e.getMessage());
+        }
+    }
+
+    public record TextStatus(String status, List<String> tags, String error) {
+        public boolean completed() { return "COMPLETED".equalsIgnoreCase(status); }
+        public boolean failed() {
+            return "FAILED".equalsIgnoreCase(status) || "CANCELLED".equalsIgnoreCase(status)
+                || "TIMED_OUT".equalsIgnoreCase(status) || JobStatus.NOT_FOUND.equalsIgnoreCase(status);
+        }
+    }
+
     public boolean health() {
         requireConfigured();
         try {

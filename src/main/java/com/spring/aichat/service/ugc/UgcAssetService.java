@@ -201,6 +201,33 @@ public class UgcAssetService {
         }
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [docs/56 §10] 그림 방식 — 유저가 올린 그림 (공개 URL 비노출)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    private static final String REFERENCE_PREFIX = "ugc/references/";
+
+    /**
+     * 재인코딩된 레퍼런스 PNG 저장 — 키는 전체 UUID(추측 불가). 프런트에는 presigned로만 내보내고
+     * {@link #publicUrl}을 쓰지 않는다. CDN 캐시를 남기지 않도록 private 캐시 헤더.
+     */
+    public String storeReference(Long userId, byte[] png) {
+        String key = REFERENCE_PREFIX + userId + "/" + UUID.randomUUID() + ".png";
+        s3Client.putObject(PutObjectRequest.builder()
+                .bucket(s3Props.bucketName()).key(key)
+                .contentType("image/png").cacheControl("private, no-store")
+                .build(),
+            RequestBody.fromBytes(png));
+        log.info("[UGC-ASSET] reference stored: user={} ({} bytes)", userId, png.length);
+        return key;
+    }
+
+    /** 보관 정책 정리용 삭제 (멱등 — 없는 키도 성공). */
+    public void delete(String key) {
+        s3Client.deleteObject(software.amazon.awssdk.services.s3.model.DeleteObjectRequest.builder()
+            .bucket(s3Props.bucketName()).key(key).build());
+    }
+
     private void putPng(String key, byte[] bytes) {
         s3Client.putObject(PutObjectRequest.builder()
                 .bucket(s3Props.bucketName())
