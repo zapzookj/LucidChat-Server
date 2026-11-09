@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
  * [2026-11-09] 관리자 공식 세계관 관리 — 조회·편집·활성 토글(소프트 삭제)·시드로 되돌리기.
  *
  * <p>World PK는 {@link WorldId} enum이라 하드 삭제는 의미가 없다(다음 부팅에 시더가 재생성).
- * 세계관 행은 전부 YAML 시드 관리 대상이라, 편집·활성 토글은 시드 잠금을 켠다.
+ * 세계관 행은 전부 YAML 시드 관리 대상이라, 편집·활성 토글한 필드는 필드 단위 시드 잠금에 더해진다.
  * UGC 세계관(UgcWorld)은 범위 밖 — 기존 UGC 심사 화면 소관.
  */
 @Service
@@ -67,7 +67,7 @@ public class AdminWorldService {
         }
         boolean seedManaged = findSeed(w.getId()).isPresent();
         if (!changed.isEmpty()) {
-            if (seedManaged) w.lockSeed();
+            if (seedManaged) w.lockSeedFields(changed);
             auditLogService.record(actor, "WORLD_EDIT", "WORLD", w.getId().name(),
                 AdminCharacterService.clip(String.format("fields=%s seedLocked=%s (사유: %s)",
                     changed, w.isSeedLocked(), req.reason())));
@@ -85,7 +85,7 @@ public class AdminWorldService {
         boolean seedManaged = findSeed(w.getId()).isPresent();
         if (w.isActive() != req.active()) {
             w.setActive(req.active());
-            if (seedManaged) w.lockSeed();
+            if (seedManaged) w.lockSeedFields(List.of("active"));
             auditLogService.record(actor, req.active() ? "WORLD_ACTIVATE" : "WORLD_DEACTIVATE", "WORLD",
                 w.getId().name(), AdminCharacterService.clip(String.format("active=%s seedLocked=%s (사유: %s)",
                     w.isActive(), w.isSeedLocked(), req.reason())));

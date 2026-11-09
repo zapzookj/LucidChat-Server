@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
  * [2026-11-09] 백오피스 콘텐츠 RUD — 캐릭터·공식 세계관 상세/편집 DTO.
  *
  * <p>편집 요청은 부분 갱신이다: null 필드는 변경하지 않는다. 화면은 바뀐 필드만 보낸다.
- * {@code seedManaged}=true면 YAML 시드가 관리하는 행이라 편집 시 {@code seedLocked}가 켜진다.
+ * {@code seedManaged}=true면 YAML 시드가 관리하는 행이라, 편집한 필드가 {@code lockedFields}(필드 단위 시드 잠금)에
+ * 더해진다. {@code seedLocked} = 잠긴 필드가 1개 이상.
  */
 public final class AdminContentDtos {
 
@@ -21,7 +22,7 @@ public final class AdminContentDtos {
         Long id, String slug, String source, String visibility, Long ownerUserId,
         String worldId, Long ugcWorldId,
         boolean hidden, boolean storyAvailable, boolean theaterAvailable,
-        boolean seedManaged, boolean seedLocked,
+        boolean seedManaged, boolean seedLocked, java.util.List<String> lockedFields,
         // 편집 가능 필드 (Character.AdminContentEdit와 동일 순서)
         String name, String tagline, String description, String thumbnailUrl, String defaultImageUrl,
         String role, Integer age, String llmModelName, String ttsVoiceId,
@@ -43,7 +44,7 @@ public final class AdminContentDtos {
                 c.getOwnerUserId(),
                 c.getWorldId() != null ? c.getWorldId().name() : null, c.getUgcWorldId(),
                 c.isHidden(), c.isStoryAvailable(), c.isTheaterAvailable(),
-                seedManaged, c.isSeedLocked(),
+                seedManaged, c.isSeedLocked(), java.util.List.copyOf(c.getSeedLockedFieldSet()),
                 c.getName(), c.getTagline(), c.getDescription(), c.getThumbnailUrl(), c.getDefaultImageUrl(),
                 c.getRole(), c.getAge(), c.getLlmModelName(), c.getTtsVoiceId(),
                 c.getHeight(), c.getLikes(), c.getDislikes(), c.getHobby(), c.getMoodTags(), c.getProfileQuote(),
@@ -103,14 +104,16 @@ public final class AdminContentDtos {
     }
 
     public record WorldDetail(
-        String id, boolean active, boolean seedManaged, boolean seedLocked, LocalDateTime createdAt,
+        String id, boolean active, boolean seedManaged, boolean seedLocked, java.util.List<String> lockedFields,
+        LocalDateTime createdAt,
         String displayName, String tagline, String description,
         String heroImageUrl, String thumbnailUrl, String openingNarration,
         String defaultBgm, String moodKeywords, boolean secretAllowed, int displayOrder,
         java.util.List<String> bgmOptions
     ) {
         public static WorldDetail from(World w, boolean seedManaged, java.util.List<String> bgmOptions) {
-            return new WorldDetail(w.getId().name(), w.isActive(), seedManaged, w.isSeedLocked(), w.getCreatedAt(),
+            return new WorldDetail(w.getId().name(), w.isActive(), seedManaged, w.isSeedLocked(),
+                java.util.List.copyOf(w.getSeedLockedFieldSet()), w.getCreatedAt(),
                 w.getDisplayName(), w.getTagline(), w.getDescription(),
                 w.getHeroImageUrl(), w.getThumbnailUrl(), w.getOpeningNarration(),
                 w.getDefaultBgm(), w.getMoodKeywords(), w.isSecretAllowed(), w.getDisplayOrder(),

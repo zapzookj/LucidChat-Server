@@ -24,8 +24,8 @@ import java.util.Optional;
  * <p>삭제는 소프트 삭제(hidden)만 둔다 — 채팅방·스토리 히로인·루틴·Mongo 로그가 캐릭터를 참조한다.
  *
  * <p>[시드 잠금] 공식 캐릭터는 부팅마다 YAML 시드로 덮인다. 시드가 관리하는 필드(콘텐츠 전부 +
- * storyAvailable/theaterAvailable)를 어드민이 바꾸면 {@code seedLocked}를 켜서 시더가 건너뛰게 한다.
- * hidden은 시드 밖이라 잠그지 않는다.
+ * storyAvailable/theaterAvailable)를 어드민이 바꾸면 <b>그 필드만</b> 잠가 시더가 보존하게 한다(나머지 필드는
+ * 계속 YAML을 따른다). hidden은 시드 밖이라 잠그지 않는다.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,15 +50,16 @@ public class AdminCharacterService {
     @Transactional
     public CharacterAdminResponse updateVisibility(String actor, Long id, CharacterVisibilityRequest req) {
         Character c = load(id);
-        boolean seedFieldChanged =
-            (req.storyAvailable() != null && req.storyAvailable() != c.isStoryAvailable())
-                || (req.theaterAvailable() != null && req.theaterAvailable() != c.isTheaterAvailable());
+        // story/theater는 시드가 덮는 필드다 — 바뀐 필드만 잠근다(hidden은 시드 밖)
+        List<String> seedFieldsChanged = new java.util.ArrayList<>();
+        if (req.storyAvailable() != null && req.storyAvailable() != c.isStoryAvailable()) seedFieldsChanged.add("storyAvailable");
+        if (req.theaterAvailable() != null && req.theaterAvailable() != c.isTheaterAvailable()) seedFieldsChanged.add("theaterAvailable");
+        boolean seedFieldChanged = !seedFieldsChanged.isEmpty();
 
         if (req.hidden() != null) c.setHidden(req.hidden());
         if (req.storyAvailable() != null) c.setStoryAvailable(req.storyAvailable());
         if (req.theaterAvailable() != null) c.setTheaterAvailable(req.theaterAvailable());
-        // story/theater 토글은 시드가 덮는 필드다 — 잠그지 않으면 다음 배포에 원복된다
-        if (seedFieldChanged && findSeed(c).isPresent()) c.lockSeed();
+        if (seedFieldChanged && findSeed(c).isPresent()) c.lockSeedFields(seedFieldsChanged);
 
         auditLogService.record(actor, "CHARACTER_VISIBILITY", "CHARACTER", String.valueOf(id),
             clip(String.format("hidden=%s story=%s theater=%s seedLocked=%s (사유: %s)",
@@ -78,7 +79,7 @@ public class AdminCharacterService {
         }
         boolean seedManaged = findSeed(c).isPresent();
         if (!changed.isEmpty()) {
-            if (seedManaged) c.lockSeed();
+            if (seedManaged) c.lockSeedFields(changed);
             auditLogService.record(actor, "CHARACTER_EDIT", "CHARACTER", String.valueOf(id),
                 clip(String.format("fields=%s seedLocked=%s (사유: %s)", changed, c.isSeedLocked(), req.reason())));
         }

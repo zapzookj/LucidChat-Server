@@ -1,5 +1,6 @@
 package com.spring.aichat.config;
 
+import com.spring.aichat.domain.common.SeedLocks;
 import com.spring.aichat.domain.character.Character;
 import com.spring.aichat.domain.character.CharacterRepository;
 import com.spring.aichat.domain.enums.Location;
@@ -61,12 +62,14 @@ public class CharacterSeeder {
             characterRepository.findBySlug(seed.slug())
                 .ifPresentOrElse(
                     existing -> {
-                        if (existing.isSeedLocked()) {
-                            // [V42 시드 잠금] 어드민 편집본 보존 — 시드 반영은 어드민 '시드로 되돌리기'로만
-                            log.warn("🔒 [SEED] Character seed-locked by admin edit, skip: {} (slug={})",
-                                existing.getName(), seed.slug());
-                        } else if (updateExisting) {
-                            existing.applySeed(seed);
+                        if (updateExisting) {
+                            // [V42 필드 단위 시드 잠금] 어드민이 편집한 필드만 보존하고 나머지는 시드를 따른다
+                            var locked = existing.getSeedLockedFieldSet();
+                            SeedLocks.applyPreservingLocked(existing, locked, () -> existing.applySeed(seed));
+                            if (!locked.isEmpty()) {
+                                log.warn("🔒 [SEED] Character {} keeps admin-locked fields {} (slug={})",
+                                    existing.getName(), locked, seed.slug());
+                            }
                             // [Fix 2026-07-24] UPDATE 경로 영속화 버그: seedAllCharacters()가 @Bean 람다에서
                             //   자기호출되어 @Transactional이 우회됨 → 트랜잭션/영속 컨텍스트 없이 detached 엔티티라
                             //   dirty-checking이 안 돌아 기존 캐릭터의 필드 변경(예: 신설 프로필 필드)이 유실됐다.

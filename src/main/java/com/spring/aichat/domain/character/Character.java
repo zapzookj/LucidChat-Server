@@ -243,12 +243,12 @@ public class Character {
     private boolean hidden = false;
 
     /**
-     * [V42 · 2026-11-09] 시드 잠금 — 어드민이 시드 관리 필드를 편집하면 true.
-     * true인 행은 {@code CharacterSeeder}가 갱신하지 않는다(부팅마다 YAML로 덮이는 것 방지).
-     * 어드민 '시드로 되돌리기'가 시드 재적용 후 false로 되돌린다.
+     * [V42 · 2026-11-09] 필드 단위 시드 잠금 — 어드민이 편집한 엔티티 필드명 CSV (null = 잠금 없음).
+     * {@code CharacterSeeder}는 시드를 적용하되 이 필드들만 보존한다({@link com.spring.aichat.domain.common.SeedLocks}).
+     * 어드민 '시드로 되돌리기'가 시드 재적용 후 비운다.
      */
-    @Column(name = "seed_locked", nullable = false)
-    private boolean seedLocked = false;
+    @Column(name = "seed_locked_fields", columnDefinition = "TEXT")
+    private String seedLockedFields;
 
     /**
      * 영역 장소 — Theater의 Act 초입 장소 선택 분기에서 사용
@@ -714,8 +714,12 @@ public class Character {
     public void setHidden(boolean hidden) { this.hidden = hidden; }
     public void setStoryAvailable(boolean storyAvailable) { this.storyAvailable = storyAvailable; }
     public void setTheaterAvailable(boolean theaterAvailable) { this.theaterAvailable = theaterAvailable; }
-    public void lockSeed() { this.seedLocked = true; }
-    public void unlockSeed() { this.seedLocked = false; }
+    public java.util.Set<String> getSeedLockedFieldSet() { return com.spring.aichat.domain.common.SeedLocks.parse(seedLockedFields); }
+    public boolean isSeedLocked() { return !getSeedLockedFieldSet().isEmpty(); }
+    public void lockSeedFields(java.util.Collection<String> fields) {
+        this.seedLockedFields = com.spring.aichat.domain.common.SeedLocks.merge(seedLockedFields, fields);
+    }
+    public void unlockSeed() { this.seedLockedFields = null; }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     //  [2026-11-09 백오피스 콘텐츠 편집] 부분 갱신 — null 필드는 변경 없음
@@ -764,7 +768,10 @@ public class Character {
         hobby = editText(changed, "hobby", hobby, e.hobby(), 200, false);
         moodTags = editText(changed, "moodTags", moodTags, e.moodTags(), 200, false);
         profileQuote = editText(changed, "profileQuote", profileQuote, e.profileQuote(), 200, false);
-        if (e.difficulty() != null) {
+        if (e.difficulty() != null && e.difficulty().isBlank()) {
+            // 공란 = 미지정(null → getDifficultyOrDefault()가 NORMAL) — nullable 컬럼이라 비우기 허용
+            if (difficulty != null) { difficulty = null; changed.add("difficulty"); }
+        } else if (e.difficulty() != null) {
             var parsed = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(e.difficulty());
             if (parsed == null) throw new IllegalArgumentException("difficulty: 알 수 없는 값 '" + e.difficulty() + "'");
             if (parsed != difficulty) { difficulty = parsed; changed.add("difficulty"); }

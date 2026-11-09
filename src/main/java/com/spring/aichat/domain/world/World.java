@@ -89,11 +89,11 @@ public class World {
     private int displayOrder = 0;
 
     /**
-     * [V42 · 2026-11-09] 시드 잠금 — 어드민이 편집·활성 토글하면 true.
-     * true인 행은 {@code WorldSeeder}가 갱신하지 않는다. '시드로 되돌리기'가 false로 되돌린다.
+     * [V42 · 2026-11-09] 필드 단위 시드 잠금 — 어드민이 편집·활성 토글한 엔티티 필드명 CSV (null = 잠금 없음).
+     * {@code WorldSeeder}는 시드를 적용하되 이 필드들만 보존한다. '시드로 되돌리기'가 비운다.
      */
-    @Column(name = "seed_locked", nullable = false)
-    private boolean seedLocked = false;
+    @Column(name = "seed_locked_fields", columnDefinition = "TEXT")
+    private String seedLockedFields;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -146,8 +146,12 @@ public class World {
         this.active = active;
     }
 
-    public void lockSeed() { this.seedLocked = true; }
-    public void unlockSeed() { this.seedLocked = false; }
+    public java.util.Set<String> getSeedLockedFieldSet() { return com.spring.aichat.domain.common.SeedLocks.parse(seedLockedFields); }
+    public boolean isSeedLocked() { return !getSeedLockedFieldSet().isEmpty(); }
+    public void lockSeedFields(java.util.Collection<String> fields) {
+        this.seedLockedFields = com.spring.aichat.domain.common.SeedLocks.merge(seedLockedFields, fields);
+    }
+    public void unlockSeed() { this.seedLockedFields = null; }
 
     /**
      * 시드 1건을 기존 행에 적용 — WorldSeeder의 UPDATE 경로와 어드민 '시드로 되돌리기'의 단일 구현.

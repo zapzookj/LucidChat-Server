@@ -123,10 +123,10 @@ class AdminContentRudTest {
     // ━━━ 시더가 잠긴 행을 건너뛴다 ━━━
 
     @Test
-    @DisplayName("CharacterSeeder: 잠긴 공식 캐릭터는 시드로 덮지 않는다")
-    void characterSeederSkipsLocked() {
+    @DisplayName("CharacterSeeder: 잠긴 필드만 보존하고 나머지 필드는 시드를 따른다")
+    void characterSeederPreservesOnlyLockedFields() {
         Character c = official("airi");
-        c.lockSeed();
+        c.lockSeedFields(List.of("name"));
         CharacterRepository repo = mock(CharacterRepository.class);
         when(repo.findBySlug("airi")).thenReturn(Optional.of(c));
         CharacterSeeder seeder = new CharacterSeeder(repo,
@@ -135,31 +135,57 @@ class AdminContentRudTest {
 
         seeder.seedAllCharacters();
 
-        assertEquals("아이리", c.getName());
-        verify(repo, never()).save(any());
+        assertEquals("아이리", c.getName());                 // 잠긴 필드 — 어드민 값 유지
+        assertEquals("SEED-SYS", c.getBaseSystemPrompt());   // 안 잠긴 필드 — 시드 반영
+        assertEquals("seed-model", c.getLlmModelName());
+        assertTrue(c.isSeedLocked());                        // 시더는 잠금을 풀지 않는다
+        verify(repo).save(c);
     }
 
     @Test
-    @DisplayName("WorldSeeder: 잠긴 세계관은 건너뛰고, 안 잠긴 세계관은 applySeed로 갱신")
-    void worldSeederRespectsLock() {
+    @DisplayName("WorldSeeder: 잠긴 필드(active·displayName)만 보존, 잠금 해제 후엔 전부 시드로")
+    void worldSeederRespectsFieldLocks() {
         WorldId a = WorldId.values()[0];
-        World locked = world(a);
-        locked.lockSeed();
-        locked.setActive(false);
+        World w = world(a);
+        w.setActive(false);
+        w.lockSeedFields(List.of("active", "displayName"));
         WorldRepository repo = mock(WorldRepository.class);
-        when(repo.findById(a)).thenReturn(Optional.of(locked));
+        when(repo.findById(a)).thenReturn(Optional.of(w));
         WorldSeeder seeder = new WorldSeeder(repo,
             new WorldSeedProperties(List.of(worldSeed(a.name(), "시드이름", null))));
         ReflectionTestUtils.setField(seeder, "updateExisting", true);
 
         seeder.seedAllWorlds();
-        assertEquals("저택", locked.getDisplayName());
-        assertFalse(locked.isActive());
+        assertEquals("저택", w.getDisplayName());
+        assertFalse(w.isActive());
+        assertEquals("", w.getTagline()); // 안 잠긴 필드 — 시드(null→"") 반영
 
-        locked.unlockSeed();
+        w.unlockSeed();
         seeder.seedAllWorlds();
-        assertEquals("시드이름", locked.getDisplayName());
-        assertTrue(locked.isActive()); // active 미지정 시드 = true (시더 관례)
+        assertEquals("시드이름", w.getDisplayName());
+        assertTrue(w.isActive()); // active 미지정 시드 = true (시더 관례)
+    }
+
+    @Test
+    @DisplayName("난이도 공란은 미지정(null)으로 비운다")
+    void difficultyBlankClears() {
+        Character c = official("airi");
+        ReflectionTestUtils.setField(c, "difficulty", com.spring.aichat.domain.enums.CharacterDifficulty.HARD);
+        var edit = new AdminContentDtos.CharacterEditRequest(
+            null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, "",
+            null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, "r").toEdit();
+        assertEquals(List.of("difficulty"), c.applyAdminEdit(edit));
+        assertNull(c.getDifficulty());
+        assertThrows(IllegalArgumentException.class, () -> c.applyAdminEdit(
+            new AdminContentDtos.CharacterEditRequest(
+                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, "WHAT",
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, "r").toEdit()));
     }
 
     // ━━━ 서비스: 잠금 판정·되돌리기 ━━━
@@ -177,6 +203,7 @@ class AdminContentRudTest {
         var detail = svc.edit("admin", 1L, charEditReq("새이름"));
         assertTrue(detail.seedManaged());
         assertTrue(detail.seedLocked());
+        assertEquals(List.of("name"), detail.lockedFields());
         verify(audit).record(eq("admin"), eq("CHARACTER_EDIT"), eq("CHARACTER"), eq("1"), contains("name"));
 
         var result = svc.revertSeed("admin", 1L, "원복");
@@ -213,7 +240,7 @@ class AdminContentRudTest {
         svc.updateVisibility("admin", 1L, new CharacterVisibilityRequest(true, null, null, "숨김"));
         assertFalse(c.isSeedLocked());
         svc.updateVisibility("admin", 1L, new CharacterVisibilityRequest(null, !c.isStoryAvailable(), null, "스토리"));
-        assertTrue(c.isSeedLocked());
+        assertEquals(java.util.Set.of("storyAvailable"), c.getSeedLockedFieldSet());
     }
 
     @Test
@@ -237,6 +264,7 @@ class AdminContentRudTest {
             new WorldSeedProperties(List.of(worldSeed(a.name(), "시드", true))), mock(AuditLogService.class));
 
         var detail = svc.setActive("admin", a.name(), new AdminContentDtos.WorldActiveRequest(false, "중단"));
+        assertEquals(List.of("active"), detail.lockedFields());
         assertFalse(detail.active());
         assertTrue(detail.seedLocked());
         assertThrows(BusinessException.class, () -> svc.detail("NOT_A_WORLD"));

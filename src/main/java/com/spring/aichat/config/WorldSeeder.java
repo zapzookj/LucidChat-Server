@@ -1,5 +1,6 @@
 package com.spring.aichat.config;
 
+import com.spring.aichat.domain.common.SeedLocks;
 import com.spring.aichat.domain.enums.WorldId;
 import com.spring.aichat.domain.world.World;
 import com.spring.aichat.domain.world.WorldRepository;
@@ -94,13 +95,15 @@ public class WorldSeeder {
             // 3) 업서트
             var existing = worldRepository.findById(worldId);
             if (existing.isPresent()) {
-                if (existing.get().isSeedLocked()) {
-                    // [V42 시드 잠금] 어드민 편집본 보존 — 시드 반영은 어드민 '시드로 되돌리기'로만
-                    log.warn("🔒 [WORLD-SEED] World seed-locked by admin edit, skip: {}", worldId);
-                    skipped++;
-                } else if (updateExisting) {
+                if (updateExisting) {
                     World w = existing.get();
-                    w.applySeed(seed); // [2026-11-09] update()+active 적용을 엔티티로 단일화(어드민 되돌리기와 공유)
+                    // [2026-11-09] update()+active 적용을 엔티티로 단일화(어드민 되돌리기와 공유)
+                    // [V42 필드 단위 시드 잠금] 어드민이 편집한 필드만 보존하고 나머지는 시드를 따른다
+                    var locked = w.getSeedLockedFieldSet();
+                    SeedLocks.applyPreservingLocked(w, locked, () -> w.applySeed(seed));
+                    if (!locked.isEmpty()) {
+                        log.warn("🔒 [WORLD-SEED] World {} keeps admin-locked fields {}", worldId, locked);
+                    }
                     worldRepository.save(w); // [Fix 2026-07-24] 자기호출로 @Transactional 우회 → 명시 저장으로 갱신 영속화
                     log.info("🔄 [WORLD-SEED] World updated: {} ({})", displayName, worldId);
                     updated++;
