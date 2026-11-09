@@ -1,6 +1,8 @@
 package com.spring.aichat.controller.admin;
 
+import com.spring.aichat.dto.admin.AdminContentDtos;
 import com.spring.aichat.dto.admin.CharacterAdminResponse;
+import com.spring.aichat.dto.admin.ReasonRequest;
 import com.spring.aichat.dto.admin.CharacterVisibilityRequest;
 import com.spring.aichat.dto.admin.UgcReviewDtos;
 import com.spring.aichat.service.admin.AdminCharacterService;
@@ -40,6 +42,28 @@ public class AdminCharacterController {
                                              @RequestBody CharacterVisibilityRequest req,
                                              Authentication auth) {
         return adminCharacterService.updateVisibility(auth.getName(), id, req);
+    }
+
+    // ━━━ [2026-11-09] 콘텐츠 RUD — 삭제는 visibility(hidden) 소프트 삭제 ━━━
+
+    @GetMapping("/{id:\\d+}")
+    public AdminContentDtos.CharacterDetail detail(@PathVariable Long id) {
+        return adminCharacterService.detail(id);
+    }
+
+    /** 부분 갱신 — null 필드는 변경 없음. 시드 관리 행이면 시드 잠금이 켜진다. */
+    @PatchMapping("/{id:\\d+}")
+    public AdminContentDtos.CharacterDetail edit(@PathVariable Long id,
+                                                 @RequestBody AdminContentDtos.CharacterEditRequest req,
+                                                 Authentication auth) {
+        return adminCharacterService.edit(auth.getName(), id, req);
+    }
+
+    @PostMapping("/{id:\\d+}/revert-seed")
+    public AdminContentDtos.RevertSeedResult revertSeed(@PathVariable Long id,
+                                                        @RequestBody(required = false) ReasonRequest req,
+                                                        Authentication auth) {
+        return adminCharacterService.revertSeed(auth.getName(), id, req == null ? null : req.reason());
     }
 
     // ━━━ [UGC v1] 승인 큐 ━━━

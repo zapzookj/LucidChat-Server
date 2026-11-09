@@ -243,6 +243,14 @@ public class Character {
     private boolean hidden = false;
 
     /**
+     * [V42 · 2026-11-09] 시드 잠금 — 어드민이 시드 관리 필드를 편집하면 true.
+     * true인 행은 {@code CharacterSeeder}가 갱신하지 않는다(부팅마다 YAML로 덮이는 것 방지).
+     * 어드민 '시드로 되돌리기'가 시드 재적용 후 false로 되돌린다.
+     */
+    @Column(name = "seed_locked", nullable = false)
+    private boolean seedLocked = false;
+
+    /**
      * 영역 장소 — Theater의 Act 초입 장소 선택 분기에서 사용
      * 줄 단위 구분: 한 줄 = 하나의 장소
      * 예: "대학교 미술 동아리실\n근처 카페\n자취방"
@@ -706,6 +714,102 @@ public class Character {
     public void setHidden(boolean hidden) { this.hidden = hidden; }
     public void setStoryAvailable(boolean storyAvailable) { this.storyAvailable = storyAvailable; }
     public void setTheaterAvailable(boolean theaterAvailable) { this.theaterAvailable = theaterAvailable; }
+    public void lockSeed() { this.seedLocked = true; }
+    public void unlockSeed() { this.seedLocked = false; }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  [2026-11-09 백오피스 콘텐츠 편집] 부분 갱신 — null 필드는 변경 없음
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //  선택 텍스트의 빈 문자열은 null로 저장한다(E-3 ④.9 — ""가 '값 있음'으로 보이지 않게).
+    //  필수 컬럼(name/baseSystemPrompt/llmModelName)의 빈 값과 컬럼 길이 초과는 거부한다.
+    //  편집 대상 밖: slug(시드 키)·소유/공개/심사 상태(UGC 심사 흐름 소관)·세계관 연결(방 무결성)·
+    //  의상/장소 enum 키 CSV·일러 정체성 태그(이미지 파이프라인 소관).
+
+    public record AdminContentEdit(
+        String name, String tagline, String description, String thumbnailUrl, String defaultImageUrl,
+        String role, Integer age, String llmModelName, String ttsVoiceId,
+        String height, String likes, String dislikes, String hobby, String moodTags, String profileQuote,
+        String difficulty,
+        String baseSystemPrompt, String personality, String personalitySecret, String tone, String toneSecret,
+        String oocExample, String storyBehaviorGuide,
+        String appearance, String clothing, String backstory, String coreValues, String flaws,
+        String speechQuirks, String promotionScenarios, String easterEggDialogue,
+        String introNarration, String firstGreeting,
+        String endingRoleDesc, String endingQuoteHappy, String endingQuoteBad,
+        String homeLocations, String theaterIntroBeat
+    ) {}
+
+    /**
+     * @return 실제로 값이 바뀐 필드명 목록(감사 로그·시드 잠금 판정용)
+     * @throws IllegalArgumentException 필수값 공란·길이 초과·무효 enum
+     */
+    public List<String> applyAdminEdit(AdminContentEdit e) {
+        List<String> changed = new java.util.ArrayList<>();
+        name = editText(changed, "name", name, e.name(), 50, true);
+        tagline = editText(changed, "tagline", tagline, e.tagline(), 100, false);
+        description = editText(changed, "description", description, e.description(), 0, false);
+        thumbnailUrl = editText(changed, "thumbnailUrl", thumbnailUrl, e.thumbnailUrl(), 500, false);
+        defaultImageUrl = editText(changed, "defaultImageUrl", defaultImageUrl, e.defaultImageUrl(), 500, false);
+        role = editText(changed, "role", role, e.role(), 100, false);
+        if (e.age() != null) {
+            if (e.age() < 1 || e.age() > 9999) throw new IllegalArgumentException("age: 1~9999 범위여야 합니다");
+            if (!e.age().equals(age)) { age = e.age(); changed.add("age"); }
+        }
+        llmModelName = editText(changed, "llmModelName", llmModelName, e.llmModelName(), 100, true);
+        ttsVoiceId = editText(changed, "ttsVoiceId", ttsVoiceId, e.ttsVoiceId(), 100, false);
+
+        height = editText(changed, "height", height, e.height(), 30, false);
+        likes = editText(changed, "likes", likes, e.likes(), 200, false);
+        dislikes = editText(changed, "dislikes", dislikes, e.dislikes(), 200, false);
+        hobby = editText(changed, "hobby", hobby, e.hobby(), 200, false);
+        moodTags = editText(changed, "moodTags", moodTags, e.moodTags(), 200, false);
+        profileQuote = editText(changed, "profileQuote", profileQuote, e.profileQuote(), 200, false);
+        if (e.difficulty() != null) {
+            var parsed = com.spring.aichat.domain.enums.CharacterDifficulty.fromStringOrNull(e.difficulty());
+            if (parsed == null) throw new IllegalArgumentException("difficulty: 알 수 없는 값 '" + e.difficulty() + "'");
+            if (parsed != difficulty) { difficulty = parsed; changed.add("difficulty"); }
+        }
+
+        baseSystemPrompt = editText(changed, "baseSystemPrompt", baseSystemPrompt, e.baseSystemPrompt(), 0, true);
+        personality = editText(changed, "personality", personality, e.personality(), 0, false);
+        personalitySecret = editText(changed, "personalitySecret", personalitySecret, e.personalitySecret(), 0, false);
+        tone = editText(changed, "tone", tone, e.tone(), 300, false);
+        toneSecret = editText(changed, "toneSecret", toneSecret, e.toneSecret(), 300, false);
+        oocExample = editText(changed, "oocExample", oocExample, e.oocExample(), 0, false);
+        storyBehaviorGuide = editText(changed, "storyBehaviorGuide", storyBehaviorGuide, e.storyBehaviorGuide(), 0, false);
+
+        appearance = editText(changed, "appearance", appearance, e.appearance(), 0, false);
+        clothing = editText(changed, "clothing", clothing, e.clothing(), 0, false);
+        backstory = editText(changed, "backstory", backstory, e.backstory(), 0, false);
+        coreValues = editText(changed, "coreValues", coreValues, e.coreValues(), 0, false);
+        flaws = editText(changed, "flaws", flaws, e.flaws(), 0, false);
+        speechQuirks = editText(changed, "speechQuirks", speechQuirks, e.speechQuirks(), 0, false);
+        promotionScenarios = editText(changed, "promotionScenarios", promotionScenarios, e.promotionScenarios(), 0, false);
+        easterEggDialogue = editText(changed, "easterEggDialogue", easterEggDialogue, e.easterEggDialogue(), 0, false);
+
+        introNarration = editText(changed, "introNarration", introNarration, e.introNarration(), 0, false);
+        firstGreeting = editText(changed, "firstGreeting", firstGreeting, e.firstGreeting(), 0, false);
+        endingRoleDesc = editText(changed, "endingRoleDesc", endingRoleDesc, e.endingRoleDesc(), 200, false);
+        endingQuoteHappy = editText(changed, "endingQuoteHappy", endingQuoteHappy, e.endingQuoteHappy(), 0, false);
+        endingQuoteBad = editText(changed, "endingQuoteBad", endingQuoteBad, e.endingQuoteBad(), 0, false);
+
+        homeLocations = editText(changed, "homeLocations", homeLocations, e.homeLocations(), 0, false);
+        theaterIntroBeat = editText(changed, "theaterIntroBeat", theaterIntroBeat, e.theaterIntroBeat(), 0, false);
+        return changed;
+    }
+
+    /** @param maxLen 0 = 제한 없음(TEXT) */
+    private static String editText(List<String> changed, String field, String current, String next,
+                                   int maxLen, boolean required) {
+        if (next == null) return current;
+        String normalized = next.isBlank() ? null : next;
+        if (normalized == null && required) throw new IllegalArgumentException(field + ": 비울 수 없습니다");
+        if (normalized != null && maxLen > 0 && normalized.length() > maxLen)
+            throw new IllegalArgumentException(field + ": 최대 " + maxLen + "자입니다 (현재 " + normalized.length() + "자)");
+        if (java.util.Objects.equals(current, normalized)) return current;
+        changed.add(field);
+        return normalized;
+    }
 
     /** 관리 용도: Theater 메타데이터 수동 업데이트 */
     public void updateTheaterMetadata(WorldId worldId, boolean theaterAvailable,

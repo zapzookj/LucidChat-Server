@@ -88,6 +88,13 @@ public class World {
     @Column(name = "display_order", nullable = false)
     private int displayOrder = 0;
 
+    /**
+     * [V42 · 2026-11-09] 시드 잠금 — 어드민이 편집·활성 토글하면 true.
+     * true인 행은 {@code WorldSeeder}가 갱신하지 않는다. '시드로 되돌리기'가 false로 되돌린다.
+     */
+    @Column(name = "seed_locked", nullable = false)
+    private boolean seedLocked = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -137,5 +144,88 @@ public class World {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public void lockSeed() { this.seedLocked = true; }
+    public void unlockSeed() { this.seedLocked = false; }
+
+    /**
+     * 시드 1건을 기존 행에 적용 — WorldSeeder의 UPDATE 경로와 어드민 '시드로 되돌리기'의 단일 구현.
+     * 시더 관례대로 null 텍스트는 ""로, active 미지정은 true로, displayOrder 미지정은 0으로 본다.
+     */
+    public void applySeed(com.spring.aichat.config.WorldSeedProperties.WorldSeed seed) {
+        update(
+            nz(seed.displayName()), nz(seed.tagline()), nz(seed.description()),
+            nz(seed.heroImageUrl()), nz(seed.thumbnailUrl()), nz(seed.openingNarration()),
+            nz(seed.defaultBgm()), nz(seed.moodKeywords()),
+            Boolean.TRUE.equals(seed.secretAllowed()),
+            seed.displayOrder() == null ? 0 : seed.displayOrder());
+        this.active = seed.active() == null || seed.active();
+    }
+
+    private static String nz(String s) { return s == null ? "" : s; }
+
+    // ━━━ [2026-11-09 백오피스 콘텐츠 편집] 부분 갱신 — null 필드는 변경 없음 ━━━
+
+    public record AdminContentEdit(
+        String displayName, String tagline, String description,
+        String heroImageUrl, String thumbnailUrl, String openingNarration,
+        String defaultBgm, String moodKeywords, Boolean secretAllowed, Integer displayOrder
+    ) {}
+
+    /**
+     * @return 값이 바뀐 필드명 목록
+     * @throws IllegalArgumentException displayName 공란·길이 초과·무효 BGM
+     */
+    public java.util.List<String> applyAdminEdit(AdminContentEdit e) {
+        java.util.List<String> changed = new java.util.ArrayList<>();
+        if (e.displayName() != null && e.displayName().isBlank())
+            throw new IllegalArgumentException("displayName: 비울 수 없습니다");
+        String bgm = e.defaultBgm() == null ? null : e.defaultBgm().trim();
+        if (bgm != null && !bgm.isEmpty()) {
+            try {
+                com.spring.aichat.domain.enums.BgmMode.valueOf(bgm);
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException("defaultBgm: 알 수 없는 BGM '" + bgm + "'");
+            }
+        }
+        // 검증을 모두 끝낸 뒤 적용한다 — 중간 실패로 일부 필드만 바뀐 엔티티가 남지 않게
+        checkLen("displayName", e.displayName(), 50);
+        checkLen("tagline", e.tagline(), 200);
+        checkLen("heroImageUrl", e.heroImageUrl(), 500);
+        checkLen("thumbnailUrl", e.thumbnailUrl(), 500);
+        checkLen("moodKeywords", e.moodKeywords(), 200);
+
+        displayName = edit(changed, "displayName", displayName, e.displayName());
+        tagline = edit(changed, "tagline", tagline, e.tagline());
+        description = edit(changed, "description", description, e.description());
+        heroImageUrl = edit(changed, "heroImageUrl", heroImageUrl, e.heroImageUrl());
+        thumbnailUrl = edit(changed, "thumbnailUrl", thumbnailUrl, e.thumbnailUrl());
+        openingNarration = edit(changed, "openingNarration", openingNarration, e.openingNarration());
+        defaultBgm = edit(changed, "defaultBgm", defaultBgm, bgm);
+        moodKeywords = edit(changed, "moodKeywords", moodKeywords, e.moodKeywords());
+        if (e.secretAllowed() != null && e.secretAllowed() != secretAllowed) {
+            secretAllowed = e.secretAllowed();
+            changed.add("secretAllowed");
+        }
+        if (e.displayOrder() != null && e.displayOrder() != displayOrder) {
+            displayOrder = e.displayOrder();
+            changed.add("displayOrder");
+        }
+        return changed;
+    }
+
+    private static void checkLen(String field, String v, int maxLen) {
+        if (v != null && v.length() > maxLen)
+            throw new IllegalArgumentException(field + ": 최대 " + maxLen + "자입니다 (현재 " + v.length() + "자)");
+    }
+
+    /** 시더 관례와 맞춰 빈 값은 ""로 저장한다. */
+    private static String edit(java.util.List<String> changed, String field, String current, String next) {
+        if (next == null) return current;
+        String normalized = next.isBlank() ? "" : next;
+        if (java.util.Objects.equals(current == null ? "" : current, normalized)) return current;
+        changed.add(field);
+        return normalized;
     }
 }

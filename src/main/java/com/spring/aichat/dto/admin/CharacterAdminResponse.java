@@ -21,7 +21,9 @@ public record CharacterAdminResponse(
      * 완비돼 있는데(감사로그·소유자 알림 포함) 화면이 대상을 가려낼 수 없어 부적절 공개 UGC를
      * UI로 내릴 수 없었다. 응답 필드 추가는 순수 가산이라 구 SPA와 호환된다.
      */
-    String visibility
+    String visibility,
+    /** [V42 · 2026-11-09] 어드민 편집으로 시드 갱신이 멈춘 행. 응답 필드 추가는 순수 가산. */
+    boolean seedLocked
 ) {
     public static CharacterAdminResponse from(Character c) {
         return new CharacterAdminResponse(
@@ -29,6 +31,7 @@ public record CharacterAdminResponse(
             c.getWorldId() != null ? c.getWorldId().name() : null,
             c.isStoryAvailable(), c.isTheaterAvailable(), c.isHidden(),
             c.getSource() != null ? c.getSource().name() : null,
-            c.getVisibility() != null ? c.getVisibility().name() : null);
+            c.getVisibility() != null ? c.getVisibility().name() : null,
+            c.isSeedLocked());
     }
 }
