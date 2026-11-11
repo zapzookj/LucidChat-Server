@@ -27,9 +27,9 @@ public final class StoryV2Requests {
         @NotBlank
         String worldId,
 
-        /** 등장 히로인 ID 목록 (1~5명 — [docs/55 결정 ⑥] 상한 3→5. 극장은 별도 3 유지) */
+        /** 등장 히로인 ID 목록 (1~10명 — [docs/55 결정 ⑥] 3→5, [2026-11-12] 5→10. 극장은 별도 3 유지) */
         @NotNull
-        @Size(min = 1, max = 5, message = "히로인은 1~5명 선택해야 합니다.")
+        @Size(min = 1, max = 10, message = "히로인은 1~10명 선택해야 합니다.")
         List<Long> heroineIds,
 
         /** 시작 장소 키 (WorldLocation.locationKey 참조). null이면 World 기본값 */

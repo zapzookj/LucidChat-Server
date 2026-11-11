@@ -48,7 +48,8 @@ import java.util.Set;
 public class UgcWorldService {
 
     static final int CONCEPT_MIN_LENGTH = 30;
-    static final int CONCEPT_MAX_LENGTH = 1000;
+    // [2026-11-12] 컨셉 원문이 곧 lore다 — 입력 상한과 lore 상한은 단일 값
+    static final int CONCEPT_MAX_LENGTH = WorldConceptStructuringService.LORE_MAX_LENGTH;
     // 텍스트 상한은 W0 sanitize와 단일 소스 공유 — LLM 산출·유저 편집 어느 경로로도 우회 불가
     static final int INTRO_MAX_LENGTH = WorldConceptStructuringService.INTRO_MAX_LENGTH;
     /** lore는 시스템 프롬프트에 주입된다 — 캐릭터 정체성 희석 방지 상한 (도그푸딩 #3). */

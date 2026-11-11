@@ -22,7 +22,8 @@ import java.util.Set;
 /**
  * [UGC 세계관 빌더] W0 — 유저 자유 서술을 세계관 구조화 데이터로 변환.
  * {@link ConceptStructuringService}와 동일한 3단 파이프(call → parse → sanitize)·동일 불변 원칙:
- * 유저 텍스트는 여기서 끝나고, 배경/썸네일 프롬프트는 구조화 산출만으로 조립된다.
+ * 유저 텍스트는 이미지 프롬프트로 직결되지 않고, 배경/썸네일 프롬프트는 구조화 산출만으로 조립된다.
+ * 단 [2026-11-12] 세계관 설정 본문(lore)만은 유저 컨셉 원문을 그대로 쓴다(종원 확정 — LLM 요약 폐지).
  *
  * <p>부가 책임: 유저가 W1에서 직접 추가한 장소(backgroundPrompt 없음)의 <b>일괄 프롬프트화</b>
  * ({@link #promptizeLocations}) — 일러 시작 시 워커가 호출한다.
@@ -39,8 +40,10 @@ public class WorldConceptStructuringService {
 
     // [리뷰 픽스] 텍스트 상한 단일 소스 — W0 sanitize와 유저 편집(updateDraft) 검증이 대칭이어야
     // LLM 산출 경로로 상한이 우회되지 않는다. lore 상한은 캐릭터 정체성 희석 방지선(도그푸딩 #3).
+    // [2026-11-12 종원 확정] lore = 유저 컨셉 원문 그대로(LLM 요약 폐지) → 상한을 컨셉 입력 상한(5000)에 맞춘다.
+    // UgcWorldService.CONCEPT_MAX_LENGTH와 같은 값이어야 한다 — 다르면 원문이 sanitize에서 잘린다.
     static final int INTRO_MAX_LENGTH = 500;
-    static final int LORE_MAX_LENGTH = 2000;
+    static final int LORE_MAX_LENGTH = 5000;
     static final int LOCATION_DESC_MAX_LENGTH = 300;
     static final int MOOD_TAG_MAX_LENGTH = 20;
     static final int MOOD_TAGS_MAX_COUNT = 10;
@@ -50,8 +53,7 @@ public class WorldConceptStructuringService {
         규칙:
         - world.name: 한국어 세계관 이름 — 유저가 이름을 지정했다면 반드시 그대로 사용.
         - world.intro: 카드 노출용 소개 1~2문장 (한국어).
-        - world.lore: 채팅 AI의 시스템 프롬프트에 주입될 세계관 설정 본문 (한국어 4~8문장).
-          시대·사회 구조·규칙(마법/기술/금기)·핵심 긴장을 담는다. 지시문·메타 발화·2인칭 호명 금지.
+        - 세계관 설정 본문(lore)은 작성하지 않는다 — 유저 서술 원문이 그대로 본문으로 쓰인다.
         - world.mood_tags: 무드 키워드 3~5개 (짧은 단어 — 예: "몽환적", "네온", "잔혹동화").
         - locations: 정확히 6개 — 이 세계관을 대표하는 서로 다른 장소.
           · location_key: 영문 대문자 SCREAMING_SNAKE_CASE 고유 키 (최대 40자 — 예: "ROOFTOP_GARDEN")
@@ -65,7 +67,7 @@ public class WorldConceptStructuringService {
           서사에 아동·소년기 인물이 등장하는 것 자체(성장담·수련기·과거사·가족사·전쟁고아 등)는
           정상적인 세계관 설정이며 false다. 모호하면 false.
         출력 스키마:
-        {"world":{"name":"...","intro":"...","lore":"...","mood_tags":["..."]},
+        {"world":{"name":"...","intro":"...","mood_tags":["..."]},
          "locations":[{"location_key":"...","display_name":"...","description":"...","background_prompt":"..."}],
          "thumbnail_prompt":"...",
          "moderation":{"minor_signal":false,"reason":""}}
@@ -112,7 +114,7 @@ public class WorldConceptStructuringService {
         }
 
         StructuredWorld world = parse(raw);
-        return sanitize(world, requestedName);
+        return sanitize(world, requestedName, rawInput);
     }
 
     /**
@@ -205,11 +207,14 @@ public class WorldConceptStructuringService {
         }
     }
 
-    /** 필수 필드 검증 + 장소 6개 절삭 + locationKey 정규화·중복 해소 + 유저 지정 이름 우선. */
-    private StructuredWorld sanitize(StructuredWorld w, String requestedName) {
+    /**
+     * 필수 필드 검증 + 장소 6개 절삭 + locationKey 정규화·중복 해소 + 유저 지정 이름 우선.
+     * [2026-11-12] lore는 LLM 산출이 아니라 유저 컨셉 원문(rawInput)을 그대로 쓴다 — LLM이 lore를 내도 무시.
+     */
+    private StructuredWorld sanitize(StructuredWorld w, String requestedName, String rawInput) {
         if (w.world() == null
             || w.world().name() == null || w.world().name().isBlank()
-            || w.world().lore() == null || w.world().lore().isBlank()
+            || rawInput == null || rawInput.isBlank()
             || w.locations() == null || w.locations().isEmpty()
             || w.thumbnailPrompt() == null || w.thumbnailPrompt().isBlank()) {
             log.error("[UGC-WORLD-W0] 필수 필드 누락: world={}, locations={}, thumbPrompt={}",
@@ -252,7 +257,7 @@ public class WorldConceptStructuringService {
 
         StructuredWorld.WorldProfile profile = new StructuredWorld.WorldProfile(
             effectiveName, truncate(w.world().intro(), INTRO_MAX_LENGTH),
-            truncate(w.world().lore(), LORE_MAX_LENGTH), moodTags);
+            truncate(rawInput.trim(), LORE_MAX_LENGTH), moodTags);
         return new StructuredWorld(profile, locations, w.thumbnailPrompt(), w.moderation());
     }
 

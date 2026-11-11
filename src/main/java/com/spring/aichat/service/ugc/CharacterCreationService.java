@@ -42,7 +42,7 @@ import java.util.Map;
 public class CharacterCreationService {
 
     static final int CONCEPT_MIN_LENGTH = 30;
-    static final int CONCEPT_MAX_LENGTH = 1000;
+    static final int CONCEPT_MAX_LENGTH = 5000;
 
     private static final List<CreationJobStatus> ACTIVE_STATUSES =
         Arrays.stream(CreationJobStatus.values()).filter(CreationJobStatus::isActive).toList();
