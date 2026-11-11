@@ -97,6 +97,7 @@ public class ChatStreamServiceV2 {
     private final com.spring.aichat.service.tts.TtsService ttsService;
     private final TransactionTemplate txTemplate;
     private final OpenRouterStreamClient streamClient;
+    private final com.spring.aichat.external.ClaudeChatStreamClient claudeStreamClient;
     private final LlmCircuitBreaker llmCircuitBreaker;
     private final ContentModerationService contentModerationService;
     private final PromptInjectionGuard injectionGuard;
@@ -611,9 +612,6 @@ public class ChatStreamServiceV2 {
             room.getId(), systemPrompt, systemActionInjection);
 
         String model = boostModeResolver.resolveModel(room.getUser());
-        LlmCircuitBreaker.ProviderDecision decision = llmCircuitBreaker.decide();
-        log.info("🔌 [V2-CIRCUIT] provider={}, deadline={}ms, roomId={}",
-            decision.provider(), decision.ttftDeadlineMs(), room.getId());
 
         Set<String> sanitizerSpeakers = collectSanitizerSpeakers(room);
         java.util.List<com.spring.aichat.domain.character.Character> expressionCharacters = heroineRepository.findByChatRoom_Id(room.getId()).stream().map(ChatRoomHeroine::getCharacter).filter(java.util.Objects::nonNull).toList();
@@ -640,9 +638,26 @@ public class ChatStreamServiceV2 {
         // event_meta 콜백은 V2에서 미사용 (event_status 필드 폐기)
         Consumer<String> onEventStatus = ignored -> { /* no-op for V2 */ };
 
+        // [Claude 직결 1차] 성공하면 끝. 실패·크레딧 소진·시크릿 모드면 아래 OpenRouter 경로를 그대로 탄다
+        com.spring.aichat.external.ClaudeChatStreamClient.Attempt claudeAttempt = claudeStreamClient.tryStream(
+            Boolean.TRUE.equals(room.getUser().getBoostMode()), effectiveSecretMode,
+            messages, 8192, onFirstScene, onEventStatus);
+        // Claude가 first_scene을 이미 내보낸 뒤 끊겼다면 폴백은 다시 쏘지 않는다(중복 표시 방지)
+        final Consumer<String> orFirstScene = claudeAttempt.firstSceneEmitted() ? s -> { } : onFirstScene;
+        final Consumer<String> orEventStatus = claudeAttempt.eventStatusEmitted() ? s -> { } : onEventStatus;
+
+        // decide()는 HALF_OPEN 프로브 슬롯을 점유하는 부수효과가 있다 — OpenRouter를 실제로 탈 때만 부른다.
+        final LlmCircuitBreaker.ProviderDecision decision = claudeAttempt.succeeded() ? null : llmCircuitBreaker.decide();
+        if (decision != null) {
+            log.info("🔌 [V2-CIRCUIT] provider={}, deadline={}ms, roomId={}",
+                decision.provider(), decision.ttftDeadlineMs(), room.getId());
+        }
+
         // LLM 스트림 + Circuit Breaker (V1 패턴 충실 재현)
         StreamResult streamResult;
-        try {
+        if (claudeAttempt.succeeded()) {
+            streamResult = claudeAttempt.result();
+        } else try {
             Map<String, Object> providerRouting = Map.of(
                 "order", List.of(decision.provider()),
                 "allow_fallbacks", false
@@ -651,7 +666,7 @@ public class ChatStreamServiceV2 {
                 model, messages, 0.8, true, 0.3, 0.15, providerRouting,
                 Map.of("type", "json_object"), 8192);  // [Q2-Fix] 멀티씬+system_updates 한글 JSON 여유 — 잘림 방지
             streamResult = streamClient.streamCompletion(
-                req, onFirstScene, onEventStatus, decision.ttftDeadlineMs());
+                req, orFirstScene, orEventStatus, decision.ttftDeadlineMs());
             if (decision.isPrimary()) {
                 llmCircuitBreaker.recordSuccess(streamResult.ttft());
             }
@@ -666,7 +681,7 @@ public class ChatStreamServiceV2 {
                 OpenAiChatRequest fbReq = new OpenAiChatRequest(
                     model, messages, 0.8, true, 0.3, 0.15, fb,
                     Map.of("type", "json_object"), 8192);  // [Q2-Fix]
-                streamResult = streamClient.streamCompletion(fbReq, onFirstScene, onEventStatus, 0);
+                streamResult = streamClient.streamCompletion(fbReq, orFirstScene, orEventStatus, 0);
                 log.info("✅ [V2-CIRCUIT] Vertex fallback OK | TTFT={}ms", streamResult.ttft());
             } catch (Exception fbEx) {
                 log.error("❌ [V2-CIRCUIT] Vertex fallback failed | roomId={}", room.getId(), fbEx);

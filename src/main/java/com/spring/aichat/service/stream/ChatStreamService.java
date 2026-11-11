@@ -77,6 +77,7 @@ public class ChatStreamService {
     private final CharacterPromptAssembler promptAssembler;
     private final com.spring.aichat.config.LegacyFeatureProperties legacy;
     private final OpenRouterStreamClient streamClient;
+    private final com.spring.aichat.external.ClaudeChatStreamClient claudeStreamClient;
     private final OpenRouterClient openRouterClient;
     private final OpenAiProperties props;
     private final ObjectMapper objectMapper;
@@ -987,9 +988,6 @@ public class ChatStreamService {
         String model = boostModeResolver.resolveModel(room.getUser());
 
         // ━━━ [Phase 5.5-Stability] 서킷 브레이커 기반 Provider 결정 ━━━
-        LlmCircuitBreaker.ProviderDecision decision = llmCircuitBreaker.decide();
-        log.info("🔌 [CIRCUIT] Provider decision: {} | deadline={}ms | state={} | roomId={}",
-            decision.provider(), decision.ttftDeadlineMs(), llmCircuitBreaker.getState(), room.getId());
 
         // ── SSE 콜백 정의 (Primary/Fallback 재시도 시에도 동일하게 사용) ──
         // [Polish · P1 #2] dialogue prefix sanitizer를 위해 알려진 화자 이름 모음.
@@ -1043,9 +1041,27 @@ public class ChatStreamService {
             }
         };
 
+        // ── [Claude 직결 1차] 성공하면 끝. 실패·크레딧 소진·시크릿 모드면 아래 OpenRouter 경로를 그대로 탄다 ──
+        com.spring.aichat.external.ClaudeChatStreamClient.Attempt claudeAttempt = claudeStreamClient.tryStream(
+            Boolean.TRUE.equals(room.getUser().getBoostMode()), effectiveSecretMode,
+            messages, 6144, onFirstScene, onEventStatus);
+        // Claude가 first_scene을 이미 내보낸 뒤 끊겼다면 폴백은 다시 쏘지 않는다(중복 표시 방지)
+        final Consumer<String> orFirstScene = claudeAttempt.firstSceneEmitted() ? s -> { } : onFirstScene;
+        final Consumer<String> orEventStatus = claudeAttempt.eventStatusEmitted() ? s -> { } : onEventStatus;
+
+        // ━━━ [Phase 5.5-Stability] 서킷 브레이커 기반 Provider 결정 ━━━
+        // decide()는 HALF_OPEN 프로브 슬롯을 점유하는 부수효과가 있다 — OpenRouter를 실제로 탈 때만 부른다.
+        final LlmCircuitBreaker.ProviderDecision decision = claudeAttempt.succeeded() ? null : llmCircuitBreaker.decide();
+        if (decision != null) {
+            log.info("🔌 [CIRCUIT] Provider decision: {} | deadline={}ms | state={} | roomId={}",
+                decision.provider(), decision.ttftDeadlineMs(), llmCircuitBreaker.getState(), room.getId());
+        }
+
         // ── LLM 스트림 (서킷 브레이커 연동) ──
         StreamResult streamResult;
-        try {
+        if (claudeAttempt.succeeded()) {
+            streamResult = claudeAttempt.result();
+        } else try {
             Map<String, Object> providerRouting = Map.of(
                 "order", List.of(decision.provider()),
                 "allow_fallbacks", false
@@ -1055,7 +1071,7 @@ public class ChatStreamService {
                 6144);  // [Q2-Fix] 멀티씬(2~3)+location 필드 한글 JSON 여유 — scenes 배열 중간 잘림(파스 에러) 방지
 
             streamResult = streamClient.streamCompletion(
-                llmRequest, onFirstScene, onEventStatus, decision.ttftDeadlineMs());
+                llmRequest, orFirstScene, orEventStatus, decision.ttftDeadlineMs());
 
             // ✅ AI Studio 성공 → 서킷 브레이커 기록
             if (decision.isPrimary()) {
@@ -1078,7 +1094,7 @@ public class ChatStreamService {
                     6144);  // [Q2-Fix]
 
                 streamResult = streamClient.streamCompletion(
-                    fallbackRequest, onFirstScene, onEventStatus, 0); // Vertex는 데드라인 없음
+                    fallbackRequest, orFirstScene, orEventStatus, 0); // Vertex는 데드라인 없음
 
                 log.info("✅ [CIRCUIT] Vertex 폴백 성공 | TTFT={}ms | roomId={}", streamResult.ttft(), room.getId());
 

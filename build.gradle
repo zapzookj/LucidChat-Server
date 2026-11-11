@@ -51,6 +51,9 @@ dependencies {
 
     implementation 'org.ahocorasick:ahocorasick:0.6.3'
 
+    // Claude Console(Anthropic) 직결 — 채팅 1차 경로(실패·크레딧 소진 시 OpenRouter 폴백)
+    implementation 'com.anthropic:anthropic-java:3.3.0'
+
     // [docs/56 §10 그림 방식] 업로드 WebP 디코드 — ImageIO 기본 미지원(순수 자바 플러그인, SPI 자동 등록)
     implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'
 

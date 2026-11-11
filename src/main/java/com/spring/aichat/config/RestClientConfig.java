@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
 @Configuration
 @EnableConfigurationProperties({
     OpenAiProperties.class,
+    ClaudeConsoleProperties.class,  // Claude Console 직결 채팅 경로
     CharacterSeedProperties.class,
     WorldSeedProperties.class,
     WorldLocationSeedProperties.class,
