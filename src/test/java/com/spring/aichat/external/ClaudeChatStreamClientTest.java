@@ -110,6 +110,20 @@ class ClaudeChatStreamClientTest {
         assertThat(System.currentTimeMillis() - t0).isLessThan(200);   // 네트워크를 타지 않았다
     }
 
+    /** 부스트 모델 공란 = 부스트 턴은 Claude를 건너뛴다(OpenRouter pro-model 직행). 일반 모델 기본값은 Sonnet. */
+    @Test
+    void blankBoostModel_skipsBoostWithoutCalling() {
+        ClaudeConsoleProperties p = props("sk-ant-not-a-real-key");
+        assertThat(p.model()).isEqualTo("claude-sonnet-5-5");
+        assertThat(p.boostModel()).isEmpty();
+        assertThat(new ClaudeConsoleProperties("k", null, "  ", null, null, null, null, null).boostModel()).isEmpty();
+
+        ClaudeChatStreamClient on = new ClaudeChatStreamClient(p);
+        long t0 = System.currentTimeMillis();
+        assertThat(on.tryStream(true, false, sample(), 512, null, null).succeeded()).isFalse();
+        assertThat(System.currentTimeMillis() - t0).isLessThan(200);   // 네트워크를 타지 않았다
+    }
+
     /** 실 API: 틀린 키는 던지지 않고 실패를 돌려주며, 쿨다운 동안 재시도하지 않는다. */
     @Test
     @EnabledIfEnvironmentVariable(named = "CLAUDE_LIVE_TEST", matches = "true")
@@ -121,11 +135,12 @@ class ClaudeChatStreamClientTest {
         assertThat(System.currentTimeMillis() - t0).isLessThan(200);
     }
 
-    /** 실 API: 일반(Haiku)·부스트(Sonnet) 모두 파싱 가능한 JSON과 first_scene을 낸다. */
+    /** 실 API: Sonnet(일반 슬롯)·Haiku(부스트 슬롯에 명시) 모두 파싱 가능한 JSON과 first_scene을 낸다. */
     @Test
     @EnabledIfEnvironmentVariable(named = "CLAUDE_LIVE_TEST", matches = "true")
     void live_bothModels_streamParsableJson() throws Exception {
-        ClaudeChatStreamClient c = new ClaudeChatStreamClient(props(System.getenv("CLAUDE_API_KEY")));
+        ClaudeChatStreamClient c = new ClaudeChatStreamClient(new ClaudeConsoleProperties(
+            System.getenv("CLAUDE_API_KEY"), "claude-sonnet-5-5", "claude-haiku-5-5", "low", "medium", 15000L, null, null));
         ObjectMapper om = new ObjectMapper();
         for (boolean boost : new boolean[]{false, true}) {
             List<String> firstScenes = new ArrayList<>();

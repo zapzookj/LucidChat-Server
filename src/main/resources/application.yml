@@ -167,10 +167,10 @@ openai:
 # ⚠ 프리픽스 anthropic 금지(OS 환경변수 ANTHROPIC_API_KEY에 가려진다).
 claude-console:
   api-key: ${CLAUDE_API_KEY:}
-  model: claude-haiku-5-5          # 일반 모드
-  boost-model: claude-sonnet-5-5   # 부스트 모드
-  effort: medium
-  boost-effort: low                # Sonnet은 적응형 사고가 켜져 있다 — effort가 사고량(=첫 토큰 지연)을 정한다
+  model: claude-sonnet-5-5         # 일반 모드 (2026-11-14 종원 지시: Haiku → Sonnet)
+  boost-model: ""                  # 부스트 모드 — 공란 = Claude를 건너뛰고 openai.pro-model(Gemini 3.1 Pro)로 직행
+  effort: low                      # Sonnet은 적응형 사고가 켜져 있다 — effort가 사고량(=첫 토큰 지연)을 정한다
+  boost-effort: low
   ttft-deadline-ms: 8000           # 실측: 웜 0.5~0.7s, 기동 직후 첫 호출 4~5s
   credit-cooldown-sec: 600
   error-cooldown-sec: 30

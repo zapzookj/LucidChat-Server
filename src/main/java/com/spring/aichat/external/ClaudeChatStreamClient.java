@@ -44,9 +44,9 @@ import java.util.function.Consumer;
  * 아니면(키 없음·크레딧 소진·인증 실패·과부하·첫 토큰 지연·거절·스트림 중단) 실패를 돌려주고
  * 호출부가 기존 OpenRouter 경로를 그대로 탄다.
  *
- * <p>[모델] 일반 = Haiku 5.5(사고 끔 — first_scene까지의 시간이 체감 품질),
- * 부스트 = Sonnet 5.5(적응형 사고 + 낮은 effort — 사고를 끄면 `reasoning` 필드 때문에 거절된다, buildParams 주석 참조).
- * 두 모델 모두 temperature 등 샘플링 파라미터가 400이므로 보내지 않는다.
+ * <p>[모델] 2026-11-14~ 일반 = Sonnet 5.5(적응형 사고 + 낮은 effort — 사고를 끄면 `reasoning` 필드 때문에
+ * 거절된다, buildParams 주석 참조), 부스트 = 모델 공란 → Claude를 건너뛰고 OpenRouter pro-model(Gemini Pro).
+ * 사고 on/off는 모드가 아니라 모델명으로 정한다(Haiku만 끔). temperature 등 샘플링 파라미터는 400이므로 보내지 않는다.
  *
  * <p>[스레딩] SDK 스트림 읽기는 워커 스레드, 콜백(onFirstScene·onEventStatus)은 <b>호출 스레드</b>에서
  * 실행한다 — 콜백이 SseEmitter와 지연 로딩 엔티티를 만지기 때문에 기존 OpenRouter 클라이언트와
@@ -93,7 +93,8 @@ public class ClaudeChatStreamClient {
                 .maxRetries(0)
                 .timeout(Duration.ofSeconds(300))
                 .build();
-            log.info("🟣 [CLAUDE] 직결 경로 활성 | model={} | boostModel={}", props.model(), props.boostModel());
+            log.info("🟣 [CLAUDE] 직결 경로 활성 | model={} | boostModel={}", props.model(),
+                props.boostModel().isBlank() ? "(없음 — 부스트는 OpenRouter 직행)" : props.boostModel());
         } else {
             this.client = null;
             log.info("🟣 [CLAUDE] CLAUDE_API_KEY 없음 — 직결 경로 비활성(OpenRouter만 사용)");
@@ -119,7 +120,7 @@ public class ClaudeChatStreamClient {
     /**
      * Claude로 스트리밍을 시도한다.
      *
-     * @param boost      부스트 모드 여부 (true = Sonnet 5.5)
+     * @param boost      부스트 모드 여부 (true = boostModel, 공란이면 시도하지 않는다)
      * @param secretMode 시크릿 모드 여부 — true면 시도하지 않는다(성인 수위 텍스트는 Anthropic
      *                   이용정책상 거절 대상이라 매 턴 거절→폴백 지연만 생긴다)
      * @param messages   OpenAI 형식 메시지(기존 빌더 산출물 그대로)
@@ -127,11 +128,13 @@ public class ClaudeChatStreamClient {
     public Attempt tryStream(boolean boost, boolean secretMode, List<OpenAiMessage> messages, int maxTokens,
                              Consumer<String> onFirstScene, Consumer<String> onEventStatus) {
         if (client == null || secretMode) return SKIPPED;
+        String model = boost ? props.boostModel() : props.model();
+        // 모델 공란 = 이 모드는 Claude를 쓰지 않는다(2026-11-14~ 부스트는 OpenRouter pro-model 직행).
+        if (model == null || model.isBlank()) return SKIPPED;
         long now = System.currentTimeMillis();
         int slot = boost ? 1 : 0;
         if (now < keySkipUntil.get() || now < modelSkipUntil[slot].get()) return SKIPPED;
 
-        String model = boost ? props.boostModel() : props.model();
         MessageCreateParams params;
         try {
             params = buildParams(model, boost, messages, maxTokens);

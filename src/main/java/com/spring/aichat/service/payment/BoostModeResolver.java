@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
  * LLM 모델 선택과 에너지 비용 계산을 중앙화.
  *
  * [모델 선택 로직]
- * boostMode ON  → proModel (e.g. claude-sonnet)
- * boostMode OFF → model (e.g. gemini-flash)
+ * boostMode ON  → proModel (Gemini 3.1 Pro — 2026-11-14~ 부스트는 Claude 직결을 건너뛴다)
+ * boostMode OFF → model (Claude 직결 Sonnet 5.5가 1차, 이 값은 폴백)
  *
  * [비용 계산 로직]
  * boostMode OFF:

@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * @param apiKey             Claude Console API 키 (공란 = 비활성)
  * @param model              일반 모드 모델
- * @param boostModel         부스트 모드 모델
+ * @param boostModel         부스트 모드 모델 (공란 = 부스트는 Claude를 건너뛰고 OpenRouter {@code openai.pro-model}로 직행)
  * @param effort             일반 모드 effort (low|medium|high)
  * @param boostEffort        부스트 모드 effort (low|medium|high)
  * @param ttftDeadlineMs     첫 토큰 데드라인 — 초과 시 OpenRouter로 폴백
@@ -32,9 +32,10 @@ public record ClaudeConsoleProperties(
     Long errorCooldownSec
 ) {
     public ClaudeConsoleProperties {
-        if (model == null || model.isBlank()) model = "claude-haiku-5-5";
-        if (boostModel == null || boostModel.isBlank()) boostModel = "claude-sonnet-5-5";
-        if (effort == null || effort.isBlank()) effort = "medium";
+        if (model == null || model.isBlank()) model = "claude-sonnet-5-5";
+        // 부스트는 기본값을 채우지 않는다 — 공란이 "부스트는 Claude를 건너뛴다"는 뜻이다.
+        boostModel = boostModel == null ? "" : boostModel.trim();
+        if (effort == null || effort.isBlank()) effort = "low";
         if (boostEffort == null || boostEffort.isBlank()) boostEffort = "low";
         if (ttftDeadlineMs == null || ttftDeadlineMs <= 0) ttftDeadlineMs = 8000L;
         if (creditCooldownSec == null || creditCooldownSec <= 0) creditCooldownSec = 600L;
